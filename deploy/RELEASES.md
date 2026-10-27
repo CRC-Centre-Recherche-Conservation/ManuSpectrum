@@ -92,7 +92,9 @@ host uses `rc`, production uses `prod`.
   checks it: the registry digest, the signature and revision
   (`scripts/release-verify.sh`, with the channel policy) and whether Ansible
   must run first. It then marks the release as *armed* and mails
-  `ALERT_EMAILS` once. It installs nothing and never moves the checkout. A tag
+  `ALERT_EMAILS` once. It installs nothing and never moves the checkout (it
+  fetches with `--prune-tags`: a tag that moved on the origin is refused by git,
+  a local tag the origin lacks is dropped). A tag
   whose image or signature is not published yet is waited for six hours before
   it counts as a failure (`ReleaseVerificationFailed`).
 - **The update** is started by an operator, now or at a scheduled time, with
@@ -196,3 +198,10 @@ the first tag is pushed; the chain relies on all of them.
    « Attestations are not a signature » must pass, then verify the image by
    hand (« Verify an image by hand »).
 8. After the first push, make the GHCR package public.
+9. Migrations: a release with long migrations says how long its readiness
+   takes (in the tag message and the release notes), and the operator raises
+   `RELEASE_READY_WAIT_SECONDS` in `.env` (default 600, at most 1800: the
+   engine refuses a larger value) before installing it. The engine rolls back
+   when `/readyz` does not answer within that wait, which would interrupt a
+   migration still running; the rollback never restores the data. A
+   migration that cannot fit in 1800 seconds is run by hand beforehand.

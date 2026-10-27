@@ -69,6 +69,7 @@ OPTIONAL_METRICS = LABELLED_APP_METRICS | frozenset(
         "manuspectrum_release_pending_security",
         "manuspectrum_release_rollbacks_total",
         "manuspectrum_release_rollback_failed",
+        "manuspectrum_release_inflight_since_timestamp_seconds",
         "manuspectrum_release_update_last_success_timestamp_seconds",
         "manuspectrum_release_scheduled_timestamp_seconds",
         "manuspectrum_release_schedule_failed",

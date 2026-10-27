@@ -133,6 +133,8 @@ REQUIRED_TESTED = {
     "SearchExportSlow",
     "ReleaseVerificationFailed",
     "UpdateRolledBack",
+    "UpdateRollbackFailed",
+    "UpdateInterrupted",
     "ReleaseWatchFailing",
     "ReleaseWatchStale",
     "ReleasePendingTooLong",

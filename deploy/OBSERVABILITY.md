@@ -397,12 +397,14 @@ release watch (`manuspectrum-watch`, hourly) and the update engine write
 for the last run, the failing step (`watch_failed{step=git|registry|sigstore|pull|mail|state}`),
 the verification, the armed release and how long it waits (`pending_since_timestamp_seconds`,
 `pending_security`), rollbacks (`rollbacks_total`, `rollback_failed`), the last
-successful update and the scheduled slot (`scheduled_timestamp_seconds`,
+successful update, the update in flight (`inflight_since_timestamp_seconds`, 0 when none)
+and the scheduled slot (`scheduled_timestamp_seconds`,
 `schedule_failed{reason=refused|missed}`). No tag or version appears in a label.
-Six alerts read them (`rules/release.yml`, [release runbook](runbooks/release.md)):
-`ReleaseVerificationFailed` and `UpdateRolledBack` (critical), `ReleaseWatchFailing`,
-`ReleaseWatchStale`, `ReleasePendingTooLong` (30 days, 14 when the release carries a
-security fix) and `ReleaseScheduleFailed` (warning). A
+Eight alerts read them (`rules/release.yml`, [release runbook](runbooks/release.md)):
+`ReleaseVerificationFailed`, `UpdateRolledBack` and `UpdateRollbackFailed` (critical),
+`UpdateInterrupted` (warning, an update in flight for more than 5 hours),
+`ReleaseWatchFailing`, `ReleaseWatchStale`, `ReleasePendingTooLong` (30 days, 14 when the
+release carries a security fix) and `ReleaseScheduleFailed` (warning). A
 stale file raises `HostMetricsStale` or `DiskUsageStale`.
 
 **Labels.** Metric labels are closed vocabularies (service names, area names,

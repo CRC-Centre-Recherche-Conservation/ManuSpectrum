@@ -23,6 +23,28 @@ groups:
           summary: "An update was rolled back"
           description: "An update failed its readiness checks and the previous release was restored. The release is still armed; the site runs the previous version."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/release.md#updaterolledback
+      - alert: UpdateRollbackFailed
+        expr: |
+          manuspectrum_release_rollback_failed == 1
+        labels:
+          severity: critical
+          service: release
+        annotations:
+          summary: "An update failed and its rollback failed too"
+          description: "An update was interrupted or failed and the previous release could not be put back. The site may be down or half switched; no update runs until the in-flight marker is cleared."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/release.md#updaterollbackfailed
+      - alert: UpdateInterrupted
+        expr: |
+          manuspectrum_release_inflight_since_timestamp_seconds > 0
+          and time() - manuspectrum_release_inflight_since_timestamp_seconds > 5 * 3600
+        for: 5m
+        labels:
+          severity: warning
+          service: release
+        annotations:
+          summary: "An update has been in flight for more than 5 hours"
+          description: "An update started more than 5 hours ago and neither finished nor was rolled back (the unit is cut after 4 hours). The host may have restarted or the engine crashed; the site may be half switched."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/release.md#updateinterrupted
       - alert: ReleaseWatchFailing
         expr: |
           max by (step) (manuspectrum_release_watch_failed) == 1

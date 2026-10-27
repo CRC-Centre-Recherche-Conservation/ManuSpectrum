@@ -57,6 +57,10 @@ mkdir -p "$FAKE/bin" "$FAKE/lib"
 cat >"$FAKE/bin/docker" <<'SH'
 #!/bin/bash
 echo "docker $*" >>"$FAKE_LOG"
+case "$1 $2" in
+  "image ls") [ ! -f "$FAKE_DIR/images" ] || cat "$FAKE_DIR/images"; exit 0 ;;
+  "image rm") exit 0 ;;
+esac
 case "$1" in
   image) printf '%s\n' "${FAKE_LABEL-}"; exit 0 ;;
   compose)
@@ -81,12 +85,33 @@ if ( flock -n 9 ) 9>"$FAKE_DUMP/.lock"; then lock=free; else lock=held; fi
 inflight=0; [ ! -e "$FAKE_STATE/inflight" ] || inflight=1
 echo "make $target head=$head_tag env=$last lock=$lock inflight=$inflight :: $*" >>"$FAKE_LOG"
 case "$target" in
-  backup) [ ! -e "$FAKE_DIR/backup_fail" ] || exit 1 ;;
-  up) [ ! -e "$FAKE_DIR/up_fail_$last" ] || exit 1 ;;
+  backup)
+    [ ! -e "$FAKE_DIR/backup_fail" ] || exit 1
+    [ ! -e "$FAKE_DIR/backup_closes_window" ] || sed -i 's/^WINDOW_END_EPOCH=.*/WINDOW_END_EPOCH=1790003050/' "$FAKE_STATE/scheduled" ;;
+  up)
+    if [ -e "$FAKE_DIR/up_slow_$last" ]; then touch "$FAKE_DIR/up_started"; sleep 2; touch "$FAKE_DIR/up_finished"; fi
+    [ ! -e "$FAKE_DIR/up_fail_$last" ] || exit 1 ;;
   site-notice) [ ! -e "$FAKE_DIR/notice_fail" ] || exit 1 ;;
 esac
 exit 0
 SH
+cat >"$FAKE/bin/curl" <<'SH'
+#!/bin/bash
+echo "curl $*" >>"$FAKE_LOG"
+if [ -e "$FAKE_DIR/probe_down_sigstore" ]; then echo "curl: (28) timed out" >&2; exit 28; fi
+printf 200
+SH
+{
+  printf '#!/bin/bash\nREAL_GIT=%q\n' "$(command -v git)"
+  cat <<'SH'
+for a in "$@"; do [ "$a" != submodule ] || sub=1; done
+if [ -n "${sub-}" ] && [ -e "$FAKE_DIR/submodule_fail" ] && [ "$("$REAL_GIT" -C "$FAKE_APP" rev-parse HEAD)" = "$FAKE_C2" ]; then
+  echo "fatal: could not update submodule" >&2
+  exit 1
+fi
+exec "$REAL_GIT" "$@"
+SH
+} >"$FAKE/bin/git"
 cat >"$FAKE/bin/sendmail" <<'SH'
 #!/bin/bash
 n=$(ls "$FAKE_MAIL" | wc -l)
@@ -105,6 +130,8 @@ if [ -e "$FAKE_DIR/digest_override" ]; then cat "$FAKE_DIR/digest_override"; els
 SH
 chmod +x "$FAKE"/bin/* "$FAKE"/lib/*
 cp "$SCRIPTS/lib-release.sh" "$SCRIPTS/lib-metrics.sh" "$SCRIPTS/release-managed.sh" "$FAKE/lib/" 2>/dev/null
+
+RNOW=1790003100 # inside the window of sched() below
 
 # --- one scenario: W/{app,state,dump,metrics,mail,fake}
 setup() {
@@ -143,7 +170,8 @@ engine() { # engine ARGS...: runs the engine from an unrelated directory; sets R
     APP_DIR="$W/app" STATE_DIR="$W/state" ENV_FILE="$ENVF" MANAGED_SOURCES="$W/managed" RELEASE_LIB_DIR="$FAKE/lib" \
     RELEASE_SENDMAIL="$FAKE/bin/sendmail" RELEASE_READY_INTERVAL=0.1 UPDATE_LOCK_WAIT=1 BACKUP_LOCK_WAIT=1 \
     FAKE_LOG="$LOG" FAKE_DIR="$W/f" FAKE_ENV="$ENVF" FAKE_APP="$W/app" FAKE_STATE="$W/state" FAKE_DUMP="$W/dump" FAKE_MAIL="$W/mail" \
-    FAKE_D2="$D2" FAKE_LABEL="${FAKE_LABEL-$C1}" \
+    FAKE_D2="$D2" FAKE_C2="$C2" FAKE_LABEL="${FAKE_LABEL-$C1}" ANSIBLE_MARKER="$W/ansible-running" \
+    ${RNOW:+RELEASE_NOW_EPOCH=$RNOW} ${SERVICE_RESULT:+SERVICE_RESULT=$SERVICE_RESULT} ${EXIT_STATUS:+EXIT_STATUS=$EXIT_STATUS} \
     bash "$ENGINE" "$@" 2>&1)"
   RC=$?
 }
@@ -271,7 +299,7 @@ before; engine v1.1.0
 # --- SIGTERM during readiness
 setup; printf 500 >"$W/f/ready_2"; sed -i 's/^RELEASE_READY_WAIT_SECONDS=.*/RELEASE_READY_WAIT_SECONDS=60/' "$ENVF"; before
 ( cd "$TMP" && exec env -i PATH="$FAKE/bin:$PATH" HOME="$TMP" APP_DIR="$W/app" STATE_DIR="$W/state" ENV_FILE="$ENVF" MANAGED_SOURCES="$W/managed" RELEASE_LIB_DIR="$FAKE/lib" \
-  RELEASE_SENDMAIL="$FAKE/bin/sendmail" RELEASE_READY_INTERVAL=0.1 FAKE_LOG="$LOG" FAKE_DIR="$W/f" FAKE_ENV="$ENVF" FAKE_APP="$W/app" FAKE_STATE="$W/state" FAKE_DUMP="$W/dump" FAKE_MAIL="$W/mail" FAKE_D2="$D2" FAKE_LABEL="$C1" \
+  RELEASE_SENDMAIL="$FAKE/bin/sendmail" RELEASE_READY_INTERVAL=0.1 FAKE_LOG="$LOG" FAKE_DIR="$W/f" FAKE_ENV="$ENVF" FAKE_APP="$W/app" FAKE_STATE="$W/state" FAKE_DUMP="$W/dump" FAKE_MAIL="$W/mail" FAKE_D2="$D2" FAKE_C2="$C2" FAKE_LABEL="$C1" ANSIBLE_MARKER="$W/ansible-running" RELEASE_NOW_EPOCH=1790003100 \
   bash "$ENGINE" v1.1.0 >"$W/out" 2>&1 ) &
 pid=$!
 for _ in $(seq 1 100); do has '^docker compose' && break; sleep 0.1; done
@@ -282,6 +310,33 @@ equals "SIGTERM during readiness: HEAD back" "$HEAD_BEFORE" "$(head_of)"
 equals "SIGTERM during readiness: .env back" "$ENV_BEFORE" "$(sha256sum "$ENVF" | cut -d' ' -f1)"
 equals "SIGTERM during readiness: rollbacks counter" 1 "$(sget rollbacks COUNT)"
 check "SIGTERM during readiness: armed kept" test -e "$W/state/armed"
+
+# --- SIGTERM during `make up`: the trap defers, make up finishes, then the rollback
+setup; touch "$W/f/up_slow_2"; sed -i 's/^RELEASE_READY_WAIT_SECONDS=.*/RELEASE_READY_WAIT_SECONDS=60/' "$ENVF"; before
+( cd "$TMP" && exec env -i PATH="$FAKE/bin:$PATH" HOME="$TMP" APP_DIR="$W/app" STATE_DIR="$W/state" ENV_FILE="$ENVF" MANAGED_SOURCES="$W/managed" RELEASE_LIB_DIR="$FAKE/lib" \
+  RELEASE_SENDMAIL="$FAKE/bin/sendmail" RELEASE_READY_INTERVAL=0.1 FAKE_LOG="$LOG" FAKE_DIR="$W/f" FAKE_ENV="$ENVF" FAKE_APP="$W/app" FAKE_STATE="$W/state" FAKE_DUMP="$W/dump" FAKE_MAIL="$W/mail" FAKE_D2="$D2" FAKE_C2="$C2" FAKE_LABEL="$C1" ANSIBLE_MARKER="$W/ansible-running" RELEASE_NOW_EPOCH=1790003100 \
+  bash "$ENGINE" v1.1.0 >"$W/out" 2>&1 ) &
+pid=$!
+for _ in $(seq 1 100); do [ -e "$W/f/up_started" ] && break; sleep 0.1; done
+kill -TERM "$pid" 2>/dev/null
+wait "$pid"; RC=$?
+equals "SIGTERM during make up: exit 3" 3 "$RC"
+[ -e "$W/f/up_finished" ] && ok "SIGTERM during make up: make up was left to finish" || not_ok "SIGTERM during make up: make up was left to finish"
+mapfile -t ups < <(grep -n '^make up' "$LOG" | cut -d: -f1)
+equals "SIGTERM during make up: a second up put the old version back" 2 "${#ups[@]}"
+equals "SIGTERM during make up: no readiness wait on the new version" 0 "$(sed -n "${ups[0]},${ups[1]}p" "$LOG" | grep -c '^docker compose')"
+equals "SIGTERM during make up: HEAD back" "$HEAD_BEFORE" "$(head_of)"
+equals "SIGTERM during make up: .env back" "$ENV_BEFORE" "$(sha256sum "$ENVF" | cut -d' ' -f1)"
+equals "SIGTERM during make up: rollbacks counter" 1 "$(sget rollbacks COUNT)"
+
+# --- git submodule update failing on the new version rolls back
+setup; touch "$W/f/submodule_fail"; before; engine v1.1.0
+equals "submodule update failing: exit 3" 3 "$RC"
+equals "submodule update failing: HEAD back" "$HEAD_BEFORE" "$(head_of)"
+equals "submodule update failing: .env back" "$ENV_BEFORE" "$(sha256sum "$ENVF" | cut -d' ' -f1)"
+has '^make up head=v1.1.0' && not_ok "submodule update failing: the new version never started" || ok "submodule update failing: the new version never started"
+has '^make up head=v1.0.0' && ok "submodule update failing: the old version was started again" || not_ok "submodule update failing: the old version was started again" "$(cat "$LOG")"
+equals "submodule update failing: rollbacks counter" 1 "$(sget rollbacks COUNT)"
 
 # --- bootstrap of a missing `current`
 setup; rm "$W/state/current"; engine v1.1.0
@@ -332,6 +387,95 @@ setup; sched; touch "$W/f/notice_fail"; engine v1.1.0
 { [ "$RC" = 0 ] && has 'site-notice'; } && ok "a failing notice command does not change the exit code" || not_ok "failing notice command" "$RC $OUT"
 setup; sched; touch "$W/f/notice_fail"; sed -i '1s/^[0-9a-f]*/0000000000000000000000000000000000000000000000000000000000000000/' "$W/managed"; engine v1.1.0
 equals "a failing notice command does not change a refusal" 1 "$RC"
+
+# --- readiness wait is capped
+setup; sed -i 's/^RELEASE_READY_WAIT_SECONDS=.*/RELEASE_READY_WAIT_SECONDS=1801/' "$ENVF"; refusal_case "wait above the maximum" env_keys "1800"
+setup; sed -i 's/^RELEASE_READY_WAIT_SECONDS=.*/RELEASE_READY_WAIT_SECONDS=1800/' "$ENVF"; engine --check-only v1.1.0
+equals "wait at the maximum is accepted" 0 "$RC"
+
+# --- Ansible marker
+setup; touch "$W/ansible-running"; refusal_case "Ansible is running" busy "Ansible is running on this host"
+setup; sched; touch "$W/ansible-running"; engine v1.1.0
+equals "scheduled slot while Ansible runs: recorded as busy" busy "$(sget scheduled REASON)"
+
+# --- the window of a scheduled slot
+setup; sched; RNOW=1790004801 engine v1.1.0
+{ [ "$RC" = 1 ] && grep -q '^REASON=late$' <<<"$OUT"; } && ok "late at the start: REASON=late" || not_ok "late at the start" "$RC $OUT"
+equals "late at the start: OUTCOME" refused "$(sget scheduled OUTCOME)"
+equals "late at the start: REASON in the record" late "$(sget scheduled REASON)"
+has 'ARGS=withdraw 7$' && ok "late at the start: notice withdrawn" || not_ok "late at the start: notice withdrawn"
+has '^make (backup|up)' && not_ok "late at the start: no backup, no switch" || ok "late at the start: no backup, no switch"
+grep -q '^Subject: \[ManuSpectrum\]\[Release\] scheduled update of v1.1.0 refused: late$' <<<"$(mails)" && ok "late at the start: mail" || not_ok "late at the start: mail" "$(mails)"
+setup; sched; touch "$W/f/backup_closes_window"; before; engine v1.1.0
+{ [ "$RC" = 1 ] && grep -q '^REASON=late$' <<<"$OUT"; } && ok "late after the backup: REASON=late" || not_ok "late after the backup" "$RC $OUT"
+has '^make backup' && ok "late after the backup: the backup did run" || not_ok "late after the backup: the backup did run"
+has '^make up' && not_ok "late after the backup: no switch" || ok "late after the backup: no switch"
+[ "$(sha256sum "$ENVF" | cut -d' ' -f1) $(head_of)" = "$ENV_BEFORE $HEAD_BEFORE" ] && ok "late after the backup: .env and HEAD untouched" || not_ok "late after the backup: .env and HEAD untouched"
+check "late after the backup: no inflight" test ! -e "$W/state/inflight"
+equals "late after the backup: OUTCOME" refused "$(sget scheduled OUTCOME)"
+setup; touch "$W/f/backup_closes_window"; engine v1.1.0
+equals "an interactive run has no window" 0 "$RC"
+
+# --- a scheduled refusal on the lock
+setup; sched; ( exec 7>"$W/state/lock"; flock 7; sleep 3 ) & holder=$!; sleep 0.3
+engine v1.1.0; wait "$holder" 2>/dev/null
+{ [ "$RC" = 1 ] && grep -q '^REASON=lock$' <<<"$OUT"; } && ok "scheduled, lock held: REASON=lock" || not_ok "scheduled, lock held" "$RC $OUT"
+equals "scheduled, lock held: OUTCOME recorded" refused "$(sget scheduled OUTCOME)"
+equals "scheduled, lock held: REASON recorded" lock "$(sget scheduled REASON)"
+has 'ARGS=withdraw 7$' && ok "scheduled, lock held: notice withdrawn" || not_ok "scheduled, lock held: notice withdrawn"
+
+# --- signature services unreachable
+setup; touch "$W/f/probe_down_sigstore"; refusal_case "sigstore unreachable" fetch "signature services"
+has '^verify' && not_ok "sigstore unreachable: release-verify not run" || ok "sigstore unreachable: release-verify not run"
+grep -q '^manuspectrum_release_verification_failed 0$' "$W/metrics/manuspectrum_release.prom" && ok "sigstore unreachable: not a verification failure" || not_ok "sigstore unreachable: not a verification failure"
+setup; engine v1.1.0
+grep -q '^curl .*https://tuf-repo-cdn.sigstore.dev/' "$LOG" && ok "the sigstore probe asks tuf-repo-cdn" || not_ok "the sigstore probe asks tuf-repo-cdn" "$(cat "$LOG")"
+
+# --- fetch: a moved tag is refused, a stray local tag is pruned
+setup; git clone -q --bare "$ORIGIN" "$W/o2.git"; git -C "$W/o2.git" -c user.name=t -c user.email=t@manuspectrum.test tag -f -a -m moved v1.1.0 "$C1" >/dev/null
+git -C "$W/app" remote set-url origin "$W/o2.git"; refusal_case "origin moved the armed tag" fetch "clobber"
+equals "origin moved the armed tag: the local tag is kept" "$C2" "$(git -C "$W/app" rev-parse "v1.1.0^{commit}")"
+setup; "${GIT[@]}" -C "$W/app" tag stray-tag; engine --check-only v1.1.0
+equals "fetch prunes a local tag the origin does not have" "" "$(git -C "$W/app" tag -l stray-tag)"
+equals "fetch prune: the check still passes" 0 "$RC"
+
+# --- images left over after a success
+setup; printf '%s\n' "$REPO $D1" "$REPO $D2" "$REPO sha256:$(printf '3%.0s' {1..64})" "docker.io/library/nginx sha256:$(printf '4%.0s' {1..64})" >"$W/f/images"; engine v1.1.0
+equals "images: a stale image of the repository is removed" 1 "$(grep -c "^docker image rm $REPO@sha256:$(printf '3%.0s' {1..64})$" "$LOG")"
+equals "images: exactly one removal" 1 "$(grep -c '^docker image rm ' "$LOG")"
+grep -q "docker image rm $REPO@$D1\|docker image rm $REPO@$D2\|nginx" "$LOG" && not_ok "images: current, previous and other repositories are kept" || ok "images: current, previous and other repositories are kept"
+grep -q "^docker image ls .*$REPO\$" "$LOG" && ok "images: only the repository is listed" || not_ok "images: only the repository is listed" "$(grep 'image ls' "$LOG")"
+setup; printf '%s\n' "$REPO sha256:$(printf '3%.0s' {1..64})" >"$W/f/images"; printf 500 >"$W/f/ready_2"; engine v1.1.0
+has '^docker image rm ' && not_ok "images: nothing removed after a rollback" || ok "images: nothing removed after a rollback"
+
+# --- --after-stop: an engine that ended without finishing
+after_stop() { # after_stop RESULT STATUS [TAG]
+  SERVICE_RESULT="$1" EXIT_STATUS="$2" engine --after-stop "${3:-v1.1.0}"
+  unset SERVICE_RESULT EXIT_STATUS
+}
+setup; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000; snapshot; s0="$SNAP"
+after_stop timeout TERM
+equals "after-stop timeout: exit 0" 0 "$RC"
+equals "after-stop timeout: ROLLBACK_FAILED=1" 1 "$(sget rollbacks ROLLBACK_FAILED)"
+check "after-stop timeout: inflight kept" test -e "$W/state/inflight"
+grep -q '^Subject: \[ManuSpectrum\]\[Release\] update of v1.1.0 interrupted$' <<<"$(mails)" && ok "after-stop timeout: mail" || not_ok "after-stop timeout: mail" "$(mails)"
+grep -qF 'make -C deploy restore RESTIC_SNAPSHOT=<id> CONFIRM=yes ERASURES_CHECKED=yes' <<<"$(mails)" && ok "after-stop timeout: mail names the restore commands" || not_ok "after-stop timeout: restore commands"
+grep -q '^manuspectrum_release_rollback_failed 1$' "$W/metrics/manuspectrum_release.prom" && grep -q '^manuspectrum_release_inflight_since_timestamp_seconds 1790001000$' "$W/metrics/manuspectrum_release.prom" && ok "after-stop timeout: metrics" || not_ok "after-stop timeout: metrics" "$(cat "$W/metrics/manuspectrum_release.prom" 2>&1)"
+grep -qP '\tinterrupted\tv1.0.0\tv1.1.0$' "$W/state/history.log" && ok "after-stop timeout: history line" || not_ok "after-stop timeout: history line"
+has '^make |^docker compose' && not_ok "after-stop timeout: the stack is not touched" || ok "after-stop timeout: the stack is not touched"
+for case_ in "success 0" "exit-code 1" "exit-code 3"; do
+  read -r res code <<<"$case_"
+  setup; rm -f "$W/state/inflight"; after_stop "$res" "$code"
+  { [ "$RC" = 0 ] && [ -z "$(ls "$W/mail")" ] && [ -z "$(sget rollbacks ROLLBACK_FAILED)" ]; } && ok "after-stop $res/$code without inflight: nothing happens" || not_ok "after-stop $res/$code without inflight" "$RC $OUT"
+done
+setup; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000; release_state_w rollbacks COUNT=0 ROLLBACK_FAILED=1; after_stop exit-code 4
+{ [ "$RC" = 0 ] && [ -z "$(ls "$W/mail")" ]; } && ok "after-stop exit 4: already mailed, not mailed twice" || not_ok "after-stop exit 4" "$RC $(mails)"
+setup; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000; after_stop success 0
+{ [ "$RC" = 0 ] && [ -z "$(ls "$W/mail")" ]; } && ok "after-stop success with a stale inflight: left alone" || not_ok "after-stop success" "$RC $(mails)"
+setup; sched; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000; after_stop timeout TERM
+has 'ARGS=end 7 --at \+24h$' && [ ! -e "$W/state/scheduled" ] && ok "after-stop scheduled: notice extended 24 h, scheduled removed" || not_ok "after-stop scheduled" "$(grep site-notice "$LOG")"
+setup; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000; after_stop timeout TERM v1.2
+{ [ "$RC" = 0 ] && [ -z "$(ls "$W/mail")" ]; } && ok "after-stop with a bad tag: ignored" || not_ok "after-stop with a bad tag"
 
 echo "1..$N"
 [ "$FAILED" -eq 0 ] || { echo "# FAILED"; exit 1; }

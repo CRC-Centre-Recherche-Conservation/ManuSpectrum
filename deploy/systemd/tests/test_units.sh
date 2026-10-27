@@ -99,8 +99,10 @@ assert "update@: no [Install] section" $?
 grep -q '^Type=oneshot' "$US" && grep -q "^User=$(id -un)$" "$US" \
   && grep -q '^ExecStart=/usr/local/lib/manuspectrum/release/release-update.sh %i$' "$US"
 assert "update@: a oneshot of the service account running the engine on its instance" $?
-grep -q '^TimeoutStartSec=4h$' "$US" && grep -q '^TimeoutStopSec=20min$' "$US"
-assert "update@: TimeoutStartSec=4h, TimeoutStopSec=20min" $?
+grep -q '^TimeoutStartSec=4h$' "$US" && grep -q '^TimeoutStopSec=4520s$' "$US"
+assert "update@: TimeoutStartSec=4h, TimeoutStopSec=4520s (2 x (310 + 1800) + 300)" $?
+grep -q '^ExecStopPost=/usr/local/lib/manuspectrum/release/release-update.sh --after-stop %i$' "$US"
+assert "update@: ExecStopPost runs the engine in --after-stop mode" $?
 grep -q '^KillMode=mixed$' "$US"
 assert "update@: SIGTERM reaches the engine alone (KillMode=mixed)" $?
 [ ! -e "$TMP/manuspectrum-update@.timer" ]

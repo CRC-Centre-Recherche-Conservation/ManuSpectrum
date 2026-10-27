@@ -146,3 +146,49 @@ tests:
     exp_samples:
     - labels: ALERTS{alertname="ReleaseScheduleFailed", alertstate="firing", reason="missed", service="release", severity="warning"}
       value: 1
+- name: a failed rollback fires at once and clears when the next update succeeds
+  interval: 1m
+  input_series:
+  - series: manuspectrum_release_rollback_failed
+    values: 0 0 1 1 1 0 0
+  promql_expr_test:
+  - expr: ALERTS{alertname="UpdateRollbackFailed", alertstate="firing"}
+    eval_time: 1m
+    exp_samples: []
+  - expr: ALERTS{alertname="UpdateRollbackFailed", alertstate="firing"}
+    eval_time: 3m
+    exp_samples:
+    - labels: ALERTS{alertname="UpdateRollbackFailed", alertstate="firing", service="release", severity="critical"}
+      value: 1
+  - expr: ALERTS{alertname="UpdateRollbackFailed", alertstate="firing"}
+    eval_time: 6m
+    exp_samples: []
+- name: an update in flight for 4 hours is quiet, past 5 hours it fires, and it clears when the marker goes
+  interval: 5m
+  input_series:
+  - series: manuspectrum_release_inflight_since_timestamp_seconds
+    values: 1000x100 0x100
+  promql_expr_test:
+  - expr: ALERTS{alertname="UpdateInterrupted", alertstate="firing"}
+    eval_time: 4h
+    exp_samples: []
+  - expr: ALERTS{alertname="UpdateInterrupted", alertstate="firing"}
+    eval_time: 5h
+    exp_samples: []
+  - expr: ALERTS{alertname="UpdateInterrupted", alertstate="firing"}
+    eval_time: 5h30m
+    exp_samples:
+    - labels: ALERTS{alertname="UpdateInterrupted", alertstate="firing", service="release", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="UpdateInterrupted", alertstate="firing"}
+    eval_time: 9h
+    exp_samples: []
+- name: no update in flight never fires UpdateInterrupted
+  interval: 5m
+  input_series:
+  - series: manuspectrum_release_inflight_since_timestamp_seconds
+    values: 0x200
+  promql_expr_test:
+  - expr: ALERTS{alertname="UpdateInterrupted", alertstate="firing"}
+    eval_time: 10h
+    exp_samples: []

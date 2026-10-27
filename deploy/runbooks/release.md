@@ -4,6 +4,8 @@ Alerts of the monitoring stack that point here. Each section has the same five p
 
 Outbound hosts of the release watch and update (HTTPS, port 443): `github.com`, `ghcr.io`, `pkg-containers.githubusercontent.com` (image layers), `tuf-repo-cdn.sigstore.dev`, `rekor.sigstore.dev`. Each watch run probes `https://github.com/` (step `git`), `https://ghcr.io/v2/`, which must answer 401 (step `registry`), and `https://tuf-repo-cdn.sigstore.dev/` (step `sigstore`); a blocked layer or Rekor host shows as a failed pull or verification.
 
+The unit log of an update (or of a scheduled slot) is `journalctl -u manuspectrum-update@<tag>`; the watch's is `journalctl -u manuspectrum-watch`.
+
 `sudo manuspectrum-update --status` prints the current release, the armed one, how long it has waited, the schedule and the last rollback; start every diagnosis with it.
 
 ## ReleaseVerificationFailed
@@ -16,7 +18,7 @@ SSH access to the host as an operator (`manuspectrum-ops`). RELEASES.md.
 
 ### Symptom
 
-The release watch found a tag whose image signature, image digest or signed revision does not verify. It armed nothing and pulled nothing: the site runs the release it already had.
+The release watch found a tag whose image signature, image digest or signed revision does not verify. It armed nothing and pulled nothing: the site runs the release it already had. The revision check reads the `org.opencontainers.image.revision` label of the image, which is only visible after the pull: a label that differs from the tag's commit fails after the pull, as a verification failure (not a pull failure).
 
 ### Diagnosis
 
@@ -42,7 +44,7 @@ SSH access to the host as an operator (`manuspectrum-ops`). BACKUP.md for the re
 
 An update failed its readiness checks and the previous release was restored. The site runs the previous version; the release is still armed. The alert stays for 64 hours after the rollback.
 
-If the rollback itself failed (mail subject `ROLLBACK FAILED`, `manuspectrum_release_rollback_failed` at 1), the site may be down or running a mixed state.
+If the rollback itself failed (mail subject `ROLLBACK FAILED`, `manuspectrum_release_rollback_failed` at 1), the critical alert `UpdateRollbackFailed` fires: follow its section below.
 
 ### Diagnosis
 
@@ -50,13 +52,66 @@ If the rollback itself failed (mail subject `ROLLBACK FAILED`, `manuspectrum_rel
 
 ### Remediation
 
-Rollback succeeded: fix the cause, then install again with `sudo manuspectrum-update --now <TAG>`. The alert clears by itself 64 hours after the rollback.
+Fix the cause, then install again with `sudo manuspectrum-update --now <TAG>`. The alert clears by itself 64 hours after the rollback.
 
-Rollback failed: the pre-update snapshot is the way back. Restore it as BACKUP.md describes (`make -C deploy restore` with the snapshot taken before the update), check the site, then remove the in-flight marker so another update can start: `sudo rm /var/lib/manuspectrum/release/inflight`. `ROLLBACK_FAILED` clears on the next successful update.
+A migration that takes long is the usual reason for a rollback that was not a bug: the engine waits `RELEASE_READY_WAIT_SECONDS` (default 600, at most 1800) for `/readyz` and then rolls back, and a migration that was running at that moment is interrupted. The rollback never restores the data, so check that the database is consistent with the previous release before trying again. A release with long migrations says how long its readiness takes (RELEASES.md, pre-tag checklist): raise `RELEASE_READY_WAIT_SECONDS` in `.env` first, then install.
 
 ### Escalation
 
 The technical lead at once if the site is down or a restore is needed.
+
+## UpdateRollbackFailed
+
+Severity: critical. An update failed or was interrupted and the previous release could not be put back.
+
+### Prerequisites
+
+SSH access to the host as an operator (`manuspectrum-ops`). BACKUP.md (« Restore the stack », « Personal data »).
+
+### Symptom
+
+The mail `ROLLBACK FAILED` (or `update of <tag> interrupted`) was sent and `manuspectrum_release_rollback_failed` is 1. The site may be down or running a mixed state (new code on the previous database, or the reverse). `/var/lib/manuspectrum/release/inflight` is kept: no update runs until it is removed. The engine never restores data by itself.
+
+### Diagnosis
+
+`sudo manuspectrum-update --status`, `journalctl -u 'manuspectrum-update@*' -e`, `make -C deploy status`, and `git -C ~/manuspectrum describe --tags --always` with the `MANUSPECTRUM_IMAGE` line of `.env` to see which release the checkout and the stack are on.
+
+### Remediation
+
+First try to repair by hand: check out the previous release's tag in the checkout, put its `MANUSPECTRUM_IMAGE` back in `.env` (`sudo manuspectrum-update --status` prints both), and `make -C deploy up`. If the data are damaged or the stack will not start, restore the snapshot taken just before the update as BACKUP.md describes (`make -C deploy restic ARGS="snapshots --tag pre-update"`, then `make -C deploy restore RESTIC_SNAPSHOT=<id> CONFIRM=yes ERASURES_CHECKED=yes`). Once the site answers on the release `current` names, remove the in-flight marker so another update can start: `sudo rm /var/lib/manuspectrum/release/inflight`. `ROLLBACK_FAILED` clears on the next successful update, and so does the alert.
+
+### Escalation
+
+The technical lead at once: the site may be down.
+
+## UpdateInterrupted
+
+Severity: warning. An update has been in flight for more than 5 hours.
+
+### Prerequisites
+
+SSH access to the host as an operator (`manuspectrum-ops`). BACKUP.md for a restore.
+
+### Symptom
+
+`manuspectrum_release_inflight_since_timestamp_seconds` names an update that started more than 5 hours ago, past the 4 hours the unit is allowed to run. The engine did not finish or roll back: the host restarted during the update, the engine was killed, or it hung. When the unit stopped on its own (timeout, kill), the engine's `--after-stop` step has already raised `UpdateRollbackFailed` and mailed `update of <tag> interrupted`; this warning is the net for a host that restarted before it could.
+
+### Diagnosis
+
+`sudo manuspectrum-update --status`, `systemctl status 'manuspectrum-update@*'`, `journalctl -u 'manuspectrum-update@*' -e`, `cat /var/lib/manuspectrum/release/inflight` (FROM_TAG, TO_TAG, STARTED_AT) and `make -C deploy status`.
+
+### Remediation
+
+Inflight after a crash, in order:
+
+1. Make sure no update still runs: `systemctl list-units 'manuspectrum-update@*'`. If one does, let it end or stop it with `sudo systemctl stop 'manuspectrum-update@<tag>'`; its trap rolls back first.
+2. Find which release the checkout (`git describe --tags`) and `.env` (`MANUSPECTRUM_IMAGE`) are on, against FROM_TAG and TO_TAG of the marker, and whether the site answers (`curl -s -o /dev/null -w '%{http_code}' https://<host>/readyz`).
+3. Site healthy on FROM_TAG: nothing else is needed. Site healthy on TO_TAG: the state files still name FROM_TAG as current and the next update refuses with `drift` until they are corrected, so tell the technical lead before removing the marker. Otherwise repair or restore as in `UpdateRollbackFailed`.
+4. Remove the marker: `sudo rm /var/lib/manuspectrum/release/inflight`. The next `sudo manuspectrum-update --now <tag>` then starts from a clean state.
+
+### Escalation
+
+The technical lead if the site is down, half switched, or a restore is considered.
 
 ## ReleaseWatchFailing
 
@@ -77,6 +132,8 @@ The hourly watch has failed at the named step for two hours: `git`, `registry`, 
 ### Remediation
 
 Restore the outbound access or the failing component. The next hourly run clears the alert; to run it now, `sudo systemctl start manuspectrum-watch`.
+
+Step `git` with `! [rejected] <tag> -> <tag> (would clobber existing tag)` in the log: the origin now names a different commit for a tag this host already has. Release tags never move (RELEASES.md), so treat it as a possible tag rewrite and as a security incident: do not install that tag, do not delete the local tag, compare it with the GitHub release and the repository ruleset, and call the technical lead. Only once the lead has confirmed the move is legitimate, delete the stray local tag as the service account (`git -C ~manuspectrum/manuspectrum tag -d <tag>`); the next watch run fetches the tag again. A local tag that the origin never had needs no action: the watch and the engine fetch with `--prune-tags` and drop it.
 
 ### Escalation
 
@@ -147,6 +204,8 @@ At the slot the update did not run. Refused: a check failed at the slot (worktre
 `sudo manuspectrum-update --status` shows the outcome and the reason; `journalctl -u manuspectrum-update-at -e` the pre-check output.
 
 ### Remediation
+
+The reasons are those of the engine: `drift`, `unarmed`, `tag_moved`, `env_keys`, `managed_sources`, `verify`, `backup`, `lock`, `busy` (an update in flight, or Ansible running on the host), `fetch` (git or the signature services unreachable) and `late` (the slot started, or the backup ended, after the window closed: the pre-update backup may have taken the window). The log of the slot is `journalctl -u manuspectrum-update@<tag>`.
 
 Fix the reason if there is one, acknowledge the failed slot with `sudo manuspectrum-update --cancel` (the alert clears on the next watch run), then schedule a new slot or install at once.
 

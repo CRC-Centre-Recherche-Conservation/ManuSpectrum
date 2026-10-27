@@ -14,14 +14,20 @@
 #     metrics untouched
 #   1 scheduled update: a slot that passed 15 minutes ago with no run recorded
 #     in history.log becomes OUTCOME=missed (notice withdrawn, one mail)
+#   1b Ansible running (ANSIBLE_MARKER exists): log, metrics refreshed, exit 0,
+#     nothing probed or armed
 #   2 probes: github.com (git), ghcr.io/v2/ must answer 401 (registry),
 #     tuf-repo-cdn.sigstore.dev (sigstore); a failure skips the rest
-#   3 `git fetch --tags origin` (refs only); candidate = highest tag the
+#   3 `git fetch --tags --prune --prune-tags origin` (refs only; git itself
+#     refuses a tag that moved: « would clobber existing tag »; a local tag the
+#     origin lacks is pruned); candidate = highest tag the
 #     channel allows that is newer than `current`; none -> metrics, exit 0
 #   4 a scheduled update with an empty OUTCOME is never replaced: a newer
 #     candidate sets HELD_TAG and mails once; `armed` is not touched
-#   5 armed for the candidate with the same registry digest -> metrics (and a
-#     mail still owed), exit 0
+#   5 armed for the candidate with the same registry digest -> NEEDS_ANSIBLE
+#     recomputed (rewritten when it changed, no new mail), metrics
+#     (verification_failed is kept: nothing was verified), a mail still owed,
+#     exit 0
 #   6 image digest of the tag, then release-verify with the channel policy.
 #     A missing image or a failed check on a tag younger than
 #     RELEASE_PUBLISH_GRACE (6 h) is "still publishing" and records nothing;
@@ -38,7 +44,8 @@
 # RELEASE_IMAGE_REPO (ghcr.io/crc-centre-recherche-conservation/manuspectrum),
 # RELEASE_REPO_URL (the GitHub repository, for the release link),
 # RELEASE_PUBLISH_GRACE (21600), RELEASE_PROBE_GIT / _REGISTRY / _SIGSTORE
-# (the three probe URLs), RELEASE_NOW_EPOCH (tests). From .env:
+# (the three probe URLs), ANSIBLE_MARKER (/run/manuspectrum/ansible-running),
+# RELEASE_NOW_EPOCH (tests). From .env:
 # RELEASE_CHANNEL (prod|rc, default prod), METRICS_TEXTFILE_DIR, PUBLIC_HOST and
 # the mail keys of release_mail.
 set -uo pipefail
@@ -54,6 +61,7 @@ GRACE="${RELEASE_PUBLISH_GRACE:-21600}"
 PROBE_GIT="${RELEASE_PROBE_GIT:-https://github.com/}"
 PROBE_REGISTRY="${RELEASE_PROBE_REGISTRY:-https://ghcr.io/v2/}"
 PROBE_SIGSTORE="${RELEASE_PROBE_SIGSTORE:-https://tuf-repo-cdn.sigstore.dev/}"
+ANSIBLE_MARKER="${ANSIBLE_MARKER:-/run/manuspectrum/ansible-running}"
 
 log() { echo "release-watch: $*"; }
 
@@ -148,6 +156,13 @@ An update is never run late. Schedule a new slot, or run it now:
   fi
 fi
 
+# --- 1b Ansible running
+
+if [ -e "$ANSIBLE_MARKER" ]; then
+  log "Ansible is running on this host: nothing is armed this run"
+  finish 0
+fi
+
 # --- 2 probes
 
 probe_code() { curl -sS -m 15 -o /dev/null -w '%{http_code}' "$1" 2>&1; }
@@ -177,8 +192,8 @@ CUR_IMAGE="$(sget current IMAGE)" || CUR_IMAGE=""
 PREV_IMAGE="$(sget previous IMAGE)" || PREV_IMAGE=""
 
 log "step 3: fetch (running $CUR_TAG, channel $CHANNEL)"
-if ! git -C "$APP_DIR" fetch --quiet --tags origin; then
-  log "git fetch --tags origin failed"
+if ! git -C "$APP_DIR" fetch --quiet --tags --prune --prune-tags origin; then
+  log "git fetch --tags --prune --prune-tags origin failed (a rejected tag means the origin moved it: see the runbook)"
   FAIL[git]=1
   finish 1
 fi
@@ -263,7 +278,12 @@ or choose a time (Paris time):
 if [ "$armed_tag" = "$CANDIDATE" ] && [ -n "$armed_image" ]; then
   if digest="$(bash "$RELEASE_LIB_DIR/image-digest.sh" "$REF" 2>/dev/null)" && [ "$digest" = "${armed_image#*@}" ]; then
     log "$CANDIDATE is armed and unchanged"
-    VERIFICATION=0
+    needs_now=0
+    release_compat_check "$APP_DIR" "$ENV_FILE" "$CANDIDATE" "$MANAGED_SOURCES" || needs_now=1
+    if [ "$needs_now" != "$(sget armed NEEDS_ANSIBLE)" ]; then
+      log "$CANDIDATE: needs_ansible is now $needs_now"
+      release_state_set "$STATE_DIR/armed" NEEDS_ANSIBLE "$needs_now" || FAIL[state]=1
+    fi
     announce
     finish 0
   fi

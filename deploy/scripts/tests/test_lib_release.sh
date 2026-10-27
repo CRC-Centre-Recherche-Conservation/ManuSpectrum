@@ -124,7 +124,7 @@ done
 equals "refused writes left the file untouched" "$before" "$(cat "$S/armed")"
 refused "write refuses a duplicate key" release_state_write "$S/dup" TAG=v1.0.0 TAG=v1.0.1
 refused "set refuses a bad value" release_state_set "$S/armed" TAG '$(id)'
-for r in drift unarmed tag_moved env_keys managed_sources verify backup lock busy fetch; do
+for r in drift unarmed tag_moved env_keys managed_sources verify backup lock busy fetch late; do
   check "REASON=$r" release_state_write "$S/sched" TAG=v1.2.0 "REASON=$r"
 done
 check "COUNT and APPLIED_AT" release_state_write "$S/rb" COUNT=3 APPLIED_AT=1790000000 ROLLBACK_FAILED=1
@@ -202,7 +202,7 @@ check "metrics written" release_metrics_write "$M" watch_last_run=1790000100 arm
 body="$(cat "$M")"
 for series in 'manuspectrum_release_watch_last_run_timestamp_seconds 1790000100' 'manuspectrum_release_verification_failed 0' 'manuspectrum_release_armed 1' \
   'manuspectrum_release_pending_since_timestamp_seconds 1789000000' 'manuspectrum_release_pending_security 1' 'manuspectrum_release_rollbacks_total 2' \
-  'manuspectrum_release_rollback_failed 0' 'manuspectrum_release_update_last_success_timestamp_seconds 0' 'manuspectrum_release_scheduled_timestamp_seconds 1790003000' \
+  'manuspectrum_release_rollback_failed 0' 'manuspectrum_release_inflight_since_timestamp_seconds 0' 'manuspectrum_release_update_last_success_timestamp_seconds 0' 'manuspectrum_release_scheduled_timestamp_seconds 1790003000' \
   'manuspectrum_release_watch_failed{step="git"} 0' 'manuspectrum_release_watch_failed{step="registry"} 1' 'manuspectrum_release_watch_failed{step="sigstore"} 0' \
   'manuspectrum_release_watch_failed{step="pull"} 0' 'manuspectrum_release_watch_failed{step="mail"} 0' 'manuspectrum_release_watch_failed{step="state"} 0' \
   'manuspectrum_release_schedule_failed{reason="refused"} 0' 'manuspectrum_release_schedule_failed{reason="missed"} 1'; do
@@ -217,7 +217,7 @@ refused "metrics refuse a non-number" release_metrics_write "$M" armed=yes
 equals "refused metrics left the file untouched" "$before" "$(cat "$M")"
 check "no .tmp left" test ! -e "$M.tmp"
 check "defaults: a bare call emits every series" release_metrics_write "$TMP/bare.prom"
-equals "bare call emits 17 samples" 17 "$(grep -vc '^#' "$TMP/bare.prom")"
+equals "bare call emits 18 samples" 18 "$(grep -vc '^#' "$TMP/bare.prom")"
 
 # --- mail
 mkdir -p "$TMP/mailbin"
@@ -295,8 +295,9 @@ release_state_write "$D/pending" SINCE=1789000000 SECURITY=1
 release_state_write "$D/rollbacks" COUNT=2 ROLLBACK_FAILED=1
 release_state_write "$D/current" TAG=v1.1.0 IMAGE="ghcr.io/x/y@sha256:$(printf 'b%.0s' {1..64})" COMMIT=0123456789012345678901234567890123456788 APPLIED_AT=1788000000
 release_state_write "$D/scheduled" TAG=v1.2.0 AT_EPOCH=1790003000 OUTCOME=refused REASON=drift
+release_state_write "$D/inflight" FROM_TAG=v1.1.0 TO_TAG=v1.2.0 STARTED_AT=1790001000
 check "derive: full state" release_metrics_from_state "$D" "$P"
-for want in 'armed 1' 'pending_since_timestamp_seconds 1789000000' 'pending_security 1' 'rollbacks_total 2' 'rollback_failed 1' 'update_last_success_timestamp_seconds 1788000000' 'scheduled_timestamp_seconds 1790003000' 'schedule_failed{reason="refused"} 1' 'schedule_failed{reason="missed"} 0'; do
+for want in 'armed 1' 'pending_since_timestamp_seconds 1789000000' 'pending_security 1' 'rollbacks_total 2' 'rollback_failed 1' 'update_last_success_timestamp_seconds 1788000000' 'inflight_since_timestamp_seconds 1790001000' 'scheduled_timestamp_seconds 1790003000' 'schedule_failed{reason="refused"} 1' 'schedule_failed{reason="missed"} 0'; do
   grep -qF "manuspectrum_release_$want" "$P" && ok "derive: $want" || not_ok "derive: $want" "$(cat "$P")"
 done
 release_metrics_write "$P" watch_last_run=1790000100 failed_git=1 verification_failed=1

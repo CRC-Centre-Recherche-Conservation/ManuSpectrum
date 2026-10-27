@@ -114,7 +114,8 @@ _release_state_key_known() {
 #   NOTICE_ID                      integer (may be empty)
 #   AT_PARIS                       YYYY-MM-DD HH:MM
 #   SECURITY NOTIFIED NEEDS_ANSIBLE ROLLBACK_FAILED   0 or 1
-#   REASON                         drift unarmed tag_moved env_keys managed_sources verify backup lock busy fetch (or empty)
+#   REASON                         drift unarmed tag_moved env_keys managed_sources verify backup lock busy fetch late (or empty)
+#                                  (late: a scheduled slot ran past its WINDOW_END_EPOCH)
 #   OUTCOME                        refused or missed (or empty)
 #   BY                             login [a-z_][a-z0-9_-]*
 release_state_ok() { # release_state_ok KEY VALUE
@@ -130,7 +131,7 @@ release_state_ok() { # release_state_ok KEY VALUE
     NOTICE_ID) [[ "$value" =~ ^([0-9]{1,12})?$ ]] ;;
     AT_PARIS) [[ "$value" =~ ^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])\ ([01][0-9]|2[0-3]):[0-5][0-9]$ ]] ;;
     SECURITY | NOTIFIED | NEEDS_ANSIBLE | ROLLBACK_FAILED) [[ "$value" =~ ^[01]$ ]] ;;
-    REASON) [[ "$value" =~ ^(drift|unarmed|tag_moved|env_keys|managed_sources|verify|backup|lock|busy|fetch)?$ ]] ;;
+    REASON) [[ "$value" =~ ^(drift|unarmed|tag_moved|env_keys|managed_sources|verify|backup|lock|busy|fetch|late)?$ ]] ;;
     OUTCOME) [[ "$value" =~ ^(refused|missed)?$ ]] ;;
     BY) [[ "$value" =~ ^[a-z_][a-z0-9_-]*$ ]] ;;
     *) return 1 ;;
@@ -272,14 +273,14 @@ release_env_missing_keys() { # release_env_missing_keys ENVFILE [EXAMPLE|-]
 # Writes the release textfile FILE. Arguments are NAME=VALUE integers; every
 # series is always emitted, 0 when not given. Names: watch_last_run (default
 # now), verification_failed, armed, pending_since, pending_security, rollbacks,
-# rollback_failed, update_last_success, scheduled, failed_git, failed_registry,
+# rollback_failed, inflight_since, update_last_success, scheduled, failed_git, failed_registry,
 # failed_sigstore, failed_pull, failed_mail, failed_state,
 # schedule_failed_refused, schedule_failed_missed.
 release_metrics_write() { # release_metrics_write FILE [NAME=VALUE ...]
   local file="${1-}" arg name step reason
   local -A v=(
     [watch_last_run]="$(date +%s)" [verification_failed]=0 [armed]=0 [pending_since]=0 [pending_security]=0
-    [rollbacks]=0 [rollback_failed]=0 [update_last_success]=0 [scheduled]=0
+    [rollbacks]=0 [rollback_failed]=0 [inflight_since]=0 [update_last_success]=0 [scheduled]=0
     [failed_git]=0 [failed_registry]=0 [failed_sigstore]=0 [failed_pull]=0 [failed_mail]=0 [failed_state]=0
     [schedule_failed_refused]=0 [schedule_failed_missed]=0
   )
@@ -310,6 +311,8 @@ release_metrics_write() { # release_metrics_write FILE [NAME=VALUE ...]
       && metric_sample manuspectrum_release_rollbacks_total "${v[rollbacks]}" \
       && metric_family manuspectrum_release_rollback_failed gauge "1 when a rollback itself failed" \
       && metric_sample manuspectrum_release_rollback_failed "${v[rollback_failed]}" \
+      && metric_family manuspectrum_release_inflight_since_timestamp_seconds gauge "Unix time an update started and has not finished, 0 when none" \
+      && metric_sample manuspectrum_release_inflight_since_timestamp_seconds "${v[inflight_since]}" \
       && metric_family manuspectrum_release_update_last_success_timestamp_seconds gauge "Unix time of the last successful update, 0 when none" \
       && metric_sample manuspectrum_release_update_last_success_timestamp_seconds "${v[update_last_success]}" \
       && metric_family manuspectrum_release_scheduled_timestamp_seconds gauge "Unix time of the scheduled update slot, 0 when none" \
@@ -323,8 +326,8 @@ release_metrics_write() { # release_metrics_write FILE [NAME=VALUE ...]
 }
 
 # Rewrites the release textfile FILE from the state files of STATE_DIR: armed,
-# pending (SINCE, SECURITY), rollbacks (COUNT, ROLLBACK_FAILED), current
-# (APPLIED_AT) and scheduled (AT_EPOCH, OUTCOME). The series the watch owns
+# pending (SINCE, SECURITY), rollbacks (COUNT, ROLLBACK_FAILED), inflight
+# (STARTED_AT), current (APPLIED_AT) and scheduled (AT_EPOCH, OUTCOME). The series the watch owns
 # (last run, failed steps, verification_failed) are carried over from the
 # existing FILE (the last run is 0 when there is none: the engine never claims
 # a watch ran); NAME=VALUE arguments, as for release_metrics_write, override
@@ -345,6 +348,7 @@ release_metrics_from_state() { # release_metrics_from_state STATE_DIR FILE [NAME
   v="$(release_state_get "$dir/pending" SECURITY 2>/dev/null)" && args+=("pending_security=$v")
   v="$(release_state_get "$dir/rollbacks" COUNT 2>/dev/null)" && args+=("rollbacks=$v")
   v="$(release_state_get "$dir/rollbacks" ROLLBACK_FAILED 2>/dev/null)" && args+=("rollback_failed=$v")
+  v="$(release_state_get "$dir/inflight" STARTED_AT 2>/dev/null)" && args+=("inflight_since=$v")
   v="$(release_state_get "$dir/current" APPLIED_AT 2>/dev/null)" && args+=("update_last_success=$v")
   v="$(release_state_get "$dir/scheduled" AT_EPOCH 2>/dev/null)" && args+=("scheduled=$v")
   outcome="$(release_state_get "$dir/scheduled" OUTCOME 2>/dev/null)" || outcome=""

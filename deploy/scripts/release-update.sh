@@ -7,6 +7,7 @@
 #
 # Usage: release-update.sh TAG
 #        release-update.sh --check-only TAG    steps 1-4 without any change
+#        release-update.sh --after-stop TAG    ExecStopPost of the unit (below)
 #
 # Exit codes: 0 installed (or the check passed), 1 refused with nothing
 # changed, 3 rolled back to the previous version, 4 the rollback failed.
@@ -15,20 +16,31 @@
 # Steps (one log line each):
 #   1 lock STATE_DIR/lock; create `current` from the running version if absent
 #   2 preflight: .env image and HEAD agree with `current`, clean worktree, no
-#     update in flight, TAG is armed
+#     update in flight, no Ansible run (ANSIBLE_MARKER exists), TAG is armed,
+#     a scheduled slot still inside its window
 #   3 fetch; the tag still names the armed commit; the registry tag still names
 #     the armed digest; the keys of the tag's .env.example are in .env; the
 #     files Ansible manages at the tag equal MANAGED_SOURCES
-#   4 release-verify on the armed digest
+#   4 the signature services answer (a failed probe is REASON=fetch), then
+#     release-verify on the armed digest
 #   5 `make backup TAG=pre-update` from the current version
-#   6 take the lock of the backup on our own descriptor and hold it
+#   6 take the lock of the backup on our own descriptor and hold it; a
+#     scheduled slot past its window after the backup is REASON=late
 #   7 write `inflight`, check out the tag, rewrite the .env image, `make up`
 #   8 poll /readyz until one deadline (start of step 7 + RELEASE_READY_WAIT_SECONDS)
-#   9 success: previous <- current <- armed, clear armed, pending, inflight
+#   9 success: previous <- current <- armed, clear armed, pending, inflight;
+#     local images of the repository that are neither current, previous nor
+#     armed (by digest) are removed
 #  10 any failure of 7-8, SIGTERM or SIGINT included: check out the previous
 #     commit, put its image back, `make up`, wait again; `rollbacks` counts it
 # The data are never restored, `init` and `load-snapshot` never run: a failed
 # rollback only mails the restore commands.
+#
+# --after-stop (ExecStopPost of manuspectrum-update@.service, reads
+# SERVICE_RESULT and EXIT_STATUS): an engine that exited 0, 1 or 3 left no
+# `inflight`, and 4 mailed already; any other end (timeout, kill, crash) with
+# `inflight` still there sets ROLLBACK_FAILED=1, writes the metrics and mails
+# the restore commands once. It never touches the stack.
 #
 # Scheduled context: STATE_DIR/scheduled names TAG with an empty OUTCOME. A
 # refusal sets OUTCOME=refused and REASON (the file stays) and withdraws the
@@ -39,9 +51,12 @@
 #
 # Configuration (environment, defaults for the host): APP_DIR, STATE_DIR,
 # ENV_FILE (APP_DIR/deploy/compose/.env), MANAGED_SOURCES, RELEASE_LIB_DIR,
-# UPDATE_LOCK_WAIT (900), BACKUP_LOCK_WAIT (600), RELEASE_READY_INTERVAL (10).
+# UPDATE_LOCK_WAIT (900), BACKUP_LOCK_WAIT (600), RELEASE_READY_INTERVAL (10),
+# ANSIBLE_MARKER (/run/manuspectrum/ansible-running), RELEASE_PROBE_SIGSTORE,
+# RELEASE_NOW_EPOCH (tests).
 # From .env: MANUSPECTRUM_IMAGE, RELEASE_CHANNEL (prod|rc, default prod),
-# RELEASE_READY_WAIT_SECONDS (default 600), BACKUP_DUMP_DIR (the backup lock is
+# RELEASE_READY_WAIT_SECONDS (default 600, at most RELEASE_READY_WAIT_MAX =
+# 1800: the unit's TimeoutStopSec is sized on it), BACKUP_DUMP_DIR (the backup lock is
 # BACKUP_DUMP_DIR/.lock, as in lib-backup.sh), METRICS_TEXTFILE_DIR, PUBLIC_HOST
 # and the mail keys of release_mail.
 set -uo pipefail
@@ -54,21 +69,26 @@ MANAGED_SOURCES="${MANAGED_SOURCES:-/etc/manuspectrum/managed-sources}"
 UPDATE_LOCK_WAIT="${UPDATE_LOCK_WAIT:-900}"
 BACKUP_LOCK_WAIT="${BACKUP_LOCK_WAIT:-600}"
 READY_INTERVAL="${RELEASE_READY_INTERVAL:-10}"
+ANSIBLE_MARKER="${ANSIBLE_MARKER:-/run/manuspectrum/ansible-running}"
+PROBE_SIGSTORE="${RELEASE_PROBE_SIGSTORE:-https://tuf-repo-cdn.sigstore.dev/}"
+RELEASE_READY_WAIT_MAX=1800
 
 log() { echo "release-update: $*"; }
+now_epoch() { echo "${RELEASE_NOW_EPOCH:-$(date +%s)}"; }
 
 # shellcheck source=lib-release.sh
 # shellcheck source-path=SCRIPTDIR
 source "$RELEASE_LIB_DIR/lib-release.sh" || { echo "release-update: cannot read $RELEASE_LIB_DIR/lib-release.sh" >&2; exit 2; }
 
-CHECK_ONLY=0
+CHECK_ONLY=0 AFTER_STOP=0
 TAG=""
 case "${1-}" in
-  --check-only) CHECK_ONLY=1; TAG="${2-}"; [ "$#" -eq 2 ] || { echo "usage: release-update.sh [--check-only] TAG" >&2; exit 2; } ;;
-  *) TAG="${1-}"; [ "$#" -eq 1 ] || { echo "usage: release-update.sh [--check-only] TAG" >&2; exit 2; } ;;
+  --check-only) CHECK_ONLY=1; TAG="${2-}"; [ "$#" -eq 2 ] || { echo "usage: release-update.sh [--check-only|--after-stop] TAG" >&2; exit 2; } ;;
+  --after-stop) AFTER_STOP=1; TAG="${2-}"; [ "$#" -eq 2 ] || { echo "usage: release-update.sh [--check-only|--after-stop] TAG" >&2; exit 2; } ;;
+  *) TAG="${1-}"; [ "$#" -eq 1 ] || { echo "usage: release-update.sh [--check-only|--after-stop] TAG" >&2; exit 2; } ;;
 esac
 
-SCHED=0 NOTICE_ID="" HAVE_LOCK=0 TERMINATED=0
+SCHED=0 NOTICE_ID="" HAVE_LOCK=0 LOCK_REFUSAL=0 TERMINATED=0
 CUR_TAG="" CUR_IMAGE="" CUR_COMMIT=""
 ARMED_IMAGE="" ARMED_COMMIT=""
 CHANNEL=prod WAIT=600
@@ -111,7 +131,7 @@ refuse() { # refuse REASON MESSAGE
   local reason="$1"
   shift
   log "REFUSED: $*"
-  if [ "$CHECK_ONLY" = 0 ] && [ "$HAVE_LOCK" = 1 ]; then
+  if [ "$CHECK_ONLY" = 0 ] && { [ "$HAVE_LOCK" = 1 ] || [ "$LOCK_REFUSAL" = 1 ]; }; then
     if [ "$SCHED" = 1 ]; then
       release_state_set "$STATE_DIR/scheduled" OUTCOME refused REASON "$reason" || log "scheduled: state not updated"
       notice withdraw "$NOTICE_ID"
@@ -132,9 +152,50 @@ finish() { # finish CODE: refresh the metrics and leave
   exit "$1"
 }
 
+# A scheduled run is bound to its window: past WINDOW_END_EPOCH it is refused.
+check_window() { # check_window WHEN
+  local end
+  [ "$SCHED" = 1 ] || return 0
+  end="$(release_state_get "$STATE_DIR/scheduled" WINDOW_END_EPOCH 2>/dev/null)" || return 0
+  [ "$(now_epoch)" -le "$end" ] || refuse late "the window of the scheduled update closed at $(date -u -d "@$end" '+%Y-%m-%d %H:%M UTC') ($1)"
+}
+
 run_verify() { # run_verify IMAGE TAG COMMIT
   (cd "$APP_DIR" && bash "$RELEASE_LIB_DIR/release-verify.sh" --policy "$CHANNEL" "$1" "$2" --commit "$3" --repo-dir "$APP_DIR") 2>&1
 }
+
+# --- after-stop (ExecStopPost)
+
+if [ "$AFTER_STOP" = 1 ]; then
+  release_tag_valid "$TAG" || { log "after-stop: '$TAG' is not a release tag"; exit 0; }
+  HOST_NAME="$(release_env_get "$ENV_FILE" PUBLIC_HOST 2>/dev/null || hostname)"
+  if [ "${SERVICE_RESULT:-}" = success ] || [ ! -e "$STATE_DIR/inflight" ]; then exit 0; fi
+  if [ "${SERVICE_RESULT:-}" = exit-code ] && [ "${EXIT_STATUS:-}" = 4 ]; then exit 0; fi
+  exec 7>>"$STATE_DIR/lock" && { flock -w 30 7 || log "after-stop: lock not taken, going on"; }
+  log "after-stop: the engine ended with ${SERVICE_RESULT:-unknown} (${EXIT_STATUS:-?}) and left $STATE_DIR/inflight"
+  from_tag="$(release_state_get "$STATE_DIR/inflight" FROM_TAG 2>/dev/null || echo "the previous version")"
+  release_state_set "$STATE_DIR/rollbacks" ROLLBACK_FAILED 1 || log "state: ROLLBACK_FAILED not written"
+  history interrupted "$from_tag" "$TAG"
+  if [ -f "$STATE_DIR/scheduled" ] && [ "$(release_state_get "$STATE_DIR/scheduled" TAG 2>/dev/null)" = "$TAG" ] \
+    && [ -z "$(release_state_get "$STATE_DIR/scheduled" OUTCOME 2>/dev/null)" ]; then
+    SCHED=1
+    NOTICE_ID="$(release_state_get "$STATE_DIR/scheduled" NOTICE_ID 2>/dev/null || true)"
+    scheduled_done end "$NOTICE_ID" --at +24h
+  fi
+  write_metrics
+  send_mail "update of $TAG interrupted" "The update to $TAG on $HOST_NAME ended without finishing (${SERVICE_RESULT:-unknown}, exit ${EXIT_STATUS:-unknown}); it was neither completed nor rolled back by the engine.
+The site may be down or half switched. Nothing was restored automatically and $STATE_DIR/inflight is kept: no update runs until it is removed.
+
+Check the site first (sudo manuspectrum-update --status, make -C deploy status). If it must be repaired, restore the backup taken just before the update:
+
+  make -C deploy restic ARGS=\"snapshots --tag pre-update\"
+  make -C deploy restore RESTIC_SNAPSHOT=<id> CONFIRM=yes ERASURES_CHECKED=yes
+
+Read deploy/BACKUP.md (\"Restore the stack\", \"Personal data\") before the restore: it replaces the database and the uploads. Then follow deploy/runbooks/release.md (UpdateInterrupted).
+
+Details: journalctl -u manuspectrum-update@$TAG.service"
+  exit 0
+fi
 
 # --- arguments and configuration
 
@@ -154,14 +215,17 @@ fi
 
 log "step 1: lock and current version"
 exec 7>>"$STATE_DIR/lock" || { log "REFUSED: cannot open $STATE_DIR/lock"; echo "REASON=lock"; exit 1; }
-flock -w "$UPDATE_LOCK_WAIT" 7 || refuse lock "another update or watch holds $STATE_DIR/lock"
+if ! flock -w "$UPDATE_LOCK_WAIT" 7; then
+  LOCK_REFUSAL=1 # a scheduled run records its refusal without the lock (release_state_set renames atomically)
+  refuse lock "another update or watch holds $STATE_DIR/lock"
+fi
 HAVE_LOCK=1
 
 CHANNEL="$(release_env_get "$ENV_FILE" RELEASE_CHANNEL 2>/dev/null || echo prod)"
 case "$CHANNEL" in prod | rc) ;; *) refuse env_keys "RELEASE_CHANNEL in $ENV_FILE must be prod or rc" ;; esac
 WAIT="$(release_env_get "$ENV_FILE" RELEASE_READY_WAIT_SECONDS 2>/dev/null || echo 600)"
-if ! [[ "$WAIT" =~ ^[0-9]{1,5}$ ]] || [ "$WAIT" -le 0 ]; then
-  refuse env_keys "RELEASE_READY_WAIT_SECONDS in $ENV_FILE must be a positive number of seconds"
+if ! [[ "$WAIT" =~ ^[0-9]{1,5}$ ]] || [ "$WAIT" -le 0 ] || [ "$WAIT" -gt "$RELEASE_READY_WAIT_MAX" ]; then
+  refuse env_keys "RELEASE_READY_WAIT_SECONDS in $ENV_FILE must be between 1 and $RELEASE_READY_WAIT_MAX seconds"
 fi
 
 ENV_IMAGE="$(release_env_get "$ENV_FILE" MANUSPECTRUM_IMAGE 2>/dev/null)" || ENV_IMAGE=""
@@ -196,6 +260,8 @@ log "step 2: preflight (running $CUR_TAG)"
 dirty="$(git -C "$APP_DIR" status --porcelain 2>&1)" || refuse drift "git status failed in $APP_DIR"
 [ -z "$dirty" ] || refuse drift "$APP_DIR has local changes:
 $(head -n 10 <<<"$dirty")"
+check_window "before the start"
+[ ! -e "$ANSIBLE_MARKER" ] || refuse busy "Ansible is running on this host"
 [ ! -e "$STATE_DIR/inflight" ] || refuse busy "an update is in flight or was interrupted ($STATE_DIR/inflight)"
 [ -f "$STATE_DIR/armed" ] || refuse unarmed "no release is armed"
 [ "$(release_state_get "$STATE_DIR/armed" TAG 2>/dev/null)" = "$TAG" ] || refuse unarmed "$TAG is not the armed release"
@@ -207,7 +273,7 @@ fi
 # --- 3 what the tag brings
 
 log "step 3: fetch and compare $TAG with what is armed"
-git -C "$APP_DIR" fetch --tags origin || refuse fetch "git fetch --tags origin failed (a tag that moved is refused by git itself)"
+git -C "$APP_DIR" fetch --tags --prune --prune-tags origin || refuse fetch "git fetch --tags --prune --prune-tags origin failed (a tag that moved is refused by git itself: would clobber existing tag)"
 tag_commit="$(git -C "$APP_DIR" rev-parse --verify --quiet "refs/tags/$TAG^{commit}")" || refuse tag_moved "$TAG is not in $APP_DIR after the fetch"
 [ "$tag_commit" = "$ARMED_COMMIT" ] || refuse tag_moved "$TAG names $tag_commit, the armed commit is $ARMED_COMMIT"
 registry_ref="${ARMED_IMAGE%@*}:$TAG"
@@ -218,6 +284,8 @@ release_compat_check "$APP_DIR" "$ENV_FILE" "$TAG" "$MANAGED_SOURCES" || refuse 
 # --- 4 verification
 
 log "step 4: signature and revision of the armed image"
+sig_code="$(curl -sS -m 15 -o /dev/null -w '%{http_code}' "$PROBE_SIGSTORE" 2>&1)"
+[[ "$sig_code" =~ ^[23][0-9][0-9]$ ]] || refuse fetch "the signature services ($PROBE_SIGSTORE) do not answer (${sig_code:-no answer}): verification cannot run"
 verify_out="$(run_verify "$ARMED_IMAGE" "$TAG" "$ARMED_COMMIT")" || { refuse verify "release-verify refused $ARMED_IMAGE: $(tail -n 3 <<<"$verify_out")"; }
 
 if [ "$CHECK_ONLY" = 1 ]; then
@@ -236,6 +304,8 @@ exec 8>"$backup_dir/.lock" || refuse lock "cannot open $backup_dir/.lock"
 flock -w "$BACKUP_LOCK_WAIT" 8 || refuse lock "another backup or restore holds $backup_dir/.lock"
 
 # --- 7 switch, 8 readiness
+
+check_window "after the backup"
 
 # shellcheck disable=SC2317  # run by the trap
 on_signal() { TERMINATED=1; }
@@ -274,9 +344,27 @@ switch_to() { # switch_to LABEL COMMIT IMAGE
   wait_ready "$deadline"
 }
 
+# Removes the local images of the release repository that `current`, `previous`
+# and `armed` do not name (by digest). Images of other repositories are never
+# listed. Failures are logged.
+prune_images() {
+  local repo="${ARMED_IMAGE%@*}" keep="" f img repository digest
+  for f in current previous armed; do
+    img="$(release_state_get "$STATE_DIR/$f" IMAGE 2>/dev/null)" && keep+=" ${img#*@} "
+  done
+  while read -r repository digest; do
+    [ "$repository" = "$repo" ] || continue
+    [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || continue
+    case "$keep" in *" $digest "*) continue ;; esac
+    log "removing the unused image $repo@$digest"
+    docker image rm "$repo@$digest" >/dev/null 2>&1 || log "image $repo@$digest not removed"
+  done < <(docker image ls --digests --no-trunc --format '{{.Repository}} {{.Digest}}' "$repo" 2>/dev/null)
+}
+
 trap on_signal TERM INT
 log "step 7: switching $CUR_TAG -> $TAG (wait ${WAIT}s)"
 release_state_write "$STATE_DIR/inflight" "FROM_TAG=$CUR_TAG" "TO_TAG=$TAG" "STARTED_AT=$(date +%s)" || refuse busy "cannot write $STATE_DIR/inflight"
+write_metrics
 switch_to "$TAG" "$ARMED_COMMIT" "$ARMED_IMAGE"
 switched=$?
 
@@ -289,6 +377,7 @@ if [ "$switched" = 0 ]; then
   rm -f "$STATE_DIR/armed" "$STATE_DIR/pending" "$STATE_DIR/inflight"
   if [ -f "$STATE_DIR/rollbacks" ]; then release_state_set "$STATE_DIR/rollbacks" ROLLBACK_FAILED 0 || true; fi
   history installed "$CUR_TAG" "$TAG"
+  prune_images
   scheduled_done end "$NOTICE_ID" --at now
   send_mail "$TAG installed on $HOST_NAME" "$TAG is installed on $HOST_NAME (it was $CUR_TAG) and the application answers /readyz."
   finish 0

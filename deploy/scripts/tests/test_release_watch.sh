@@ -165,7 +165,7 @@ watch() { # watch: runs the watch from an unrelated directory; sets RC, OUT
   OUT="$(cd "$TMP" && env -i PATH="$FAKE/bin:$PATH" HOME="$TMP" \
     APP_DIR="$W/app" STATE_DIR="$W/state" ENV_FILE="$ENVF" MANAGED_SOURCES="$W/managed" RELEASE_LIB_DIR="$FAKE/lib" \
     RELEASE_SENDMAIL="$FAKE/bin/sendmail" \
-    FAKE_LOG="$LOG" FAKE_DIR="$W/f" FAKE_MAIL="$W/mail" FAKE_D2="$D2" \
+    FAKE_LOG="$LOG" FAKE_DIR="$W/f" FAKE_MAIL="$W/mail" FAKE_D2="$D2" ANSIBLE_MARKER="$W/ansible-running" \
     bash "$WATCH" 2>&1)"
   RC=$?
 }
@@ -191,6 +191,29 @@ equals "lock held: exit 0" 0 "$RC"
 grep -q 'update running' <<<"$OUT" && ok "lock held: says so" || not_ok "lock held: says so" "$OUT"
 check "lock held: metrics untouched, nothing probed" test ! -e "$(prom)" -a ! -s "$LOG"
 kill "$holder" 2>/dev/null; wait "$holder" 2>/dev/null
+
+# --- Ansible is running: nothing is probed or armed
+setup rc v1.1.0 v1.1.0 v1.2.0
+touch "$W/ansible-running"
+watch
+equals "Ansible running: exit 0" 0 "$RC"
+grep -q 'Ansible is running' <<<"$OUT" && ok "Ansible running: says so" || not_ok "Ansible running: says so" "$OUT"
+check "Ansible running: nothing armed, nothing probed, no mail" test ! -e "$W/state/armed" -a ! -s "$LOG" -a "$(nmails)" = 0
+grep -qE "watch_last_run_timestamp_seconds [0-9]{10}$" "$(prom)" && ok "Ansible running: metrics refreshed" || not_ok "Ansible running: metrics refreshed"
+rm "$W/ansible-running"; watch
+equals "Ansible done: the release is armed" v1.2.0 "$(sget armed TAG)"
+
+# --- fetch: a stray local tag is pruned, a moved tag is not taken
+setup rc v1.1.0 v1.1.0 v1.2.0
+"${GIT[@]}" -C "$W/app" tag stray-tag
+watch
+equals "fetch prunes a local tag the origin lacks" "" "$(git -C "$W/app" tag -l stray-tag)"
+setup rc v1.1.0 v1.1.0 v1.2.0
+git -C "$W/origin.git" -c user.name=t -c user.email=t@manuspectrum.test tag -f -a -m moved v1.1.0 "$C1" >/dev/null
+watch
+equals "a tag moved on the origin: exit 1, step git" "1" "$RC"
+metric 'watch_failed{step="git"} 1' && ok "a tag moved on the origin: step git" || not_ok "a tag moved on the origin: step git" "$(cat "$(prom)")"
+equals "a tag moved on the origin: the local tag is kept" "$C11" "$(git -C "$W/app" rev-parse "v1.1.0^{commit}")"
 
 # --- nothing new
 setup rc v1.0.0 v1.0.0
@@ -295,6 +318,25 @@ equals "armed and unchanged: exit 0" 0 "$RC"
 equals "armed and unchanged: state untouched" "$s0" "$(state_hash)"
 check "armed and unchanged: no verification, no mail" test "$(nmails)" = 0 && ! has '^verify'
 metric 'armed 1' && ok "armed and unchanged: metrics refreshed" || not_ok "armed and unchanged: metrics"
+# the armed release was not re-verified: a failure recorded earlier stays
+setup rc v1.1.0 v1.1.0 v1.2.0
+arm v1.2.0 "$C12" "$D2" 1
+bash -c ". '$FAKE/lib/lib-release.sh'; release_metrics_write '$(prom)' verification_failed=1"
+watch
+grep -qx 'manuspectrum_release_verification_failed 1' "$(prom)" && ok "armed and unchanged: verification_failed is not cleared" || not_ok "armed and unchanged: verification_failed is not cleared" "$(cat "$(prom)")"
+# NEEDS_ANSIBLE follows the host: rewritten when it changed, no new mail
+setup rc v1.1.0 v1.1.0 v1.2.0
+arm v1.2.0 "$C12" "$D2" 1
+sed -i 's/NEEDS_ANSIBLE=0/NEEDS_ANSIBLE=1/' "$W/state/armed"
+watch
+equals "armed and unchanged: NEEDS_ANSIBLE cleared once the host is compatible" 0 "$(sget armed NEEDS_ANSIBLE)"
+equals "armed and unchanged: no mail for it" 0 "$(nmails)"
+setup rc v1.1.0 v1.1.0 v1.2.0
+arm v1.2.0 "$C12" "$D2" 1
+sed -i '/^NEW_KEY=/d' "$ENVF"
+watch
+equals "armed and unchanged: NEEDS_ANSIBLE set when the host lacks a key" 1 "$(sget armed NEEDS_ANSIBLE)"
+equals "armed and unchanged: the other armed keys are kept" "v1.2.0 1" "$(sget armed TAG) $(sget armed NOTIFIED)"
 setup rc v1.1.0 v1.1.0 v1.2.0
 touch "$W/f/mail_fail"
 watch
