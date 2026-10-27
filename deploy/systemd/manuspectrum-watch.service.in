@@ -1,0 +1,22 @@
+# Hourly release watch: finds the newest release the channel allows, checks it
+# (digest, signature, compatibility) and arms it for an operator. It installs
+# nothing. Runs the root-owned copy of the script, never the checkout (bash
+# reads a script while it runs). The service account is in the docker group
+# (the signature check pulls the image). No NoNewPrivileges: the notification
+# mail goes through the setgid sendmail. PP-8 substitutes the two placeholders
+# and installs this file with the timer next to it.
+[Unit]
+Description=ManuSpectrum release watch
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@APP_USER@
+Environment=APP_DIR=@DEPLOY_DIR@/..
+Environment=STATE_DIR=/var/lib/manuspectrum/release
+Environment=RELEASE_LIB_DIR=/usr/local/lib/manuspectrum/release
+ExecStart=/usr/local/lib/manuspectrum/release/release-watch.sh
+TimeoutStartSec=30min
+Nice=10
+PrivateTmp=true
