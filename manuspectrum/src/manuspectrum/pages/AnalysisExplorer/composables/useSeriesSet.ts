@@ -14,11 +14,14 @@ export interface SeriesResult {
     retryable: boolean;
     /** The file is over the server's ceiling for the full series (413). */
     tooLarge: boolean;
+    /** The file is missing from the server's storage (410). */
+    missing: boolean;
 }
 
 const QUICK_VIEW_POINTS = 4096;
 const TOO_MANY_REQUESTS = 429;
 const TOO_LARGE = 413;
+const GONE = 410;
 const SERVER_ERROR = 500;
 
 function isRetryable(error: unknown): boolean {
@@ -41,6 +44,7 @@ function readOne(
             failed: false,
             retryable: false,
             tooLarge: false,
+            missing: false,
         }),
         (error: unknown) => {
             if (signal.aborted) throw error;
@@ -50,6 +54,7 @@ function readOne(
                 retryable: isRetryable(error),
                 tooLarge:
                     error instanceof ServiceError && error.status === TOO_LARGE,
+                missing: error instanceof ServiceError && error.status === GONE,
             };
         },
     );

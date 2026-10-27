@@ -536,10 +536,22 @@ class SpectrumPreviewViewTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 204)
 
-    def test_a_missing_file_has_no_preview(self):
-        response = self.get("/nowhere/at/all.csv")
+    def test_a_file_missing_from_storage_is_a_bodyless_410_logged_once(self):
+        with self.assertLogs("manuspectrum.views.spectrum_preview", "WARNING") as logs:
+            first = self.get("/nowhere/at/all.csv")
+            second = self.get("/nowhere/at/all.csv")
 
-        self.assertEqual(response.status_code, 204)
+        for response in (first, second):
+            self.assertEqual((response.status_code, response.content), (410, b""))
+            self.assertEqual(response["Cache-Control"], "private, no-store")
+        self.assertEqual(len(logs.records), 1)
+        self.assertIn(str(FILE_ID), logs.output[0])
+        self.assertNotIn("/nowhere", logs.output[0])
+
+    def test_a_refused_missing_file_is_still_a_404(self):
+        response = self.get("/nowhere/at/all.csv", readable=False)
+
+        self.assertEqual((response.status_code, response.content), (404, b""))
 
     def test_the_stored_configuration_shapes_the_series(self):
         path = self.written(".csv", text=FORS_CSV)
@@ -728,10 +740,18 @@ class FullSeriesViewTests(SimpleTestCase):
         for path in (
             self.written(".mca"),
             self.written(text="400.0,1.0\n"),
-            "/nowhere/at/all.csv",
         ):
             with self.subTest(path=path):
                 self.assertEqual(self.get(path).status_code, 204)
+
+    def test_a_full_series_missing_from_storage_is_a_bodyless_410(self):
+        cache.delete(f"spectrum-preview-missing:{FILE_ID}")
+        with mock.patch("manuspectrum.views.spectrum_preview.read_series") as read:
+            response = self.get("/nowhere/at/all.csv")
+
+        self.assertEqual((response.status_code, response.content), (410, b""))
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+        read.assert_not_called()
 
     def test_a_full_series_revalidates_with_its_etag(self):
         path = self.written()

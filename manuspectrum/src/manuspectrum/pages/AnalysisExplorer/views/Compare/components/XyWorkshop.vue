@@ -698,7 +698,7 @@ const answered = computed(() =>
     props.curves.flatMap((line) => {
         const answer = line.file.previewUrl
             ? answers.value.get(line.file.previewUrl)
-            : { series: null, failed: false, tooLarge: false };
+            : { series: null, failed: false, tooLarge: false, missing: false };
         return answer
             ? [{ name: `${slotLabel(line.slot)} · ${line.file.name}`, answer }]
             : [];
@@ -735,6 +735,14 @@ const notes = computed(() => {
                     $gettext(
                         "%{name}: too large to draw in full; download the file to read it.",
                     ),
+                    { name },
+                    true,
+                ),
+            );
+        } else if (answer.missing) {
+            found.push(
+                interpolate(
+                    $gettext("%{name}: file not found on the server."),
                     { name },
                     true,
                 ),

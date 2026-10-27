@@ -503,6 +503,15 @@ describe("XyWorkshop", () => {
         expect(traces[0].line.dash).toBe("solid");
     });
 
+    it("says a file missing from the server is not found, without a retry", async () => {
+        answer(1, jsonResponse({}, 410));
+        const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
+        expect(notes(view)).toEqual([
+            "A1 · S1.csv: file not found on the server.",
+        ]);
+        expect(view.find(".retry").exists()).toBe(false);
+    });
+
     it("offers a retry when a file fails on a server error", async () => {
         answer(1, jsonResponse({}, 503));
         const view = await mountWorkshop([curve(0, 1), curve(1, 2)]);
