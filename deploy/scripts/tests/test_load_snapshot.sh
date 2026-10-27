@@ -322,6 +322,7 @@ run_load CONFIRM=yes STUB_VOID_FAIL=1 && void_status=0 || void_status=$?
   && ! grep -q "^make up" "$TMP/calls" && ! grep -q "reindex_database" "$TMP/calls"
 assert "a failed voiding of the notices stops before the stack starts, telling what to do" $?
 reset_media
+inode_before="$(stat -c %i "$TMP/media/uploadedfiles")"
 run_load CONFIRM=yes && status=0 || status=$?
 
 
