@@ -106,7 +106,9 @@ class RedactionTests(SimpleTestCase):
         for text in ("a" * 32768, "a." * 16384 + "@" + "b-" * 16384):
             started = time.perf_counter()
             obs_logging.redact_text(text)
-            self.assertLess(time.perf_counter() - started, 0.05)
+            # A quadratic scan of these inputs takes seconds; a loaded CI runner
+            # can take a few tens of milliseconds for the linear one.
+            self.assertLess(time.perf_counter() - started, 0.5)
 
     def test_an_email_with_a_long_local_part_still_matches_its_tail(self):
         self.assertEqual(obs_logging.redact_text("x@example.org"), "[email]")
