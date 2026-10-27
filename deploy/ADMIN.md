@@ -252,6 +252,11 @@ accounts anonymised in the month.
 - **Dry run.** `make -C deploy manage ARGS="anonymise_inactive_accounts"` lists, by user id,
   the notices and anonymisations the pass would make and writes and sends nothing; `--apply`
   runs the pass.
+- **Notices.** A notice counts as sent only when it reached someone, or nobody had an address
+  to write to. When every send failed, the next pass sends it again, and the 7-day (workflow)
+  or 30-day (account) delay starts from that new notice. A pass runs only at its hour, up to
+  two hours late: after a stop over that hour, beat does not catch it up and the next night
+  runs it. This holds for the three daily passes.
 - Alerts: `AccountRetentionFailures`, `AccountRetentionStale`.
 
 ## Restrictions (embargoes)
@@ -267,9 +272,13 @@ unless an administrator records an exception (below).
 - **Date.** The daily pass (06:00 Europe/Paris) records every restriction it finds without an
   Embargo row and dates it at the detection day plus 12 months (events `detected`, then
   `dated` by nobody); open Embargoes in the admin and edit "Ends on" (the last day of the
-  restriction) to shorten it. It is lifted the day after at 06:00. A row restored or
-  migrated with the database keeps its dates; one already past its end is lifted at the
-  next pass with the usual mail. After moving data between hosts without the `ms_embargo`
+  restriction) to shorten it. It is lifted the day after at 06:00. An end date must be at least
+  7 days after today, for every administrator, superusers included: each lift follows its final
+  notice by 7 days. When a restriction would end without that notice (a pass missed, a mail
+  that failed, a database restored or loaded), the daily pass moves its end 7 days on (history:
+  « End date set », by nobody, old and new end), sends the notice, which says the date was
+  moved, and lifts it after the new date; the dry run lists such rows as « would be re-dated
+  for a final notice ». After moving data between hosts without the `ms_embargo`
   table, the first pass therefore dates every restriction it finds at its own detection day
   + 12 months: review the list and shorten what must end sooner.
   Notices go to the resource creator and the user who set the restriction at 30 and 7 days
@@ -281,7 +290,9 @@ unless an administrator records an exception (below).
   "Extend the end date by 3, 6 or 12 months". Beyond the maximum duration only a superuser can
   set the date. Each change is recorded: who, when, from and to.
 - **History.** Open the embargo: the inline "events" list every change, and "Notices sent"
-  the notices already mailed.
+  the notices already mailed. When `AccountMailFailures` persists, check this history: rows
+  whose final notice cannot be delivered are re-dated every day and never lifted until a
+  notice gets through.
 - **Rehearsal / by hand.** `make -C deploy manage ARGS="release_expired_embargoes"` lists what
   the pass would do (dry run); `--apply` runs it as the beat task does.
 - Alerts: `EmbargoLiftFailures`, `EmbargoOverdue`, `EmbargoPassStale` (`runbooks/application.md`,
@@ -381,10 +392,9 @@ completed workflows are never touched.
   be noticed and cleaned and the resources it would delete and keep, and writes and sends
   nothing. `--apply` runs the pass; `--workflow <id>` restricts it to one run.
 - **After a long outage or a restore.** A run found already past its delay gets both notices
-  (21 and 7 days) the same day and is cleaned 7 days later. Before the beat schedule is enabled
-  again (after a restore, a move to a new host, or a stack stopped for weeks), run the dry run,
-  read who would be warned and what would be cleaned, and tell those people beforehand or delay
-  the first pass.
+  (21 and 7 days) the same day and is cleaned 7 days later. After `restore` or `load-snapshot`
+  the pending notices are voided: the first pass after it only sends notices, and the dry run
+  shows who will be warned.
 - Alerts: `WorkflowCleanupFailures`, `WorkflowCleanupStale`.
 
 ## Draft register of processing

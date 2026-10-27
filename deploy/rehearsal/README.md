@@ -143,7 +143,13 @@ and again, from one snapshot directory.
   does not have under `migrations_ahead_of_code` (a warning is printed; the snapshot is still written but an
   image built from this commit refuses it), sha256 of the files),
   directory `0700`, files `0600`. It refuses a non-empty directory and never prints the
-  database password.
+  database password. It counts the `files` rows whose file is missing under
+  `MEDIA_ROOT/uploadedfiles`, prints the count and records it in `manifest.json`
+  (`uploaded_files`: `cited`, `missing`; `load-snapshot` prints it again). Above
+  `SNAPSHOT_MAX_MISSING_PERCENT` (default `10`) of the cited files it stops before dumping:
+  `MEDIA_ROOT` lives inside the Python package of each checkout, so a high share usually
+  means the script ran from a checkout other than the one the development server uses (pass
+  `--repo`). `ALLOW_MISSING_FILES=yes` writes the snapshot anyway.
 - [ ] Copy it: `scp -r ~/ms-snapshots/ms-snapshot-<date> <admin>@192.168.123.10:`, then
   move it where the service account reads it (placeholders: `<service-account>`, `<date>`):
   `sudo install -d -o <service-account> -g <service-account> -m 0700 /home/<service-account>/snapshots`,
@@ -152,7 +158,8 @@ and again, from one snapshot directory.
   (a glob run by the admin cannot expand inside a directory it cannot read: use `sudo sh -c '…'`).
 - [ ] On the VM, as the service account, set the environment explicitly: the template
   `deploy/compose/.env.example` ships `DEPLOY_ENVIRONMENT=production`, so run
-  `sed -i 's/^DEPLOY_ENVIRONMENT=.*/DEPLOY_ENVIRONMENT=rehearsal/' deploy/compose/.env`. The command
+  `V=rehearsal; sed -i "s/^DEPLOY_ENVIRONMENT=.*/DEPLOY_ENVIRONMENT=$V/" deploy/compose/.env`
+  (or edit the line with `nano deploy/compose/.env`). The command
   also requires the host marker `/etc/manuspectrum/rehearsal-host`, written by `host-baseline.sh`
   in the VM and checked by `verify-baseline.sh`; without it (a production host) the command is
   refused whatever `.env` says.

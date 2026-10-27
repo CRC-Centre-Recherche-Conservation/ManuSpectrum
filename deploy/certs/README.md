@@ -56,7 +56,18 @@ sudo update-ca-certificates
 Firefox keeps its own store: Settings, Privacy and Security, Certificates, View
 Certificates, Authorities, Import `ca.crt`, tick « Trust this CA to identify
 websites ». Chromium-based browsers on Linux use the NSS store of the user:
-`certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n manuspectrum-local -i ca.crt`.
+`certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n manuspectrum-local -i ca.crt`
+(package `libnss3-tools`); they ignore the system store.
+
+Once the rehearsal is over, remove it again:
+
+```bash
+certutil -d sql:$HOME/.pki/nssdb -D -n manuspectrum-local
+sudo rm /usr/local/share/ca-certificates/manuspectrum-local-ca.crt
+sudo update-ca-certificates --fresh
+```
+
+and delete the authority in Firefox and the `/etc/hosts` line.
 
 Add `manuspectrum.test` to the workstation's `/etc/hosts`, pointing at the host
 running the stack.
