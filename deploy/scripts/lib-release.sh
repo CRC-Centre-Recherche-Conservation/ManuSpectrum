@@ -26,7 +26,8 @@
 # release_pick_candidate, release_state_ok, release_state_read,
 # release_state_get, release_state_write, release_state_set, release_env_get,
 # release_env_set_image, release_env_missing_keys, release_metrics_write,
-# release_mail, release_slot_parse, release_metrics_from_state.
+# release_mail, release_slot_parse, release_metrics_from_state,
+# release_compat_check.
 # shellcheck disable=SC2034  # patterns read by the sourcing scripts
 
 RELEASE_TAG_FINAL_RE='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
@@ -422,4 +423,40 @@ if epoch - now > 30 * 86400:
     sys.exit("slot must be at most 30 days ahead")
 print(f"{epoch}\t{utc.strftime('%Y-%m-%d %H:%M')}\t{text}")
 PY
+}
+
+# --- compatibility of a tag with this host
+
+# Checks that the host can take the release TAG of the checkout APP_DIR: every
+# key of the tag's deploy/compose/.env.example is in ENVFILE, and the files
+# Ansible installs at the tag (release-managed.sh, next to this library) equal
+# MANAGED_SOURCES. Status 0 when both hold. Otherwise status 1, with
+# RELEASE_COMPAT_REASON (env_keys or managed_sources) and
+# RELEASE_COMPAT_MESSAGE set for the caller; nothing is printed.
+release_compat_check() { # release_compat_check APP_DIR ENVFILE TAG MANAGED_SOURCES
+  local app="${1-}" envfile="${2-}" tag="${3-}" sources="${4-}" missing managed diff_out differing
+  RELEASE_COMPAT_REASON="" RELEASE_COMPAT_MESSAGE=""
+  missing="$(git -C "$app" show "refs/tags/$tag:deploy/compose/.env.example" | release_env_missing_keys "$envfile" -)" || {
+    RELEASE_COMPAT_REASON=env_keys RELEASE_COMPAT_MESSAGE="cannot read deploy/compose/.env.example at $tag"
+    return 1
+  }
+  if [ -n "$missing" ]; then
+    RELEASE_COMPAT_REASON=env_keys RELEASE_COMPAT_MESSAGE="$envfile lacks keys that $tag expects: $(tr '\n' ' ' <<<"$missing")"
+    return 1
+  fi
+  if [ ! -f "$sources" ]; then
+    RELEASE_COMPAT_REASON=managed_sources RELEASE_COMPAT_MESSAGE="$sources does not exist: run Ansible from a laptop checkout at $tag, then retry"
+    return 1
+  fi
+  managed="$(cd "$app" && bash "$_RELEASE_LIB_DIR/release-managed.sh" --ref "refs/tags/$tag" --repo "$app")" || {
+    RELEASE_COMPAT_REASON=managed_sources RELEASE_COMPAT_MESSAGE="cannot fingerprint the managed files at $tag"
+    return 1
+  }
+  if ! diff_out="$(diff <(printf '%s\n' "$managed") "$sources")"; then
+    differing="$(grep '^[<>]' <<<"$diff_out" | sed 's/^[<>] [0-9a-f]*  //' | sort -u)"
+    RELEASE_COMPAT_REASON=managed_sources RELEASE_COMPAT_MESSAGE="files installed by Ansible differ between $tag and this host:
+$differing
+Re-run Ansible from a laptop checkout at $tag, then retry."
+    return 1
+  fi
 }

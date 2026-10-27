@@ -213,18 +213,7 @@ tag_commit="$(git -C "$APP_DIR" rev-parse --verify --quiet "refs/tags/$TAG^{comm
 registry_ref="${ARMED_IMAGE%@*}:$TAG"
 registry_digest="$(bash "$RELEASE_LIB_DIR/image-digest.sh" "$registry_ref")" || refuse fetch "cannot read the manifest of $registry_ref"
 [ "$registry_digest" = "${ARMED_IMAGE#*@}" ] || refuse tag_moved "$registry_ref is now $registry_digest, the armed digest is ${ARMED_IMAGE#*@}"
-missing="$(git -C "$APP_DIR" show "refs/tags/$TAG:deploy/compose/.env.example" | release_env_missing_keys "$ENV_FILE" -)" \
-  || refuse env_keys "cannot read deploy/compose/.env.example at $TAG"
-[ -z "$missing" ] || refuse env_keys "$ENV_FILE lacks keys that $TAG expects: $(tr '\n' ' ' <<<"$missing")"
-[ -f "$MANAGED_SOURCES" ] || refuse managed_sources "$MANAGED_SOURCES does not exist: run Ansible from a laptop checkout at $TAG, then retry"
-managed="$(cd "$APP_DIR" && bash "$RELEASE_LIB_DIR/release-managed.sh" --ref "refs/tags/$TAG" --repo "$APP_DIR")" \
-  || refuse managed_sources "cannot fingerprint the managed files at $TAG"
-if ! diff_out="$(diff <(printf '%s\n' "$managed") "$MANAGED_SOURCES")"; then
-  differing="$(grep '^[<>]' <<<"$diff_out" | sed 's/^[<>] [0-9a-f]*  //' | sort -u)"
-  refuse managed_sources "files installed by Ansible differ between $TAG and this host:
-$differing
-Re-run Ansible from a laptop checkout at $TAG, then retry."
-fi
+release_compat_check "$APP_DIR" "$ENV_FILE" "$TAG" "$MANAGED_SOURCES" || refuse "$RELEASE_COMPAT_REASON" "$RELEASE_COMPAT_MESSAGE"
 
 # --- 4 verification
 

@@ -87,6 +87,9 @@ bash deploy/scripts/tests/test_release_ruleset_check.sh
 step "release verify tests"
 bash deploy/scripts/tests/test_release_verify.sh
 
+step "release watch tests"
+bash deploy/scripts/tests/test_release_watch.sh
+
 step "release update tests"
 bash deploy/scripts/tests/test_release_update.sh
 
