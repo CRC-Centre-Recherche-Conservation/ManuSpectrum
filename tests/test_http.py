@@ -1,13 +1,20 @@
 import ipaddress
 import socket
+import threading
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlparse
 
 import requests
-
+from django.core.cache import cache
 from django.test import SimpleTestCase, override_settings
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
+from manuspectrum.utils.budget import HostBreaker, upstream_budget
 from manuspectrum.utils.http import (
+    HostDown,
     ResponseTooLargeError,
+    _safe_fetch,
     UnsafeURLError,
     assert_url_is_safe,
     fetch_iiif_manifest,
@@ -548,3 +555,149 @@ class CappedRetryTests(SimpleTestCase):
         with patch("urllib3.util.retry.time.sleep") as sleep:
             retry.sleep(self._response("3600"))
         sleep.assert_called_once_with(10)
+
+
+class _Server:
+    """A local TCP server whose answer to each connection is *behaviour*."""
+
+    def __init__(self, behaviour):
+        self.socket = socket.socket()
+        self.socket.bind(("127.0.0.1", 0))
+        self.socket.listen(8)
+        self.port = self.socket.getsockname()[1]
+        self.held = []
+        self.behaviour = behaviour
+        threading.Thread(target=self.serve, daemon=True).start()
+
+    def serve(self):
+        while True:
+            try:
+                connection, _ = self.socket.accept()
+            except OSError:
+                return
+            self.held.append(connection)
+            if self.behaviour == "error":
+                connection.recv(4096)
+                connection.sendall(
+                    b"HTTP/1.1 503 Service Unavailable\r\n"
+                    b"Content-Length: 0\r\nConnection: close\r\n\r\n"
+                )
+            elif self.behaviour == "close":
+                connection.recv(4096)
+                connection.close()
+
+    def close(self):
+        self.socket.close()
+        for connection in self.held:
+            connection.close()
+
+
+class BudgetBreakerTests(SimpleTestCase):
+    """Inside a budget with a host breaker, only a failed connection trips an origin.
+
+    The session is the one a budget gives a caller: a real ``HTTPAdapter``
+    without retries, which reports every transport failure as a ConnectionError.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.breaker = HostBreaker("test-breaker", lambda: 60)
+        self.session = requests.Session()
+        self.session.mount(
+            "http://", HTTPAdapter(max_retries=Retry(total=0, raise_on_status=False))
+        )
+        guard = patch(
+            "manuspectrum.utils.http.assert_url_is_safe",
+            side_effect=lambda url, **_: urlparse(url),
+        )
+        guard.start()
+        self.addCleanup(guard.stop)
+
+    def fetch(self, url, timeout=(1, 0.3)):
+        with upstream_budget(5, connect_cap=1, breaker=self.breaker):
+            return _safe_fetch(url, session=self.session, timeout=timeout)
+
+    def server(self, behaviour):
+        server = _Server(behaviour)
+        self.addCleanup(server.close)
+        return server
+
+    def test_a_read_timeout_does_not_trip_the_origin(self):
+        server = self.server("silent")
+
+        with self.assertRaises(requests.exceptions.ConnectionError):
+            self.fetch(f"http://127.0.0.1:{server.port}/")
+
+        self.assertFalse(self.breaker.is_down(f"127.0.0.1:{server.port}"))
+
+    def test_a_server_error_does_not_trip_the_origin(self):
+        server = self.server("error")
+
+        self.assertEqual(
+            self.fetch(f"http://127.0.0.1:{server.port}/").status_code, 503
+        )
+        self.assertFalse(self.breaker.is_down(f"127.0.0.1:{server.port}"))
+
+    def test_a_connection_closed_without_an_answer_does_not_trip_the_origin(self):
+        server = self.server("close")
+
+        with self.assertRaises(requests.exceptions.ConnectionError):
+            self.fetch(f"http://127.0.0.1:{server.port}/")
+
+        self.assertFalse(self.breaker.is_down(f"127.0.0.1:{server.port}"))
+
+    def test_a_refused_connection_trips_the_origin_and_only_that_port(self):
+        free = socket.socket()
+        free.bind(("127.0.0.1", 0))
+        port = free.getsockname()[1]
+        free.close()
+
+        with self.assertRaises(requests.exceptions.ConnectionError):
+            self.fetch(f"http://127.0.0.1:{port}/")
+
+        self.assertTrue(self.breaker.is_down(f"127.0.0.1:{port}"))
+        self.assertFalse(self.breaker.is_down("127.0.0.1:80"))
+
+    def test_a_name_that_does_not_resolve_trips_the_origin(self):
+        unresolved = socket.gaierror(socket.EAI_NONAME, "Name or service not known")
+        with (
+            patch("socket.getaddrinfo", side_effect=unresolved),
+            self.assertRaises(requests.exceptions.ConnectionError),
+        ):
+            self.fetch("http://nowhere.invalid/")
+
+        self.assertTrue(self.breaker.is_down("nowhere.invalid:80"))
+
+    def test_a_tripped_origin_is_refused_before_the_throttle_and_without_connecting(
+        self,
+    ):
+        self.breaker.trip("slow.example:443")
+        session = MagicMock()
+
+        with (
+            override_settings(MANIFEST_FETCH_RATE_LIMITS={"slow.example": 30}),
+            patch("manuspectrum.utils.http.throttle_for_host") as throttle,
+            upstream_budget(5, breaker=self.breaker),
+        ):
+            with self.assertRaises(HostDown):
+                _safe_fetch("https://slow.example/manifest", session=session)
+
+        throttle.assert_not_called()
+        session.get.assert_not_called()
+
+    def test_the_budget_caps_the_connect_timeout_of_each_hop(self):
+        session = MagicMock()
+        session.get.return_value.is_redirect = False
+        session.get.return_value.status_code = 200
+        session.get.return_value.raw.read.side_effect = [b"{}", b""]
+
+        with (
+            patch("manuspectrum.utils.http._read_capped", return_value=b"{}"),
+            upstream_budget(5, connect_cap=2.5),
+        ):
+            _safe_fetch("https://host.example/x", session=session, timeout=(10, 45))
+
+        connect, read = session.get.call_args.kwargs["timeout"]
+        self.assertEqual(connect, 2.5)
+        self.assertLessEqual(read, 5)

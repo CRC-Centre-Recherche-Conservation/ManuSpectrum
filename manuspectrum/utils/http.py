@@ -15,6 +15,7 @@ from urllib.parse import urljoin, urlparse
 
 import arches
 import requests
+import urllib3
 from django.conf import settings as django_settings
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -343,6 +344,38 @@ _iiif_session = None
 _iiif_session_guard = threading.Lock()
 
 
+class HostDown(requests.exceptions.ConnectionError):
+    """The budget's host breaker holds this host: no connection is tried."""
+
+
+_DEFAULT_PORTS = {"http": 80, "https": 443}
+
+
+def _host_port(url):
+    """``host:port`` of *url*, the scheme's default port when none is written."""
+    parsed = urlparse(url)
+    port = parsed.port or _DEFAULT_PORTS.get(parsed.scheme, 0)
+    return f"{(parsed.hostname or '').lower()}:{port}"
+
+
+def failed_to_connect(exc):
+    """Whether a ``requests`` ConnectionError means no connection was made.
+
+    A session without retries reports every transport failure as a
+    ConnectionError wrapping urllib3's reason: a read timeout or a server
+    closing without an answer is one too. Only a connect timeout, a refused
+    connection or a name that does not resolve count; in urllib3 1.26 and 2.x
+    the last two are ``NewConnectionError``, a ``ConnectTimeoutError``.
+    """
+    if isinstance(exc, requests.exceptions.ConnectTimeout):
+        return True
+    wrapped = exc.args[0] if exc.args else None
+    for reason in (wrapped, getattr(wrapped, "reason", None)):
+        if isinstance(reason, urllib3.exceptions.ConnectTimeoutError):
+            return True
+    return False
+
+
 class CappedRetry(Retry):
     """``Retry`` whose ``Retry-After`` sleep never exceeds ``IIIF_RETRY_AFTER_MAX``.
 
@@ -539,8 +572,12 @@ def _safe_fetch(
 
     Inside a budget (``utils.budget``) no hop starts once it is spent, the
     throttle never waits past it, each hop's connect and read timeouts are
-    capped by what is left, and a caller that gave no *session* gets one
-    without retries. Outside one nothing changes.
+    capped by what is left (the connect also by the budget's ``connect_cap``),
+    and a caller that gave no *session* gets one without retries. With a
+    budget's host breaker, a hop to a ``host:port`` it holds raises
+    ``HostDown`` before the throttle and without connecting, and a hop that
+    fails to connect (``failed_to_connect``) trips it.
+    Outside a budget nothing changes.
 
     Raises ``UnsafeURLError`` for a rejected URL or redirect chain,
     ``ResponseTooLargeError`` past the cap, ``BudgetSpent`` when the budget
@@ -565,20 +602,29 @@ def _safe_fetch(
         if budget is not None:
             if budget.spent():
                 raise BudgetSpent()
+        breaker = budget.breaker if budget is not None else None
+        origin = _host_port(target)
+        if breaker is not None and breaker.is_down(origin):
+            raise HostDown(f"{origin} did not accept a connection recently")
         if throttle:
             throttle_for_host(target, budget)
         if budget is not None:
             left = budget.left()
             if left <= 0:
                 raise BudgetSpent()
-            hop_timeout = capped_timeout(timeout, left)
-        response = session.get(
-            target,
-            headers=headers,
-            timeout=hop_timeout,
-            allow_redirects=False,
-            stream=True,
-        )
+            hop_timeout = capped_timeout(timeout, left, budget.connect_cap)
+        try:
+            response = session.get(
+                target,
+                headers=headers,
+                timeout=hop_timeout,
+                allow_redirects=False,
+                stream=True,
+            )
+        except requests.exceptions.ConnectionError as exc:
+            if breaker is not None and failed_to_connect(exc):
+                breaker.trip(origin)
+            raise
         location = response.headers.get("Location") if response.is_redirect else None
         if not location:
             try:
