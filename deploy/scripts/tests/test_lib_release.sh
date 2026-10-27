@@ -124,8 +124,12 @@ done
 equals "refused writes left the file untouched" "$before" "$(cat "$S/armed")"
 refused "write refuses a duplicate key" release_state_write "$S/dup" TAG=v1.0.0 TAG=v1.0.1
 refused "set refuses a bad value" release_state_set "$S/armed" TAG '$(id)'
-for r in drift unarmed tag_moved env_keys managed_sources verify backup lock busy; do
+for r in drift unarmed tag_moved env_keys managed_sources verify backup lock busy fetch; do
   check "REASON=$r" release_state_write "$S/sched" TAG=v1.2.0 "REASON=$r"
+done
+check "COUNT and APPLIED_AT" release_state_write "$S/rb" COUNT=3 APPLIED_AT=1790000000 ROLLBACK_FAILED=1
+for bad in COUNT=-1 COUNT=x COUNT= COUNT=1234567890 'APPLIED_AT=1x'; do
+  refused "write refuses: $bad" release_state_write "$S/rb" "$bad"
 done
 check "OUTCOME empty and missed" release_state_write "$S/sched" OUTCOME= REASON=
 check "OUTCOME=missed" release_state_write "$S/sched" OUTCOME=missed
@@ -278,6 +282,30 @@ refused "slot beyond 30 days" release_slot_parse '2027-07-02 23:00'
 for bad in '2027-6-5 23:00' '2027-06-05T23:00' '2027-06-05 23:00:00' '2027-06-05 24:00' '2027-02-30 10:00' '2027-06-05 23:00;id' $'2027-06-05 23:00\nx' "" 'tomorrow'; do
   refused "slot refuses: ${bad//$'\n'/\\n}" release_slot_parse "$bad"
 done
+
+# --- metrics derived from the state files
+D="$TMP/derive"; mkdir -p "$D"
+P="$TMP/derive.prom"
+rm -f "$P"
+check "derive: empty state dir" release_metrics_from_state "$D" "$P"
+grep -qF 'watch_last_run_timestamp_seconds 0' "$P" && ok "derive: no watch run is claimed" || not_ok "derive: no watch run is claimed" "$(cat "$P")"
+grep -q '^manuspectrum_release_armed 0$' "$P" && ok "derive: nothing armed" || not_ok "derive: nothing armed" "$(cat "$P")"
+release_state_write "$D/armed" TAG=v1.2.0 IMAGE="ghcr.io/x/y@sha256:$(printf 'a%.0s' {1..64})" COMMIT=0123456789012345678901234567890123456789 ARMED_AT=1790000000 SECURITY=1 NOTIFIED=1 NEEDS_ANSIBLE=0
+release_state_write "$D/pending" SINCE=1789000000 SECURITY=1
+release_state_write "$D/rollbacks" COUNT=2 ROLLBACK_FAILED=1
+release_state_write "$D/current" TAG=v1.1.0 IMAGE="ghcr.io/x/y@sha256:$(printf 'b%.0s' {1..64})" COMMIT=0123456789012345678901234567890123456788 APPLIED_AT=1788000000
+release_state_write "$D/scheduled" TAG=v1.2.0 AT_EPOCH=1790003000 OUTCOME=refused REASON=drift
+check "derive: full state" release_metrics_from_state "$D" "$P"
+for want in 'armed 1' 'pending_since_timestamp_seconds 1789000000' 'pending_security 1' 'rollbacks_total 2' 'rollback_failed 1' 'update_last_success_timestamp_seconds 1788000000' 'scheduled_timestamp_seconds 1790003000' 'schedule_failed{reason="refused"} 1' 'schedule_failed{reason="missed"} 0'; do
+  grep -qF "manuspectrum_release_$want" "$P" && ok "derive: $want" || not_ok "derive: $want" "$(cat "$P")"
+done
+release_metrics_write "$P" watch_last_run=1790000100 failed_git=1 verification_failed=1
+release_metrics_from_state "$D" "$P" rollbacks=9
+grep -qF 'manuspectrum_release_watch_last_run_timestamp_seconds 1790000100' "$P" && grep -qF 'watch_failed{step="git"} 1' "$P" && grep -qF 'verification_failed 1' "$P" && ok "derive: carries the watch series" || not_ok "derive: carries the watch series" "$(cat "$P")"
+grep -qF 'rollbacks_total 9' "$P" && ok "derive: an explicit value wins" || not_ok "derive: an explicit value wins" "$(cat "$P")"
+printf 'garbage\n' >"$D/pending"
+check "derive: an unreadable state file counts as absent" release_metrics_from_state "$D" "$P"
+grep -qF 'pending_since_timestamp_seconds 0' "$P" && ok "derive: unreadable pending is 0" || not_ok "derive: unreadable pending is 0" "$(cat "$P")"
 
 echo "1..$N"
 [ "$FAILED" -eq 0 ] || { echo "# FAILED"; exit 1; }

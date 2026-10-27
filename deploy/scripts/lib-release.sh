@@ -26,7 +26,7 @@
 # release_pick_candidate, release_state_ok, release_state_read,
 # release_state_get, release_state_write, release_state_set, release_env_get,
 # release_env_set_image, release_env_missing_keys, release_metrics_write,
-# release_mail, release_slot_parse.
+# release_mail, release_slot_parse, release_metrics_from_state.
 # shellcheck disable=SC2034  # patterns read by the sourcing scripts
 
 RELEASE_TAG_FINAL_RE='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
@@ -101,18 +101,19 @@ release_pick_candidate() { # release_pick_candidate CHANNEL CURRENT < tags
 # --- state files
 
 _release_state_key_known() {
-  [[ "${1-}" =~ ^(TAG|HELD_TAG|FROM_TAG|TO_TAG|IMAGE|COMMIT|ARMED_AT|CREATED_AT|SINCE|STARTED_AT|AT_EPOCH|WINDOW_END_EPOCH|NOTICE_ID|AT_PARIS|SECURITY|NOTIFIED|NEEDS_ANSIBLE|ROLLBACK_FAILED|REASON|OUTCOME|BY)$ ]]
+  [[ "${1-}" =~ ^(TAG|HELD_TAG|FROM_TAG|TO_TAG|IMAGE|COMMIT|ARMED_AT|CREATED_AT|SINCE|STARTED_AT|AT_EPOCH|WINDOW_END_EPOCH|NOTICE_ID|AT_PARIS|SECURITY|NOTIFIED|NEEDS_ANSIBLE|ROLLBACK_FAILED|COUNT|APPLIED_AT|REASON|OUTCOME|BY)$ ]]
 }
 
 # Status 0 when VALUE is acceptable for KEY. Keys and their patterns:
 #   TAG HELD_TAG FROM_TAG TO_TAG   release tag (HELD_TAG may be empty)
 #   IMAGE                          repository@sha256:<64 hex>
 #   COMMIT                         40 lowercase hex
-#   ARMED_AT CREATED_AT SINCE STARTED_AT AT_EPOCH WINDOW_END_EPOCH   epoch seconds
+#   ARMED_AT CREATED_AT SINCE STARTED_AT AT_EPOCH WINDOW_END_EPOCH APPLIED_AT   epoch seconds
+#   COUNT                          integer of at most 9 digits (rollbacks done)
 #   NOTICE_ID                      integer (may be empty)
 #   AT_PARIS                       YYYY-MM-DD HH:MM
 #   SECURITY NOTIFIED NEEDS_ANSIBLE ROLLBACK_FAILED   0 or 1
-#   REASON                         drift unarmed tag_moved env_keys managed_sources verify backup lock busy (or empty)
+#   REASON                         drift unarmed tag_moved env_keys managed_sources verify backup lock busy fetch (or empty)
 #   OUTCOME                        refused or missed (or empty)
 #   BY                             login [a-z_][a-z0-9_-]*
 release_state_ok() { # release_state_ok KEY VALUE
@@ -123,11 +124,12 @@ release_state_ok() { # release_state_ok KEY VALUE
     HELD_TAG) [ -z "$value" ] || release_tag_valid "$value" ;;
     IMAGE) [[ "$value" =~ ^[a-z0-9][a-z0-9._/-]*(:[0-9]+)?(/[a-z0-9._/-]+)?@sha256:[0-9a-f]{64}$ ]] ;;
     COMMIT) [[ "$value" =~ ^[0-9a-f]{40}$ ]] ;;
-    ARMED_AT | CREATED_AT | SINCE | STARTED_AT | AT_EPOCH | WINDOW_END_EPOCH) [[ "$value" =~ ^[0-9]{1,12}$ ]] ;;
+    ARMED_AT | CREATED_AT | SINCE | STARTED_AT | AT_EPOCH | WINDOW_END_EPOCH | APPLIED_AT) [[ "$value" =~ ^[0-9]{1,12}$ ]] ;;
+    COUNT) [[ "$value" =~ ^[0-9]{1,9}$ ]] ;;
     NOTICE_ID) [[ "$value" =~ ^([0-9]{1,12})?$ ]] ;;
     AT_PARIS) [[ "$value" =~ ^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])\ ([01][0-9]|2[0-3]):[0-5][0-9]$ ]] ;;
     SECURITY | NOTIFIED | NEEDS_ANSIBLE | ROLLBACK_FAILED) [[ "$value" =~ ^[01]$ ]] ;;
-    REASON) [[ "$value" =~ ^(drift|unarmed|tag_moved|env_keys|managed_sources|verify|backup|lock|busy)?$ ]] ;;
+    REASON) [[ "$value" =~ ^(drift|unarmed|tag_moved|env_keys|managed_sources|verify|backup|lock|busy|fetch)?$ ]] ;;
     OUTCOME) [[ "$value" =~ ^(refused|missed)?$ ]] ;;
     BY) [[ "$value" =~ ^[a-z_][a-z0-9_-]*$ ]] ;;
     *) return 1 ;;
@@ -317,6 +319,36 @@ release_metrics_write() { # release_metrics_write FILE [NAME=VALUE ...]
       done
   } || { metrics_abort 2>/dev/null; return 1; }
   metrics_commit
+}
+
+# Rewrites the release textfile FILE from the state files of STATE_DIR: armed,
+# pending (SINCE, SECURITY), rollbacks (COUNT, ROLLBACK_FAILED), current
+# (APPLIED_AT) and scheduled (AT_EPOCH, OUTCOME). The series the watch owns
+# (last run, failed steps, verification_failed) are carried over from the
+# existing FILE (the last run is 0 when there is none: the engine never claims
+# a watch ran); NAME=VALUE arguments, as for release_metrics_write, override
+# anything. A state file that cannot be read counts as absent.
+release_metrics_from_state() { # release_metrics_from_state STATE_DIR FILE [NAME=VALUE ...]
+  local dir="${1-}" file="${2-}" line v outcome args=("watch_last_run=0")
+  shift 2
+  if [ -f "$file" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      if [[ "$line" =~ ^manuspectrum_release_watch_last_run_timestamp_seconds\ ([0-9]+)$ ]]; then args+=("watch_last_run=${BASH_REMATCH[1]}")
+      elif [[ "$line" =~ ^manuspectrum_release_watch_failed\{step=\"(git|registry|sigstore|pull|mail|state)\"\}\ ([0-9]+)$ ]]; then args+=("failed_${BASH_REMATCH[1]}=${BASH_REMATCH[2]}")
+      elif [[ "$line" =~ ^manuspectrum_release_verification_failed\ ([0-9]+)$ ]]; then args+=("verification_failed=${BASH_REMATCH[1]}")
+      fi
+    done <"$file"
+  fi
+  [ ! -f "$dir/armed" ] || { release_state_read "$dir/armed" >/dev/null 2>&1 && args+=("armed=1"); }
+  v="$(release_state_get "$dir/pending" SINCE 2>/dev/null)" && args+=("pending_since=$v")
+  v="$(release_state_get "$dir/pending" SECURITY 2>/dev/null)" && args+=("pending_security=$v")
+  v="$(release_state_get "$dir/rollbacks" COUNT 2>/dev/null)" && args+=("rollbacks=$v")
+  v="$(release_state_get "$dir/rollbacks" ROLLBACK_FAILED 2>/dev/null)" && args+=("rollback_failed=$v")
+  v="$(release_state_get "$dir/current" APPLIED_AT 2>/dev/null)" && args+=("update_last_success=$v")
+  v="$(release_state_get "$dir/scheduled" AT_EPOCH 2>/dev/null)" && args+=("scheduled=$v")
+  outcome="$(release_state_get "$dir/scheduled" OUTCOME 2>/dev/null)" || outcome=""
+  case "$outcome" in refused | missed) args+=("schedule_failed_$outcome=1") ;; esac
+  release_metrics_write "$file" "${args[@]}" "$@"
 }
 
 # --- mail

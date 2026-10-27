@@ -156,11 +156,13 @@ restic: ## Run restic on the repository, interactive: make -C deploy restic ARGS
 
 # `up --wait` refuses a service whose healthcheck is disabled, and beat has
 # none on purpose: wait for every other service, then start beat (it depends
-# on a healthy web).
+# on a healthy web). UP_WAIT_TIMEOUT is the wait in seconds; the update engine
+# (release-update.sh) passes RELEASE_READY_WAIT_SECONDS.
+UP_WAIT_TIMEOUT ?= 900
 up: ## Start or update the stack and wait until it is healthy
 	@d="$(call envval,METRICS_TEXTFILE_DIR)"; \
 	if [ -n "$$d" ] && [ ! -d "$$d" ]; then install -d -m 0755 "$$d" && echo "created $$d (node-exporter mounts it)"; fi
-	$(COMPOSE) up -d --wait --wait-timeout 900 $$($(COMPOSE) config --services | grep -vx beat)
+	$(COMPOSE) up -d --wait --wait-timeout $(UP_WAIT_TIMEOUT) $$($(COMPOSE) config --services | grep -vx beat)
 	$(COMPOSE) up -d beat
 
 down: ## Stop and remove the containers; volumes are kept

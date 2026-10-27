@@ -87,6 +87,9 @@ bash deploy/scripts/tests/test_release_ruleset_check.sh
 step "release verify tests"
 bash deploy/scripts/tests/test_release_verify.sh
 
+step "release update tests"
+bash deploy/scripts/tests/test_release_update.sh
+
 step "local CA tests"
 bash deploy/certs/tests/test_make_local_ca.sh
 
