@@ -1,6 +1,12 @@
 ---
+- name: Stop while an update runs
+  ansible.builtin.include_tasks: update_guard.yml
+
 - name: Prepare the application host
   ansible.builtin.include_tasks: prepare.yml
+
+- name: Install the release programs, the update command and its access rule
+  ansible.builtin.include_tasks: release.yml
 
 - name: Check the prerequisites of the stack
   ansible.builtin.include_tasks: gates.yml

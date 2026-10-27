@@ -1,0 +1,154 @@
+---
+# Installs what the release watch and the update command need on the host:
+# root-owned programs, the access rule, the group of operators, and the list of
+# files Ansible manages (compared by the update with the tag it installs).
+# Nothing here enables or starts an update unit, and the slot drop-in of
+# manuspectrum-update-at.timer is written and removed by the update command only.
+
+- name: Assert the service account is not an operator
+  ansible.builtin.assert:
+    that:
+      - service_user not in app_release_operators
+      - app_release_operators is subset(admin_users | map(attribute='name') | list)
+    quiet: true
+    fail_msg: >-
+      release_operators must be a subset of admin_users and must not contain {{ service_user }}:
+      the update command is run with the operator's own sudo password.
+
+- name: Assert the paths release.conf records can be read back
+  ansible.builtin.assert:
+    that:
+      - app_dir is match('^/[A-Za-z0-9._/-]+$')
+      - "'..' not in app_dir"
+      - env_public_host is match('^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$')
+    quiet: true
+    fail_msg: >-
+      app_dir ({{ app_dir }}) or env_public_host ({{ env_public_host }}) holds a character
+      manuspectrum-update refuses in /etc/manuspectrum/release.conf.
+
+- name: Look for uncommitted changes in the managed paths  # noqa: command-instead-of-module
+  ansible.builtin.command: >-
+    git -C {{ (playbook_dir | dirname | dirname) | quote }} status --porcelain --untracked-files=no --
+    {{ app_release_managed_paths | flatten | map('quote') | join(' ') }}
+  delegate_to: localhost
+  become: false
+  register: app_laptop_dirty
+  changed_when: false
+  check_mode: false
+
+- name: Assert the laptop checkout is clean in the managed paths
+  ansible.builtin.assert:
+    that:
+      - app_laptop_dirty.stdout | trim == ''
+    quiet: true
+    fail_msg: >-
+      The checkout this playbook runs from has uncommitted changes in files the update compares with the
+      release tag ({{ app_laptop_dirty.stdout_lines | map('trim') | join(', ') }}). Commit or discard them,
+      or the host would refuse every update. Run Ansible from a checkout of the tag you installed.
+
+- name: Hash the managed files of the laptop checkout
+  ansible.builtin.command:
+    argv:
+      - bash
+      - "{{ playbook_dir }}/../scripts/release-managed.sh"
+      - --worktree
+      - "{{ playbook_dir | dirname | dirname }}"
+  delegate_to: localhost
+  become: false
+  register: app_managed_sources
+  changed_when: false
+  check_mode: false
+
+- name: Assert the managed list is not empty
+  ansible.builtin.assert:
+    that:
+      - app_managed_sources.stdout_lines | length > 0
+    quiet: true
+    fail_msg: "release-managed.sh printed nothing: the checkout is not the ManuSpectrum repository."
+
+- name: Create the program and configuration directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "/etc/manuspectrum"
+    - "{{ app_release_lib_dir | dirname }}"
+    - "{{ app_release_lib_dir }}"
+    - "/var/lib/manuspectrum"
+
+- name: Create the release state directory
+  ansible.builtin.file:
+    path: "/var/lib/manuspectrum/release"
+    state: directory
+    owner: "{{ app_uid }}"
+    group: "{{ app_gid }}"
+    mode: "0750"
+
+- name: Install the release programs
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../scripts/{{ item.name }}"
+    dest: "{{ app_release_lib_dir }}/{{ item.name }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop: "{{ app_release_program_files }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Install the update command
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../sbin/manuspectrum-update"
+    dest: /usr/local/sbin/manuspectrum-update
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write the release configuration
+  ansible.builtin.template:
+    src: release.conf.j2
+    dest: "/etc/manuspectrum/release.conf"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Record the managed sources
+  ansible.builtin.copy:
+    content: "{{ app_managed_sources.stdout }}\n"
+    dest: "/etc/manuspectrum/managed-sources"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create the group of the update operators
+  ansible.builtin.group:
+    name: "{{ app_ops_group }}"
+    state: present
+
+- name: Add the operators to that group
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: "{{ app_ops_group }}"
+    append: true
+  loop: "{{ app_release_operators }}"
+
+- name: Read the members of that group
+  ansible.builtin.getent:
+    database: group
+    key: "{{ app_ops_group }}"
+
+- name: Remove the members who are no longer operators
+  ansible.builtin.command: gpasswd -d {{ item | quote }} {{ app_ops_group | quote }}
+  loop: "{{ (ansible_facts['getent_group'][app_ops_group][2] | split(',')) | reject('equalto', '') | difference(app_release_operators) }}"
+  changed_when: true
+
+- name: Allow the operators to run the update
+  ansible.builtin.template:
+    src: sudoers-manuspectrum-update.j2
+    dest: /etc/sudoers.d/manuspectrum-update
+    owner: root
+    group: root
+    mode: "0440"
+    validate: visudo -cf %s

@@ -1,7 +1,7 @@
 ---
 - name: Install the tools the make targets and the checkout need
   ansible.builtin.apt:
-    name: [make, git, openssl, python3]
+    name: [make, git, openssl, python3, curl, tzdata, util-linux]
     state: present
     update_cache: true
     cache_valid_time: 3600

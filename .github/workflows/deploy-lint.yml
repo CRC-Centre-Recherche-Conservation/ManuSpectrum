@@ -57,13 +57,13 @@ jobs:
           workflow='\.github/workflows/(deploy-lint|stack-proof)\.yml$'
           # check-stack.sh lints every project workflow but main.yml (actionlint).
           workflows='\.github/workflows/'
-          stack='deploy/(docker|compose|certs|logrotate|systemd|runbooks)/|deploy/(check-stack\.sh|Makefile|OBSERVABILITY\.md)$|deploy/scripts/|\.gitleaks\.toml$|\.pre-commit-config\.yaml$|\.gitignore$|\.dockerignore$|\.trivyignore$|manuspectrum/templates/errors/500\.htm$|pyproject\.toml$|uv\.lock$'
+          stack='deploy/(docker|compose|certs|logrotate|systemd|runbooks|sbin)/|deploy/(check-stack\.sh|Makefile|OBSERVABILITY\.md)$|deploy/scripts/|\.gitleaks\.toml$|\.pre-commit-config\.yaml$|\.gitignore$|\.dockerignore$|\.trivyignore$|manuspectrum/templates/errors/500\.htm$|pyproject\.toml$|uv\.lock$'
           build='pkg$|\.gitmodules$|package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/utils/client_ip\.py$|manuspectrum/management/commands/(rewrite_dev_origin|export_pkg|check_pkg_inventory)\.py$|manuspectrum/(migrations|system_settings)/|manuspectrum/basemaps\.py$|manuspectrum/constants/openfreemap_bright_layers\.json$|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
           {
             echo "rehearsal=$(matches "^(deploy/rehearsal/|$workflow)")"
             echo "stack=$(matches "^($stack|$workflows)")"
             echo "image=$(matches "^($stack|$build|$workflow)")"
-            echo "ansible=$(matches "^(deploy/ansible/|deploy/systemd/|deploy/logrotate/|deploy/Makefile$|deploy/compose/\\.env\\.example$|deploy/rehearsal/(host|verify)-baseline\\.sh$|$workflow)")"
+            echo "ansible=$(matches "^(deploy/ansible/|deploy/systemd/|deploy/logrotate/|deploy/sbin/|deploy/scripts/release-|deploy/scripts/lib-(release|metrics)\\.sh$|deploy/scripts/image-digest\\.sh$|deploy/Makefile$|deploy/compose/\\.env\\.example$|deploy/rehearsal/(host|verify)-baseline\\.sh$|$workflow)")"
           } >> "$GITHUB_OUTPUT"
 
   rehearsal-kit:

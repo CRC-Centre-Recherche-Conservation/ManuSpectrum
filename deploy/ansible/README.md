@@ -11,7 +11,7 @@ Roles, played in order:
 | `preflight` | Assertions only: OS, memory, CPUs, free space, Docker version, `vm.max_map_count`, clock, ports 80/443, DNS (warning), SMTP relay. |
 | `baseline` | `baseline_mode: apply` sets the system baseline (accounts, sshd, UFW, fail2ban, Docker CE, data mount, unattended-upgrades, postfix); both modes then run the same assertion list on the host's effective state (`sshd -T`, `ufw status`, `apt-config dump`, `findmnt`...). |
 | `host` | `/etc/docker/daemon.json` (validated by `dockerd --validate`) and the journald drop-in. It refuses to overwrite a `daemon.json` that holds other keys, and, when containers run and the file would change, needs `-e docker_restart_ok=true` (Docker restarts). |
-| `app` | `make`, `git`, `openssl` and `python3` (both modes), directories (and the parent of `SECRETS_DIR`), checkout, `.env`, logrotate and systemd units, then the gates, `make up`, the checks and the timers. |
+| `app` | `make`, `git`, `openssl`, `python3`, `curl`, `tzdata` and `util-linux` (both modes), directories (and the parent of `SECRETS_DIR`), checkout, `.env`, logrotate and systemd units, the release programs and access rule (below), then the gates, `make up`, the checks and the timers. |
 
 It never runs `make init`, `make restore`, `make cert-init` or `make secrets`,
 never moves an existing checkout (it clones only when `app_dir/.git` is
@@ -132,6 +132,44 @@ rendered `.env` takes `MANUSPECTRUM_IMAGE` from the inventory
 afterwards the value already in `.env` is kept, and the image gate checks that
 one.
 
+## Releases: watch and update
+
+The `app` role installs what `deploy/RELEASES.md` describes on the host:
+
+- the root-owned programs under `/usr/local/lib/manuspectrum/release/` and the
+  command `/usr/local/sbin/manuspectrum-update`, copied from the checkout the
+  playbook runs from (the list is `app_release_program_files`; a test keeps it
+  equal to the managed list of `deploy/scripts/release-managed.sh`);
+- `/etc/manuspectrum/release.conf` (service account, checkout, public host) and
+  `/etc/manuspectrum/managed-sources`, the hash of every file Ansible manages,
+  computed from the laptop checkout with `release-managed.sh --worktree`;
+- the state directory `/var/lib/manuspectrum/release` (service account, 0750);
+- the group `manuspectrum-ops` and `/etc/sudoers.d/manuspectrum-update`
+  (validated by `visudo -cf`, password required, never `NOPASSWD`);
+- the units; `manuspectrum-watch.timer` is enabled with the other timers.
+  `manuspectrum-update@.service` and `manuspectrum-update-at.service/.timer`
+  are installed and never enabled or started: the update command starts them,
+  and writes and removes the slot drop-in of the `-at` timer itself.
+
+Inventory variables:
+
+- `env_release_channel` (`RELEASE_CHANNEL`): `prod` offers final tags only, `rc`
+  release candidates too. `env_release_ready_wait_seconds` is how long an update
+  waits for `/readyz` before rolling back.
+- `release_operators`: the accounts that may run `sudo manuspectrum-update`;
+  default every account of `admin_users`. A subset of `admin_users`, never the
+  service account. An account removed from the list leaves the group at the next run.
+
+The playbook refuses to run while an update unit is active or activating, and
+refuses when the checkout it runs from has uncommitted changes in a managed
+path (the host would then compare the tag with files no tag holds).
+
+The first installation takes `env_manuspectrum_image` as a release image
+digest (`registry/name@sha256:...`) and `app_git_ref` as the matching tag.
+When the update refuses with "re-run Ansible at <tag>", a file Ansible manages
+differs in that tag: check out the tag on the laptop, run the playbook, then run
+the update again.
+
 ## Audit and checks without a host
 
 `ansible-playbook -i inventories/<host> audit.yml --ask-become-pass` installs
@@ -148,5 +186,5 @@ ansible-playbook -i inventories/example render.yml -e render_dir=/tmp/rendered
 RENDERED_UNITS_DIR=/tmp/rendered/units bash ../systemd/tests/test_units.sh
 ```
 
-`render.yml` renders `.env`, the twelve units and the logrotate rule from the
+`render.yml` renders `.env`, the seventeen units and the logrotate rule from the
 example inventory into a scratch directory, without privileges.

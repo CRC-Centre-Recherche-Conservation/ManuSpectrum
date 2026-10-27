@@ -243,7 +243,13 @@ class AppRoleTests(unittest.TestCase):
         main = load_tasks(ROLES_DIR / "app" / "tasks" / "main.yml")
         self.assertEqual(
             [t["ansible.builtin.include_tasks"] for t in main],
-            ["prepare.yml", "gates.yml", "start.yml"],
+            [
+                "update_guard.yml",
+                "prepare.yml",
+                "release.yml",
+                "gates.yml",
+                "start.yml",
+            ],
         )
 
     def test_the_stack_starts_after_monitoring_init(self):
@@ -253,6 +259,220 @@ class AppRoleTests(unittest.TestCase):
         self.assertLess(
             names.index("Start the monitoring prerequisites"),
             names.index("Start or update the stack"),
+        )
+
+
+APP = ROLES_DIR / "app"
+REPO = ROLES_DIR.parents[2]
+
+
+def app_defaults():
+    return yaml.safe_load((APP / "defaults" / "main.yml").read_text(encoding="utf-8"))
+
+
+def managed_script_names():
+    """The deploy/scripts files release-managed.sh treats as managed."""
+    text = (REPO / "deploy" / "scripts" / "release-managed.sh").read_text(
+        encoding="utf-8"
+    )
+    body = text[text.index("is_managed()") : text.index("no_dotdot()")]
+    return set(re.findall(r"deploy/scripts/([A-Za-z0-9._-]+\.sh)", body))
+
+
+def release_tasks():
+    return load_tasks(APP / "tasks" / "release.yml")
+
+
+def all_app_tasks():
+    return [t for _, t in role_tasks("app")]
+
+
+class ReleaseInstallTests(unittest.TestCase):
+    def test_units_lists_keep_the_update_timer_and_template_out_of_the_enabled_set(
+        self,
+    ):
+        d = app_defaults()
+        self.assertIn("manuspectrum-watch", d["app_unit_names"])
+        self.assertIn("manuspectrum-watch", d["app_timer_names"])
+        self.assertIn("manuspectrum-update-at", d["app_unit_names"])
+        self.assertEqual(d["app_oneshot_unit_names"], ["manuspectrum-update@"])
+        enabled = set(d["app_timer_names"]) | set(d["app_acme_timer_names"])
+        for name in enabled:
+            self.assertNotIn("update", name)
+        self.assertNotIn("manuspectrum-update@", d["app_unit_names"])
+
+    def test_no_task_enables_or_starts_an_update_unit_or_touches_its_slot(self):
+        for task in all_app_tasks():
+            if module_of(task) in ("systemd", "systemd_service", "service"):
+                args = task[next(k for k in task if k.endswith(module_of(task)))]
+                self.assertNotIn("update", str(args.get("name", "")), task["name"])
+            for text in strings(task):
+                self.assertNotIn("timer.d", text, task["name"])
+                self.assertNotIn("slot.conf", text, task["name"])
+        start = task_named("app", "start.yml", "Enable the timers")
+        loop = start["loop"]
+        self.assertIn("app_timer_names", loop)
+        self.assertNotIn("app_unit_names", loop)
+        self.assertNotIn("oneshot", loop)
+
+    def test_render_makes_the_oneshot_unit_a_service_only(self):
+        text = (APP / "tasks" / "render.yml").read_text(encoding="utf-8")
+        self.assertIn("app_oneshot_unit_names", text)
+        self.assertNotIn("twelve", text)
+
+    def test_the_sudoers_rule_is_validated_and_asks_for_a_password(self):
+        task = task_named("app", "release.yml", "Allow the operators to run the update")
+        args = task["ansible.builtin.template"]
+        self.assertEqual(args["validate"], "visudo -cf %s")
+        self.assertEqual(args["dest"], "/etc/sudoers.d/manuspectrum-update")
+        self.assertEqual(args["mode"], "0440")
+        self.assertEqual(args["owner"], "root")
+        text = (APP / "templates" / args["src"]).read_text(encoding="utf-8")
+        self.assertNotIn("NOPASSWD", text)
+        rules = [ln for ln in text.splitlines() if ln.strip() and ln[0] != "#"]
+        self.assertEqual(
+            rules,
+            ["%{{ app_ops_group }} ALL=(root) /usr/local/sbin/manuspectrum-update"],
+        )
+        self.assertEqual(app_defaults()["app_ops_group"], "manuspectrum-ops")
+
+    def test_the_sudoers_rule_passes_visudo(self):
+        import shutil
+        import subprocess
+        import tempfile
+
+        if not shutil.which("visudo"):
+            self.skipTest("visudo is not installed")
+        import jinja2
+
+        text = (APP / "templates" / "sudoers-manuspectrum-update.j2").read_text(
+            encoding="utf-8"
+        )
+        rendered = jinja2.Template(text).render(app_ops_group="manuspectrum-ops")
+        with tempfile.NamedTemporaryFile("w", suffix=".sudoers") as handle:
+            handle.write(rendered)
+            handle.flush()
+            result = subprocess.run(
+                ["visudo", "-cf", handle.name], capture_output=True, text=True
+            )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_program_files_are_root_owned_and_not_writable_by_others(self):
+        for task in release_tasks():
+            if module_of(task) in ("copy", "template", "file"):
+                args = task[next(k for k in task if k.endswith(module_of(task)))]
+                dest = str(args.get("dest", args.get("path", "")))
+                if dest.startswith(("/usr/local", "/etc/manuspectrum", "/etc/sudoers")):
+                    self.assertEqual(args.get("owner"), "root", task["name"])
+                    self.assertEqual(args.get("group"), "root", task["name"])
+                    self.assertNotIn(
+                        args["mode"][-2:], ("22", "66", "77"), task["name"]
+                    )
+                    self.assertRegex(args["mode"], r"^0[0-7]{3}$", task["name"])
+
+    def test_the_release_file_list_is_the_managed_list_of_release_managed(self):
+        files = app_defaults()["app_release_program_files"]
+        names = {f["name"] for f in files}
+        self.assertEqual(names, managed_script_names())
+        modes = {f["name"]: f["mode"] for f in files}
+        for name in ("lib-release.sh", "lib-metrics.sh"):
+            self.assertEqual(modes[name], "0644")
+        for name in names - {"lib-release.sh", "lib-metrics.sh"}:
+            self.assertEqual(modes[name], "0755")
+        install = task_named("app", "release.yml", "Install the release programs")
+        self.assertIn("app_release_program_files", install["loop"])
+        self.assertEqual(
+            install["ansible.builtin.copy"]["dest"],
+            "{{ app_release_lib_dir }}/{{ item.name }}",
+        )
+        self.assertEqual(
+            app_defaults()["app_release_lib_dir"], "/usr/local/lib/manuspectrum/release"
+        )
+        front = task_named("app", "release.yml", "Install the update command")
+        self.assertEqual(
+            front["ansible.builtin.copy"]["dest"], "/usr/local/sbin/manuspectrum-update"
+        )
+        self.assertEqual(front["ansible.builtin.copy"]["mode"], "0755")
+
+    def test_managed_sources_come_from_the_laptop_checkout_worktree(self):
+        compute = task_named(
+            "app", "release.yml", "Hash the managed files of the laptop checkout"
+        )
+        line = command_line(compute)
+        self.assertIn("release-managed.sh", line)
+        self.assertIn("--worktree", line)
+        self.assertEqual(compute["delegate_to"], "localhost")
+        self.assertIs(compute["become"], False)
+        self.assertIs(compute["changed_when"], False)
+        self.assertIs(compute["check_mode"], False)
+        write = task_named("app", "release.yml", "Record the managed sources")
+        args = write["ansible.builtin.copy"]
+        self.assertEqual(args["dest"], "/etc/manuspectrum/managed-sources")
+        self.assertEqual(
+            (args["owner"], args["group"], args["mode"]), ("root", "root", "0644")
+        )
+
+    def test_a_dirty_laptop_checkout_stops_before_anything_is_installed(self):
+        names = [t["name"] for t in release_tasks()]
+        dirty = task_named(
+            "app", "release.yml", "Look for uncommitted changes in the managed paths"
+        )
+        self.assertIn("status --porcelain", command_line(dirty))
+        self.assertEqual(dirty["delegate_to"], "localhost")
+        self.assertIs(dirty["become"], False)
+        check = names.index("Assert the laptop checkout is clean in the managed paths")
+        self.assertLess(check, names.index("Install the release programs"))
+        self.assertLess(check, names.index("Record the managed sources"))
+
+    def test_the_service_account_is_never_an_operator(self):
+        task = task_named(
+            "app", "release.yml", "Assert the service account is not an operator"
+        )
+        text = " ".join(strings(task))
+        self.assertIn("service_user", text)
+        self.assertIn("release_operators", text)
+        defaults = (APP / "defaults" / "main.yml").read_text(encoding="utf-8")
+        self.assertIn("admin_users", defaults)
+
+    def test_release_conf_names_the_three_keys_the_front_reads(self):
+        text = (APP / "templates" / "release.conf.j2").read_text(encoding="utf-8")
+        keys = re.findall(r"^([A-Z_]+)=", text, re.M)
+        self.assertEqual(keys, ["SERVICE_USER", "APP_DIR", "PUBLIC_HOST"])
+        task = task_named("app", "release.yml", "Write the release configuration")
+        args = task["ansible.builtin.template"]
+        self.assertEqual(args["dest"], "/etc/manuspectrum/release.conf")
+        self.assertEqual(
+            (args["owner"], args["group"], args["mode"]), ("root", "root", "0644")
+        )
+
+    def test_an_active_update_stops_the_play_before_the_stack_is_touched(self):
+        guard = task_named("app", "update_guard.yml", "Look for a running update")
+        line = command_line(guard)
+        self.assertIn("manuspectrum-update@*", line)
+        self.assertIn("--state=active,activating", line)
+        refuse = task_named("app", "update_guard.yml", "Refuse to run during an update")
+        self.assertIn("app_update_units", " ".join(strings(refuse)))
+        start = load_tasks(APP / "tasks" / "start.yml")
+        self.assertEqual(start[0]["ansible.builtin.include_tasks"], "update_guard.yml")
+        main = load_tasks(APP / "tasks" / "main.yml")
+        self.assertEqual(main[0]["ansible.builtin.include_tasks"], "update_guard.yml")
+
+    def test_release_comes_after_the_checkout_and_before_the_gates(self):
+        main = [
+            t["ansible.builtin.include_tasks"]
+            for t in load_tasks(APP / "tasks" / "main.yml")
+        ]
+        self.assertLess(main.index("prepare.yml"), main.index("release.yml"))
+        self.assertLess(main.index("release.yml"), main.index("start.yml"))
+
+    def test_the_host_has_the_tools_the_release_scripts_use(self):
+        task = task_named(
+            "app",
+            "prepare.yml",
+            "Install the tools the make targets and the checkout need",
+        )
+        self.assertTrue(
+            {"curl", "tzdata", "util-linux"} <= set(task["ansible.builtin.apt"]["name"])
         )
 
 

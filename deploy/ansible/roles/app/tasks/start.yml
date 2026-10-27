@@ -1,4 +1,7 @@
 ---
+- name: Stop again if an update started meanwhile
+  ansible.builtin.include_tasks: update_guard.yml
+
 # monitoring-init is idempotent (starts postgres if needed, creates or updates
 # the ms_monitor role); it reports no change. It never starts the monitoring
 # services themselves: `make up` does with the observability profile, and this
