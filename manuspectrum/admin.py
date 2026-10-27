@@ -9,8 +9,9 @@ sends it again to the selected accounts that hold no secret.
 
 `Embargo` carries the end date of a restricted resource. Administrators date
 and extend it here; every change is recorded as an `EmbargoEvent` (who, when,
-old end, new end). Access is Django's own model permission (`change_embargo`);
-no group is created for it. `WorkflowCleanup` is a read-only ledger.
+old end, new end). Access is Django's own model permission (`change_embargo`),
+held by the « Site managers » group (migration 0015, `accounts/roles.py`).
+`WorkflowCleanup` is a read-only ledger.
 
 The User admin is the one place for accounts: its list shows two-factor
 enrolment and the planned anonymisation date, the change page a read-only
@@ -32,7 +33,7 @@ from django import forms
 from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
 from django.conf import settings
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.db import transaction
 from django.db.models import OuterRef, Q, Subquery
 from django.http import HttpResponseRedirect
@@ -44,7 +45,14 @@ from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from django.utils.translation import ngettext
 
-from manuspectrum.accounts import activation, audience, notices, retention, twofactor
+from manuspectrum.accounts import (
+    activation,
+    audience,
+    notices,
+    retention,
+    roles,
+    twofactor,
+)
 from manuspectrum.accounts.creation import resource_label
 from manuspectrum.accounts.embargo import local_today
 from manuspectrum.models import (
@@ -330,15 +338,21 @@ class EmbargoAdmin(admin.ModelAdmin):
                 % {"count": done},
             )
 
-    @admin.action(description=_("Extend the end date by 3 months"))
+    @admin.action(
+        description=_("Extend the end date by 3 months"), permissions=["change"]
+    )
     def extend_3(self, request, queryset):
         self.extend(request, queryset, 3)
 
-    @admin.action(description=_("Extend the end date by 6 months"))
+    @admin.action(
+        description=_("Extend the end date by 6 months"), permissions=["change"]
+    )
     def extend_6(self, request, queryset):
         self.extend(request, queryset, 6)
 
-    @admin.action(description=_("Extend the end date by 12 months"))
+    @admin.action(
+        description=_("Extend the end date by 12 months"), permissions=["change"]
+    )
     def extend_12(self, request, queryset):
         self.extend(request, queryset, 12)
 
@@ -576,7 +590,16 @@ class TwoFactorFilter(admin.SimpleListFilter):
 
 
 class InvitingUserAdmin(TwoFactorActionsMixin, _BaseUserAdmin):
-    """Users: the list at a glance, the add form with the invitation, the account section."""
+    """Users: the list at a glance, the add form with the invitation, the account section.
+
+    A staff account that is not a superuser grants only the assignable groups,
+    never staff or superuser status, direct permissions or a password; it
+    cannot change the user name, e-mail address or dates of an existing account,
+    nor change, delete or invite an account managed by superusers, its own
+    included (`accounts/roles.py`). The rule holds on the server: those fields
+    are left out of its forms, and a change or delete of a protected account is
+    refused.
+    """
 
     add_form = AccountCreationForm
     add_fieldsets = (
@@ -625,6 +648,7 @@ class InvitingUserAdmin(TwoFactorActionsMixin, _BaseUserAdmin):
         "two_factor",
         "last_login",
         "planned_anonymisation",
+        "is_staff",
         "is_superuser",
     )
     list_filter = ("is_active", TwoFactorFilter, "is_staff", "is_superuser", "groups")
@@ -659,6 +683,55 @@ class InvitingUserAdmin(TwoFactorActionsMixin, _BaseUserAdmin):
 
     def _profiles(self, queryset):
         return UserProfile.objects.filter(user_id__in=queryset.values("pk"))
+
+    def _may_manage(self, request, user):
+        if user is None or request.user.is_superuser:
+            return True
+        return user.pk != request.user.pk and not roles.managed_by_superusers(user)
+
+    def has_change_permission(self, request, obj=None):
+        return super().has_change_permission(request, obj) and self._may_manage(
+            request, obj
+        )
+
+    def has_delete_permission(self, request, obj=None):
+        return super().has_delete_permission(request, obj) and self._may_manage(
+            request, obj
+        )
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = super().get_fieldsets(request, obj)
+        if obj is None or request.user.is_superuser:
+            return fieldsets
+        return [
+            (
+                name,
+                {
+                    **options,
+                    "fields": [f for f in options["fields"] if f != "password"],
+                },
+            )
+            for name, options in fieldsets
+        ]
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = super().get_readonly_fields(request, obj)
+        if request.user.is_superuser:
+            return fields
+        fields = (*fields, "is_staff", "is_superuser", "user_permissions")
+        if obj is None:
+            return fields
+        return (*fields, "username", "email", "last_login", "date_joined")
+
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        if db_field.name == "groups" and not request.user.is_superuser:
+            kwargs["queryset"] = roles.assignable_groups()
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
+
+    def user_change_password(self, request, id, form_url=""):
+        if not request.user.is_superuser:
+            raise PermissionDenied
+        return super().user_change_password(request, id, form_url)
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
@@ -763,7 +836,21 @@ class InvitingUserAdmin(TwoFactorActionsMixin, _BaseUserAdmin):
         permissions=["change"],
     )
     def send_invitation(self, request, queryset):
-        self._invite(request, queryset)
+        users = list(queryset)
+        allowed = [user for user in users if self._may_manage(request, user)]
+        skipped = len(users) - len(allowed)
+        if skipped:
+            self.message_user(
+                request,
+                ngettext(
+                    "%(count)d account was skipped: only a superuser can invite it.",
+                    "%(count)d accounts were skipped: only a superuser can invite them.",
+                    skipped,
+                )
+                % {"count": skipped},
+                messages.ERROR,
+            )
+        self._invite(request, allowed)
 
     def _invite(self, request, users):
         sent = 0
