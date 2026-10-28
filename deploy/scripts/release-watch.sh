@@ -15,7 +15,8 @@
 #   1 scheduled update: a slot that passed 15 minutes ago with no run recorded
 #     in history.log becomes OUTCOME=missed (notice withdrawn, one mail)
 #   1b Ansible running (ANSIBLE_MARKER exists): log, metrics refreshed, exit 0,
-#     nothing probed or armed
+#     nothing probed or armed; a marker whose mtime is older than 2 h is an
+#     interrupted run: the `state` failure is raised (exit 1) until it is removed
 #   2 probes: github.com (git), ghcr.io/v2/ must answer 401 (registry),
 #     tuf-repo-cdn.sigstore.dev (sigstore); a failure skips the rest
 #   3 `git fetch --tags --prune --prune-tags origin` (refs only; git itself
@@ -160,6 +161,11 @@ fi
 
 if [ -e "$ANSIBLE_MARKER" ]; then
   log "Ansible is running on this host: nothing is armed this run"
+  marker_age=$((NOW - $(stat -c %Y "$ANSIBLE_MARKER" 2>/dev/null || echo "$NOW")))
+  if [ "$marker_age" -gt 7200 ]; then
+    log "Ansible marker older than 2 h: a run was interrupted; remove it if no playbook is running"
+    FAIL[state]=1
+  fi
   finish 0
 fi
 

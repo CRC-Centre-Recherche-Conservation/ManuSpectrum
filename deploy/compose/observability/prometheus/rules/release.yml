@@ -36,14 +36,14 @@ groups:
       - alert: UpdateInterrupted
         expr: |
           manuspectrum_release_inflight_since_timestamp_seconds > 0
-          and time() - manuspectrum_release_inflight_since_timestamp_seconds > 5 * 3600
+          and time() - manuspectrum_release_inflight_since_timestamp_seconds > 5.5 * 3600
         for: 5m
         labels:
           severity: warning
           service: release
         annotations:
-          summary: "An update has been in flight for more than 5 hours"
-          description: "An update started more than 5 hours ago and neither finished nor was rolled back (the unit is cut after 4 hours). The host may have restarted or the engine crashed; the site may be half switched."
+          summary: "An update has been in flight for more than 5.5 hours"
+          description: "An update started more than 5.5 hours ago and neither finished nor was rolled back (the unit is cut after 4 hours and has at most 1 h 15 min to stop: about 5 h 16 min). The host may have restarted or the engine crashed; the site may be half switched."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/release.md#updateinterrupted
       - alert: ReleaseWatchFailing
         expr: |

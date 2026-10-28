@@ -171,7 +171,7 @@ engine() { # engine ARGS...: runs the engine from an unrelated directory; sets R
     RELEASE_SENDMAIL="$FAKE/bin/sendmail" RELEASE_READY_INTERVAL=0.1 UPDATE_LOCK_WAIT=1 BACKUP_LOCK_WAIT=1 \
     FAKE_LOG="$LOG" FAKE_DIR="$W/f" FAKE_ENV="$ENVF" FAKE_APP="$W/app" FAKE_STATE="$W/state" FAKE_DUMP="$W/dump" FAKE_MAIL="$W/mail" \
     FAKE_D2="$D2" FAKE_C2="$C2" FAKE_LABEL="${FAKE_LABEL-$C1}" ANSIBLE_MARKER="$W/ansible-running" \
-    ${RNOW:+RELEASE_NOW_EPOCH=$RNOW} ${SERVICE_RESULT:+SERVICE_RESULT=$SERVICE_RESULT} ${EXIT_STATUS:+EXIT_STATUS=$EXIT_STATUS} \
+    ${RNOW:+RELEASE_NOW_EPOCH=$RNOW} ${SERVICE_RESULT:+SERVICE_RESULT=$SERVICE_RESULT} ${EXIT_STATUS:+EXIT_STATUS=$EXIT_STATUS} ${EXIT_CODE:+EXIT_CODE=$EXIT_CODE} ${INVOCATION_ID:+INVOCATION_ID=$INVOCATION_ID} \
     bash "$ENGINE" "$@" 2>&1)"
   RC=$?
 }
@@ -401,18 +401,18 @@ equals "scheduled slot while Ansible runs: recorded as busy" busy "$(sget schedu
 # --- the window of a scheduled slot
 setup; sched; RNOW=1790004801 engine v1.1.0
 { [ "$RC" = 1 ] && grep -q '^REASON=late$' <<<"$OUT"; } && ok "late at the start: REASON=late" || not_ok "late at the start" "$RC $OUT"
-equals "late at the start: OUTCOME" refused "$(sget scheduled OUTCOME)"
+equals "late at the start: OUTCOME is missed, as --fire records it" missed "$(sget scheduled OUTCOME)"
 equals "late at the start: REASON in the record" late "$(sget scheduled REASON)"
 has 'ARGS=withdraw 7$' && ok "late at the start: notice withdrawn" || not_ok "late at the start: notice withdrawn"
 has '^make (backup|up)' && not_ok "late at the start: no backup, no switch" || ok "late at the start: no backup, no switch"
-grep -q '^Subject: \[ManuSpectrum\]\[Release\] scheduled update of v1.1.0 refused: late$' <<<"$(mails)" && ok "late at the start: mail" || not_ok "late at the start: mail" "$(mails)"
+grep -q '^Subject: \[ManuSpectrum\]\[Release\] scheduled update of v1.1.0 missed [(]past its window[)]$' <<<"$(mails)" && ok "late at the start: mail" || not_ok "late at the start: mail" "$(mails)"
 setup; sched; touch "$W/f/backup_closes_window"; before; engine v1.1.0
 { [ "$RC" = 1 ] && grep -q '^REASON=late$' <<<"$OUT"; } && ok "late after the backup: REASON=late" || not_ok "late after the backup" "$RC $OUT"
 has '^make backup' && ok "late after the backup: the backup did run" || not_ok "late after the backup: the backup did run"
 has '^make up' && not_ok "late after the backup: no switch" || ok "late after the backup: no switch"
 [ "$(sha256sum "$ENVF" | cut -d' ' -f1) $(head_of)" = "$ENV_BEFORE $HEAD_BEFORE" ] && ok "late after the backup: .env and HEAD untouched" || not_ok "late after the backup: .env and HEAD untouched"
 check "late after the backup: no inflight" test ! -e "$W/state/inflight"
-equals "late after the backup: OUTCOME" refused "$(sget scheduled OUTCOME)"
+equals "late after the backup: OUTCOME is missed" missed "$(sget scheduled OUTCOME)"
 setup; touch "$W/f/backup_closes_window"; engine v1.1.0
 equals "an interactive run has no window" 0 "$RC"
 
@@ -445,15 +445,21 @@ equals "images: a stale image of the repository is removed" 1 "$(grep -c "^docke
 equals "images: exactly one removal" 1 "$(grep -c '^docker image rm ' "$LOG")"
 grep -q "docker image rm $REPO@$D1\|docker image rm $REPO@$D2\|nginx" "$LOG" && not_ok "images: current, previous and other repositories are kept" || ok "images: current, previous and other repositories are kept"
 grep -q "^docker image ls .*$REPO\$" "$LOG" && ok "images: only the repository is listed" || not_ok "images: only the repository is listed" "$(grep 'image ls' "$LOG")"
+setup; mkdir "$W/state/previous"; printf '%s\n' "$REPO $D1" "$REPO $D2" "$REPO sha256:$(printf '3%.0s' {1..64})" >"$W/f/images"; engine v1.1.0
+equals "images: the old current is kept although previous could not be written" 0 "$(grep -c "^docker image rm $REPO@$D1$" "$LOG")"
+equals "images: the new current is kept" 0 "$(grep -c "^docker image rm $REPO@$D2$" "$LOG")"
+equals "images: a stale image is still removed then" 1 "$(grep -c "^docker image rm $REPO@sha256:$(printf '3%.0s' {1..64})$" "$LOG")"
 setup; printf '%s\n' "$REPO sha256:$(printf '3%.0s' {1..64})" >"$W/f/images"; printf 500 >"$W/f/ready_2"; engine v1.1.0
 has '^docker image rm ' && not_ok "images: nothing removed after a rollback" || ok "images: nothing removed after a rollback"
 
 # --- --after-stop: an engine that ended without finishing
-after_stop() { # after_stop RESULT STATUS [TAG]
-  SERVICE_RESULT="$1" EXIT_STATUS="$2" engine --after-stop "${3:-v1.1.0}"
+INV="$(printf 'ab%.0s' {1..16})"
+FOREIGN_INV="$(printf 'cd%.0s' {1..16})"
+after_stop() { # after_stop RESULT STATUS [TAG]: EC = EXIT_CODE of the unit, INVX = its invocation id
+  SERVICE_RESULT="$1" EXIT_STATUS="$2" EXIT_CODE="${EC-exited}" INVOCATION_ID="${INVX-$INV}" engine --after-stop "${3:-v1.1.0}"
   unset SERVICE_RESULT EXIT_STATUS
 }
-setup; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000; snapshot; s0="$SNAP"
+setup; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000 INVOCATION_ID="$INV"; snapshot; s0="$SNAP"
 after_stop timeout TERM
 equals "after-stop timeout: exit 0" 0 "$RC"
 equals "after-stop timeout: ROLLBACK_FAILED=1" 1 "$(sget rollbacks ROLLBACK_FAILED)"
@@ -468,14 +474,36 @@ for case_ in "success 0" "exit-code 1" "exit-code 3"; do
   setup; rm -f "$W/state/inflight"; after_stop "$res" "$code"
   { [ "$RC" = 0 ] && [ -z "$(ls "$W/mail")" ] && [ -z "$(sget rollbacks ROLLBACK_FAILED)" ]; } && ok "after-stop $res/$code without inflight: nothing happens" || not_ok "after-stop $res/$code without inflight" "$RC $OUT"
 done
-setup; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000; release_state_w rollbacks COUNT=0 ROLLBACK_FAILED=1; after_stop exit-code 4
+setup; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000 INVOCATION_ID="$INV"; release_state_w rollbacks COUNT=0 ROLLBACK_FAILED=1; after_stop exit-code 4
 { [ "$RC" = 0 ] && [ -z "$(ls "$W/mail")" ]; } && ok "after-stop exit 4: already mailed, not mailed twice" || not_ok "after-stop exit 4" "$RC $(mails)"
-setup; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000; after_stop success 0
+setup; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000 INVOCATION_ID="$INV"; after_stop success 0
 { [ "$RC" = 0 ] && [ -z "$(ls "$W/mail")" ]; } && ok "after-stop success with a stale inflight: left alone" || not_ok "after-stop success" "$RC $(mails)"
-setup; sched; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000; after_stop timeout TERM
+setup; sched; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000 INVOCATION_ID="$INV"; after_stop timeout TERM
 has 'ARGS=end 7 --at \+24h$' && [ ! -e "$W/state/scheduled" ] && ok "after-stop scheduled: notice extended 24 h, scheduled removed" || not_ok "after-stop scheduled" "$(grep site-notice "$LOG")"
-setup; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000; after_stop timeout TERM v1.2
+setup; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000 INVOCATION_ID="$INV"; after_stop timeout TERM v1.2
 { [ "$RC" = 0 ] && [ -z "$(ls "$W/mail")" ]; } && ok "after-stop with a bad tag: ignored" || not_ok "after-stop with a bad tag"
+
+# an inflight that another invocation wrote is not this unit's to flag
+setup; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000 INVOCATION_ID="$FOREIGN_INV"; after_stop exit-code 1
+{ [ "$RC" = 0 ] && [ -z "$(ls "$W/mail")" ] && [ -z "$(sget rollbacks ROLLBACK_FAILED)" ] && [ -e "$W/state/inflight" ]; } && ok "after-stop exit 1 with a foreign inflight: nothing flagged, nothing mailed" || not_ok "after-stop exit 1 with a foreign inflight" "$RC $(mails)"
+setup; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000 INVOCATION_ID="$FOREIGN_INV"; after_stop timeout TERM
+{ [ -z "$(ls "$W/mail")" ] && [ -z "$(sget rollbacks ROLLBACK_FAILED)" ]; } && ok "after-stop timeout with a foreign inflight: nothing flagged" || not_ok "after-stop timeout with a foreign inflight" "$(mails)"
+setup; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000 INVOCATION_ID=; after_stop timeout TERM
+{ [ -z "$(ls "$W/mail")" ] && [ -z "$(sget rollbacks ROLLBACK_FAILED)" ]; } && ok "after-stop with an inflight that carries no invocation id: nothing flagged" || not_ok "after-stop inflight without id" "$(mails)"
+# the engine's own exit 4 is never mailed twice, whatever SERVICE_RESULT says
+for exit_status in 0 3 4; do
+  setup; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000 INVOCATION_ID="$INV"; after_stop timeout "$exit_status"
+  { [ -z "$(ls "$W/mail")" ] && [ -z "$(sget rollbacks ROLLBACK_FAILED)" ]; } && ok "after-stop timeout/$exit_status with exited code: engine already ended, nothing flagged" || not_ok "after-stop timeout/$exit_status" "$(mails)"
+done
+setup; release_state_w inflight FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1790001000 INVOCATION_ID="$INV"; EC=killed after_stop signal TERM
+{ [ "$(sget rollbacks ROLLBACK_FAILED)" = 1 ] && grep -q 'interrupted' <<<"$(mails)"; } && ok "after-stop killed with the matching invocation id: flagged and mailed" || not_ok "after-stop killed" "$(mails)"
+
+# the inflight records the invocation that wrote it
+setup; printf 500 >"$W/f/ready_2"; printf 500 >"$W/f/ready_1"; INVOCATION_ID="$INV" engine v1.1.0
+equals "inflight carries the INVOCATION_ID of the unit" "$INV" "$(sget inflight INVOCATION_ID)"
+setup; printf 500 >"$W/f/ready_2"; printf 500 >"$W/f/ready_1"; INVOCATION_ID=not-an-id engine v1.1.0
+equals "an invalid INVOCATION_ID is recorded empty" "" "$(sget inflight INVOCATION_ID)"
+equals "an invalid INVOCATION_ID does not stop the update" 4 "$RC"
 
 echo "1..$N"
 [ "$FAILED" -eq 0 ] || { echo "# FAILED"; exit 1; }

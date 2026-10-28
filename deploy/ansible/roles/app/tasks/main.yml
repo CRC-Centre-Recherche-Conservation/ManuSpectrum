@@ -2,11 +2,13 @@
 # The marker tells the update command, the scheduled slot and the release engine
 # that an Ansible run is in progress (they refuse to start meanwhile); it is
 # taken before the update guard looks, so that of the two at most one runs, and
-# it is removed whatever happens.
+# it is removed whatever happens. When site.yml already holds the marker
+# (`app_marker_outer`), this role neither takes nor removes it.
 - name: Run the application role under the Ansible run marker
   block:
     - name: Take the Ansible run marker
       ansible.builtin.include_tasks: marker.yml
+      when: not (app_marker_outer | default(false) | bool)
 
     - name: Stop while an update runs
       ansible.builtin.include_tasks: update_guard.yml
@@ -28,6 +30,5 @@
       when: app_todo | length == 0
   always:
     - name: Remove the Ansible run marker
-      ansible.builtin.file:
-        path: "{{ app_ansible_marker }}"
-        state: absent
+      ansible.builtin.include_tasks: marker_release.yml
+      when: not (app_marker_outer | default(false) | bool)

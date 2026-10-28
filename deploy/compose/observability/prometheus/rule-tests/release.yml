@@ -163,7 +163,7 @@ tests:
   - expr: ALERTS{alertname="UpdateRollbackFailed", alertstate="firing"}
     eval_time: 6m
     exp_samples: []
-- name: an update in flight for 4 hours is quiet, past 5 hours it fires, and it clears when the marker goes
+- name: an update in flight for 4 hours is quiet, past 5.5 hours it fires, and it clears when the marker goes
   interval: 5m
   input_series:
   - series: manuspectrum_release_inflight_since_timestamp_seconds
@@ -176,7 +176,16 @@ tests:
     eval_time: 5h
     exp_samples: []
   - expr: ALERTS{alertname="UpdateInterrupted", alertstate="firing"}
+    eval_time: 5h20m
+    exp_samples: []
+  - expr: ALERTS{alertname="UpdateInterrupted", alertstate="firing"}
     eval_time: 5h30m
+    exp_samples: []
+  - expr: ALERTS{alertname="UpdateInterrupted", alertstate="firing"}
+    eval_time: 5h50m
+    exp_samples: []
+  - expr: ALERTS{alertname="UpdateInterrupted", alertstate="firing"}
+    eval_time: 6h
     exp_samples:
     - labels: ALERTS{alertname="UpdateInterrupted", alertstate="firing", service="release", severity="warning"}
       value: 1

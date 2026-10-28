@@ -27,7 +27,7 @@
 # release_state_get, release_state_write, release_state_set, release_env_get,
 # release_env_set_image, release_env_missing_keys, release_metrics_write,
 # release_mail, release_slot_parse, release_metrics_from_state,
-# release_compat_check.
+# release_metrics_refresh, release_compat_check.
 # shellcheck disable=SC2034  # patterns read by the sourcing scripts
 
 RELEASE_TAG_FINAL_RE='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
@@ -102,7 +102,7 @@ release_pick_candidate() { # release_pick_candidate CHANNEL CURRENT < tags
 # --- state files
 
 _release_state_key_known() {
-  [[ "${1-}" =~ ^(TAG|HELD_TAG|FROM_TAG|TO_TAG|IMAGE|COMMIT|ARMED_AT|CREATED_AT|SINCE|STARTED_AT|AT_EPOCH|WINDOW_END_EPOCH|NOTICE_ID|AT_PARIS|SECURITY|NOTIFIED|NEEDS_ANSIBLE|ROLLBACK_FAILED|COUNT|APPLIED_AT|REASON|OUTCOME|BY)$ ]]
+  [[ "${1-}" =~ ^(TAG|HELD_TAG|FROM_TAG|TO_TAG|IMAGE|COMMIT|ARMED_AT|CREATED_AT|SINCE|STARTED_AT|AT_EPOCH|WINDOW_END_EPOCH|NOTICE_ID|AT_PARIS|SECURITY|NOTIFIED|NEEDS_ANSIBLE|ROLLBACK_FAILED|COUNT|APPLIED_AT|REASON|OUTCOME|BY|INVOCATION_ID)$ ]]
 }
 
 # Status 0 when VALUE is acceptable for KEY. Keys and their patterns:
@@ -118,6 +118,7 @@ _release_state_key_known() {
 #                                  (late: a scheduled slot ran past its WINDOW_END_EPOCH)
 #   OUTCOME                        refused or missed (or empty)
 #   BY                             login [a-z_][a-z0-9_-]*
+#   INVOCATION_ID                  32 lowercase hex (systemd's invocation id), or empty
 release_state_ok() { # release_state_ok KEY VALUE
   local key="${1-}" value="${2-}"
   _release_state_key_known "$key" || return 1
@@ -134,6 +135,7 @@ release_state_ok() { # release_state_ok KEY VALUE
     REASON) [[ "$value" =~ ^(drift|unarmed|tag_moved|env_keys|managed_sources|verify|backup|lock|busy|fetch|late)?$ ]] ;;
     OUTCOME) [[ "$value" =~ ^(refused|missed)?$ ]] ;;
     BY) [[ "$value" =~ ^[a-z_][a-z0-9_-]*$ ]] ;;
+    INVOCATION_ID) [[ "$value" =~ ^([0-9a-f]{32})?$ ]] ;;
     *) return 1 ;;
   esac
 }
@@ -354,6 +356,14 @@ release_metrics_from_state() { # release_metrics_from_state STATE_DIR FILE [NAME
   outcome="$(release_state_get "$dir/scheduled" OUTCOME 2>/dev/null)" || outcome=""
   case "$outcome" in refused | missed) args+=("schedule_failed_$outcome=1") ;; esac
   release_metrics_write "$file" "${args[@]}" "$@"
+}
+
+# Refreshes the release textfile (METRICS_TEXTFILE_DIR of ENV_FILE) from the
+# state files. Status 1 when ENV_FILE names no such directory.
+release_metrics_refresh() { # release_metrics_refresh STATE_DIR ENV_FILE
+  local dir
+  dir="$(release_env_get "${2-}" METRICS_TEXTFILE_DIR 2>/dev/null)" && [ -d "$dir" ] || return 1
+  release_metrics_from_state "${1-}" "$dir/manuspectrum_release.prom"
 }
 
 # --- mail

@@ -38,7 +38,9 @@ cp "$SCRIPTS/lib-release.sh" "$SCRIPTS/lib-metrics.sh" "$LIB/"
 cat >"$APP/deploy/compose/.env" <<EOF
 ALERT_EMAILS=ops@manuspectrum.test
 ALERT_EMAIL_FROM=noreply@manuspectrum.test
+METRICS_TEXTFILE_DIR=$TMP/metrics
 EOF
+mkdir -p "$TMP/metrics"
 cat >"$TMP/release.conf" <<EOF
 # written by Ansible
 SERVICE_USER=$(id -un)
@@ -66,14 +68,15 @@ stub systemctl 'echo "systemctl $*" >>"$FAKE_LOG"
 case "$1" in
   list-units) [ -z "${FAKE_ACTIVE-}" ] || echo "$FAKE_ACTIVE loaded active running" ;;
   show) case "$3" in
-      ExecMainCode) printf "ExecMainCode=%s\nExecMainStatus=%s\n" "${FAKE_CODE:-1}" "${FAKE_STATUS:-0}" ;;
+      ExecMainCode) if [ -n "${FAKE_GONE-}" ]; then printf "ExecMainCode=0\nExecMainStatus=0\n"; else printf "ExecMainCode=%s\nExecMainStatus=%s\n" "${FAKE_CODE:-1}" "${FAKE_STATUS:-0}"; fi ;;
       Result) echo success ;;
       NextElapseUSecRealtime) echo "${FAKE_NEXT-}" ;;
     esac ;;
   daemon-reload) echo "dropin: $(cat "$FAKE_DROPIN/slot.conf" 2>/dev/null | tr "\n" "|")" >>"$FAKE_LOG" ;;
   start) case "$2" in
       *.timer) [ -z "${FAKE_TIMER_FAIL-}" ] || exit 1 ;;
-      *) [ -z "${FAKE_UNIT_FAIL-}" ] || exit 1; [ -z "${FAKE_START_SLEEP-}" ] || exec sleep "$FAKE_START_SLEEP" ;;
+      *) [ -z "${FAKE_UNIT_FAIL-}" ] || exit 1; [ -z "${FAKE_START_SLEEP-}" ] || exec sleep "$FAKE_START_SLEEP"
+         [ "${FAKE_STATUS:-0}" = 0 ] && [ "${FAKE_CODE:-1}" = 1 ] || exit 1 ;;
     esac ;;
 esac
 exit 0'
@@ -120,7 +123,7 @@ reset() { # reset: fresh state, armed v1.2.0
   release_state_write "$STATE/current" TAG=v1.1.0 IMAGE="${IMG%@*}@sha256:$(printf 'c%.0s' {1..64})" COMMIT="$(printf 'd%.0s' {1..40})" APPLIED_AT=1
   release_state_write "$STATE/armed" TAG=v1.2.0 IMAGE="$IMG" COMMIT="$COMMIT" ARMED_AT=2 SECURITY=1 NOTIFIED=1 NEEDS_ANSIBLE=0
   local v
-  for v in FAKE_ACTIVE FAKE_STATUS FAKE_NEXT FAKE_TIMER_FAIL FAKE_UNIT_FAIL FAKE_START_SLEEP FAKE_NOTICE_FAIL FAKE_CHECK_RC FAKE_CODE FAKE_TZ; do
+  for v in FAKE_ACTIVE FAKE_STATUS FAKE_NEXT FAKE_TIMER_FAIL FAKE_UNIT_FAIL FAKE_START_SLEEP FAKE_NOTICE_FAIL FAKE_CHECK_RC FAKE_CODE FAKE_GONE FAKE_TZ; do
     unset "$v"
     export "${v?}="
   done
@@ -215,6 +218,12 @@ contains "--now success message" "installed" "$OUT"
 reset; FAKE_STATUS=3; run --now v1.2.0; contains "exit 3 says rolled back" "ROLLED BACK" "$OUT"
 reset; FAKE_STATUS=4; run --now v1.2.0; contains "exit 4 says rollback failed" "ROLLBACK FAILED" "$OUT"
 reset; FAKE_STATUS=1; run --now v1.2.0; contains "exit 1 points at the journal" "REASON=" "$OUT"
+
+reset; FAKE_GONE=1; run --now v1.2.0
+equals "--now: a successful start whose unit was already collected exits 0" 0 "$RC"
+contains "--now: collected unit still reports the install" "is installed" "$OUT"
+reset; FAKE_GONE=1; FAKE_STATUS=3; run --now v1.2.0
+equals "--now: a failed start never reads a collected unit as installed" 1 "$RC"
 
 reset
 FAKE_START_SLEEP=30
@@ -390,7 +399,7 @@ equals "--fire past its window records missed" missed "$(release_state_get "$STA
 equals "--fire past its window records the reason late" late "$(release_state_get "$STATE/scheduled" REASON)"
 lacks "--fire past its window starts no unit" "systemctl start" "$(logtext)"
 contains "--fire past its window withdraws the notice" "ARGS=withdraw 7" "$(logtext)"
-contains "--fire past its window mails the miss" "scheduled update of v1.2.0 missed" "$(cat "$MAILS")"
+contains "--fire past its window mails the miss" "scheduled update of v1.2.0 missed (past its window)" "$(cat "$MAILS")"
 reset
 release_state_write "$STATE/scheduled" TAG=v1.2.0 AT_EPOCH=1 AT_PARIS="2027-03-22 23:00" WINDOW_END_EPOCH="$NOW_SPRING" NOTICE_ID=7 BY=ops CREATED_AT=1 OUTCOME= REASON=
 run --fire
@@ -428,7 +437,8 @@ contains "--status outcome" "OUTCOME=refused REASON=drift" "$OUT"
 contains "--status held tag" "v1.3.0" "$OUT"
 contains "--status inflight" "inflight: v1.1.0 -> v1.2.0" "$OUT"
 contains "--status rollbacks" "rollbacks: 2" "$OUT"
-contains "--status rollback failed instructions" "remove $STATE/inflight" "$OUT"
+contains "--status rollback failed instructions" "sudo manuspectrum-update --resolved" "$OUT"
+lacks "--status no longer tells to remove the file by hand" "remove $STATE/inflight" "$OUT"
 
 # --- the service account gets its environment on the command line
 reset
@@ -516,6 +526,69 @@ equals "--at while Ansible runs refused" 1 "$RC"
 contains "--at Ansible message" "Ansible is running on this host" "$OUT"
 equals "Ansible refusals started nothing" "" "$(logtext)"
 rm -f "$TMP/ansible-running"
+
+# --- --resolved
+failed_update() { # failed_update: an update that failed, its rollback too
+  release_state_write "$STATE/inflight" FROM_TAG=v1.1.0 TO_TAG=v1.2.0 STARTED_AT="$NOW_SPRING" INVOCATION_ID=
+  release_state_write "$STATE/rollbacks" COUNT=2 ROLLBACK_FAILED=1
+}
+has_file() { [ -e "$1" ] && echo yes || echo no; }
+reset; failed_update
+OUT="$(printf 'yes\n' | bash "$(mkfront "$NOW_SPRING" 1)" --resolved 2>&1)"; RC=$?
+equals "--resolved without a terminal refused" 1 "$RC"
+contains "--resolved no terminal message" "needs a terminal" "$OUT"
+equals "--resolved without a terminal changed nothing" yes "$(has_file "$STATE/inflight")"
+run --resolved extra; equals "--resolved takes no argument" 2 "$RC"
+reset; failed_update; FAKE_ACTIVE=manuspectrum-update@v1.2.0.service
+run --resolved
+equals "--resolved while an update unit is active refused" 1 "$RC"
+equals "--resolved while a unit is active kept inflight" yes "$(has_file "$STATE/inflight")"
+equals "--resolved while a unit is active kept ROLLBACK_FAILED" 1 "$(release_state_get "$STATE/rollbacks" ROLLBACK_FAILED)"
+reset; failed_update; : >"$TMP/ansible-running"
+run --resolved
+equals "--resolved while Ansible runs refused" 1 "$RC"
+contains "--resolved Ansible message" "Ansible is running on this host" "$OUT"
+equals "--resolved while Ansible runs kept inflight" yes "$(has_file "$STATE/inflight")"
+rm -f "$TMP/ansible-running"
+reset
+run --resolved
+equals "--resolved with nothing to resolve exits 0" 0 "$RC"
+contains "--resolved nothing to resolve message" "Nothing to resolve" "$OUT"
+lacks "--resolved with nothing to resolve mails nothing" "sendmail" "$(logtext)"
+reset; failed_update
+OUT="$(printf 'no\n' | bash "$(mkfront)" --resolved 2>&1)"; RC=$?
+equals "--resolved not confirmed refused" 1 "$RC"
+equals "--resolved not confirmed kept inflight" yes "$(has_file "$STATE/inflight")"
+reset; failed_update
+run --resolved
+equals "--resolved exits 0" 0 "$RC"
+equals "--resolved removes inflight" no "$(has_file "$STATE/inflight")"
+equals "--resolved clears ROLLBACK_FAILED" 0 "$(release_state_get "$STATE/rollbacks" ROLLBACK_FAILED)"
+equals "--resolved keeps the rollback count" 2 "$(release_state_get "$STATE/rollbacks" COUNT)"
+contains "--resolved removes the file as the service account" "env APP_DIR=$APP STATE_DIR=$STATE RELEASE_LIB_DIR=$LIB ENV_FILE=$APP/deploy/compose/.env rm -f $STATE/inflight" "$(cat "$LOG")"
+grep -q '^manuspectrum_release_rollback_failed 0$' "$TMP/metrics/manuspectrum_release.prom" && grep -q '^manuspectrum_release_inflight_since_timestamp_seconds 0$' "$TMP/metrics/manuspectrum_release.prom" && ok "--resolved rewrites the metrics" || not_ok "--resolved rewrites the metrics" "$(cat "$TMP/metrics/manuspectrum_release.prom" 2>&1)"
+contains "--resolved mails who resolved it" "Subject: [ManuSpectrum][Release] manuspectrum.test: failed update marked as resolved by root" "$(cat "$MAILS")"
+run --status
+contains "--status after --resolved shows no inflight" "inflight: none" "$OUT"
+lacks "--status after --resolved shows no failed rollback" "ROLLBACK FAILED" "$OUT"
+reset; release_state_write "$STATE/inflight" FROM_TAG=v1.1.0 TO_TAG=v1.2.0 STARTED_AT="$NOW_SPRING" INVOCATION_ID=
+run --resolved
+equals "--resolved clears an interrupted inflight without a rollbacks file" 0 "$RC"
+equals "--resolved without a rollbacks file creates none" no "$(has_file "$STATE/rollbacks")"
+reset; release_state_write "$STATE/rollbacks" COUNT=1 ROLLBACK_FAILED=1
+run --resolved
+equals "--resolved clears ROLLBACK_FAILED when inflight is already gone" 0 "$(release_state_get "$STATE/rollbacks" ROLLBACK_FAILED)"
+reset; failed_update
+( exec 8>"$TMP/update.lock"; flock -n 8; exec sleep 20 ) &
+holder=$!
+sleep 0.3
+run --resolved
+equals "another command is running: --resolved refused" 1 "$RC"
+contains "lock message for --resolved" "another manuspectrum-update is running" "$OUT"
+kill "$holder" 2>/dev/null; wait "$holder" 2>/dev/null
+reset; failed_update; rm -f "$STATE/inflight"; ln -s "$TMP/outside-link" "$STATE/inflight"
+run --resolved
+equals "--resolved refuses a symlinked inflight" 1 "$RC"
 
 # --- the slot is parsed again after the confirmation
 reset

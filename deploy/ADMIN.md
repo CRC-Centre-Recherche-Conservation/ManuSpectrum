@@ -678,13 +678,13 @@ running (a reboot or a kill in the middle of the switch). The update records its
 progress in `inflight`, so no other update starts. Follow
 [runbooks/release.md](runbooks/release.md) (« UpdateInterrupted » and
 « UpdateRollbackFailed »): find out which version runs, repair or roll back by
-hand, then remove the record as for a failed rollback.
+hand, then run `sudo manuspectrum-update --resolved` as for a failed rollback.
 
 ### After a failed rollback
 
 `--now` exits with 4, the mail subject says `ROLLBACK FAILED`, and `--status`
 prints a `ROLLBACK FAILED` block. The site may be down. The update keeps the
-in-flight record, so no other update starts until it is removed.
+in-flight record, so no other update starts until it is marked as resolved.
 
 1. Repair the site from the checkout if the cause is plain (a service that
    needs a restart), or restore the `pre-update` backup (`make -C deploy restic
@@ -693,9 +693,12 @@ in-flight record, so no other update starts until it is removed.
    human decision**: read `BACKUP.md` (« Restore the stack », « Personal data »)
    first, it replaces the database and the uploads.
 2. Check that the site answers (`make -C deploy status`, `/readyz`).
-3. Remove the record: `sudo rm /var/lib/manuspectrum/release/inflight`.
+3. Run `sudo manuspectrum-update --resolved` (terminal, asks for `yes`): it removes
+   the record, sets `ROLLBACK_FAILED` to 0, rewrites the metrics and mails who did
+   it. It is refused while an update unit is active or an Ansible run holds its marker.
 
-`ROLLBACK_FAILED` returns to 0 at the next successful update.
+Without it, `ROLLBACK_FAILED` returns to 0 only at the next successful update,
+which cannot start while the record exists.
 
 The mails of the watch and the update are sent to `ALERT_EMAILS` by the host's
 own mail service; if the stack is down they still go out, because they do not

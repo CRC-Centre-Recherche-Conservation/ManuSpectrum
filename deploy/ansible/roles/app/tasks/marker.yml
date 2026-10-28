@@ -15,4 +15,4 @@
     group: root
     mode: "0644"
     access_time: preserve
-    modification_time: preserve
+    modification_time: now

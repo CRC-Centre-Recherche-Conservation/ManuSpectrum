@@ -402,7 +402,7 @@ and the scheduled slot (`scheduled_timestamp_seconds`,
 `schedule_failed{reason=refused|missed}`). No tag or version appears in a label.
 Eight alerts read them (`rules/release.yml`, [release runbook](runbooks/release.md)):
 `ReleaseVerificationFailed`, `UpdateRolledBack` and `UpdateRollbackFailed` (critical),
-`UpdateInterrupted` (warning, an update in flight for more than 5 hours),
+`UpdateInterrupted` (warning, an update in flight for more than 5.5 hours),
 `ReleaseWatchFailing`, `ReleaseWatchStale`, `ReleasePendingTooLong` (30 days, 14 when the
 release carries a security fix) and `ReleaseScheduleFailed` (warning). A
 stale file raises `HostMetricsStale` or `DiskUsageStale`.

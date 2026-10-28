@@ -94,7 +94,11 @@ host uses `rc`, production uses `prod`.
   must run first. It then marks the release as *armed* and mails
   `ALERT_EMAILS` once. It installs nothing and never moves the checkout (it
   fetches with `--prune-tags`: a tag that moved on the origin is refused by git,
-  a local tag the origin lacks is dropped). A tag
+  a local tag the origin lacks is dropped). With `--prune-tags`, a tag deleted
+  and created again on the origin between two fetches is accepted as new; the
+  armed-commit pin of the engine and `release-verify` still refuse anything the
+  release workflow did not sign for that tag, and deleting a release tag is an
+  incident. A tag
   whose image or signature is not published yet is waited for six hours before
   it counts as a failure (`ReleaseVerificationFailed`).
 - **The update** is started by an operator, now or at a scheduled time, with

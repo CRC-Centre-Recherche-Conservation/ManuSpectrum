@@ -1785,9 +1785,10 @@ read and record »). Paris time everywhere.
   - Expected: the update ends with exit status 4 and `ROLLBACK FAILED`; mail `vA ROLLBACK FAILED`, delivered although the stack is
     down, with the restore commands; `--status` prints the `ROLLBACK FAILED` block and `inflight:`;
     `manuspectrum_release_rollback_failed 1` in the release metrics file (no alert reads it: only the mail and `--status`
-    announce a failed rollback). A new `--now` refuses until `sudo rm /var/lib/manuspectrum/release/inflight`.
-  - Start Docker and the stack again (`make -C deploy up`), remove the file, and check that `ROLLBACK_FAILED` returns to 0 after
-    the next successful update.
+    announce a failed rollback). A new `--now` refuses until `sudo manuspectrum-update --resolved`.
+  - Start Docker and the stack again (`make -C deploy up`), run `sudo manuspectrum-update --resolved` → `Marked as resolved.`; `--status` shows `inflight: none` and
+    no `ROLLBACK FAILED` block, the release metrics say `rollback_failed 0`, and a mail `<host>: failed update marked as
+    resolved by <login>` arrives.
 
 ### 9.13 What cannot be tested in rehearsal
 

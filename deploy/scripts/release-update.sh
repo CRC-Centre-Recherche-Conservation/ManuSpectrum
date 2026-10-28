@@ -37,13 +37,17 @@
 # rollback only mails the restore commands.
 #
 # --after-stop (ExecStopPost of manuspectrum-update@.service, reads
-# SERVICE_RESULT and EXIT_STATUS): an engine that exited 0, 1 or 3 left no
-# `inflight`, and 4 mailed already; any other end (timeout, kill, crash) with
-# `inflight` still there sets ROLLBACK_FAILED=1, writes the metrics and mails
-# the restore commands once. It never touches the stack.
+# SERVICE_RESULT, EXIT_CODE, EXIT_STATUS and INVOCATION_ID): an engine that
+# exited 0, 3 or 4 has finished (4 mailed already, whatever SERVICE_RESULT
+# says); any other end (timeout, kill, crash) with an `inflight` still there
+# sets ROLLBACK_FAILED=1, writes the metrics and mails the restore commands
+# once. Step 7 records the unit's INVOCATION_ID in `inflight`, and --after-stop
+# acts only on an `inflight` carrying its own id: one left by an earlier
+# invocation is not this unit's. It never touches the stack.
 #
 # Scheduled context: STATE_DIR/scheduled names TAG with an empty OUTCOME. A
-# refusal sets OUTCOME=refused and REASON (the file stays) and withdraws the
+# refusal sets OUTCOME=refused and REASON (the file stays); a slot past its
+# window (REASON=late) is OUTCOME=missed, as manuspectrum-update --fire records it and withdraws the
 # site notice; success and exit 3 end the notice and remove the file; exit 4
 # extends the notice by 24 hours and removes the file. Mail goes out only in
 # that context (and for the result of a run), through release_mail. A failing
@@ -128,14 +132,15 @@ history() { # history OUTCOME FROM TO
 
 # A refusal changes nothing on the host. --check-only stops at the message.
 refuse() { # refuse REASON MESSAGE
-  local reason="$1"
+  local reason="$1" outcome subject
   shift
   log "REFUSED: $*"
   if [ "$CHECK_ONLY" = 0 ] && { [ "$HAVE_LOCK" = 1 ] || [ "$LOCK_REFUSAL" = 1 ]; }; then
     if [ "$SCHED" = 1 ]; then
-      release_state_set "$STATE_DIR/scheduled" OUTCOME refused REASON "$reason" || log "scheduled: state not updated"
+      if [ "$reason" = late ]; then outcome=missed subject="scheduled update of $TAG missed (past its window)"; else outcome=refused subject="scheduled update of $TAG refused: $reason"; fi
+      release_state_set "$STATE_DIR/scheduled" OUTCOME "$outcome" REASON "$reason" || log "scheduled: state not updated"
       notice withdraw "$NOTICE_ID"
-      send_mail "scheduled update of $TAG refused: $reason" "The scheduled update of $TAG on ${HOST_NAME:-this host} was refused ($reason) and nothing was changed.
+      send_mail "$subject" "The scheduled update of $TAG on ${HOST_NAME:-this host} was $outcome ($reason) and nothing was changed.
 
 $*
 
@@ -170,7 +175,12 @@ if [ "$AFTER_STOP" = 1 ]; then
   release_tag_valid "$TAG" || { log "after-stop: '$TAG' is not a release tag"; exit 0; }
   HOST_NAME="$(release_env_get "$ENV_FILE" PUBLIC_HOST 2>/dev/null || hostname)"
   if [ "${SERVICE_RESULT:-}" = success ] || [ ! -e "$STATE_DIR/inflight" ]; then exit 0; fi
-  if [ "${SERVICE_RESULT:-}" = exit-code ] && [ "${EXIT_STATUS:-}" = 4 ]; then exit 0; fi
+  if [ "${EXIT_CODE:-}" = exited ]; then case "${EXIT_STATUS:-}" in 0 | 3 | 4) exit 0 ;; esac; fi
+  own_id="$(release_state_get "$STATE_DIR/inflight" INVOCATION_ID 2>/dev/null)" || own_id=""
+  if ! [[ "${INVOCATION_ID:-}" =~ ^[0-9a-f]{32}$ ]] || [ "$own_id" != "$INVOCATION_ID" ]; then
+    log "after-stop: $STATE_DIR/inflight was not written by this invocation: left alone"
+    exit 0
+  fi
   exec 7>>"$STATE_DIR/lock" && { flock -w 30 7 || log "after-stop: lock not taken, going on"; }
   log "after-stop: the engine ended with ${SERVICE_RESULT:-unknown} (${EXIT_STATUS:-?}) and left $STATE_DIR/inflight"
   from_tag="$(release_state_get "$STATE_DIR/inflight" FROM_TAG 2>/dev/null || echo "the previous version")"
@@ -345,10 +355,11 @@ switch_to() { # switch_to LABEL COMMIT IMAGE
 }
 
 # Removes the local images of the release repository that `current`, `previous`
-# and `armed` do not name (by digest). Images of other repositories are never
+# and `armed` do not name (by digest). The version just replaced and the one
+# just installed are kept from memory, whatever the state files say. Images of other repositories are never
 # listed. Failures are logged.
 prune_images() {
-  local repo="${ARMED_IMAGE%@*}" keep="" f img repository digest
+  local repo="${ARMED_IMAGE%@*}" keep=" ${CUR_IMAGE#*@}  ${ARMED_IMAGE#*@} " f img repository digest
   for f in current previous armed; do
     img="$(release_state_get "$STATE_DIR/$f" IMAGE 2>/dev/null)" && keep+=" ${img#*@} "
   done
@@ -363,7 +374,9 @@ prune_images() {
 
 trap on_signal TERM INT
 log "step 7: switching $CUR_TAG -> $TAG (wait ${WAIT}s)"
-release_state_write "$STATE_DIR/inflight" "FROM_TAG=$CUR_TAG" "TO_TAG=$TAG" "STARTED_AT=$(date +%s)" || refuse busy "cannot write $STATE_DIR/inflight"
+inflight_id=""
+[[ "${INVOCATION_ID:-}" =~ ^[0-9a-f]{32}$ ]] && inflight_id="$INVOCATION_ID"
+release_state_write "$STATE_DIR/inflight" "FROM_TAG=$CUR_TAG" "TO_TAG=$TAG" "STARTED_AT=$(date +%s)" "INVOCATION_ID=$inflight_id" || refuse busy "cannot write $STATE_DIR/inflight"
 write_metrics
 switch_to "$TAG" "$ARMED_COMMIT" "$ARMED_IMAGE"
 switched=$?

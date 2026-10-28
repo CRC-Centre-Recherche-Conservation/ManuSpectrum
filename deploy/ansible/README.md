@@ -160,9 +160,13 @@ Inventory variables:
   default every account of `admin_users`. A subset of `admin_users`, never the
   service account. An account removed from the list leaves the group at the next run.
 
-The `app` role holds the marker `/run/manuspectrum/ansible-running` for the
-whole run (taken first, then the role checks that no update unit is active; the
-marker is removed whatever the outcome). While it exists, `manuspectrum-update`,
+`site.yml` holds the marker `/run/manuspectrum/ansible-running` for the whole
+run, every role included (taken first, then the play checks that no update unit
+is active; the marker is removed whatever the outcome, a failed run too). The
+`app` role takes it itself only when it runs without that play. The marker file
+is touched again at each run, and the release watch raises the `state` failure
+(`ReleaseWatchFailing`) when its modification time is older than 2 hours: a run
+was interrupted, remove the file if no playbook is running. While it exists, `manuspectrum-update`,
 a scheduled slot and the release engine refuse to start an update, and the role
 refuses to run while an update unit is active or activating: an Ansible run and
 an update never overlap. Before `make up` the role also checks that the image in

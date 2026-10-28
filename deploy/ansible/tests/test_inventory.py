@@ -116,7 +116,9 @@ class ExampleInventoryTests(unittest.TestCase):
         variables = yaml.safe_load(
             (EXAMPLE / "group_vars" / "all.yml").read_text(encoding="utf-8")
         )
-        self.assertRegex(variables["app_git_ref"], r"^v[0-9A-Z]+\.[0-9A-Z]+\.[0-9A-Z]+$")
+        self.assertRegex(
+            variables["app_git_ref"], r"^v[0-9A-Z]+\.[0-9A-Z]+\.[0-9A-Z]+$"
+        )
         self.assertRegex(
             variables["env_manuspectrum_image"], r"^[a-z0-9./-]+@sha256:[0-9a-f]{64}$"
         )

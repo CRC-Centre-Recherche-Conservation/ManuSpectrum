@@ -8,6 +8,7 @@
 #   manuspectrum-update --now TAG
 #   manuspectrum-update --at "YYYY-MM-DD HH:MM" [--window 30m] [--no-notice] TAG
 #   manuspectrum-update --cancel
+#   manuspectrum-update --resolved
 #   manuspectrum-update --fire            (manuspectrum-update-at.service only)
 #
 # TAG must be the armed release (STATE_DIR/armed). --now and --at need a
@@ -19,10 +20,17 @@
 # (nothing changed), 3 rolled back, 4 rollback failed, 5 the unit was killed
 # (signal; the host state is unknown: --status and deploy/runbooks/release.md);
 # 2 is a usage error. The result is read from ExecMainCode/ExecMainStatus: only
-# a unit that exited (code 1) maps its status.
+# a unit that exited (code 1) maps its status. `systemctl start` of the oneshot
+# unit returns 0 exactly when the engine exited 0 (a finished unit may already
+# be collected, so nothing is read back after a success); only a failed start
+# reads ExecMainCode/ExecMainStatus.
 # Ctrl-C or a dropped SSH session stops the follower only; the unit keeps
 # running and the message names the journalctl command to resume.
-# --now, --at, --cancel and --fire exclude each other (flock on LOCK_FILE) and
+# --resolved (terminal, `yes`) is run once a failed or interrupted update has
+# been repaired by hand: when no update unit is active and no Ansible run holds
+# the marker, it removes STATE_DIR/inflight, sets ROLLBACK_FAILED to 0, rewrites
+# the release metrics and mails who did it. It checks nothing about the site.
+# --now, --at, --cancel, --resolved and --fire exclude each other (flock on LOCK_FILE) and
 # refuse while an Ansible run holds ANSIBLE_MARKER. --at also refuses when the
 # host time zone is not Europe/Paris (the reboot and backup times are read in it).
 # --at accepts a Paris wall-clock slot 10 minutes to 30 days ahead, refuses a
@@ -77,6 +85,7 @@ usage: manuspectrum-update --status
        manuspectrum-update --now TAG
        manuspectrum-update --at "YYYY-MM-DD HH:MM" [--window 30m|2h] [--no-notice] TAG
        manuspectrum-update --cancel
+       manuspectrum-update --resolved
 EOF
   exit 2
 }
@@ -112,8 +121,8 @@ source "$RELEASE_LIB_DIR/lib-release.sh" || die "cannot read $RELEASE_LIB_DIR/li
 
 now_epoch() { if [ -n "$RELEASE_NOW_EPOCH" ]; then echo "$RELEASE_NOW_EPOCH"; else date +%s; fi; }
 paris() { TZ=Europe/Paris date -d "@$1" "+$2"; }
-# The environment of the service account is not the caller's: what a release
-# program reads is passed on the command line.
+# runuser keeps the reset environment sudo gave root, plus the four variables
+# passed explicitly here; the service account does not get the caller's own.
 as_service() {
   runuser -u "$SERVICE_USER" -- env "APP_DIR=$APP_DIR" "STATE_DIR=$STATE_DIR" \
     "RELEASE_LIB_DIR=$RELEASE_LIB_DIR" "ENV_FILE=$ENV_FILE" "$@"
@@ -226,8 +235,8 @@ cmd_status() {
   if [ "$(state rollbacks ROLLBACK_FAILED)" = 1 ]; then
     echo "ROLLBACK FAILED: the last rollback did not bring the previous version back."
     echo "  Repair or restore the site (deploy/BACKUP.md, snapshots tagged pre-update), check it answers,"
-    echo "  then remove $STATE_DIR/inflight (as root): no update runs while it exists."
-    echo "  ROLLBACK_FAILED returns to 0 after the next successful update."
+    echo "  then run: sudo manuspectrum-update --resolved (no update runs while $STATE_DIR/inflight exists)."
+    echo "  ROLLBACK_FAILED also returns to 0 after the next successful update."
   fi
   if [ -n "$(update_units_active)" ]; then echo "unit:     an update unit is running (journalctl -fu 'manuspectrum-update@*' -o cat)"; fi
 }
@@ -241,7 +250,7 @@ cleanup_followers() {
 }
 
 cmd_now() {
-  local tag="$1" unit code status result line
+  local tag="$1" unit code status result line start_rc=0
   take_lock
   armed_check "$tag"
   need_tty "--now"
@@ -257,11 +266,15 @@ cmd_now() {
   trap 'cleanup_followers; echo; echo "Disconnected. The update keeps running. Follow it with: journalctl -fu $unit -o cat; result: sudo manuspectrum-update --status"; exit 130' INT TERM HUP
   systemctl start "$unit" &
   starter=$!
-  wait "$starter" || true
+  wait "$starter" || start_rc=$?
   starter=""
   trap - INT TERM HUP
   sleep "$FOLLOW_GRACE"
   cleanup_followers
+  if [ "$start_rc" = 0 ]; then
+    echo "$tag is installed and the application answers."
+    exit 0
+  fi
   code="" status=""
   while IFS= read -r line; do
     case "$line" in ExecMainCode=*) code="${line#*=}" ;; ExecMainStatus=*) status="${line#*=}" ;; esac
@@ -273,7 +286,6 @@ cmd_now() {
   fi
   [ "$code" = 1 ] || status=""
   case "$status" in
-    0) echo "$tag is installed and the application answers." ; exit 0 ;;
     1) echo "REFUSED: $tag was not installed and nothing was changed. The reason is the last REASON= line of: journalctl -u $unit -o cat"; exit 1 ;;
     3) echo "ROLLED BACK: $tag did not start; the previous version is back. $tag stays armed. Nothing was restored."; exit 3 ;;
     4) echo "ROLLBACK FAILED: the site may be down. See: sudo manuspectrum-update --status"; exit 4 ;;
@@ -387,6 +399,34 @@ cmd_cancel() {
   else echo "Removed a leftover timer slot."; fi
 }
 
+# --- --resolved
+
+cmd_resolved() {
+  local by failed=0
+  take_lock
+  need_tty "--resolved"
+  if [ -n "$(update_units_active)" ]; then die "an update is running: it cannot be marked as resolved"; fi
+  ansible_check
+  state_has inflight && failed=1
+  if state_has rollbacks && [ "$(state rollbacks ROLLBACK_FAILED)" = 1 ]; then failed=1; fi
+  [ "$failed" = 1 ] || { echo "Nothing to resolve."; return 0; }
+  echo "About to mark the failed update as resolved:"
+  if state_has inflight; then
+    echo "  in flight: $(state inflight FROM_TAG) -> $(state inflight TO_TAG) since $(paris "$(state inflight STARTED_AT)" '%Y-%m-%d %H:%M') Paris"
+  fi
+  echo "  Only do it once the site answers on the release 'current' names: the next update starts from here."
+  confirm
+  by="${SUDO_USER:-root}"
+  [[ "$by" =~ ^[a-z_][a-z0-9_-]*$ ]] || by=root
+  as_service rm -f "$STATE_DIR/inflight" || die "cannot remove $STATE_DIR/inflight"
+  if state_has rollbacks; then
+    as_state release_state_set "$STATE_DIR/rollbacks" ROLLBACK_FAILED 0 || die "ROLLBACK_FAILED could not be cleared"
+  fi
+  as_state release_metrics_refresh "$STATE_DIR" "$ENV_FILE" || echo "manuspectrum-update: warning: metrics not written" >&2
+  send_mail "$PUBLIC_HOST: failed update marked as resolved by $by" "The failed or interrupted update on $PUBLIC_HOST was marked as resolved by $by: the in-flight marker is removed and ROLLBACK_FAILED is 0. The next update starts from the state files as they are (sudo manuspectrum-update --status)."
+  echo "Marked as resolved. Check: sudo manuspectrum-update --status"
+}
+
 # --- --fire
 
 cmd_fire() {
@@ -402,7 +442,7 @@ cmd_fire() {
   if [ -n "$end" ] && [ "$(now_epoch)" -gt "$end" ]; then
     as_state release_state_set "$STATE_DIR/scheduled" OUTCOME missed REASON late NOTIFIED 1 || true
     if [ -n "$notice" ]; then as_service make -C "$APP_DIR/deploy" site-notice ARGS="withdraw $notice" >/dev/null 2>&1 || true; fi
-    send_mail "scheduled update of $tag missed" "The scheduled update of $tag on $PUBLIC_HOST missed (past its window): the slot came after the window closed at $(paris "$end" '%H:%M') Paris, so nothing was started and nothing was changed.
+    send_mail "scheduled update of $tag missed (past its window)" "The scheduled update of $tag on $PUBLIC_HOST missed (past its window): the slot came after the window closed at $(paris "$end" '%H:%M') Paris, so nothing was started and nothing was changed.
 Schedule a new slot, or run it now: sudo manuspectrum-update --now $tag"
     die "the window of the slot closed at $(paris "$end" '%H:%M') Paris: $unit was not started"
   fi
@@ -425,6 +465,7 @@ Schedule a new slot, or run it now: sudo manuspectrum-update --now $tag"
 case "$1" in
   --status) [ "$#" -eq 1 ] || usage; cmd_status ;;
   --cancel) [ "$#" -eq 1 ] || usage; cmd_cancel ;;
+  --resolved) [ "$#" -eq 1 ] || usage; cmd_resolved ;;
   --fire) [ "$#" -eq 1 ] || usage; cmd_fire ;;
   --now)
     [ "$#" -eq 2 ] || usage

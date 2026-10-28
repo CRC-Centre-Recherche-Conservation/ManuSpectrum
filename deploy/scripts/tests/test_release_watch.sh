@@ -203,6 +203,18 @@ grep -qE "watch_last_run_timestamp_seconds [0-9]{10}$" "$(prom)" && ok "Ansible 
 rm "$W/ansible-running"; watch
 equals "Ansible done: the release is armed" v1.2.0 "$(sget armed TAG)"
 
+# --- a marker older than 2 h means an Ansible run was interrupted
+setup rc v1.1.0 v1.1.0 v1.2.0
+touch -d '3 hours ago' "$W/ansible-running"
+watch
+equals "stale Ansible marker: exit 1" 1 "$RC"
+grep -qF 'Ansible marker older than 2 h: a run was interrupted; remove it if no playbook is running' <<<"$OUT" && ok "stale Ansible marker: says so" || not_ok "stale Ansible marker: says so" "$OUT"
+check "stale Ansible marker: nothing armed, nothing probed, no mail" test ! -e "$W/state/armed" -a ! -s "$LOG" -a "$(nmails)" = 0
+grep -q '^manuspectrum_release_watch_failed{step="state"} 1$' "$(prom)" && ok "stale Ansible marker: the state failure is exported" || not_ok "stale Ansible marker: failure metric" "$(cat "$(prom)")"
+touch -d '1 hour 50 minutes ago' "$W/ansible-running"; watch
+equals "young Ansible marker: still a quiet exit 0" 0 "$RC"
+grep -q '^manuspectrum_release_watch_failed{step="state"} 0$' "$(prom)" && ok "young Ansible marker: no failure exported" || not_ok "young Ansible marker: no failure" "$(cat "$(prom)")"
+
 # --- fetch: a stray local tag is pruned, a moved tag is not taken
 setup rc v1.1.0 v1.1.0 v1.2.0
 "${GIT[@]}" -C "$W/app" tag stray-tag

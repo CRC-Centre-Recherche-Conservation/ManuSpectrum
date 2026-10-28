@@ -118,7 +118,7 @@ equals "only the state file in the dir" armed "$(ls -A "$S")"
 before="$(cat "$S/armed")"
 for bad in 'TAG=$(id)' 'TAG=v1.2.0;id' 'TAG=v1.2' 'TAG=v1.2.0
 EXTRA=1' 'TAG=`id`' 'TAG= v1.2.0' 'IMAGE=ghcr.io/x/y:latest' 'IMAGE=ghcr.io/x/y@sha256:abc' 'COMMIT=abc' 'COMMIT=ABCDEF0123456789ABCDEF0123456789ABCDEF01' \
-  'SECURITY=2' 'NOTIFIED=yes' 'ARMED_AT=12ab' 'ARMED_AT=' 'REASON=other' 'OUTCOME=done' 'NOTICE_ID=1x' 'BY=Root' 'BY=a b' 'BY=$(id)' 'NOPE=1' 'tag=v1.2.0' 'AT_PARIS=2027-13-01 10:00' 'AT_PARIS=2027-01-01 10:00:00'; do
+  'SECURITY=2' 'NOTIFIED=yes' 'ARMED_AT=12ab' 'ARMED_AT=' 'REASON=other' 'OUTCOME=done' 'NOTICE_ID=1x' 'BY=Root' 'BY=a b' 'BY=$(id)' 'NOPE=1' 'tag=v1.2.0' 'AT_PARIS=2027-13-01 10:00' 'AT_PARIS=2027-01-01 10:00:00' 'INVOCATION_ID=abc' "INVOCATION_ID=$(printf 'A%.0s' {1..32})" "INVOCATION_ID=$(printf 'a%.0s' {1..33})"; do
   refused "write refuses: ${bad//$'\n'/\\n}" release_state_write "$S/armed" "$bad"
 done
 equals "refused writes left the file untouched" "$before" "$(cat "$S/armed")"
@@ -127,6 +127,8 @@ refused "set refuses a bad value" release_state_set "$S/armed" TAG '$(id)'
 for r in drift unarmed tag_moved env_keys managed_sources verify backup lock busy fetch late; do
   check "REASON=$r" release_state_write "$S/sched" TAG=v1.2.0 "REASON=$r"
 done
+check "INVOCATION_ID: 32 hex" release_state_write "$S/inv" FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1 "INVOCATION_ID=$(printf 'ab%.0s' {1..16})"
+check "INVOCATION_ID may be empty" release_state_write "$S/inv" FROM_TAG=v1.0.0 TO_TAG=v1.1.0 STARTED_AT=1 INVOCATION_ID=
 check "COUNT and APPLIED_AT" release_state_write "$S/rb" COUNT=3 APPLIED_AT=1790000000 ROLLBACK_FAILED=1
 for bad in COUNT=-1 COUNT=x COUNT= COUNT=1234567890 'APPLIED_AT=1x'; do
   refused "write refuses: $bad" release_state_write "$S/rb" "$bad"
@@ -285,6 +287,13 @@ done
 
 # --- metrics derived from the state files
 D="$TMP/derive"; mkdir -p "$D"
+mkdir -p "$TMP/refresh-prom"; printf 'METRICS_TEXTFILE_DIR=%s\n' "$TMP/refresh-prom" >"$TMP/refresh.env"
+release_state_write "$D/rollbacks" COUNT=1 ROLLBACK_FAILED=0
+check "refresh: writes the release textfile named by the .env" release_metrics_refresh "$D" "$TMP/refresh.env"
+grep -q '^manuspectrum_release_rollbacks_total 1$' "$TMP/refresh-prom/manuspectrum_release.prom" && ok "refresh: the file holds the state" || not_ok "refresh: the file holds the state" "$(cat "$TMP/refresh-prom/manuspectrum_release.prom" 2>&1)"
+printf 'METRICS_TEXTFILE_DIR=%s\n' "$TMP/missing-dir" >"$TMP/refresh.env"
+refused "refresh: a missing directory is a status 1" release_metrics_refresh "$D" "$TMP/refresh.env"
+rm -f "$D/rollbacks"
 P="$TMP/derive.prom"
 rm -f "$P"
 check "derive: empty state dir" release_metrics_from_state "$D" "$P"

@@ -253,6 +253,7 @@ class AppRoleTests(unittest.TestCase):
                 "release.yml",
                 "gates.yml",
                 "start.yml",
+                "marker_release.yml",
             ],
         )
         start = [
@@ -663,10 +664,17 @@ class RunMarkerTests(unittest.TestCase):
         )
         always = block["always"]
         self.assertEqual(len(always), 1)
-        args = always[0]["ansible.builtin.file"]
+        self.assertEqual(
+            always[0]["ansible.builtin.include_tasks"], "marker_release.yml"
+        )
+        release = load_tasks(APP / "tasks" / "marker_release.yml")
+        self.assertEqual(len(release), 1)
+        args = release[0]["ansible.builtin.file"]
         self.assertEqual(args["state"], "absent")
         self.assertEqual(args["path"], "{{ app_ansible_marker }}")
-        self.assertEqual(app_defaults()["app_ansible_marker"], "/run/manuspectrum/ansible-running")
+        self.assertEqual(
+            app_defaults()["app_ansible_marker"], "/run/manuspectrum/ansible-running"
+        )
 
     def test_the_marker_is_taken_before_the_update_guard_looks(self):
         names = [
@@ -690,7 +698,72 @@ class RunMarkerTests(unittest.TestCase):
             (marker["state"], marker["owner"], marker["group"], marker["mode"]),
             ("touch", "root", "root", "0644"),
         )
-        self.assertEqual(marker["modification_time"], "preserve")
+        self.assertEqual(marker["modification_time"], "now")
+
+    def test_the_role_leaves_the_marker_to_a_play_that_holds_it(self):
+        block = self.main_play()[0]
+        taken = block["block"][0]
+        self.assertEqual(
+            taken["when"], "not (app_marker_outer | default(false) | bool)"
+        )
+        self.assertEqual(block["always"][0]["when"], taken["when"])
+        guard = [
+            t
+            for t in block["block"]
+            if t.get("ansible.builtin.include_tasks") == "update_guard.yml"
+        ][0]
+        self.assertNotIn("when", guard)
+
+    def site_block(self):
+        play = yaml.safe_load((ANSIBLE / "site.yml").read_text(encoding="utf-8"))
+        self.assertEqual(len(play), 1)
+        self.assertNotIn("roles", play[0])
+        self.assertEqual(len(play[0]["tasks"]), 1)
+        return play[0]["tasks"][0]
+
+    def test_every_role_of_the_site_play_runs_under_the_marker(self):
+        block = self.site_block()
+        steps = block["block"]
+        roles = [
+            (
+                t["ansible.builtin.import_role"]["name"],
+                t["ansible.builtin.import_role"].get("tasks_from"),
+            )
+            for t in steps
+            if "ansible.builtin.import_role" in t
+        ]
+        self.assertEqual(
+            roles,
+            [
+                ("app", "marker"),
+                ("app", "update_guard"),
+                ("preflight", None),
+                ("baseline", None),
+                ("host", None),
+                ("app", None),
+            ],
+        )
+        self.assertEqual(
+            steps[0]["ansible.builtin.set_fact"], {"app_marker_outer": True}
+        )
+        for step in steps[:3]:
+            self.assertEqual(step["tags"], ["always"], step["name"])
+        for step, tag in zip(steps[3:], ["preflight", "baseline", "host", "app"]):
+            self.assertEqual(step["tags"], [tag], step["name"])
+
+    def test_the_site_play_removes_the_marker_after_a_failure_too(self):
+        always = self.site_block()["always"]
+        self.assertEqual(len(always), 1)
+        self.assertEqual(
+            always[0]["ansible.builtin.import_role"],
+            {"name": "app", "tasks_from": "marker_release"},
+        )
+        self.assertEqual(always[0]["tags"], ["always"])
+
+    def test_the_read_only_audit_takes_no_marker(self):
+        text = (ANSIBLE / "audit.yml").read_text(encoding="utf-8")
+        self.assertNotIn("marker", text)
+        self.assertNotIn("update_guard", text)
 
     def test_the_stack_starts_only_if_the_image_and_checkout_are_unchanged(self):
         start = load_tasks(APP / "tasks" / "start.yml")
@@ -714,9 +787,7 @@ class RunMarkerTests(unittest.TestCase):
         )
         seen = prepare[-1]["ansible.builtin.set_fact"]
         self.assertEqual(set(seen), {"app_seen_image", "app_seen_commit"})
-        state = " ".join(
-            strings(load_tasks(APP / "tasks" / "source_state.yml"))
-        )
+        state = " ".join(strings(load_tasks(APP / "tasks" / "source_state.yml")))
         self.assertIn("rev-parse HEAD", state)
         self.assertIn("MANUSPECTRUM_IMAGE", state)
 
@@ -743,7 +814,10 @@ class TimezoneTests(unittest.TestCase):
         self.assertEqual(
             apply["community.general.timezone"], {"name": "{{ baseline_timezone }}"}
         )
-        names = [t["name"] for t in load_tasks(ROLES_DIR / "baseline" / "tasks" / "apply.yml")]
+        names = [
+            t["name"]
+            for t in load_tasks(ROLES_DIR / "baseline" / "tasks" / "apply.yml")
+        ]
         self.assertLess(
             names.index("Set the host time zone"),
             names.index("Configure unattended-upgrades"),
@@ -788,9 +862,12 @@ class ReadyWaitCapTests(unittest.TestCase):
                 check=False,
             ).returncode
 
-    def test_the_readiness_wait_is_digits_and_at_most_1800(self):
+    def test_the_readiness_wait_is_digits_from_1_to_1800(self):
         self.assertEqual(self.assert_with("1800"), 0)
         self.assertEqual(self.assert_with("600"), 0)
+        self.assertEqual(self.assert_with("1"), 0)
+        self.assertNotEqual(self.assert_with("0"), 0)
+        self.assertNotEqual(self.assert_with("00"), 0)
         self.assertNotEqual(self.assert_with("1801"), 0)
         self.assertNotEqual(self.assert_with("abc"), 0)
 
