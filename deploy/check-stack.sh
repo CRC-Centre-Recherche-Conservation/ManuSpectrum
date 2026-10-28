@@ -85,6 +85,9 @@ bash deploy/scripts/tests/test_release_managed.sh
 step "release ruleset check tests"
 bash deploy/scripts/tests/test_release_ruleset_check.sh
 
+step "image retag tests"
+bash deploy/scripts/tests/test_image_retag.sh
+
 step "release verify tests"
 bash deploy/scripts/tests/test_release_verify.sh
 
