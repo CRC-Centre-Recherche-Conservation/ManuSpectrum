@@ -63,7 +63,7 @@ jobs:
             echo "rehearsal=$(matches "^(deploy/rehearsal/|$workflow)")"
             echo "stack=$(matches "^($stack|$workflows)")"
             echo "image=$(matches "^($stack|$build|$workflow)")"
-            echo "ansible=$(matches "^(deploy/ansible/|deploy/systemd/|deploy/logrotate/|deploy/sbin/|deploy/scripts/release-|deploy/scripts/lib-(release|metrics)\\.sh$|deploy/scripts/image-digest\\.sh$|deploy/Makefile$|deploy/compose/\\.env\\.example$|deploy/rehearsal/(host|verify)-baseline\\.sh$|$workflow)")"
+            echo "ansible=$(matches "^(deploy/ansible/|deploy/systemd/|deploy/logrotate/|deploy/sbin/|deploy/scripts/release-|deploy/scripts/lib-(release|metrics)\\.sh$|deploy/scripts/image-(digest|retag)\\.sh$|deploy/Makefile$|deploy/compose/\\.env\\.example$|deploy/rehearsal/(host|verify)-baseline\\.sh$|$workflow)")"
           } >> "$GITHUB_OUTPUT"
 
   rehearsal-kit:

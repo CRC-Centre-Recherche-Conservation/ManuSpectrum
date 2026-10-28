@@ -252,7 +252,8 @@ class ReleaseTests(unittest.TestCase):
     def test_a_missing_staging_image_names_staging_yml(self):
         promote = "\n".join(s.get("run", "") for s in steps(self.jobs["promote"]))
         self.assertIn("staging.yml", promote)
-        self.assertIn("imagetools create", promote)
+        self.assertIn("image-retag.sh", promote)
+        self.assertNotIn("imagetools create", promote)
         self.assertIn("image-digest.sh", promote)
 
     def test_the_promoted_digest_is_compared_with_the_tested_one(self):
@@ -292,11 +293,9 @@ class ReleaseTests(unittest.TestCase):
         run = [
             s["run"]
             for s in steps(self.jobs["promote"])
-            if "imagetools" in s.get("run", "")
+            if "image-retag.sh" in s.get("run", "")
         ][0]
-        self.assertLess(
-            run.index("gh attestation verify"), run.index("imagetools create")
-        )
+        self.assertLess(run.index("gh attestation verify"), run.index("image-retag.sh"))
         for part in (
             "--signer-workflow",
             "workflows/staging.yml",

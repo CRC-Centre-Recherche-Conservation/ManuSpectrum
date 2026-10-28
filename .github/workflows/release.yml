@@ -131,7 +131,7 @@ jobs:
             echo "::error::$source has no build provenance from staging.yml on $source_ref: a $KIND release needs an image that staging.yml built and proved on that branch"
             exit 1
           fi
-          docker buildx imagetools create --tag "$IMAGE_NAME:$TAG" "$IMAGE_NAME@$digest"
+          REGISTRY_USER="$GITHUB_ACTOR" REGISTRY_TOKEN="$GH_TOKEN" bash deploy/scripts/image-retag.sh "$IMAGE_NAME@$digest" "$TAG"
           promoted="$(bash deploy/scripts/image-digest.sh "$IMAGE_NAME:$TAG")"
           if [ "$promoted" != "$digest" ]; then
             echo "::error::$IMAGE_NAME:$TAG is $promoted, the tested image is $digest"
