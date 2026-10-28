@@ -52,8 +52,9 @@ code="$(req "$work/probe.body" "$work/probe.hdr" "$base/")"
 case "$code" in
   200) ;;
   401)
-    [ -n "${REGISTRY_USER:-}" ] && [ -n "${REGISTRY_TOKEN:-}" ] \
-      || die "$host asks for credentials: set REGISTRY_USER and REGISTRY_TOKEN"
+    if [ -z "${REGISTRY_USER:-}" ] || [ -z "${REGISTRY_TOKEN:-}" ]; then
+      die "$host asks for credentials: set REGISTRY_USER and REGISTRY_TOKEN"
+    fi
     challenge="$(header "$work/probe.hdr" www-authenticate)"
     [[ "$challenge" =~ ^[Bb]earer[[:space:]] ]] || die "$host sent no Bearer challenge"
     realm="$(sed -n 's/.*realm="\([^"]*\)".*/\1/p' <<<"$challenge")"

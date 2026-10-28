@@ -295,9 +295,7 @@ class ReleaseTests(unittest.TestCase):
             for s in steps(self.jobs["promote"])
             if "image-retag.sh" in s.get("run", "")
         ][0]
-        self.assertLess(
-            run.index("gh attestation verify"), run.index("image-retag.sh")
-        )
+        self.assertLess(run.index("gh attestation verify"), run.index("image-retag.sh"))
         for part in (
             "--signer-workflow",
             "workflows/staging.yml",

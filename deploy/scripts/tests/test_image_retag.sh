@@ -4,7 +4,7 @@
 # bytes PUT under the tag are the bytes read by digest, the bearer flow keeps
 # credentials and token out of argv, and every refusal happens before a PUT.
 # Prints `ok N` / `not ok N`; exits non-zero on failure.
-# shellcheck disable=SC2319,SC2015,SC2030,SC2031
+# shellcheck disable=SC2319,SC2015,SC2001,SC2030,SC2031
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -117,7 +117,7 @@ refused "a refused token request is reported" "token request refused"
 retag "$REF" v1.0.0 FAKE_SERVED_BAD=1
 refused "bytes that do not hash to the digest are refused, nothing PUT" "registry served"
 
-retag "$REF" v1.0.0 FAKE_PUT_DIGEST=sha256:$(printf 'f%.0s' {1..64})
+retag "$REF" v1.0.0 "FAKE_PUT_DIGEST=sha256:$(printf 'f%.0s' {1..64})"
 refused_late "a different Docker-Content-Digest is refused" "expected $DIGEST"
 
 retag "$REF" v1.0.0 FAKE_PUT_CODE=403
