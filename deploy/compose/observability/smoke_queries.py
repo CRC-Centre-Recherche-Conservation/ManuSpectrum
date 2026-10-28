@@ -39,7 +39,7 @@ LABELLED_APP_METRICS = frozenset(
 )
 
 # Series that can be legitimately absent from a running stack: the labelled
-# application metrics above (not primed), the backup and restore-test gauges (they exist
+# application metrics above (not primed), the backup, restore-test and release gauges (they exist
 # only after the first run of those jobs), the gauges the daily account
 # passes set (their run timestamps and the embargo counts, from the first
 # pass on), ALERTS (only while an alert is
@@ -61,6 +61,18 @@ OPTIONAL_METRICS = LABELLED_APP_METRICS | frozenset(
         "manuspectrum_account_retention_timestamp_seconds",
         "manuspectrum_embargo_pass_timestamp_seconds",
         "manuspectrum_embargoes",
+        "manuspectrum_release_watch_last_run_timestamp_seconds",
+        "manuspectrum_release_watch_failed",
+        "manuspectrum_release_verification_failed",
+        "manuspectrum_release_armed",
+        "manuspectrum_release_pending_since_timestamp_seconds",
+        "manuspectrum_release_pending_security",
+        "manuspectrum_release_rollbacks_total",
+        "manuspectrum_release_rollback_failed",
+        "manuspectrum_release_inflight_since_timestamp_seconds",
+        "manuspectrum_release_update_last_success_timestamp_seconds",
+        "manuspectrum_release_scheduled_timestamp_seconds",
+        "manuspectrum_release_schedule_failed",
         "manuspectrum_login_records_prune_timestamp_seconds",
         "manuspectrum_workflow_cleanup_timestamp_seconds",
     }

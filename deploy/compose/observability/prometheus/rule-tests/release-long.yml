@@ -1,0 +1,87 @@
+rule_files:
+  - ../rules/release.yml
+evaluation_interval: 1h
+
+
+tests:
+- name: a rollback fires for 64 hours then clears, a steady count stays quiet
+  interval: 1h
+  input_series:
+  - series: manuspectrum_release_rollbacks_total
+    values: 0x10 1x120
+  - series: manuspectrum_release_rollbacks_total{kind="steady"}
+    values: 3x130
+  promql_expr_test:
+  - expr: ALERTS{alertname="UpdateRolledBack", alertstate="firing"}
+    eval_time: 5h
+    exp_samples: []
+  - expr: ALERTS{alertname="UpdateRolledBack", alertstate="firing"}
+    eval_time: 12h
+    exp_samples:
+    - labels: ALERTS{alertname="UpdateRolledBack", alertstate="firing", service="release", severity="critical"}
+      value: 1
+  - expr: ALERTS{alertname="UpdateRolledBack", alertstate="firing"}
+    eval_time: 100h
+    exp_samples: []
+- name: an armed release waits 30 days, 14 when it carries a security fix
+  interval: 1h
+  input_series:
+  - series: manuspectrum_release_armed
+    values: 1x800
+  - series: manuspectrum_release_pending_since_timestamp_seconds
+    values: 3600x800
+  - series: manuspectrum_release_pending_security
+    values: 0x800
+  promql_expr_test:
+  - expr: ALERTS{alertname="ReleasePendingTooLong", alertstate="firing"}
+    eval_time: 29d
+    exp_samples: []
+  - expr: ALERTS{alertname="ReleasePendingTooLong", alertstate="firing"}
+    eval_time: 31d
+    exp_samples:
+    - labels: ALERTS{alertname="ReleasePendingTooLong", alertstate="firing", service="release", severity="warning"}
+      value: 1
+- name: a security fix fires after 14 days and not before
+  interval: 1h
+  input_series:
+  - series: manuspectrum_release_armed
+    values: 1x500
+  - series: manuspectrum_release_pending_since_timestamp_seconds
+    values: 3600x500
+  - series: manuspectrum_release_pending_security
+    values: 1x500
+  promql_expr_test:
+  - expr: ALERTS{alertname="ReleasePendingTooLong", alertstate="firing"}
+    eval_time: 13d
+    exp_samples: []
+  - expr: ALERTS{alertname="ReleasePendingTooLong", alertstate="firing"}
+    eval_time: 15d
+    exp_samples:
+    - labels: ALERTS{alertname="ReleasePendingTooLong", alertstate="firing", service="release", severity="warning"}
+      value: 1
+- name: a release that is not armed is quiet
+  interval: 1h
+  input_series:
+  - series: manuspectrum_release_armed
+    values: 0x800
+  - series: manuspectrum_release_pending_since_timestamp_seconds
+    values: 3600x800
+  - series: manuspectrum_release_pending_security
+    values: 1x800
+  promql_expr_test:
+  - expr: ALERTS{alertname="ReleasePendingTooLong", alertstate="firing"}
+    eval_time: 31d
+    exp_samples: []
+- name: an armed release with no pending date is quiet
+  interval: 1h
+  input_series:
+  - series: manuspectrum_release_armed
+    values: 1x800
+  - series: manuspectrum_release_pending_since_timestamp_seconds
+    values: 0x800
+  - series: manuspectrum_release_pending_security
+    values: 0x800
+  promql_expr_test:
+  - expr: ALERTS{alertname="ReleasePendingTooLong", alertstate="firing"}
+    eval_time: 31d
+    exp_samples: []

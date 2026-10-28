@@ -1,0 +1,31 @@
+# Installs the armed release TAG (instance name), or puts the previous one
+# back. Started only by `manuspectrum-update` (root, through sudo or the slot
+# timer): no [Install] section and no timer, so nothing starts it at boot.
+# Runs the root-owned engine, never the checkout it modifies.
+# KillMode=mixed: a stop sends SIGTERM to the engine alone. Its trap lets the
+# running `make up` finish and then rolls back; SIGTERM to the whole control
+# group would also kill `make up` and docker compose half-way. Whatever is
+# left after TimeoutStopSec gets SIGKILL. ExecStopPost runs the engine's
+# --after-stop mode: an end that is not a normal exit (timeout, kill, crash)
+# with `inflight` left behind is flagged ROLLBACK_FAILED and mailed. No
+# NoNewPrivileges: the result mail goes through the setgid sendmail. The engine writes the checkout, the state
+# directory, the backup directories and the metrics directory and drives
+# Docker through the socket, so no filesystem sandbox is applied. PP-8
+# substitutes the two placeholders and installs this file.
+[Unit]
+Description=ManuSpectrum update to %i
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@APP_USER@
+Environment=APP_DIR=@DEPLOY_DIR@/..
+Environment=STATE_DIR=/var/lib/manuspectrum/release
+Environment=RELEASE_LIB_DIR=/usr/local/lib/manuspectrum/release
+ExecStart=/usr/local/lib/manuspectrum/release/release-update.sh %i
+TimeoutStartSec=4h
+# 4520 s = 2 x (310 s web stop_grace_period + 1800 s RELEASE_READY_WAIT_MAX) + 300 s: the running `make up` and the rollback each at the worst.
+TimeoutStopSec=4520s
+ExecStopPost=/usr/local/lib/manuspectrum/release/release-update.sh --after-stop %i
+KillMode=mixed

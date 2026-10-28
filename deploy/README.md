@@ -49,6 +49,7 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
 | `init` | First installation: Arches `setup_db` then the `admin` password from the `admin_password` secret, refused when the database exists |
 | `admin-password` | Set (or rotate) the `admin` password from the `admin_password` secret |
 | `manage` | Run `manage.py ARGS` in a one-off `web` container (interactive); the commands that drop the database stay refused |
+| `site-notice` | `ARGS="plan --start … --end …"` (prints `id=<n>`), `end <id> [--at now\|+24h\|ISO]`, `withdraw <id>`: the update announcement, Paris times, no terminal needed |
 | `up` | Start or update the stack and wait until it is healthy |
 | `down` | Stop and remove the containers; volumes are kept |
 | `restart` | Restart `web`, `worker` and `beat` |
@@ -278,8 +279,8 @@ every commit for secrets with a pinned image, so it needs Docker
 ## What comes next
 
 - PP-8: Ansible writes `.env` and creates the volumes.
-- PP-10b: the update command on the host, which verifies a release with
-  `scripts/release-verify.sh`.
+- PP-10b (done): the release watch and the update command on the host, which
+  verify a release with `scripts/release-verify.sh`.
 
 ## Releases
 
@@ -288,3 +289,9 @@ only ever pulls a signed digest. `staging.yml` publishes `sha-<commit>` for
 every merge to `main`, `release.yml` turns a `v*` tag into a signed release.
 How to cut a candidate or a final release, what each workflow proves and how to
 verify an image by hand: [RELEASES.md](RELEASES.md).
+
+On the host, an hourly watch arms the newest verified release and mails the
+operators; they install it with `sudo manuspectrum-update` (not a `make`
+target: a root command installed by Ansible), now or at a scheduled time. The
+steps are in [ADMIN.md](ADMIN.md#updating-the-application), the alerts in
+[runbooks/release.md](runbooks/release.md).

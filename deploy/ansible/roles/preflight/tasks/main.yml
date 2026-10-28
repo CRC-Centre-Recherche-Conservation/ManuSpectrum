@@ -26,10 +26,15 @@
       - data_dir is defined
       - env_cert_mode is defined
       - env_domain_names is defined
+      - env_release_channel in ['prod', 'rc']
+      - (env_release_ready_wait_seconds | string) is match('^[0-9]+$')
+      - (env_release_ready_wait_seconds | int) >= 1
+      - (env_release_ready_wait_seconds | int) <= 1800
     quiet: true
     fail_msg: >-
       The inventory misses a variable, or baseline_mode / ssh_password_authentication /
-      data_mount.type holds an unknown value. Compare it with inventories/example/group_vars/all.yml.
+      data_mount.type / env_release_channel (prod or rc) / env_release_ready_wait_seconds (digits, 1 to 1800)
+      holds an unknown value. Compare it with inventories/example/group_vars/all.yml.
 
 - name: Assert the operating system is supported
   ansible.builtin.assert:

@@ -39,6 +39,7 @@ SPEC_VARIABLES = [
     "app_git_url",
     "app_git_ref",
     "data_dir",
+    "release_operators",
 ]
 READ_FROM_THE_HOST = {"APP_UID", "APP_GID"}
 
@@ -96,6 +97,31 @@ class ExampleInventoryTests(unittest.TestCase):
         )
         for user in variables["admin_users"]:
             self.assertEqual(set(user), {"name", "pubkey"})
+
+    def test_the_release_variables_hold_a_valid_value(self):
+        variables = yaml.safe_load(
+            (EXAMPLE / "group_vars" / "all.yml").read_text(encoding="utf-8")
+        )
+        self.assertIn(variables["env_release_channel"], ("prod", "rc"))
+        self.assertTrue(str(variables["env_release_ready_wait_seconds"]).isdigit())
+        admins = {u["name"] for u in variables["admin_users"]}
+        self.assertTrue(set(variables["release_operators"]) <= admins)
+        self.assertNotIn(variables["service_user"], variables["release_operators"])
+        preflight = (
+            ANSIBLE_DIR / "roles" / "preflight" / "tasks" / "main.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("env_release_channel in ['prod', 'rc']", preflight)
+
+    def test_the_example_installs_a_release_tag_and_a_digest(self):
+        variables = yaml.safe_load(
+            (EXAMPLE / "group_vars" / "all.yml").read_text(encoding="utf-8")
+        )
+        self.assertRegex(
+            variables["app_git_ref"], r"^v[0-9A-Z]+\.[0-9A-Z]+\.[0-9A-Z]+$"
+        )
+        self.assertRegex(
+            variables["env_manuspectrum_image"], r"^[a-z0-9./-]+@sha256:[0-9a-f]{64}$"
+        )
 
     def test_real_inventories_are_ignored(self):
         def ignored(path):

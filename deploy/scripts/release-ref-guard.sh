@@ -9,14 +9,19 @@
 # remote branches; MAIN_REF and INTEGRATION_REF override the two refs)
 set -uo pipefail
 
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib-release.sh
+# shellcheck source-path=SCRIPTDIR
+source "$HERE/lib-release.sh"
+
 TAG="${1:?usage: release-ref-guard.sh TAG}"
 MAIN_REF="${MAIN_REF:-origin/main}"
 INTEGRATION_REF="${INTEGRATION_REF:-origin/feat/production-platform}"
 
 refuse() { echo "release-ref-guard: $*" >&2; exit 1; }
 
-final='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
-candidate='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-rc\.(0|[1-9][0-9]*)$'
+final="$RELEASE_TAG_FINAL_RE"
+candidate="$RELEASE_TAG_RC_RE"
 
 if [[ "$TAG" =~ $final ]]; then
   branch="$MAIN_REF"

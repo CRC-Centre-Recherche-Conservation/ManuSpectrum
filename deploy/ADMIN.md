@@ -1,8 +1,8 @@
 # Administration
 
 Day-to-day tasks of the administrators of a running ManuSpectrum. This page covers
-accounts, restrictions (embargoes), abandoned workflows and the draft register of
-processing; PP-9 completes it with the rest of the operating procedures. Commands
+accounts, restrictions (embargoes), abandoned workflows, updating the application and the
+draft register of processing; PP-9 completes it with the rest of the operating procedures. Commands
 run on the host from the repository checkout, as the service account; "the admin" is
 the Django administration (`/<lang>/admin/`), which only staff and superusers reach.
 
@@ -453,6 +453,257 @@ completed workflows are never touched.
   the pending notices are voided: the first pass after it only sends notices, and the dry run
   shows who will be warned.
 - Alerts: `WorkflowCleanupFailures`, `WorkflowCleanupStale`.
+
+## Updating the application
+
+A host never updates itself. An hourly watch finds the newest signed release its
+channel allows, verifies it and mails the operators; an operator then installs
+it, now or at a time chosen in advance, with one command. The release procedure
+(tags, channels, the image chain) is in `RELEASES.md`; the alerts and what to do
+about them are in [runbooks/release.md](runbooks/release.md).
+
+### The « ready to install » mail
+
+When the watch has verified a new release (signature, digest, revision), it
+*arms* it and sends one mail to `ALERT_EMAILS`, subject
+`[ManuSpectrum][Release] vX.Y.Z ready to install on <host>`, with
+` (security fix)` appended when the signed tag carries `Security-Fix: yes`. The
+body gives:
+
+- the version, the channel, the image digest and the commit;
+- the link of the GitHub release;
+- the date to install by: 30 days after the oldest release still waiting, 14
+  days for a security fix (`ReleasePendingTooLong` fires after it);
+- a line when the release carries a security fix;
+- « Re-run Ansible first » when the update would be refused until Ansible has
+  run (below);
+- the release notes (the body of the signed tag);
+- the two commands, install now and choose a time.
+
+Only one release is armed at a time: a newer verified tag replaces the armed one
+and sends a new mail, unless an update is scheduled (below). The mail is sent
+once per arming.
+
+### Who can run it
+
+The command is `/usr/local/sbin/manuspectrum-update`, root-owned, installed by
+Ansible. It runs through `sudo` for the members of the group `manuspectrum-ops`,
+who type their **own** password (never `NOPASSWD`). The members are the
+inventory's `release_operators`: a subset of `admin_users`, never the service
+account; by default every account of `admin_users`.
+
+To remove an operator, take the account out of `release_operators` and run the
+playbook again: the account leaves the group. An update already running is not
+affected, and the playbook refuses to run while an update unit is active.
+
+**Ansible and an update never run together.** While the `app` role runs, the
+file `/run/manuspectrum/ansible-running` exists (root, removed at the end of the
+run, failed or not; `/run` is emptied by a reboot). `--now`, `--at` and a
+scheduled slot refuse while it exists (`Ansible is running on this host`; a
+slot records `OUTCOME=refused REASON=busy`), and the playbook refuses to start
+while an update unit is active. Right after a crash of the Ansible controller
+the file may be left behind: when no run is active, remove it as root.
+
+### Look before acting
+
+```bash
+ssh <account>@<host> sudo manuspectrum-update --status
+```
+
+prints the running release and its commit, the previous one, the armed release
+(with its security and Ansible flags and whether the mail went out), how long
+releases have been pending and their deadline, the schedule (if any, with its
+outcome), an update in flight, the number of rollbacks, and a `ROLLBACK FAILED`
+block when the last rollback did not work. It changes nothing.
+
+### Install now
+
+```bash
+ssh -t <account>@<host> sudo manuspectrum-update --now vX.Y.Z
+```
+
+`-t` is required: the command needs a terminal. The tag must be the armed
+release. It refuses at once when no release is armed, when the tag is not the
+armed one, when a schedule exists (cancel it first) or when an update is
+already running. Then it shows the release, its image and the warnings, asks you
+to type `yes`, and starts the update as a systemd unit
+(`manuspectrum-update@vX.Y.Z.service`) under the service account, following its
+log on your screen. The site restarts and is unavailable while the new version
+starts.
+
+What the update does, in order:
+
+1. **Checks, nothing changed yet.** It takes the update lock (waiting up to 15
+   minutes for a running watch). The `.env` image and the checkout must be those
+   of the running release, the worktree must be clean, no update may be in
+   flight. It fetches the tags and checks that the tag still names the armed
+   commit and the registry still holds the armed digest, that every key of the
+   tag's `.env.example` is in `.env`, and that the files Ansible manages are the
+   ones of that tag. It verifies the signature and revision of the armed
+   image again. The same checks run before the confirmation, so a refusal
+   costs nothing.
+2. **Pre-update backup.** `make backup TAG=pre-update` from the running version
+   (`BACKUP.md`). If the backup fails, nothing is changed.
+3. **Switch.** It records the update as in flight, checks out the tag, rewrites
+   the image in `.env` and runs `make up`.
+4. **Readiness.** It polls `/readyz` inside the `web` container until it answers
+   200, for at most `RELEASE_READY_WAIT_SECONDS` (600 s by default, counted from
+   the start of the switch). The maximum is **1800 s** (inventory variable
+   `env_release_ready_wait_seconds`, refused above it at the next Ansible run).
+   A release whose migrations are long (a large table rewrite, a reindex) needs
+   a larger value, set **before** the update: raise it in the inventory and run
+   the playbook; a value set after the update started does not apply to it.
+5. **Success:** the release becomes the running one (the former one becomes the
+   previous one), the armed and pending records are cleared, and a mail
+   `<tag> installed on <host>` is sent.
+6. **Failure:** the previous commit and image are put back, the stack is started
+   and `/readyz` awaited again (automatic rollback, below).
+
+The data are never restored by an update, and `init` never runs.
+
+Exit codes of `--now` (2 is a wrong command line):
+
+| Code | Meaning |
+| --- | --- |
+| 0 | Installed, the application answers |
+| 1 | Refused or not started, nothing was changed; the reason is the last `REASON=` line of `journalctl -u manuspectrum-update@<tag> -o cat` (`unarmed`, `drift`, `tag_moved`, `env_keys`, `managed_sources`, `verify`, `backup`, `lock`, `busy`, `fetch`) |
+| 3 | Rolled back: the new version did not become ready, the previous one is back, the release stays armed |
+| 4 | The rollback failed: the site may be down (see « After a failed rollback ») |
+| 5 | The update unit was killed (a signal: reboot, out-of-memory, `systemctl kill`); the host may be half updated, see « After an interrupted update » |
+
+A dropped SSH session, or Ctrl-C, stops only the on-screen follower: the update
+is a systemd unit and keeps running. Follow it again with
+`journalctl -fu manuspectrum-update@<tag> -o cat` and read the outcome with
+`sudo manuspectrum-update --status`. The mails (installed, rolled back,
+rollback failed) arrive either way.
+
+### Schedule an update
+
+```bash
+ssh -t <account>@<host> sudo manuspectrum-update --at "YYYY-MM-DD HH:MM" [--window 30m] [--no-notice] vX.Y.Z
+```
+
+The time is Paris time. After the same checks as `--now` and a `yes`, the
+command plans the site announcement, sets a systemd timer for that minute,
+records the schedule and mails `<tag> scheduled for <slot> by <account>`. At the
+slot the timer starts the same update as `--now`.
+
+Rules, all checked before anything is set:
+
+- the slot is 10 minutes to 30 days ahead;
+- a time that does not exist or occurs twice because of the clock change (for
+  example 02:30 on the last Sunday of March or October) is refused;
+- the slot must not fall in the automatic reboot window of the host: from 60
+  minutes before to 15 minutes after the reboot time of unattended upgrades,
+  when it reboots automatically;
+- 02:00 to 03:00 is accepted with a warning: the nightly backup runs then and the
+  update waits for it. **23:00 is the recommended slot.**
+- the host time zone must be `Europe/Paris` (the baseline role sets it): the
+  reboot time and the backup timer are wall-clock times read as Paris time, and
+  `--at` refuses on a host set to another zone (`timedatectl show -p Timezone`);
+- `--window` (default `30m`, from 5 minutes to 4 hours) is how long after the
+  slot the update may still start and how long the announcement lasts. **The
+  window is enforced**: a slot that cannot start before its window ends is
+  reported `missed` (reason `late`) and nothing is started, for example when the
+  pre-update backup runs past the end of the window, or when the timer fires
+  after it;
+- only one schedule exists at a time; a schedule and a running update exclude
+  each other, and `--now` is refused while a schedule exists.
+
+**The announcement.** Unless `--no-notice` is given, the command creates a
+« Maintenance » site announcement from the slot to the end of the window (text in
+English and French: scheduled update of the site, brief interruption of service),
+displayed like any announcement (`ACCEPTANCE.md` 4.4b). If it cannot be created,
+nothing is scheduled. During the switch the application is down: nginx then
+answers with the site's error page, which carries the announcement box. When the
+update ends (installed or rolled back) the announcement ends at once; a refused
+slot withdraws it; after a failed rollback it is extended by 24 hours.
+
+**Cancel.** `sudo manuspectrum-update --cancel` removes the timer slot and the
+announcement and mails `schedule of <tag> cancelled`. It does not stop a running
+update.
+
+**A refused or missed slot.** At the slot the update repeats its checks. A slot
+that fires after its window is `missed` with no check made, and an Ansible run
+in progress at the slot makes it `refused` (`busy`). If one
+fails (a dirty worktree, a moved tag, a failed backup, another update running) the schedule is kept with the outcome `refused` and the reason, the
+announcement is withdrawn and a mail says why. If the host was off or busy and
+the slot passed more than 15 minutes ago without a run, the next watch marks it
+`missed` and mails. **A missed slot is never run late, and never at boot.**
+`--status` shows the outcome; acknowledge it with `sudo manuspectrum-update
+--cancel` (this clears the alert `ReleaseScheduleFailed`), then schedule again or
+install now.
+
+**A newer release during a schedule.** The armed release is not replaced while
+its schedule is open. The watch mails once that the newer tag is available and
+holds it back; it is armed on the next hourly run after the scheduled update
+ends or is cancelled.
+
+### When the update refuses because Ansible must run first
+
+Two things make the host refuse a tag until Ansible has run: a key that the
+tag's `.env.example` expects and `.env` lacks (`env_keys`), and a file that
+Ansible installs (the Ansible playbook and roles, the systemd and logrotate
+templates, the update command, the release programs) that differs between the tag and the host
+(`managed_sources`; the refusal lists the files). The mail already says
+« Re-run Ansible first ». From a laptop checkout:
+
+1. Check out the new tag (`git switch --detach vX.Y.Z`), with no uncommitted
+   change in the managed paths (the playbook refuses otherwise).
+2. Run the playbook for the host (`deploy/ansible/README.md`).
+3. Install again with `--now` or `--at`.
+
+Ansible never changes the running version; it only brings the host's files up to
+what the tag expects.
+
+### After a rollback
+
+The site runs the previous version and `--now` exits with 3 (or the rollback mail
+`<tag> rolled back` arrives for a scheduled run). The release stays armed. Nothing
+was restored: the database and the uploads are as the failed update left them.
+`UpdateRolledBack` stays on for 64 hours. Read the cause
+(`journalctl -u 'manuspectrum-update@*' -e`; usually a service that did not
+become ready, a migration error or a full disk), fix it, and install again.
+
+**A rollback does not undo database migrations.** It returns to the previous
+image and commit, but the migrations the new version already applied stay
+applied; the previous version then runs on a database that may be ahead of it.
+That is why the update takes the `pre-update` backup first, and why a rolled-back
+release should be understood before it is retried.
+
+### After an interrupted update
+
+`--now` exits with 5, or `--status` shows an `inflight` line with no update unit
+running (a reboot or a kill in the middle of the switch). The update records its
+progress in `inflight`, so no other update starts. Follow
+[runbooks/release.md](runbooks/release.md) (« UpdateInterrupted » and
+« UpdateRollbackFailed »): find out which version runs, repair or roll back by
+hand, then run `sudo manuspectrum-update --resolved` as for a failed rollback.
+
+### After a failed rollback
+
+`--now` exits with 4, the mail subject says `ROLLBACK FAILED`, and `--status`
+prints a `ROLLBACK FAILED` block. The site may be down. The update keeps the
+in-flight record, so no other update starts until it is marked as resolved.
+
+1. Repair the site from the checkout if the cause is plain (a service that
+   needs a restart), or restore the `pre-update` backup (`make -C deploy restic
+   ARGS="snapshots --tag pre-update"`, then `make -C deploy restore
+   RESTIC_SNAPSHOT=<id> CONFIRM=yes ERASURES_CHECKED=yes`). **Restoring is a
+   human decision**: read `BACKUP.md` (« Restore the stack », « Personal data »)
+   first, it replaces the database and the uploads.
+2. Check that the site answers (`make -C deploy status`, `/readyz`).
+3. Run `sudo manuspectrum-update --resolved` (terminal, asks for `yes`): it removes
+   the record, sets `ROLLBACK_FAILED` to 0, rewrites the metrics and mails who did
+   it. It is refused while an update unit is active or an Ansible run holds its marker.
+
+Without it, `ROLLBACK_FAILED` returns to 0 only at the next successful update,
+which cannot start while the record exists.
+
+The mails of the watch and the update are sent to `ALERT_EMAILS` by the host's
+own mail service; if the stack is down they still go out, because they do not
+depend on it. Each alert of this procedure has a section in
+[runbooks/release.md](runbooks/release.md).
 
 ## Draft register of processing
 

@@ -1,5 +1,5 @@
 ---
-# Renders `.env`, the twelve units and the logrotate file. Shared by prepare.yml
+# Renders `.env`, the units and the logrotate file. Shared by prepare.yml
 # (real destinations) and render.yml (a scratch directory, no privileges).
 # Inputs: app_uid, app_gid, app_render_env_dest, app_render_units_dir,
 # app_render_logrotate_dir, app_render_owner (omit for no ownership change),
@@ -45,7 +45,9 @@
     owner: "{{ app_render_owner | default(omit) }}"
     group: "{{ app_render_owner | default(omit) }}"
     mode: "0644"
-  loop: "{{ app_unit_names | product(['.service', '.timer']) | map('join') | list }}"
+  loop: >-
+    {{ app_unit_names | product(['.service', '.timer']) | map('join') | list
+    + app_oneshot_unit_names | product(['.service']) | map('join') | list }}
   notify: "{{ app_render_notify | default([]) }}"
 
 - name: Render the nginx logrotate rule

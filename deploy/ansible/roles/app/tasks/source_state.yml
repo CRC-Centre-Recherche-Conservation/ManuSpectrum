@@ -1,0 +1,25 @@
+---
+# What the rest of the play relies on: the image `.env` names and the commit
+# checked out. Sets app_current_image and app_current_commit. Skipped in check
+# mode, where neither the file nor the checkout may exist yet.
+- name: Read the environment file
+  ansible.builtin.slurp:
+    src: "{{ app_dir }}/deploy/compose/.env"
+  register: app_source_env
+  when: not ansible_check_mode
+
+- name: Read the commit of the checkout  # noqa: command-instead-of-module
+  ansible.builtin.command: git -C {{ app_dir | quote }} rev-parse HEAD
+  become: true
+  become_user: "{{ service_user }}"
+  register: app_source_head
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Take the image and the commit
+  ansible.builtin.set_fact:
+    app_current_image: >-
+      {{ (app_source_env.content | b64decode | regex_findall('(?m)^MANUSPECTRUM_IMAGE=(.*)$') | last | default('', true) | trim) }}
+    app_current_commit: "{{ app_source_head.stdout | trim }}"
+  when: not ansible_check_mode

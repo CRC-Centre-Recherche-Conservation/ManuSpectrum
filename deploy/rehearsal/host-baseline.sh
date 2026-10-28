@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Applies the host baseline on a fresh Ubuntu: SSH, UFW, fail2ban, Docker CE,
-# accounts, /data over NFS, unattended-upgrades, postfix. vm.max_map_count
-# and /etc/docker/daemon.json are left untouched (Ansible's job). Runs as
+# accounts, /data over NFS, time zone Europe/Paris, unattended-upgrades,
+# postfix. vm.max_map_count and /etc/docker/daemon.json are left untouched
+# (Ansible's job). Runs as
 # root inside the VM; reads rehearsal.env (next to the script, or --env FILE).
 # Idempotent: each step reports "already done" when nothing changes.
 set -euo pipefail
@@ -94,6 +95,14 @@ write_file() {
   rm -f "$tmp"
   echo "written: ${target}"
 }
+
+echo "== Time zone"
+if [ "$(timedatectl show -p Timezone --value)" = Europe/Paris ]; then
+  echo "already done: time zone Europe/Paris"
+else
+  timedatectl set-timezone Europe/Paris
+  echo "set: time zone Europe/Paris"
+fi
 
 echo "== Packages"
 apt-get update -qq

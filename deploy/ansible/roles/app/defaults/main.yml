@@ -6,13 +6,48 @@ app_unit_names:
   - manuspectrum-disk-usage
   - manuspectrum-monthly-report
   - manuspectrum-restore-test
+  - manuspectrum-watch
+  - manuspectrum-update-at
 app_timer_names:
   - manuspectrum-backup
   - manuspectrum-restore-test
   - manuspectrum-container-metrics
   - manuspectrum-disk-usage
   - manuspectrum-monthly-report
+  - manuspectrum-watch
+# Rendered as `.service` only: the instance name comes from the update command.
+app_oneshot_unit_names:
+  - manuspectrum-update@
 app_acme_timer_names:
   - manuspectrum-cert-renew
 app_compose_project: manuspectrum
+# Exists while the app role runs: the update command, the scheduled slot and the
+# release engine refuse to start an update meanwhile.
+app_ansible_marker: /run/manuspectrum/ansible-running
 app_pg_volume: ms_pg_data
+
+# --- Releases (deploy/RELEASES.md) ---
+# Members of the group that may run `sudo manuspectrum-update`: the inventory's
+# `release_operators`, else every administrator. The service account is never one.
+app_release_operators: "{{ release_operators | default(admin_users | map(attribute='name') | list) }}"
+app_ops_group: manuspectrum-ops
+app_release_lib_dir: /usr/local/lib/manuspectrum/release
+# deploy/scripts files installed on the host: exactly the ones release-managed.sh
+# lists as managed (a test compares the two).
+app_release_program_files:
+  - { name: release-watch.sh, mode: "0755" }
+  - { name: release-update.sh, mode: "0755" }
+  - { name: release-managed.sh, mode: "0755" }
+  - { name: release-verify.sh, mode: "0755" }
+  - { name: release-ref-guard.sh, mode: "0755" }
+  - { name: image-digest.sh, mode: "0755" }
+  - { name: lib-release.sh, mode: "0644" }
+  - { name: lib-metrics.sh, mode: "0644" }
+# Paths of the laptop checkout that release-managed.sh hashes (its is_managed()).
+app_release_managed_paths:
+  - deploy/ansible/site.yml
+  - deploy/ansible/roles
+  - deploy/systemd/*.in
+  - deploy/logrotate/*.in
+  - deploy/sbin
+  - "{{ app_release_program_files | map(attribute='name') | map('regex_replace', '^', 'deploy/scripts/') | list }}"

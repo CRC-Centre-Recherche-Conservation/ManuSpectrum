@@ -118,6 +118,22 @@ the next boot.
   script's status. systemd records make's status too (`ExecMainStatus=2`); read
   the cause in `journalctl -u manuspectrum-backup.service`. The same holds for
   the restore test and the restore.
+- **The `pre-update` backup** is taken by the update command
+  (`ADMIN.md`, « Updating the application ») before it touches the running
+  version, from the version that is still running. It is blocking: if the backup
+  fails, nothing is changed and the update is refused (reason `backup`). It
+  follows the normal retention and gets no protection of its own: it is kept for
+  at least 7 days, but `forget` keeps the newest snapshot of each day, so a
+  nightly snapshot taken later the same day replaces it. Find it with
+
+  ```bash
+  make -C deploy restic ARGS="snapshots --tag pre-update"
+  ```
+
+  A rollback does not use it (the data are left as the update left them).
+  Restoring it is a human decision: read « Restore the stack » and « Personal
+  data » first, because it replaces the database and the uploads and drops
+  everything written since.
 - **One lock** (`BACKUP_DUMP_DIR/.lock`) serialises backup, restore test and
   restore. A backup or a restore test waits up to an hour for it
   (`BACKUP_LOCK_WAIT`); a restore refuses at once.

@@ -25,7 +25,7 @@ EXTERNAL_VOLUMES := ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache ms
 # A value, read as Compose does: the environment first, then the env file (KEY=value, no quoting).
 envval = $${$(1):-$$(sed -n 's/^$(1)=//p' '$(ENV_FILE)' 2>/dev/null | tail -n 1)}
 
-.PHONY: help config volumes secrets secret-set secrets-check secrets-dir build init admin-password manage load-snapshot backup-init backup restore-test restore restore-files restic up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew observability-on observability-off monitoring-init container-metrics disk-usage alert-recipients alert-test alerts silence silence-fresh-install monthly-report report-test
+.PHONY: help config volumes secrets secret-set secrets-check secrets-dir build init admin-password manage site-notice load-snapshot backup-init backup restore-test restore restore-files restic up down restart status logs smoke nginx-test nginx-reload certs-local cert-init cert-renew observability-on observability-off monitoring-init container-metrics disk-usage alert-recipients alert-test alerts silence silence-fresh-install monthly-report report-test
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(firstword $(MAKEFILE_LIST)) | sed 's/:.*## /\t/'
@@ -111,6 +111,9 @@ admin-password: ## Set the admin password from the admin_password secret (first 
 manage: ## Run a management command, interactive: make -C deploy manage ARGS="changepassword admin"
 	$(COMPOSE) run --rm --no-deps web manage $(ARGS)
 
+site-notice: ## Plan, end or withdraw a site announcement, non-interactive: make -C deploy site-notice ARGS="plan --start 2026-11-03T20:00 --end 2026-11-03T20:30"
+	$(COMPOSE) run --rm --no-deps -T web manage site_notice $(ARGS)
+
 load-snapshot: ## Rehearsal only: replace the data with a dev snapshot (SNAPSHOT=/path) or an aside directory (RESTORE_BEFORE=/path), CONFIRM=yes
 	COMPOSE='$(COMPOSE)' ENV_FILE='$(ENV_FILE)' CONFIRM='$(CONFIRM)' RESTORE_BEFORE='$(RESTORE_BEFORE)' \
 		$(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts/load-snapshot.sh '$(SNAPSHOT)'
@@ -153,11 +156,13 @@ restic: ## Run restic on the repository, interactive: make -C deploy restic ARGS
 
 # `up --wait` refuses a service whose healthcheck is disabled, and beat has
 # none on purpose: wait for every other service, then start beat (it depends
-# on a healthy web).
+# on a healthy web). UP_WAIT_TIMEOUT is the wait in seconds; the update engine
+# (release-update.sh) passes RELEASE_READY_WAIT_SECONDS.
+UP_WAIT_TIMEOUT ?= 900
 up: ## Start or update the stack and wait until it is healthy
 	@d="$(call envval,METRICS_TEXTFILE_DIR)"; \
 	if [ -n "$$d" ] && [ ! -d "$$d" ]; then install -d -m 0755 "$$d" && echo "created $$d (node-exporter mounts it)"; fi
-	$(COMPOSE) up -d --wait --wait-timeout 900 $$($(COMPOSE) config --services | grep -vx beat)
+	$(COMPOSE) up -d --wait --wait-timeout $(UP_WAIT_TIMEOUT) $$($(COMPOSE) config --services | grep -vx beat)
 	$(COMPOSE) up -d beat
 
 down: ## Stop and remove the containers; volumes are kept
@@ -222,7 +227,7 @@ silence: ## Silence for maintenance: make silence ARGS='alertname=DiskUsageHigh 
 # A new install raises, until the first backup, the first restore test and the
 # first run of the systemd timers, alerts that say nothing about a fault.
 silence-fresh-install: ## Silence for 48 h the alerts a new install raises before its first backup, restore test and timers
-	$(AMTOOL) silence add 'alertname=~"BackupMissing|RestoreTestMissing|HostMetricsStale|DiskUsageStale|ContainerMissing"' \
+	$(AMTOOL) silence add 'alertname=~"BackupMissing|RestoreTestMissing|ReleaseWatchStale|HostMetricsStale|DiskUsageStale|ContainerMissing"' \
 		--duration=48h --comment="fresh install: first backup, restore test and timers pending"
 
 # The monthly report (scripts/monthly-report.py, Python standard library only)

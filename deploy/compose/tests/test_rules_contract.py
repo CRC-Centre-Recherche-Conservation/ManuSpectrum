@@ -43,6 +43,9 @@ MULTIPROC_PY = REPO / "manuspectrum" / "observability" / "multiproc.py"
 TEXTFILE_SCRIPTS = [
     REPO / "deploy" / "scripts" / "backup.sh",
     REPO / "deploy" / "scripts" / "restore-test.sh",
+    REPO / "deploy" / "scripts" / "lib-release.sh",
+    REPO / "deploy" / "scripts" / "release-watch.sh",
+    REPO / "deploy" / "scripts" / "release-update.sh",
 ]
 
 RUNBOOK_BASE = (
@@ -65,6 +68,7 @@ SERVICES = {
     "redis",
     "tls",
     "backup",
+    "release",
     "monitoring",
 }
 MAX_FOR_SECONDS = {
@@ -127,6 +131,14 @@ REQUIRED_TESTED = {
     "WriteRequestsFailing",
     "ActivityStale",
     "SearchExportSlow",
+    "ReleaseVerificationFailed",
+    "UpdateRolledBack",
+    "UpdateRollbackFailed",
+    "UpdateInterrupted",
+    "ReleaseWatchFailing",
+    "ReleaseWatchStale",
+    "ReleasePendingTooLong",
+    "ReleaseScheduleFailed",
 }
 
 # Series written by deploy/scripts/host-metrics.sh (Task 6 keeps these names).

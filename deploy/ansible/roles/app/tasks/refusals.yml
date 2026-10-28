@@ -1,0 +1,42 @@
+---
+# Everything that can be refused is refused here, before the play changes anything.
+- name: Assert the service account is not an operator
+  ansible.builtin.assert:
+    that:
+      - service_user not in app_release_operators
+      - app_release_operators is subset(admin_users | map(attribute='name') | list)
+    quiet: true
+    fail_msg: >-
+      release_operators must be a subset of admin_users and must not contain {{ service_user }}:
+      the update command is run with the operator's own sudo password.
+
+- name: Assert the paths release.conf records can be read back
+  ansible.builtin.assert:
+    that:
+      - app_dir is match('^/[A-Za-z0-9._/-]+$')
+      - "'..' not in app_dir"
+      - env_public_host is match('^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?$')
+    quiet: true
+    fail_msg: >-
+      app_dir ({{ app_dir }}) or env_public_host ({{ env_public_host }}) holds a character
+      manuspectrum-update refuses in /etc/manuspectrum/release.conf.
+
+- name: Look for uncommitted changes in the managed paths  # noqa: command-instead-of-module
+  ansible.builtin.command: >-
+    git -C {{ (playbook_dir | dirname | dirname) | quote }} status --porcelain --untracked-files=no --
+    {{ app_release_managed_paths | flatten | map('quote') | join(' ') }}
+  delegate_to: localhost
+  become: false
+  register: app_laptop_dirty
+  changed_when: false
+  check_mode: false
+
+- name: Assert the laptop checkout is clean in the managed paths
+  ansible.builtin.assert:
+    that:
+      - app_laptop_dirty.stdout | trim == ''
+    quiet: true
+    fail_msg: >-
+      The checkout this playbook runs from has uncommitted changes in files the update compares with the
+      release tag ({{ app_laptop_dirty.stdout_lines | map('trim') | join(', ') }}). Commit or discard them,
+      or the host would refuse every update. Run Ansible from a checkout of the tag you installed.

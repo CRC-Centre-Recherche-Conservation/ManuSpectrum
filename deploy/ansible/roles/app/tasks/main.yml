@@ -1,9 +1,34 @@
 ---
-- name: Prepare the application host
-  ansible.builtin.include_tasks: prepare.yml
+# The marker tells the update command, the scheduled slot and the release engine
+# that an Ansible run is in progress (they refuse to start meanwhile); it is
+# taken before the update guard looks, so that of the two at most one runs, and
+# it is removed whatever happens. When site.yml already holds the marker
+# (`app_marker_outer`), this role neither takes nor removes it.
+- name: Run the application role under the Ansible run marker
+  block:
+    - name: Take the Ansible run marker
+      ansible.builtin.include_tasks: marker.yml
+      when: not (app_marker_outer | default(false) | bool)
 
-- name: Check the prerequisites of the stack
-  ansible.builtin.include_tasks: gates.yml
+    - name: Stop while an update runs
+      ansible.builtin.include_tasks: update_guard.yml
 
-- name: Start the stack and enable the timers
-  ansible.builtin.include_tasks: start.yml
+    - name: Refuse what the inventory or the laptop checkout cannot satisfy
+      ansible.builtin.include_tasks: refusals.yml
+
+    - name: Prepare the application host
+      ansible.builtin.include_tasks: prepare.yml
+
+    - name: Install the release programs, the update command and its access rule
+      ansible.builtin.include_tasks: release.yml
+
+    - name: Check the prerequisites of the stack
+      ansible.builtin.include_tasks: gates.yml
+
+    - name: Start the stack and enable the timers
+      ansible.builtin.include_tasks: start.yml
+      when: app_todo | length == 0
+  always:
+    - name: Remove the Ansible run marker
+      ansible.builtin.include_tasks: marker_release.yml
+      when: not (app_marker_outer | default(false) | bool)

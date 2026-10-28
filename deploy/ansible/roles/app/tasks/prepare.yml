@@ -1,7 +1,7 @@
 ---
 - name: Install the tools the make targets and the checkout need
   ansible.builtin.apt:
-    name: [make, git, openssl, python3]
+    name: [make, git, openssl, python3, curl, tzdata, util-linux]
     state: present
     update_cache: true
     cache_valid_time: 3600
@@ -100,3 +100,11 @@
 
 - name: Reload systemd before anything uses the new units
   ansible.builtin.meta: flush_handlers
+
+- name: Read the image and the commit this run installed
+  ansible.builtin.include_tasks: source_state.yml
+
+- name: Remember them for the start of the stack
+  ansible.builtin.set_fact:
+    app_seen_image: "{{ app_current_image | default('') }}"
+    app_seen_commit: "{{ app_current_commit | default('') }}"
