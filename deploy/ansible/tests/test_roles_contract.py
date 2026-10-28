@@ -362,7 +362,9 @@ class ReleaseInstallTests(unittest.TestCase):
         text = (APP / "templates" / "sudoers-manuspectrum-update.j2").read_text(
             encoding="utf-8"
         )
-        rendered = jinja2.Template(text).render(app_ops_group="manuspectrum-ops")
+        rendered = jinja2.Template(text, keep_trailing_newline=True).render(
+            app_ops_group="manuspectrum-ops"
+        )
         with tempfile.NamedTemporaryFile("w", suffix=".sudoers") as handle:
             handle.write(rendered)
             handle.flush()
