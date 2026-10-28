@@ -41,6 +41,12 @@ for file in $FILES; do
   assert "$file: every placeholder is substituted" $?
 done
 
+# The account and deploy directory the units were rendered with, read off the
+# nightly backup unit, so the checks hold for this script's rendering and for
+# Ansible's.
+APP_USER_RENDERED="$(sed -n 's/^User=//p' "$TMP/manuspectrum-backup.service")"
+DEPLOY_DIR_RENDERED="$(sed -n 's|^ExecStart=/usr/bin/make -C \([^ ]*\) backup.*|\1|p' "$TMP/manuspectrum-backup.service")"
+
 # The slot of the -at timer comes from a root drop-in written by the front.
 mkdir "$TMP/manuspectrum-update-at.timer.d"
 printf '[Timer]\nOnCalendar=\nOnCalendar=2030-01-01 22:00:00 UTC\n' >"$TMP/manuspectrum-update-at.timer.d/slot.conf"
@@ -87,16 +93,16 @@ AT="$TMP/manuspectrum-update-at.timer"
 grep -q '^OnCalendar=hourly$' "$WT" && grep -q '^Persistent=true' "$WT" && grep -q '^RandomizedDelaySec=10m$' "$WT" \
   && grep -q '^WantedBy=timers.target' "$WT"
 assert "watch: the timer is hourly, spread over 10 minutes, persistent and enabled with timers.target" $?
-grep -q '^Type=oneshot' "$WS" && grep -q "^User=$(id -un)$" "$WS" \
+grep -q '^Type=oneshot' "$WS" && grep -q "^User=$APP_USER_RENDERED$" "$WS" \
   && grep -q '^ExecStart=/usr/local/lib/manuspectrum/release/release-watch.sh$' "$WS"
 assert "watch: a oneshot of the service account running the root-owned script" $?
 grep -q '^Environment=STATE_DIR=/var/lib/manuspectrum/release$' "$WS" \
   && grep -q '^Environment=RELEASE_LIB_DIR=/usr/local/lib/manuspectrum/release$' "$WS" \
-  && grep -q "^Environment=APP_DIR=$DEPLOY_DIR/\.\.$" "$WS"
+  && grep -q "^Environment=APP_DIR=$DEPLOY_DIR_RENDERED/\.\.$" "$WS"
 assert "watch: APP_DIR, STATE_DIR and RELEASE_LIB_DIR are set" $?
 ! grep -q '^\[Install\]' "$US"
 assert "update@: no [Install] section" $?
-grep -q '^Type=oneshot' "$US" && grep -q "^User=$(id -un)$" "$US" \
+grep -q '^Type=oneshot' "$US" && grep -q "^User=$APP_USER_RENDERED$" "$US" \
   && grep -q '^ExecStart=/usr/local/lib/manuspectrum/release/release-update.sh %i$' "$US"
 assert "update@: a oneshot of the service account running the engine on its instance" $?
 grep -q '^TimeoutStartSec=4h$' "$US" && grep -q '^TimeoutStopSec=4520s$' "$US"
