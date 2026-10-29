@@ -1647,7 +1647,9 @@ signatures, the real systemd timers and the real mail relay.
 - [ ] *(admin)* `sudo manuspectrum-update --now vA < /dev/null` (no terminal) → `needs a terminal: use ssh -t`.
 - [ ] *(admin)* `ssh -t … sudo manuspectrum-update --now v9.9.9` → `v9.9.9 is not the armed release (vA)`; nothing started.
 - [ ] Remove an operator from `release_operators`, run the playbook: the account leaves `manuspectrum-ops` and `sudo
-  manuspectrum-update` is refused for it; put it back and run the playbook again.
+  manuspectrum-update` is refused for it, unless the account is also in `sudo` (`admin_users`): a member of `sudo` keeps full
+  sudo and still runs the command. To withdraw an administrator, remove it from `admin_users` too. Put it back and run the
+  playbook again.
 
 ### 9.5 Ansible first
 
@@ -1663,15 +1665,18 @@ signatures, the real systemd timers and the real mail relay.
 
 Needs the stack running `vOld` and `vA` armed.
 
-- [ ] *(admin)* `ssh -t … sudo manuspectrum-update --now vA`, type `yes`. While the log says `readiness:`, *(service account)*
-  stop a dependency of readiness: `docker compose … stop cantaloupe` (the `dc` alias of step 2).
+- [ ] *(admin)* `ssh -t … sudo manuspectrum-update --now vA`, type `yes`. `make up` waits for health (`up -d --wait`), so
+  stopping Cantaloupe at the first `readiness:` line is too late, and compose recreates it during `up`. Instead, *(service
+  account)* follow the engine's journal (`journalctl -u 'manuspectrum-update@*' -f`) and, right after the line
+  `Container manuspectrum-worker-1 Healthy`, before the first readiness probe, run `docker kill manuspectrum-cantaloupe-1`.
+  The probe answers `readiness: 503`.
   - Expected: after `RELEASE_READY_WAIT_SECONDS` the log says `step 10: vA failed (the application was not ready within …)`,
     `rolling back to vOld`, then `readiness: 200`; the command ends `ROLLED BACK: vA did not start; the previous version is
     back` with exit status 3 (`echo $?`).
 - [ ] `--status` → `current: vOld`, `armed:    vA`, `rollbacks: 1`, no `ROLLBACK FAILED`, no `inflight`. Mail `vA rolled back`;
   `UpdateRolledBack` fires (it reads the rollback counter, 64 hours). `git -C ~/manuspectrum describe --tags` → `vOld`; `grep ^MANUSPECTRUM_IMAGE= deploy/compose/.env`
   → the digest of `vOld`.
-- [ ] `docker compose … start cantaloupe`, `make -C deploy smoke` → passes (the data were not touched).
+- [ ] `docker compose … start cantaloupe` (if the rollback left it down), `make -C deploy smoke` → passes (the data were not touched).
 - [ ] A snapshot tagged `pre-update` exists: `make -C deploy restic ARGS="snapshots --tag pre-update"`.
 
 ### 9.7 SSH disconnect
@@ -1698,7 +1703,7 @@ Needs the stack running `vOld` and `vA` armed.
   tuf-repo-cdn.sigstore.dev> -j REJECT`, or a hosts-file entry to an unroutable address), arm a release, then run the watch:
   → `probe sigstore: … unreachable`, nothing armed, `failed_sigstore 1` in the metrics; after two hours `ReleaseWatchFailing`
   names `sigstore`. Remove the rule; the next run clears it. With `--now` on an armed release while blocked: the check refuses with
-  `REASON=verify` and nothing changes.
+  `REASON=fetch` (the signature services do not answer) and nothing changes.
 - [ ] *(backup failure)* *(service account)* `chmod 000 "$RESTIC_REPOSITORY_DIR"` (see 6.8 for a mount that ignores it), then
   `--now` → `step 5: backup (pre-update)`, then `REFUSED: the pre-update backup failed: nothing was changed`; `git describe`,
   the `.env` image and the running containers are as before; no `inflight`. Restore the mode afterwards.
@@ -1737,7 +1742,8 @@ read and record »). Paris time everywhere.
   is stopped, the drop-in removed, the announcement deleted, mail `schedule of … cancelled`. At the old slot nothing runs.
   `--cancel` again → `Nothing is scheduled.`
 - [ ] *(missed)* Schedule a slot 15 minutes ahead, then `virsh shutdown` the VM before it, wait past the slot plus 20 minutes,
-  `virsh start`. After boot (and the watch's `Persistent` run): nothing installs at boot; `journalctl -u manuspectrum-watch -o cat`
+  `virsh start`. Nothing installs at boot; the slot is reported by the next hourly watch run, not at boot
+  (wait for it, or `sudo systemctl start manuspectrum-watch.service`): `journalctl -u manuspectrum-watch -o cat`
   → `scheduled update of … missed`; `--status` → `OUTCOME=missed`; mail `scheduled update of … missed`; the announcement is
   withdrawn; `ReleaseScheduleFailed` fires. `sudo manuspectrum-update --cancel` → `Acknowledged: the missed schedule … is
   cleared.`; the alert clears at the next watch.

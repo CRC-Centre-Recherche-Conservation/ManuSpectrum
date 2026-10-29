@@ -104,6 +104,11 @@ host uses `rc`, production uses `prod`.
   incident. A tag
   whose image or signature is not published yet is waited for six hours before
   it counts as a failure (`ReleaseVerificationFailed`).
+- **What takes effect when.** A file the stack reads from the checkout (for
+  example `deploy/compose/observability/alertmanager/render.sh`) changes with
+  the update, not with the Ansible run that precedes it. Ansible renders `.env`
+  from the inventory, so an inventory value the running version refuses waits
+  for the update.
 - **The update** is started by an operator, now or at a scheduled time, with
   `sudo manuspectrum-update`. It installs the armed release only, after a
   backup, and rolls back on its own when the application does not become ready.
