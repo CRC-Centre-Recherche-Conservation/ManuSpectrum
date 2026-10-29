@@ -666,9 +666,16 @@ $bbma-danger-bg: #fdf0f0;
 // ============================================
 
 .biblissima-create-step {
-    padding: 20px;
+    // No top padding: the sticky section header pins to the scrollport edge
+    // (top: 0) with nothing scrolling visibly above it. The 20px top spacing
+    // is the first section's margin instead.
+    padding: 0 20px 20px;
     overflow-y: auto;
     height: 100%;
+
+    > .biblissima-create-section:first-child {
+        margin-top: 20px;
+    }
 }
 
 .biblissima-create-section {
