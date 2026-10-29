@@ -16,8 +16,8 @@ object is the digest, never a tag.
 | Build | `staging.yml`, on push to `main` | The image builds from scratch, with the day's Debian security updates, and carries the label `org.opencontainers.image.revision` = the commit |
 | Proof | `stack-proof.yml`, called by `staging.yml` | On that exact image: probe, the whole Compose stack, observability, mails, `down`/`up`, Docker restart, static swap, backup / loss / restore |
 | Publish | `staging.yml` | The image that passed is pushed as `sha-<commit>` and its build provenance is attested (workflow `staging.yml`, branch of the run); its digest is in the job summary |
-| Guard | `release.yml`, on a `v*` tag | A ruleset protects the `v*` tags (the job fails otherwise); final tags sit on the first-parent line of `main`, release candidates on the integration branch named for their version (`dev/X.Y.Z`, `dev/X.Y.x` or `dev/X.x.x`), no other tag name is accepted; the tag's `X.Y.Z` must equal `APP_VERSION` in `manuspectrum/settings.py` at the tagged commit (`release-version-guard.sh`) |
-| Promote | `release.yml` | The provenance of the `sha-<commit>` digest is verified (`gh attestation verify`: signer workflow `staging.yml`, branch `main` for a final tag, the integration branch the guard found for a candidate), then the digest gets the tag name; the digest is compared before and after. No `sha-<commit>` image means `staging.yml` did not publish the commit: the job fails and says so. An image built on the integration branch is therefore never released as final |
+| Guard | `release.yml`, on a `v*` tag | A ruleset protects the `v*` tags (the job fails otherwise); final tags sit on the first-parent line of `main`, release candidates on the integration branch (`dev`), no other tag name is accepted; the tag's `X.Y.Z` must equal `APP_VERSION` in `manuspectrum/settings.py` at the tagged commit (`release-version-guard.sh`) |
+| Promote | `release.yml` | The provenance of the `sha-<commit>` digest is verified (`gh attestation verify`: signer workflow `staging.yml`, branch `main` for a final tag, the integration branch for a candidate), then the digest gets the tag name; the digest is compared before and after. No `sha-<commit>` image means `staging.yml` did not publish the commit: the job fails and says so. An image built on the integration branch is therefore never released as final |
 | Scan | `release.yml` | Trivy (HIGH and CRITICAL with a fix) blocks; accepted findings and their expiry are in `.trivyignore` |
 | Sign | `release.yml` | The job first checks that a digest carrying only `staging.yml`'s provenance fails `cosign verify`; then the digest is signed with cosign, keyless (GitHub OIDC); then the SBOM attestation is attached to it in GHCR (made by the same workflow identity, which cosign v3 accepts as a signature, so it comes last) |
 | Verify | `release.yml` | `scripts/release-verify.sh`, the policy a host runs, accepts the release and refuses a `sha-*` reference, a signature of another tag and (for a candidate) the `prod` policy |
@@ -29,26 +29,9 @@ Pushes to the integration branch only warm that cache (`staging.yml`,
 `warm-cache`); a manual run of `staging.yml` on it publishes a `sha-<commit>`
 image too.
 
-## Branches
-
-`main` holds what is released; feature branches start from the integration
-branch and merge into it. An integration branch is named
-`dev/<major>.<minor>.<patch>` where minor and patch are a number or `x`
-(`^dev/[0-9]+\.([0-9]+|x)\.([0-9]+|x)$`): `dev/1.x.x` carries a whole major
-line, `dev/1.0.0` one release. A release candidate `vX.Y.Z-rc.N` must be an
-ancestor of an integration branch whose name matches its version: `dev/X.Y.Z`,
-else `dev/X.Y.x`, else `dev/X.x.x` (the first one that exists on `origin` and
-holds the commit). `release-ref-guard.sh` prints that branch after the commit,
-and `release.yml` verifies the provenance against `refs/heads/<that branch>`.
-A plain `dev` branch, or a `dev/` branch of another version, is refused. Final
-tags stay on the first-parent line of `main`. `staging.yml` runs on every
-`dev/**` push (cache warm-up) and by hand on one (`workflow_dispatch`).
-`.github/dependabot.yml` needs a literal branch: its `target-branch` values
-name the current integration branch.
-
 ## Cut a release
 
-1. Merge into the integration branch (`dev/<line>`, e.g. `dev/1.x.x`). To
+1. Merge into the integration branch (`dev`). To
    publish its tip as `sha-<commit>` before a merge to `main`, run
    `staging.yml` by hand on that branch and wait for it to finish. Until
    `staging.yml` exists on the default branch (`main`), the « Run workflow »
@@ -56,7 +39,7 @@ name the current integration branch.
    workflow, use
 
    ```bash
-   gh workflow run staging.yml --ref dev/<line>
+   gh workflow run staging.yml --ref dev
    ```
 
    Tag exactly the commit the run published: the job summary of `publish`
@@ -207,7 +190,7 @@ the first tag is pushed; the chain relies on all of them.
 3. The default workflow token permission is `read`.
 4. Merge, then wait for the warm-cache run on the integration branch (and, for
    a final release, for `staging.yml` on `main`).
-5. `gh workflow run staging.yml --ref dev/<line>`; note the
+5. `gh workflow run staging.yml --ref dev`; note the
    commit and digest of the job summary.
 6. Dry run:
 
@@ -215,7 +198,7 @@ the first tag is pushed; the chain relies on all of them.
    gh attestation verify oci://ghcr.io/crc-centre-recherche-conservation/manuspectrum@sha256:<digest> \
      --repo CRC-Centre-Recherche-Conservation/ManuSpectrum \
      --signer-workflow CRC-Centre-Recherche-Conservation/ManuSpectrum/.github/workflows/staging.yml \
-     --source-ref refs/heads/dev/<line> --source-digest <commit>
+     --source-ref refs/heads/dev --source-digest <commit>
    ```
 
 7. Signed tag on that commit, push it, watch `release.yml`: the step

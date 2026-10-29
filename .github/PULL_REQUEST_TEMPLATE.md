@@ -14,7 +14,7 @@
 
 ## Checklist
 
-- [ ] The branch starts from the integration branch (`dev/<line>`, e.g. `dev/1.x.x`) and targets it.
+- [ ] The branch starts from `dev` and targets `dev`.
 - [ ] Tests cover the change (and fail without it).
 - [ ] User-facing strings exist in English and French.
 - [ ] No secret, production value or research data in the diff.

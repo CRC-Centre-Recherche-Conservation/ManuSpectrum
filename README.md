@@ -200,8 +200,8 @@ Start with [`deploy/README.md`](deploy/README.md), then:
 
 ## 🤝 Contributing
 
-Issues and pull requests are welcome: read [`CONTRIBUTING.md`](CONTRIBUTING.md) first. Branches start from `dev/<line>` (the
-integration branch, e.g. `dev/1.x.x`); `main` holds what is released. Please report vulnerabilities privately, as described in
+Issues and pull requests are welcome: read [`CONTRIBUTING.md`](CONTRIBUTING.md) first. Branches start from `dev` (the
+integration branch); `main` holds what is released. Please report vulnerabilities privately, as described in
 [`SECURITY.md`](SECURITY.md), and follow the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## 📚 Cite ManuSpectrum

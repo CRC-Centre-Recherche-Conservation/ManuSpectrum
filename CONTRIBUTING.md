@@ -14,13 +14,13 @@ Conservation (CRC). Bug reports, ideas, documentation fixes and code are all wel
 
 ## Branches and pull requests
 
-- `dev/<line>` (e.g. `dev/1.x.x`) is the integration branch: start your branch from it and open your pull request against it.
-- `main` holds what is released; it only receives merges from the integration branch.
+- `dev` is the integration branch: start your branch from it and open your pull request against it.
+- `main` holds what is released; it only receives merges from `dev`.
 - Keep one topic per pull request, and fill in the pull request template: summary, what changed, how you verified it,
   follow-ups, and the issue it closes.
 - CI runs on every pull request: tests on Python 3.11, 3.12 and 3.13, frontend tests, Black, Prettier, ESLint,
   TypeScript, missing migrations, line endings, secret scanning, and a coverage gate (a pull request may not lower the
-  Python or frontend coverage of the integration branch). Changes to `deploy/` also run the whole stack in containers.
+  Python or frontend coverage of `dev`). Changes to `deploy/` also run the whole stack in containers.
 
 ## Development set-up
 
