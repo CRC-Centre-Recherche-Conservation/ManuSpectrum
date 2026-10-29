@@ -14,7 +14,9 @@ be an http(s) origin (else ``invalidRequest``) and a trusted one (else
 ``missingCredentials`` at once; over ``IIIF_AUTH_TOKEN_RATE`` per IP,
 ``unavailable``. Version 2 speaks the Auth 2.0 message format (errors mapped
 to its profiles, heading and note as language maps). The page may be framed
-by the trusted origins only (``frame-ancestors``).
+by the trusted origins only (``frame-ancestors``), unless it carries an error
+and no token: it discloses nothing then, and a viewer on a distrusted origin
+must be able to render it to receive ``invalidOrigin`` instead of timing out.
 
 ``probe`` (Auth 2.0) answers HTTP 200 with the status the reader would get on
 the stored file: 200, 401 (no credentials, or a Bearer credential that is not
@@ -80,6 +82,13 @@ PROBE_HEADINGS = {
 def _private(response):
     response["Cache-Control"] = PRIVATE
     return response
+
+
+def _frame_ancestors(error, token):
+    """The ``Content-Security-Policy`` of a token page: any ancestor for an error page, else the trusted origins."""
+    if error and token is None:
+        return "frame-ancestors *"
+    return "frame-ancestors 'self' " + " ".join(tokens.trusted_origins())
 
 
 def _unframable(response):
@@ -172,9 +181,7 @@ class TokenView(View):
                 "target": origin if error != "invalidRequest" else None,
             },
         )
-        response["Content-Security-Policy"] = "frame-ancestors 'self' " + " ".join(
-            tokens.trusted_origins()
-        )
+        response["Content-Security-Policy"] = _frame_ancestors(error, token)
         response["Referrer-Policy"] = "no-referrer"
         return _private(response)
 
