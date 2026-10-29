@@ -1,0 +1,17 @@
+name: 📝 Documentation
+description: Something is missing, unclear or wrong in the documentation.
+labels: [documentation]
+body:
+  - type: input
+    id: where
+    attributes:
+      label: Which page or file?
+      placeholder: deploy/BACKUP.md, the « Data and reuse » page, …
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What should change?
+    validations:
+      required: true

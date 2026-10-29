@@ -1,0 +1,33 @@
+name: ✨ Feature request
+description: An idea to make ManuSpectrum more useful.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What do you need?
+      description: The problem or the task, from the point of view of the person doing it (curator, researcher, visitor, administrator).
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would help?
+      description: How you imagine it working. Screenshots, sketches or examples from other tools are welcome.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: How do you work around it today?
+  - type: dropdown
+    id: standards
+    attributes:
+      label: Does it touch a standard or another system?
+      multiple: true
+      options:
+        - IIIF
+        - CIDOC-CRM / CRMsci
+        - SKOS vocabularies
+        - Biblissima
+        - Arches core
+        - Exports (CSV, RO-Crate)
+        - None
