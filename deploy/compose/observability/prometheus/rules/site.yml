@@ -1,0 +1,94 @@
+# Alert rules of the monitoring stack: site.
+# Severity: critical = mailed at once, warning = grouped weekday e-mail, info = never mailed.
+groups:
+  - name: site
+    rules:
+      - alert: SiteDown
+        expr: |
+          probe_success{job="blackbox-edge"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: site
+        annotations:
+          summary: "The public site does not answer"
+          description: "The probe of the public /healthz through nginx has failed for 5 minutes ({{ $labels.instance }})."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#sitedown
+      - alert: NotReady
+        expr: |
+          probe_success{job="blackbox-readyz"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: site
+        annotations:
+          summary: "The application reports it is not ready"
+          description: "/readyz has failed for 5 minutes. Failing components: {{ range query \"manuspectrum_readyz_component_up == 0\" | sortByLabel \"component\" }}{{ .Labels.component }} {{ else }}none reported{{ end }}"
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#notready
+      - alert: CantaloupeDown
+        expr: |
+          probe_success{job="blackbox-cantaloupe"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: site
+        annotations:
+          summary: "The IIIF image server does not answer"
+          description: "The probe of Cantaloupe /iiif/3 has failed for 5 minutes. Images, the viewer and the Explorer thumbnails are affected."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#cantaloupedown
+      - alert: ErrorRateHigh
+        expr: |
+          (
+            (sum(rate(django_http_responses_total_by_status_view_method_total{status=~"5..",view!~"healthz|readyz|metrics"}[5m])) or vector(0))
+            / sum(rate(django_http_responses_total_by_status_view_method_total{view!~"healthz|readyz|metrics"}[5m]))
+          ) > 0.01
+          and
+          sum(rate(django_http_responses_total_by_status_view_method_total{view!~"healthz|readyz|metrics"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: site
+        annotations:
+          summary: "More than 1 % of the requests fail with a 5xx"
+          description: "The share of 5xx answers over 5 minutes is {{ $value | humanizePercentage }}. Health, readiness and metrics views are excluded, and so is any period under 0.05 request per second."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#errorratehigh
+      - alert: SearchLatencyHigh
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(django_http_requests_latency_seconds_by_view_method_bucket{view="explorer-search"}[10m]))) > 2
+          and
+          sum(rate(django_http_requests_latency_seconds_by_view_method_count{view="explorer-search"}[10m])) > 0.02
+        for: 15m
+        labels:
+          severity: warning
+          service: site
+        annotations:
+          summary: "The Explorer search is slow"
+          description: "The 95th percentile of the Explorer search is {{ $value | humanizeDuration }} over 10 minutes."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#searchlatencyhigh
+      - alert: SearchExportSlow
+        expr: |
+          (
+            sum(increase(django_http_requests_latency_seconds_by_view_method_count{view=~"export_results|api_export_results"}[64h]))
+            - sum(increase(django_http_requests_latency_seconds_by_view_method_bucket{view=~"export_results|api_export_results",le="60.0"}[64h]))
+          ) >= 3
+        for: 15m
+        labels:
+          severity: warning
+          service: site
+        annotations:
+          summary: "Search exports run for a long time in the web worker"
+          description: "{{ $value | humanize }} search exports took more than 60 seconds in the last 64 hours (the 60.0 latency bucket). A visitor can ask for an export that the web worker builds itself; nginx allows one at a time per address."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#searchexportslow
+      - alert: WriteRequestsFailing
+        expr: |
+          (
+            (sum(increase(django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"}[30m]) and django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"} offset 30m) or vector(0))
+            + (sum((django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"} unless django_http_responses_total_by_status_view_method_total{status=~"5..",method=~"POST|PUT|DELETE",view!~"healthz|readyz|metrics"} offset 30m) and on (job, instance) (up offset 30m == 1)) or vector(0))
+          ) >= 3
+        labels:
+          severity: warning
+          service: site
+        annotations:
+          summary: "Writes fail with a server error"
+          description: "{{ $value | humanize }} POST, PUT or DELETE requests answered a 5xx in the last 30 minutes. A curator's input may have been lost."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#writerequestsfailing

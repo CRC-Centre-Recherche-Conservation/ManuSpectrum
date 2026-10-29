@@ -1,14 +1,26 @@
+import ipaddress
 import socket
+import threading
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlparse
 
+import requests
+from django.core.cache import cache
 from django.test import SimpleTestCase, override_settings
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
+from manuspectrum.utils.budget import HostBreaker, upstream_budget
 from manuspectrum.utils.http import (
+    HostDown,
+    ResponseTooLargeError,
+    _safe_fetch,
     UnsafeURLError,
     assert_url_is_safe,
     fetch_iiif_manifest,
     get_iiif_session,
     get_user_agent,
+    safe_fetch,
 )
 
 
@@ -125,9 +137,22 @@ def _gai(ip):
     return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 0))]
 
 
-@override_settings(DEBUG=False)
-class AssertUrlIsSafeProdTests(SimpleTestCase):
-    """In production the SSRF guard is enforced."""
+def _resolve_as_written(host, *args, **kwargs):
+    """An IP literal resolves to itself; any name resolves to a public address.
+
+    Lets a test say which host was actually checked, instead of only whether
+    the check passed.
+    """
+    try:
+        ipaddress.ip_address(host.strip("[]"))
+    except ValueError:
+        return _gai("93.184.216.34")
+    return _gai(host)
+
+
+@override_settings(SSRF_ALLOW_PRIVATE=False)
+class AssertUrlIsSafeTests(SimpleTestCase):
+    """The guard as every environment runs it unless told otherwise."""
 
     def test_rejects_non_http_scheme(self):
         for url in ("ftp://example.com/x", "file:///etc/passwd", "gopher://x/"):
@@ -188,44 +213,262 @@ class AssertUrlIsSafeProdTests(SimpleTestCase):
         with self.assertRaises(UnsafeURLError):
             assert_url_is_safe("https://does-not-resolve.example/x")
 
-
-@override_settings(DEBUG=True)
-class AssertUrlIsSafeDebugTests(SimpleTestCase):
-    """In DEBUG, private/loopback targets are allowed (local IIIF dev)."""
+    @patch("manuspectrum.utils.http.socket.getaddrinfo")
+    def test_rejects_a_non_web_port(self, mock_gai):
+        # An http URL on 6379 is a probe of this host's Redis, not a fetch.
+        mock_gai.return_value = _gai("93.184.216.34")
+        for url in ("http://example.com:6379/x", "https://example.com:9200/x"):
+            with self.assertRaises(UnsafeURLError):
+                assert_url_is_safe(url)
+        mock_gai.assert_not_called()
 
     @patch("manuspectrum.utils.http.socket.getaddrinfo")
-    def test_debug_allows_private_without_resolving(self, mock_gai):
+    def test_allows_an_explicit_default_port(self, mock_gai):
+        mock_gai.return_value = _gai("93.184.216.34")
+        assert_url_is_safe("https://example.com:443/x")
+        assert_url_is_safe("http://example.com:80/x")
+
+    def test_rejects_a_malformed_port(self):
+        with self.assertRaises(UnsafeURLError):
+            assert_url_is_safe("http://example.com:notaport/x")
+
+    @patch(
+        "manuspectrum.utils.http.socket.getaddrinfo", side_effect=_resolve_as_written
+    )
+    def test_a_backslash_authority_is_read_the_way_requests_reads_it(self, mock_gai):
+        # urlparse stops the authority at the last "@" and sees example.com;
+        # requests stops it at the backslash and connects to the metadata
+        # service. Checking one and connecting to the other is the bypass.
+        with self.assertRaises(UnsafeURLError):
+            assert_url_is_safe("http://169.254.169.254\\@example.com/latest/")
+
+    @patch(
+        "manuspectrum.utils.http.socket.getaddrinfo", side_effect=_resolve_as_written
+    )
+    def test_the_checked_host_is_the_one_that_will_be_connected_to(self, mock_gai):
+        # Same string shape the other way round: urlparse reads the internal
+        # address, requests connects to example.com. The guard follows requests.
+        parsed = assert_url_is_safe("http://example.com\\@169.254.169.254/x")
+
+        self.assertEqual(parsed.hostname, "example.com")
+
+    @override_settings(DEBUG=True)
+    @patch("manuspectrum.utils.http.socket.getaddrinfo")
+    def test_debug_alone_does_not_open_the_guard(self, mock_gai):
+        # The guard used to key off DEBUG; turning on the debug toolbar must
+        # not also make loopback fetchable.
+        mock_gai.return_value = _gai("127.0.0.1")
+        with self.assertRaises(UnsafeURLError):
+            assert_url_is_safe("http://127.0.0.1:8000/manifest/abc")
+
+
+@override_settings(SSRF_ALLOW_PRIVATE=True)
+class AssertUrlIsSafeAllowPrivateTests(SimpleTestCase):
+    """SSRF_ALLOW_PRIVATE opens the guard for a local IIIF server."""
+
+    @patch("manuspectrum.utils.http.socket.getaddrinfo")
+    def test_private_targets_are_allowed_without_resolving(self, mock_gai):
         assert_url_is_safe("http://127.0.0.1:8000/manifest/abc")  # no raise
         assert_url_is_safe("http://localhost:8000/manifest/abc")  # no raise
         mock_gai.assert_not_called()
 
-    def test_debug_still_rejects_bad_scheme(self):
+    def test_a_bad_scheme_is_still_rejected(self):
         with self.assertRaises(UnsafeURLError):
             assert_url_is_safe("file:///etc/passwd")
 
 
 class AssertUrlIsSafeOverrideTests(SimpleTestCase):
-    @override_settings(DEBUG=False)
+    @override_settings(SSRF_ALLOW_PRIVATE=False)
     @patch("manuspectrum.utils.http.socket.getaddrinfo")
-    def test_explicit_allow_private_overrides_prod(self, mock_gai):
+    def test_explicit_allow_private_overrides_the_setting(self, mock_gai):
         assert_url_is_safe("http://10.0.0.5/x", allow_private=True)
         mock_gai.assert_not_called()
 
 
+def fake_response(
+    *, status=200, headers=None, chunks=(b"{}",), url="https://ok.example/x"
+):
+    """A streamed ``requests`` response, as ``safe_fetch`` consumes one."""
+    headers = headers or {}
+    response = MagicMock()
+    response.status_code = status
+    response.headers = headers
+    response.url = url
+    response.is_redirect = 300 <= status < 400 and "Location" in headers
+    response.iter_content.return_value = iter(chunks)
+    return response
+
+
+def fake_session(*responses):
+    session = MagicMock()
+    session.get.side_effect = list(responses)
+    return session
+
+
+@override_settings(
+    MANIFEST_FETCH_RATE_LIMITS={}, SSRF_ALLOW_PRIVATE=False, SSRF_MAX_REDIRECTS=2
+)
+@patch("manuspectrum.utils.http.socket.getaddrinfo", return_value=_gai("93.184.216.34"))
+class SafeFetchTests(SimpleTestCase):
+    """The single outbound fetch path: guard, redirects, capped read."""
+
+    def test_returns_the_body_and_never_lets_requests_redirect(self, mock_gai):
+        session = fake_session(fake_response(chunks=(b'{"a"', b":1}")))
+
+        response = safe_fetch("https://ok.example/manifest", session=session)
+
+        self.assertEqual(response.json(), {"a": 1})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(session.get.call_args.kwargs["allow_redirects"])
+        self.assertTrue(session.get.call_args.kwargs["stream"])
+
+    def test_the_url_sent_is_the_canonical_one_the_guard_checked(self, mock_gai):
+        session = fake_session(fake_response())
+
+        safe_fetch("https://ok.example/a manifest.json", session=session)
+
+        self.assertEqual(
+            session.get.call_args.args[0], "https://ok.example/a%20manifest.json"
+        )
+
+    def test_a_redirect_is_followed_only_after_the_guard_clears_it(self, mock_gai):
+        session = fake_session(
+            fake_response(
+                status=302, headers={"Location": "https://elsewhere.example/final"}
+            ),
+            fake_response(chunks=(b'{"final":true}',)),
+        )
+
+        response = safe_fetch("https://ok.example/manifest", session=session)
+
+        self.assertEqual(response.json(), {"final": True})
+        self.assertEqual(
+            [call.args[0] for call in session.get.call_args_list],
+            ["https://ok.example/manifest", "https://elsewhere.example/final"],
+        )
+
+    def test_a_relative_redirect_is_resolved_against_the_current_url(self, mock_gai):
+        session = fake_session(
+            fake_response(status=301, headers={"Location": "/v3/manifest"}),
+            fake_response(),
+        )
+
+        safe_fetch("https://ok.example/v2/manifest", session=session)
+
+        self.assertEqual(
+            session.get.call_args.args[0], "https://ok.example/v3/manifest"
+        )
+
+    def test_a_redirect_into_a_private_address_is_refused(self, mock_gai):
+        # The classic bypass: a public URL answering 302 to the metadata service.
+        mock_gai.side_effect = [_gai("93.184.216.34"), _gai("169.254.169.254")]
+        session = fake_session(
+            fake_response(
+                status=302,
+                headers={"Location": "http://metadata.example/latest/meta-data/"},
+            ),
+            fake_response(chunks=(b"SECRET",)),
+        )
+
+        with self.assertRaises(UnsafeURLError):
+            safe_fetch("https://ok.example/manifest", session=session)
+        self.assertEqual(session.get.call_count, 1)
+
+    def test_a_redirect_loop_is_cut_at_the_configured_hop_count(self, mock_gai):
+        session = fake_session(
+            *[
+                fake_response(
+                    status=302, headers={"Location": "https://ok.example/next"}
+                )
+                for _ in range(4)
+            ]
+        )
+
+        with self.assertRaises(UnsafeURLError):
+            safe_fetch("https://ok.example/manifest", session=session)
+        self.assertEqual(session.get.call_count, 3)  # 1 + SSRF_MAX_REDIRECTS
+
+    def test_the_guard_runs_before_the_first_request(self, mock_gai):
+        mock_gai.return_value = _gai("127.0.0.1")
+        session = fake_session(fake_response())
+
+        with self.assertRaises(UnsafeURLError):
+            safe_fetch("https://rebound.example/manifest", session=session)
+        session.get.assert_not_called()
+
+    def test_a_body_past_the_cap_is_refused_mid_stream(self, mock_gai):
+        session = fake_session(fake_response(chunks=(b"x" * 8, b"x" * 8)))
+
+        with self.assertRaises(ResponseTooLargeError):
+            safe_fetch("https://ok.example/big", session=session, max_bytes=10)
+
+    def test_a_declared_length_past_the_cap_is_refused_before_reading(self, mock_gai):
+        response = fake_response(headers={"Content-Length": "999999"})
+        session = fake_session(response)
+
+        with self.assertRaises(ResponseTooLargeError):
+            safe_fetch("https://ok.example/big", session=session, max_bytes=10)
+        response.iter_content.assert_not_called()
+
+    def test_stacked_content_encodings_are_refused(self, mock_gai):
+        # The shape of the urllib3 1.x decompression CVEs Arches' pin leaves open.
+        session = fake_session(
+            fake_response(headers={"Content-Encoding": "gzip, gzip"})
+        )
+
+        with self.assertRaises(ResponseTooLargeError):
+            safe_fetch("https://ok.example/bomb", session=session)
+
+    def test_a_single_content_encoding_is_normal(self, mock_gai):
+        session = fake_session(
+            fake_response(headers={"Content-Encoding": "gzip"}, chunks=(b"{}",))
+        )
+
+        self.assertEqual(safe_fetch("https://ok.example/x", session=session).json(), {})
+
+    def test_the_response_carries_the_status_for_raise_for_status(self, mock_gai):
+        session = fake_session(fake_response(status=404, chunks=(b"gone",)))
+
+        response = safe_fetch("https://ok.example/gone", session=session)
+
+        self.assertFalse(response.ok)
+        with self.assertRaises(requests.HTTPError):
+            response.raise_for_status()
+
+    @override_settings(SSRF_TIMEOUT=7)
+    def test_the_timeout_budget_comes_from_the_setting(self, mock_gai):
+        session = fake_session(fake_response())
+
+        safe_fetch("https://ok.example/x", session=session)
+
+        self.assertEqual(session.get.call_args.kwargs["timeout"], (7, 7))
+
+
+@override_settings(MANIFEST_FETCH_RATE_LIMITS={}, SSRF_ALLOW_PRIVATE=False)
+@patch("manuspectrum.utils.http.socket.getaddrinfo", return_value=_gai("93.184.216.34"))
 class FetchIiifManifestTests(SimpleTestCase):
     """The resilient, throttled IIIF manifest fetch helper."""
 
-    @override_settings(MANIFEST_FETCH_RATE_LIMITS={})
-    @patch("manuspectrum.utils.http.get_iiif_session")
-    def test_forces_no_redirects(self, mock_session_factory):
+    def test_forces_no_redirects_on_the_request_itself(self, mock_gai):
         # allow_redirects=False is a security invariant (redirect-SSRF guard).
-        session = MagicMock()
-        mock_session_factory.return_value = session
-        fetch_iiif_manifest("https://example.org/iiif/manifest")
+        session = fake_session(fake_response())
+
+        fetch_iiif_manifest("https://example.org/iiif/manifest", session=session)
+
         session.get.assert_called_once()
         self.assertFalse(session.get.call_args.kwargs["allow_redirects"])
 
-    def test_session_carries_user_agent_and_accept(self):
+    @override_settings(SSRF_TIMEOUT=9)
+    def test_keeps_a_longer_read_budget_than_the_connect_budget(self, mock_gai):
+        session = fake_session(fake_response())
+
+        fetch_iiif_manifest("https://example.org/iiif/manifest", session=session)
+
+        connect, read = session.get.call_args.kwargs["timeout"]
+        self.assertEqual(connect, 9)
+        self.assertGreater(read, connect)
+
+    def test_session_carries_user_agent_and_accept(self, mock_gai):
         session = get_iiif_session()
         self.assertIn("User-Agent", session.headers)
         self.assertIn("Accept", session.headers)
@@ -277,3 +520,184 @@ class RateBucketTests(SimpleTestCase):
             http_mod._host_rate_locks["e-codices.unifr.ch"],
             http_mod._host_rate_locks["digi.vatlib.it"],
         )
+
+
+class CappedRetryTests(SimpleTestCase):
+    """A remote ``Retry-After`` never parks a request thread past the cap."""
+
+    @staticmethod
+    def _retry():
+        from manuspectrum.utils.http import _build_iiif_session
+
+        return _build_iiif_session().get_adapter("https://x.example/").max_retries
+
+    @staticmethod
+    def _response(retry_after):
+        response = MagicMock()
+        response.headers = {"Retry-After": retry_after}
+        return response
+
+    @override_settings(IIIF_RETRY_AFTER_MAX=10)
+    def test_huge_retry_after_sleeps_at_most_the_cap(self):
+        with patch("urllib3.util.retry.time.sleep") as sleep:
+            self._retry().sleep(self._response("3600"))
+        sleep.assert_called_once_with(10)
+
+    @override_settings(IIIF_RETRY_AFTER_MAX=10)
+    def test_small_retry_after_is_honoured(self):
+        with patch("urllib3.util.retry.time.sleep") as sleep:
+            self._retry().sleep(self._response("2"))
+        sleep.assert_called_once_with(2)
+
+    @override_settings(IIIF_RETRY_AFTER_MAX=10)
+    def test_cap_survives_increment_and_new(self):
+        retry = self._retry().new().new(total=2)
+        with patch("urllib3.util.retry.time.sleep") as sleep:
+            retry.sleep(self._response("3600"))
+        sleep.assert_called_once_with(10)
+
+
+class _Server:
+    """A local TCP server whose answer to each connection is *behaviour*."""
+
+    def __init__(self, behaviour):
+        self.socket = socket.socket()
+        self.socket.bind(("127.0.0.1", 0))
+        self.socket.listen(8)
+        self.port = self.socket.getsockname()[1]
+        self.held = []
+        self.behaviour = behaviour
+        threading.Thread(target=self.serve, daemon=True).start()
+
+    def serve(self):
+        while True:
+            try:
+                connection, _ = self.socket.accept()
+            except OSError:
+                return
+            self.held.append(connection)
+            if self.behaviour == "error":
+                connection.recv(4096)
+                connection.sendall(
+                    b"HTTP/1.1 503 Service Unavailable\r\n"
+                    b"Content-Length: 0\r\nConnection: close\r\n\r\n"
+                )
+            elif self.behaviour == "close":
+                connection.recv(4096)
+                connection.close()
+
+    def close(self):
+        self.socket.close()
+        for connection in self.held:
+            connection.close()
+
+
+class BudgetBreakerTests(SimpleTestCase):
+    """Inside a budget with a host breaker, only a failed connection trips an origin.
+
+    The session is the one a budget gives a caller: a real ``HTTPAdapter``
+    without retries, which reports every transport failure as a ConnectionError.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.breaker = HostBreaker("test-breaker", lambda: 60)
+        self.session = requests.Session()
+        self.session.mount(
+            "http://", HTTPAdapter(max_retries=Retry(total=0, raise_on_status=False))
+        )
+        guard = patch(
+            "manuspectrum.utils.http.assert_url_is_safe",
+            side_effect=lambda url, **_: urlparse(url),
+        )
+        guard.start()
+        self.addCleanup(guard.stop)
+
+    def fetch(self, url, timeout=(1, 0.3)):
+        with upstream_budget(5, connect_cap=1, breaker=self.breaker):
+            return _safe_fetch(url, session=self.session, timeout=timeout)
+
+    def server(self, behaviour):
+        server = _Server(behaviour)
+        self.addCleanup(server.close)
+        return server
+
+    def test_a_read_timeout_does_not_trip_the_origin(self):
+        server = self.server("silent")
+
+        with self.assertRaises(requests.exceptions.ConnectionError):
+            self.fetch(f"http://127.0.0.1:{server.port}/")
+
+        self.assertFalse(self.breaker.is_down(f"127.0.0.1:{server.port}"))
+
+    def test_a_server_error_does_not_trip_the_origin(self):
+        server = self.server("error")
+
+        self.assertEqual(
+            self.fetch(f"http://127.0.0.1:{server.port}/").status_code, 503
+        )
+        self.assertFalse(self.breaker.is_down(f"127.0.0.1:{server.port}"))
+
+    def test_a_connection_closed_without_an_answer_does_not_trip_the_origin(self):
+        server = self.server("close")
+
+        with self.assertRaises(requests.exceptions.ConnectionError):
+            self.fetch(f"http://127.0.0.1:{server.port}/")
+
+        self.assertFalse(self.breaker.is_down(f"127.0.0.1:{server.port}"))
+
+    def test_a_refused_connection_trips_the_origin_and_only_that_port(self):
+        free = socket.socket()
+        free.bind(("127.0.0.1", 0))
+        port = free.getsockname()[1]
+        free.close()
+
+        with self.assertRaises(requests.exceptions.ConnectionError):
+            self.fetch(f"http://127.0.0.1:{port}/")
+
+        self.assertTrue(self.breaker.is_down(f"127.0.0.1:{port}"))
+        self.assertFalse(self.breaker.is_down("127.0.0.1:80"))
+
+    def test_a_name_that_does_not_resolve_trips_the_origin(self):
+        unresolved = socket.gaierror(socket.EAI_NONAME, "Name or service not known")
+        with (
+            patch("socket.getaddrinfo", side_effect=unresolved),
+            self.assertRaises(requests.exceptions.ConnectionError),
+        ):
+            self.fetch("http://nowhere.invalid/")
+
+        self.assertTrue(self.breaker.is_down("nowhere.invalid:80"))
+
+    def test_a_tripped_origin_is_refused_before_the_throttle_and_without_connecting(
+        self,
+    ):
+        self.breaker.trip("slow.example:443")
+        session = MagicMock()
+
+        with (
+            override_settings(MANIFEST_FETCH_RATE_LIMITS={"slow.example": 30}),
+            patch("manuspectrum.utils.http.throttle_for_host") as throttle,
+            upstream_budget(5, breaker=self.breaker),
+        ):
+            with self.assertRaises(HostDown):
+                _safe_fetch("https://slow.example/manifest", session=session)
+
+        throttle.assert_not_called()
+        session.get.assert_not_called()
+
+    def test_the_budget_caps_the_connect_timeout_of_each_hop(self):
+        session = MagicMock()
+        session.get.return_value.is_redirect = False
+        session.get.return_value.status_code = 200
+        session.get.return_value.raw.read.side_effect = [b"{}", b""]
+
+        with (
+            patch("manuspectrum.utils.http._read_capped", return_value=b"{}"),
+            upstream_budget(5, connect_cap=2.5),
+        ):
+            _safe_fetch("https://host.example/x", session=session, timeout=(10, 45))
+
+        connect, read = session.get.call_args.kwargs["timeout"]
+        self.assertEqual(connect, 2.5)
+        self.assertLessEqual(read, 5)

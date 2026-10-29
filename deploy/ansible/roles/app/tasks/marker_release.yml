@@ -1,0 +1,5 @@
+---
+- name: Remove the Ansible run marker
+  ansible.builtin.file:
+    path: "{{ app_ansible_marker }}"
+    state: absent

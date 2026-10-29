@@ -11,15 +11,15 @@
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     "itemListElement": [
-        {"@type": "ListItem", "position": 1, "name": "{% trans 'Home' as ms_b1 %}{{ ms_b1|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'root' %}"},
-        {"@type": "ListItem", "position": 2, "name": "{% trans 'Conceptual Model' as ms_b2 %}{{ ms_b2|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'about-model' %}"}
+        {"@type": "ListItem", "position": 1, "name": "{% trans 'Home' as ms_b1 %}{{ ms_b1|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'root' %}"},
+        {"@type": "ListItem", "position": 2, "name": "{% trans 'Conceptual Model' as ms_b2 %}{{ ms_b2|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'about-model' %}"}
     ]
 }
 </script>
 {% endblock %}
 
 {% block content %}
-<section class="ms-page-hero reveal">
+<section class="ms-page-hero">
     <div class="ms-page-hero__eyebrow">{% trans "Conceptual Model" %}</div>
     <h1 class="ms-page-hero__title">{% trans "A model for describing written heritage scientifically" %}</h1>
     <div class="ms-page-hero__accent"></div>
@@ -59,7 +59,7 @@
                page is now rewritten from /api/model-graph by conceptual-model.js; the
                numbers left in the markup are TODAY's live values, kept only so the page
                is still correct without JavaScript. Fix drift in the payload, never here. {% endcomment %}
-            <p id="ms-cm-models-line">{% trans "12 independent models linked by 70 typed CIDOC relationships — so a person recorded once as an analyst is the same record when they reappear as a volume's owner." %}</p>
+            <p id="ms-cm-models-line">{% trans "12 independent models linked by 73 typed CIDOC relationships — so a person recorded once as an analyst is the same record when they reappear as a volume's owner." %}</p>
         </div>
         <div class="ms-cm-level" data-level="3">
             <span class="ms-cm-level-num">3</span>
@@ -118,36 +118,34 @@
        ("169 field groups", "580 nodes") that mean nothing outside Arches, and one
        of them was wrong (84 relationships). These four are the figures a
        researcher can actually weigh, led by the thesaurus ratio — the strongest
-       trust signal in the dataset (166 concept-list + 21 concept of 452 data
-       nodes = 41%, measured on /api/model-graph).
+       trust signal in the dataset (reference, concept and concept-list fields: 193 of 465 data
+       nodes = 42%, measured on /api/model-graph).
        `data-count` drives the count-up in conceptual-model.js; `data-prefix` /
        `data-suffix` keep the affixes it used to overwrite. {% endcomment %}
     <div class="ms-cm-stats" id="ms-cm-stats" data-api="{% url 'model-graph' %}">
         <div class="ms-cm-stat" data-stat="thesaurus">
-            <span class="ms-cm-stat-value" data-count="41" data-suffix="%">41%</span>
-            <span class="ms-cm-stat-label">{% trans "of fields draw on a published thesaurus, not free text — 187 of 452" %}</span>
+            <span class="ms-cm-stat-value" data-count="42" data-suffix="%">42%</span>
+            <span class="ms-cm-stat-label">{% trans "of fields draw on a published thesaurus, not free text — 193 of 465" %}</span>
         </div>
         <div class="ms-cm-stat" data-stat="cidoc">
             <span class="ms-cm-stat-value" data-count="49">49</span>
             <span class="ms-cm-stat-label">{% trans "CIDOC-CRM / CRMsci classes — every entity maps to ISO 21127" %}</span>
         </div>
         <div class="ms-cm-stat" data-stat="relations">
-            <span class="ms-cm-stat-value" data-count="70">70</span>
+            <span class="ms-cm-stat-value" data-count="73">73</span>
             <span class="ms-cm-stat-label">{% trans "typed relationships across 12 interconnected models" %}</span>
         </div>
         <div class="ms-cm-stat" data-stat="concepts">
-            <span class="ms-cm-stat-value" data-count="19972" data-prefix="~">~19,972</span>
+            <span class="ms-cm-stat-value" data-count="6281" data-prefix="~">~6,281</span>
             <span class="ms-cm-stat-label">{% trans "concepts from Getty AAT, Pactols, AGORHA and LOTERRE" %}</span>
         </div>
     </div>
     <details class="ms-cm-technical">
         <summary>{% trans "Technical detail" %}</summary>
-        {% comment %} "32 controlled lists" was dropped rather than republished: the
-           `arches_controlled_lists` app is commented out of INSTALLED_APPS, so nothing
-           in this codebase can verify that figure. An unverifiable number on a page whose
-           whole argument is verifiability costs more than the number is worth. {% endcomment %}
+        {% comment %} "thesauri" counts the controlled lists the `reference` fields are
+           bound to; "concepts" above counts their items (model_graph_service). {% endcomment %}
         <p class="ms-cm-technical-line" id="ms-cm-technical-line">
-            {% trans "169 field groups · 580 nodes (452 of them data) · 77 ontology properties · 12 thesauri." %}
+            {% trans "170 field groups · 600 nodes (465 of them data) · 80 ontology properties · 38 thesauri." %}
         </p>
     </details>
 </section>
@@ -214,4 +212,5 @@
 </section>
 {% endblock %}
 
+{% block page_translations %}{% include 'includes/ms_i18n_conceptual_model.htm' %}{% endblock %}
 {% block js_bundle %}{% render_bundle 'views/pages/conceptual-model' %}{% endblock %}

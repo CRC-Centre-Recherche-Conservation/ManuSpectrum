@@ -1,0 +1,203 @@
+rule_files:
+  - ../rules/release.yml
+evaluation_interval: 1m
+
+
+tests:
+- name: a failed verification fires at once and clears with the next good run
+  interval: 1m
+  input_series:
+  - series: manuspectrum_release_verification_failed
+    values: 0 0 1 1 0 0
+  promql_expr_test:
+  - expr: ALERTS{alertname="ReleaseVerificationFailed", alertstate="firing"}
+    eval_time: 1m
+    exp_samples: []
+  - expr: ALERTS{alertname="ReleaseVerificationFailed", alertstate="firing"}
+    eval_time: 3m
+    exp_samples:
+    - labels: ALERTS{alertname="ReleaseVerificationFailed", alertstate="firing", service="release", severity="critical"}
+      value: 1
+  - expr: ALERTS{alertname="ReleaseVerificationFailed", alertstate="firing"}
+    eval_time: 5m
+    exp_samples: []
+- name: a failing step fires after two hours and names the step
+  interval: 1m
+  input_series:
+  - series: manuspectrum_release_watch_failed{step="git"}
+    values: 0x400
+  - series: manuspectrum_release_watch_failed{step="sigstore"}
+    values: 0x20 1x200 0x300
+  promql_expr_test:
+  - expr: ALERTS{alertname="ReleaseWatchFailing", alertstate="firing"}
+    eval_time: 2h
+    exp_samples: []
+  - expr: ALERTS{alertname="ReleaseWatchFailing", alertstate="firing"}
+    eval_time: 3h
+    exp_samples:
+    - labels: ALERTS{alertname="ReleaseWatchFailing", alertstate="firing", step="sigstore", service="release", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="ReleaseWatchFailing", alertstate="firing"}
+    eval_time: 6h30m
+    exp_samples: []
+- name: a failure that clears before two hours stays quiet
+  interval: 1m
+  input_series:
+  - series: manuspectrum_release_watch_failed{step="registry"}
+    values: 0x10 1x90 0x100
+  promql_expr_test:
+  - expr: ALERTS{alertname="ReleaseWatchFailing", alertstate="firing"}
+    eval_time: 1h30m
+    exp_samples: []
+  - expr: ALERTS{alertname="ReleaseWatchFailing", alertstate="firing"}
+    eval_time: 3h
+    exp_samples: []
+- name: a watch 2 hours old is fine, 4 hours old fires
+  interval: 5m
+  input_series:
+  - series: manuspectrum_release_watch_last_run_timestamp_seconds
+    values: 0+300x24 7200x200
+  - series: up{job="node"}
+    values: 1x224
+  promql_expr_test:
+  - expr: ALERTS{alertname="ReleaseWatchStale", alertstate="firing"}
+    eval_time: 4h
+    exp_samples: []
+  - expr: ALERTS{alertname="ReleaseWatchStale", alertstate="firing"}
+    eval_time: 5h
+    exp_samples: []
+  - expr: ALERTS{alertname="ReleaseWatchStale", alertstate="firing"}
+    eval_time: 6h
+    exp_samples:
+    - labels: ALERTS{alertname="ReleaseWatchStale", alertstate="firing", service="release", severity="warning"}
+      value: 1
+- name: a missing watch metric fires after the grace period while node exporter is up
+  interval: 1m
+  input_series:
+  - series: node_boot_time_seconds
+    values: 0+0x60
+  - series: up{job="node"}
+    values: 1x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="ReleaseWatchStale", alertstate="firing"}
+    eval_time: 5m
+    exp_samples: []
+  - expr: ALERTS{alertname="ReleaseWatchStale", alertstate="firing"}
+    eval_time: 30m
+    exp_samples:
+    - labels: ALERTS{alertname="ReleaseWatchStale", alertstate="firing", service="release", severity="warning"}
+      value: 1
+- name: a missing watch metric is quiet when node exporter is down or absent
+  interval: 1m
+  input_series:
+  - series: node_boot_time_seconds
+    values: 0+0x60
+  - series: up{job="node"}
+    values: 0x60
+  - series: up{job="other"}
+    values: 1x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="ReleaseWatchStale", alertstate="firing"}
+    eval_time: 30m
+    exp_samples: []
+  - expr: ALERTS{alertname="ReleaseWatchStale", alertstate="firing"}
+    eval_time: 50m
+    exp_samples: []
+- name: a stale watch metric is quiet when node exporter is down
+  interval: 5m
+  input_series:
+  - series: manuspectrum_release_watch_last_run_timestamp_seconds
+    values: 0x100
+  - series: up{job="node"}
+    values: 0x100
+  promql_expr_test:
+  - expr: ALERTS{alertname="ReleaseWatchStale", alertstate="firing"}
+    eval_time: 6h
+    exp_samples: []
+- name: a refused or missed slot fires after five minutes and names the reason
+  interval: 1m
+  input_series:
+  - series: manuspectrum_release_schedule_failed{reason="refused"}
+    values: 0x5 1x20 0x10
+  - series: manuspectrum_release_schedule_failed{reason="missed"}
+    values: 0x40
+  promql_expr_test:
+  - expr: ALERTS{alertname="ReleaseScheduleFailed", alertstate="firing"}
+    eval_time: 8m
+    exp_samples: []
+  - expr: ALERTS{alertname="ReleaseScheduleFailed", alertstate="firing"}
+    eval_time: 15m
+    exp_samples:
+    - labels: ALERTS{alertname="ReleaseScheduleFailed", alertstate="firing", reason="refused", service="release", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="ReleaseScheduleFailed", alertstate="firing"}
+    eval_time: 30m
+    exp_samples: []
+- name: a missed slot fires and names the reason
+  interval: 1m
+  input_series:
+  - series: manuspectrum_release_schedule_failed{reason="refused"}
+    values: 0x40
+  - series: manuspectrum_release_schedule_failed{reason="missed"}
+    values: 1x40
+  promql_expr_test:
+  - expr: ALERTS{alertname="ReleaseScheduleFailed", alertstate="firing"}
+    eval_time: 10m
+    exp_samples:
+    - labels: ALERTS{alertname="ReleaseScheduleFailed", alertstate="firing", reason="missed", service="release", severity="warning"}
+      value: 1
+- name: a failed rollback fires at once and clears when the next update succeeds
+  interval: 1m
+  input_series:
+  - series: manuspectrum_release_rollback_failed
+    values: 0 0 1 1 1 0 0
+  promql_expr_test:
+  - expr: ALERTS{alertname="UpdateRollbackFailed", alertstate="firing"}
+    eval_time: 1m
+    exp_samples: []
+  - expr: ALERTS{alertname="UpdateRollbackFailed", alertstate="firing"}
+    eval_time: 3m
+    exp_samples:
+    - labels: ALERTS{alertname="UpdateRollbackFailed", alertstate="firing", service="release", severity="critical"}
+      value: 1
+  - expr: ALERTS{alertname="UpdateRollbackFailed", alertstate="firing"}
+    eval_time: 6m
+    exp_samples: []
+- name: an update in flight for 4 hours is quiet, past 5.5 hours it fires, and it clears when the marker goes
+  interval: 5m
+  input_series:
+  - series: manuspectrum_release_inflight_since_timestamp_seconds
+    values: 1000x100 0x100
+  promql_expr_test:
+  - expr: ALERTS{alertname="UpdateInterrupted", alertstate="firing"}
+    eval_time: 4h
+    exp_samples: []
+  - expr: ALERTS{alertname="UpdateInterrupted", alertstate="firing"}
+    eval_time: 5h
+    exp_samples: []
+  - expr: ALERTS{alertname="UpdateInterrupted", alertstate="firing"}
+    eval_time: 5h20m
+    exp_samples: []
+  - expr: ALERTS{alertname="UpdateInterrupted", alertstate="firing"}
+    eval_time: 5h30m
+    exp_samples: []
+  - expr: ALERTS{alertname="UpdateInterrupted", alertstate="firing"}
+    eval_time: 5h50m
+    exp_samples: []
+  - expr: ALERTS{alertname="UpdateInterrupted", alertstate="firing"}
+    eval_time: 6h
+    exp_samples:
+    - labels: ALERTS{alertname="UpdateInterrupted", alertstate="firing", service="release", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="UpdateInterrupted", alertstate="firing"}
+    eval_time: 9h
+    exp_samples: []
+- name: no update in flight never fires UpdateInterrupted
+  interval: 5m
+  input_series:
+  - series: manuspectrum_release_inflight_since_timestamp_seconds
+    values: 0x200
+  promql_expr_test:
+  - expr: ALERTS{alertname="UpdateInterrupted", alertstate="firing"}
+    eval_time: 10h
+    exp_samples: []

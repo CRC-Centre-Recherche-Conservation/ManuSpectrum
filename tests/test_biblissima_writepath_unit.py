@@ -23,7 +23,8 @@ canonical source modules:
 so they are patched as ``manuspectrum.views.biblissima_proxy.Value`` /
 ``manuspectrum.views.biblissima_proxy.TileModel``.
 
-No DB writes happen.  The resource mock returns a controlled serialized graph
+No DB writes happen, except in ResourceRelationsDatabaseTests (test
+database).  The resource mock returns a controlled serialized graph
 containing concept and concept-list nodes so the code under test can look up
 datatypes.
 
@@ -32,12 +33,25 @@ Run:
         tests.test_biblissima_writepath_unit --settings="tests.test_settings"
 """
 
+import socket
 import uuid
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from arches.app.datatypes.datatypes import DataTypeFactory
+from arches.app.models.models import (
+    GraphModel,
+    Node,
+    NodeGroup,
+    ResourceInstance,
+    ResourceXResource,
+)
+from arches.app.models.resource import Resource
 from django.core.cache import cache
+from django.db import transaction
 from django.test import TestCase
+
+from manuspectrum.views import biblissima_proxy as bp
 
 # ---------------------------------------------------------------------------
 # UUIDs used consistently across tests
@@ -194,6 +208,23 @@ _STUB_REFERENCE = {
 }
 
 
+def _resolve_every_host_publicly(testcase):
+    """Keep the SSRF guard real and the DNS lookup it makes offline.
+
+    The component builder checks the annotation's canvas/manifest URLs before
+    writing them, which resolves their host. What the guard decides is locked
+    in tests/test_http.py; here it must simply not touch the network.
+    """
+    patcher = patch(
+        "manuspectrum.utils.http.socket.getaddrinfo",
+        return_value=[
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
+        ],
+    )
+    patcher.start()
+    testcase.addCleanup(patcher.stop)
+
+
 def _stub_concept_resolution(testcase):
     """Builder tests exercise tile shape, not concept resolution, and run with no
     controlled lists loaded. `_concept_list` now fails loudly on an unresolvable
@@ -230,6 +261,7 @@ class SortorderSiblingTests(TestCase):
 
     def setUp(self):
         _stub_concept_resolution(self)
+        _resolve_every_host_publicly(self)
         cache.clear()
 
     def tearDown(self):
@@ -636,6 +668,7 @@ class NestedTileFKOrderingTests(TestCase):
 
     def setUp(self):
         _stub_concept_resolution(self)
+        _resolve_every_host_publicly(self)
         cache.clear()
 
     def tearDown(self):
@@ -733,6 +766,56 @@ class NestedTileFKOrderingTests(TestCase):
 #   current behaviour: no code change is required.
 
 
+class AnnotationTargetGuardTests(TestCase):
+    """The annotation's canvas/manifest URLs are dereferenced by this server
+    (thumbnail fetchers, IIIF annotation views) and by every viewer that opens
+    the resource, so a scraped URL naming an internal address must not reach a
+    tile in the first place.
+    """
+
+    def setUp(self):
+        _stub_concept_resolution(self)
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _build(self, resolved_ip):
+        from manuspectrum.views.biblissima_proxy import COMP_LOCATION_DOC_NG
+
+        view = _make_builder_view()
+        with patch(
+            "manuspectrum.utils.http.socket.getaddrinfo",
+            return_value=[
+                (socket.AF_INET, socket.SOCK_STREAM, 6, "", (resolved_ip, 443))
+            ],
+        ):
+            view._create_component_tiles(
+                str(uuid.uuid4()),
+                str(uuid.uuid4()),
+                _make_minimal_component_data(),
+                deps={"parentDocument": str(uuid.uuid4())},
+                concepts={},
+                created_deps={},
+            )
+        return view, [
+            t for t in view._tile_buffer if str(t.nodegroup_id) == COMP_LOCATION_DOC_NG
+        ]
+
+    def test_a_public_target_is_written_as_an_annotation(self):
+        view, location_tiles = self._build("93.184.216.34")
+
+        self.assertEqual(len(location_tiles), 1)
+
+    def test_a_target_inside_the_network_writes_no_annotation(self):
+        view, location_tiles = self._build("169.254.169.254")
+
+        self.assertEqual(location_tiles, [])
+        # The rest of the resource is still built: one unusable annotation does
+        # not cost the illumination its identifiers, statements or production.
+        self.assertTrue(view._tile_buffer)
+
+
 class BufferIsolationTests(TestCase):
     """The tile buffer must be reset to [] at entry of _create_resource /
     _create_dependency_resource and after _flush_tile_buffer, so stale tiles
@@ -778,36 +861,21 @@ class BufferIsolationTests(TestCase):
     @patch(PATCH_EDITLOG)
     @patch(PATCH_TILEMODEL)
     @patch(PATCH_FACTORY)
-    def test_flush_resets_buffer_before_validation(
+    def test_flush_resets_buffer_even_when_the_insert_raises(
         self, MockFactory, MockTileModel, MockEditLog
     ):
-        """Even when _flush_tile_buffer raises (e.g. TileValidationError),
-        the buffer is already reset at the very start of the method, so
-        a subsequent call on the same view sees an empty buffer."""
-        from arches.app.models.tile import TileValidationError
+        from django.db import IntegrityError
 
-        concept_dt = _concept_dt_mock()
-        concept_dt.validate.return_value = [{"type": "ERROR", "message": "bad"}]
-        other_dt = _other_dt_mock()
-        _patch_factory(MockFactory, concept_dt, other_dt)
-        MockTileModel.objects.bulk_create.return_value = []
-        MockEditLog.objects.bulk_create.return_value = []
+        _patch_factory(MockFactory, _concept_dt_mock(), _other_dt_mock())
+        MockTileModel.objects.bulk_create.side_effect = IntegrityError("duplicate")
+        view = _make_view_with_tiles([_make_tile(data={TEXT_NODE_ID: {"en": "x"}})])
 
-        # Seed garbage from a prior "request"
-        stale_tile = _make_tile(data={CONCEPT_NODE_ID: ABSENT_CONCEPT_UUID})
-        view = _make_view_with_tiles([stale_tile])
-        resource = _make_resource()
+        with self.assertRaises(IntegrityError):
+            view._flush_tile_buffer(
+                _make_resource(), user=None, default_transaction_id=None
+            )
 
-        with self.assertRaises(TileValidationError):
-            view._flush_tile_buffer(resource, user=None, default_transaction_id=None)
-
-        # After the exception, the buffer must still be empty — stale tiles
-        # cannot survive into a future call.
-        self.assertEqual(
-            view._tile_buffer,
-            [],
-            "_tile_buffer must be [] even after _flush_tile_buffer raises",
-        )
+        self.assertEqual(view._tile_buffer, [])
 
     def test_create_resource_resets_buffer_documented_contract(self):
         """Characterization: the source of _create_resource at line 2519
@@ -820,8 +888,7 @@ class BufferIsolationTests(TestCase):
         from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
 
         src = inspect.getsource(BiblissimaCreateResourceView._create_resource)
-        # The very first statement inside ``with transaction.atomic():``
-        # must be the buffer reset.
+        # The buffer reset precedes tile building.
         self.assertIn(
             "self._tile_buffer = []",
             src,
@@ -1663,11 +1730,9 @@ class OrchestratorDelegationTests(TestCase):
     @patch(PATCH_TILEMODEL)
     @patch(PATCH_FACTORY)
     def test_delegation_order_and_argument_threading(self, MockFactory, MockTileModel):
-        """Exact call order: collect → validate → run_hook(pre) →
-        bulk_create → run_hook(post) → save_descriptors → write_editlog.
-        The set returned by _collect_valid_concepts flows into _validate_tiles;
-        the same nodes_by_id and factory go to both _run_hook calls;
-        default_transaction_id is forwarded to _write_editlog as tx_id."""
+        """Exact call order: bulk_create → run_hook(post) →
+        run_hook(after_update_all) → save_descriptors → write_editlog.
+        Validation and pre_tile_save belong to _stage_tiles."""
         from unittest.mock import MagicMock
 
         from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
@@ -1698,56 +1763,28 @@ class OrchestratorDelegationTests(TestCase):
         ):
             view._flush_tile_buffer(resource, user=None, default_transaction_id=tx_id)
 
-        # 1 — Call order (4 entries: validate, run_hook×2, write_editlog)
         call_names = [c[0] for c in mgr.mock_calls]
-        self.assertEqual(
-            call_names,
-            ["validate", "run_hook", "run_hook", "write_editlog"],
-            f"Unexpected call order: {call_names}",
-        )
+        self.assertEqual(call_names, ["run_hook", "run_hook", "write_editlog"])
+        validate_mock.assert_not_called()
+        MockTileModel.objects.bulk_create.assert_called_once_with([tile])
 
-        # 2 — _validate_tiles receives (tiles, nodes_by_id, factory)
-        validate_args = validate_mock.call_args[0]
-        self.assertEqual(validate_args[0], [tile])
-        nodes_by_id_arg = validate_args[1]
-        self.assertIsInstance(nodes_by_id_arg, dict)
+        post_args = run_hook_mock.call_args_list[0][0]
+        self.assertEqual(post_args[0], [tile])
+        self.assertIsInstance(post_args[1], dict)
+        self.assertIs(post_args[2], mock_factory_inst)
+        self.assertEqual(post_args[3], "post_tile_save")
 
-        # 3 — The SAME nodes_by_id object flows to validate and the hooks
-        self.assertIs(validate_args[1], nodes_by_id_arg, "nodes_by_id must be threaded")
-        run_hook_calls = run_hook_mock.call_args_list
-        self.assertIs(
-            run_hook_calls[0][0][1], nodes_by_id_arg, "pre_tile_save nodes_by_id"
-        )
-        self.assertIs(
-            run_hook_calls[1][0][1], nodes_by_id_arg, "post_tile_save nodes_by_id"
-        )
+        refresh_args = run_hook_mock.call_args_list[1][0]
+        self.assertEqual(refresh_args[0], [tile])
+        self.assertIs(refresh_args[2], mock_factory_inst)
+        self.assertEqual(refresh_args[3], "after_update_all")
 
-        # 4 — The factory instance returned by DataTypeFactory() is threaded
-        self.assertIs(
-            validate_args[2], mock_factory_inst, "factory threaded to validate"
-        )
-        self.assertIs(
-            run_hook_calls[0][0][2], mock_factory_inst, "factory to pre_tile_save"
-        )
-        self.assertIs(
-            run_hook_calls[1][0][2], mock_factory_inst, "factory to post_tile_save"
-        )
-
-        # 5 — _run_hook receives correct method_name as last arg
-        self.assertEqual(run_hook_calls[0][0][3], "pre_tile_save")
-        self.assertEqual(run_hook_calls[1][0][3], "post_tile_save")
-
-        # 7 — _write_editlog receives (tiles, resource, user, default_transaction_id)
         write_args = write_mock.call_args[0]
         self.assertEqual(write_args[0], [tile])
         self.assertIs(write_args[1], resource)
-        self.assertIsNone(write_args[2])  # user=None
+        self.assertIsNone(write_args[2])
         self.assertEqual(str(write_args[3]), tx_id)
 
-        # 8 — resource.save_descriptors is invoked exactly once by the
-        # orchestrator (between run_hook(post) and write_editlog per the
-        # documented order); pin it so a regression that drops or duplicates
-        # the per-resource descriptor refresh is caught.
         resource.save_descriptors.assert_called_once()
 
     @patch(PATCH_TILEMODEL)
@@ -1912,6 +1949,31 @@ class RunHookTests(TestCase):
         view._run_hook(tiles, self._nodes(), factory, "pre_tile_save")
 
         self.assertEqual(dt.pre_tile_save.call_count, 2)
+
+    def test_after_update_all_called_with_the_tile_once_per_datatype_per_tile(self):
+        from unittest.mock import call
+
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        dt = _other_dt_mock()
+        factory = MagicMock()
+        factory.get_instance.return_value = dt
+        nodes = {
+            TEXT_NODE_ID: {"nodeid": TEXT_NODE_ID, "datatype": "string"},
+            CONCEPT_NODE_ID: {"nodeid": CONCEPT_NODE_ID, "datatype": "string"},
+        }
+        tiles = [
+            _make_tile(data={TEXT_NODE_ID: {"en": "a"}, CONCEPT_NODE_ID: {"en": "b"}}),
+            _make_tile(data={TEXT_NODE_ID: {"en": "c"}, CONCEPT_NODE_ID: {"en": "d"}}),
+        ]
+        view = BiblissimaCreateResourceView()
+
+        view._run_hook(tiles, nodes, factory, "after_update_all")
+
+        self.assertEqual(
+            dt.after_update_all.call_args_list,
+            [call(tile=tiles[0]), call(tile=tiles[1])],
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -2332,3 +2394,367 @@ class MultiDescriptorPrefetchTests(TestCase):
         )
 
         MockNode.objects.filter.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Task 5 — check-duplicates input bounds and identifier atom index
+# ---------------------------------------------------------------------------
+
+
+class CheckDuplicatesBoundsTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def _post_raw(self, body):
+        import json as _json
+        from django.test import RequestFactory
+        from manuspectrum.views.biblissima_proxy import BiblissimaCheckDuplicatesView
+
+        req = RequestFactory().post(
+            "/api/biblissima/check-duplicates",
+            data=_json.dumps(body),
+            content_type="application/json",
+        )
+        with (
+            patch(PATCH_TILEMODEL, MagicMock()),
+            patch(PATCH_RESOURCE_INSTANCE, MagicMock()),
+        ):
+            resp = BiblissimaCheckDuplicatesView().post(req)
+        return resp.status_code, _json.loads(resp.content)
+
+    def test_more_than_the_cap_is_refused(self):
+        from manuspectrum.views.biblissima_proxy import (
+            _MAX_CHECK_DUPLICATES_ITEMS,
+            DOCUMENT_GRAPH_ID,
+        )
+
+        items = [
+            {"arkId": f"ark:/43093/x{i}"}
+            for i in range(_MAX_CHECK_DUPLICATES_ITEMS + 1)
+        ]
+        status, data = self._post_raw({"graphId": DOCUMENT_GRAPH_ID, "items": items})
+        self.assertEqual(status, 400)
+        self.assertEqual(data["error"], "too many items")
+        self.assertEqual(data["max"], _MAX_CHECK_DUPLICATES_ITEMS)
+
+    def test_exactly_the_cap_is_accepted(self):
+        from manuspectrum.views.biblissima_proxy import (
+            _MAX_CHECK_DUPLICATES_ITEMS,
+            DOCUMENT_GRAPH_ID,
+        )
+
+        items = [
+            {"arkId": f"ark:/43093/x{i}"} for i in range(_MAX_CHECK_DUPLICATES_ITEMS)
+        ]
+        status, data = self._post_raw({"graphId": DOCUMENT_GRAPH_ID, "items": items})
+        self.assertEqual(status, 200)
+        self.assertEqual(len(data["results"]), _MAX_CHECK_DUPLICATES_ITEMS)
+
+    def test_items_must_be_a_list(self):
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        status, data = self._post_raw({"graphId": DOCUMENT_GRAPH_ID, "items": {"a": 1}})
+        self.assertEqual(status, 400)
+        self.assertEqual(data["error"], "items must be a list")
+
+    def test_items_must_be_objects(self):
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        status, data = self._post_raw({"graphId": DOCUMENT_GRAPH_ID, "items": ["a"]})
+        self.assertEqual(status, 400)
+        self.assertEqual(data["error"], "items must be objects")
+
+    def test_a_non_string_token_is_dropped_not_compared(self):
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        status, data = self._post_raw(
+            {"graphId": DOCUMENT_GRAPH_ID, "items": [{"biblissimaQid": 5}]}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(len(data["results"]), 1)
+        self.assertEqual(data["results"][0]["suggestions"], [])
+
+
+class IdentifierAtomsTests(TestCase):
+    def atoms(self, value):
+        from manuspectrum.views.biblissima_proxy import BiblissimaCheckDuplicatesView
+
+        return BiblissimaCheckDuplicatesView._identifier_atoms(value)
+
+    def test_an_ark_yields_itself_and_its_hash(self):
+        self.assertEqual(
+            self.atoms("ark:/43093/ifdataA001"),
+            {"ark:/43093/ifdataA001", "ifdataA001"},
+        )
+
+    def test_a_portal_url_yields_the_hash(self):
+        self.assertIn(
+            "mdata" + "b" * 40,
+            self.atoms("https://portail.biblissima.fr/fr/ark:/43093/mdata" + "b" * 40),
+        )
+
+    def test_an_entity_uri_yields_the_qid(self):
+        self.assertIn("Q27392", self.atoms("https://data.biblissima.fr/entity/Q27392"))
+        self.assertEqual(self.atoms("Q27392"), {"Q27392"})
+
+    def test_a_qid_followed_by_a_slash_query_or_fragment_still_yields_the_qid(self):
+        for value in (
+            "https://data.biblissima.fr/entity/Q27392/",
+            "https://data.biblissima.fr/entity/Q27392?lang=fr",
+            "https://data.biblissima.fr/entity/Q27392#x",
+        ):
+            with self.subTest(value=value):
+                self.assertIn("Q27392", self.atoms(value))
+
+    def test_a_qid_inside_free_text_is_not_an_atom(self):
+        self.assertEqual(self.atoms("Biblissima Q27392"), {"Biblissima Q27392"})
+
+    def test_a_partial_qid_does_not_match(self):
+        self.assertFalse(
+            self.atoms("Q12") & self.atoms("https://data.biblissima.fr/entity/Q123")
+        )
+
+    def test_a_shelfmark_yields_only_itself(self):
+        self.assertEqual(self.atoms("Français 11"), {"Français 11"})
+
+
+class CheckDuplicatesIndexTests(TestCase):
+    """The matching goes through the atom index, not a substring scan."""
+
+    def setUp(self):
+        cache.clear()
+
+    def test_bare_hash_in_corpus_matches_a_full_ark_token(self):
+        from manuspectrum.constants.biblissima import DOC_IDENTIFIER_VALUE
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        corpus = [_make_corpus_tile("ifdataA001", _RID_A, id_node=DOC_IDENTIFIER_VALUE)]
+        data = _post_check_duplicates(
+            items=[
+                {
+                    "arkId": "ark:/43093/ifdataA001",
+                    "label": "",
+                    "shelfmark": "",
+                    "biblissimaQid": "",
+                    "portalHash": "",
+                    "manifestUrl": "",
+                }
+            ],
+            graph_id=DOCUMENT_GRAPH_ID,
+            mock_tile_cls=_build_mock_tile(corpus),
+            mock_ri_cls=_build_mock_ri({_RID_A: "Alpha"}),
+        )
+        self.assertEqual(data["results"][0]["suggestions"][0]["resourceId"], _RID_A)
+
+    def test_entity_uri_in_corpus_matches_a_qid_token(self):
+        from manuspectrum.constants.biblissima import DOC_IDENTIFIER_VALUE
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        corpus = [
+            _make_corpus_tile(
+                "https://data.biblissima.fr/entity/Q5",
+                _RID_A,
+                id_node=DOC_IDENTIFIER_VALUE,
+            )
+        ]
+        data = _post_check_duplicates(
+            items=[
+                {
+                    "arkId": "",
+                    "label": "",
+                    "shelfmark": "",
+                    "biblissimaQid": "Q5",
+                    "portalHash": "",
+                    "manifestUrl": "",
+                }
+            ],
+            graph_id=DOCUMENT_GRAPH_ID,
+            mock_tile_cls=_build_mock_tile(corpus),
+            mock_ri_cls=_build_mock_ri({_RID_A: "Alpha"}),
+        )
+        self.assertEqual(data["results"][0]["suggestions"][0]["resourceId"], _RID_A)
+
+    def test_a_partial_qid_no_longer_matches(self):
+        from manuspectrum.constants.biblissima import DOC_IDENTIFIER_VALUE
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        corpus = [
+            _make_corpus_tile(
+                "https://data.biblissima.fr/entity/Q123",
+                _RID_A,
+                id_node=DOC_IDENTIFIER_VALUE,
+            )
+        ]
+        data = _post_check_duplicates(
+            items=[
+                {
+                    "arkId": "",
+                    "label": "",
+                    "shelfmark": "",
+                    "biblissimaQid": "Q12",
+                    "portalHash": "",
+                    "manifestUrl": "",
+                }
+            ],
+            graph_id=DOCUMENT_GRAPH_ID,
+            mock_tile_cls=_build_mock_tile(corpus),
+            mock_ri_cls=_build_mock_ri({_RID_A: "Alpha"}),
+        )
+        self.assertEqual(
+            [
+                s
+                for s in data["results"][0]["suggestions"]
+                if s["matchType"] == "identifier"
+            ],
+            [],
+        )
+
+    def test_one_resource_is_suggested_once_even_with_two_matching_tiles(self):
+        from manuspectrum.constants.biblissima import DOC_IDENTIFIER_VALUE
+        from manuspectrum.views.biblissima_proxy import DOCUMENT_GRAPH_ID
+
+        corpus = [
+            _make_corpus_tile(
+                "ark:/43093/ifdataA001", _RID_A, id_node=DOC_IDENTIFIER_VALUE
+            ),
+            _make_corpus_tile(
+                "https://portail.biblissima.fr/fr/ark:/43093/ifdataA001",
+                _RID_A,
+                id_node=DOC_IDENTIFIER_VALUE,
+            ),
+        ]
+        data = _post_check_duplicates(
+            items=[
+                {
+                    "arkId": "ark:/43093/ifdataA001",
+                    "label": "",
+                    "shelfmark": "",
+                    "biblissimaQid": "",
+                    "portalHash": "",
+                    "manifestUrl": "",
+                }
+            ],
+            graph_id=DOCUMENT_GRAPH_ID,
+            mock_tile_cls=_build_mock_tile(corpus),
+            mock_ri_cls=_build_mock_ri({_RID_A: "Alpha"}),
+        )
+        ids = [
+            s["resourceId"]
+            for s in data["results"][0]["suggestions"]
+            if s["matchType"] == "identifier"
+        ]
+        self.assertEqual(ids, [_RID_A])
+
+
+class ResourceRelationsDatabaseTests(TestCase):
+    """A Component written by the bulk path carries its relation row.
+
+    Real database: the row comes from Arches' own
+    ``__arches_create_resource_x_resource_relationships``, which reads the
+    ``nodes`` table, so both graphs, the parent-document node and the Document
+    are created below (a test run never loads the package).
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        graphs = {}
+        for graph_id, name in (
+            (bp.DOCUMENT_GRAPH_ID, "Document"),
+            (bp.COMPONENT_GRAPH_ID, "Component"),
+        ):
+            graphs[name] = GraphModel.objects.create(
+                graphid=graph_id,
+                name=name,
+                isresource=True,
+                is_active=True,
+                slug=f"relations-{name.lower()}",
+            )
+        cls.component_graph = graphs["Component"]
+        nodegroup = NodeGroup.objects.create(
+            nodegroupid=bp.COMP_PARENT_DOC_NG, cardinality="1"
+        )
+        cls.node_config = {
+            "graphs": [
+                {
+                    "graphid": bp.DOCUMENT_GRAPH_ID,
+                    "ontologyProperty": "",
+                    "inverseOntologyProperty": "",
+                }
+            ]
+        }
+        Node.objects.create(
+            nodeid=bp.COMP_PARENT_DOC_NODE,
+            name="parent_document",
+            alias="parent_document",
+            datatype="resource-instance",
+            graph=cls.component_graph,
+            nodegroup=nodegroup,
+            istopnode=False,
+            config=cls.node_config,
+        )
+        cls.document_id = str(
+            ResourceInstance.objects.create(graph=graphs["Document"]).pk
+        )
+
+    def setUp(self):
+        self.component_id = str(
+            ResourceInstance.objects.create(graph=self.component_graph).pk
+        )
+        self.resource = Resource.objects.get(pk=self.component_id)
+        self.resource.set_serialized_graph(
+            {
+                "root": {"ontologyclass": None},
+                "nodes": [
+                    {
+                        "nodeid": bp.COMP_PARENT_DOC_NODE,
+                        "name": "parent_document",
+                        "datatype": "resource-instance",
+                        "nodegroup_id": bp.COMP_PARENT_DOC_NG,
+                        "config": self.node_config,
+                    }
+                ],
+            }
+        )
+        self.view = bp.BiblissimaCreateResourceView()
+        self.view._tile_buffer = []
+        self.tile = self.view._create_tile(
+            bp.COMP_PARENT_DOC_NG,
+            self.component_id,
+            {
+                bp.COMP_PARENT_DOC_NODE: self.view._resource_instance_ref(
+                    self.document_id
+                )
+            },
+        )
+        self.view._stage_tiles(
+            self.view._tile_buffer,
+            self.view._nodes_by_id(self.resource.get_serialized_graph()),
+            DataTypeFactory(),
+        )
+
+    def _flush(self):
+        with transaction.atomic():
+            self.view._flush_tile_buffer(
+                self.resource, user=None, default_transaction_id=None
+            )
+
+    def test_the_bulk_path_writes_the_relation_row_arches_writes(self):
+        self._flush()
+
+        row = ResourceXResource.objects.get(tile_id=self.tile.tileid)
+        self.assertEqual(str(row.from_resource_id), self.component_id)
+        self.assertEqual(str(row.to_resource_id), self.document_id)
+        self.assertEqual(str(row.node_id), bp.COMP_PARENT_DOC_NODE)
+        self.assertEqual(str(row.to_resource_graph_id), bp.DOCUMENT_GRAPH_ID)
+        stamped = self.tile.data[bp.COMP_PARENT_DOC_NODE][0]["resourceXresourceId"]
+        self.assertEqual(str(row.resourcexid), stamped)
+
+    def test_the_document_built_for_indexing_carries_the_related_id(self):
+        self._flush()
+
+        document, _terms = self.resource.get_documents_to_index(
+            datatype_factory=DataTypeFactory(),
+            node_datatypes={bp.COMP_PARENT_DOC_NODE: "resource-instance"},
+        )
+
+        self.assertIn(self.document_id, [entry["id"] for entry in document["ids"]])

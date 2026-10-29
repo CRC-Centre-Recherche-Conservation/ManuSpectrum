@@ -13,7 +13,6 @@ manuspectrum/media/build/
 manuspectrum/uploadedfiles/*
 manuspectrum/settings_local.py
 manuspectrum/archestemp/
-pkg/
 supervisor/
 
 webpack-stats.json
@@ -32,8 +31,31 @@ dist/
 
 # Manuspectrum (other)
 *.csv
+# Golden fixtures read by both the Python and the vitest twins (tests/test_spectrum_preview.py, xy-transforms.golden.spec.js)
+!tests/fixtures/**/*.csv
+/messages.mo
 CLAUDE.md
 agents_*.md
 .claude/
 docs/
 docs_claude/
+
+# Local working notes and screenshots
+/.superpowers/
+deploy/rehearsal/rehearsal.env
+
+# Compose stack (deploy/)
+deploy/compose/.env
+deploy/compose/.smoke-state
+
+# Secret escrow and age keys (nothing encrypted or key-shaped is versioned)
+*.sops.yaml
+*.sops.json
+*.enc.env
+*.age
+age-recipients.txt
+**/sops/age/keys.txt
+
+# Ansible: real inventories stay on the administrator's laptop (deploy/ansible/README.md)
+deploy/ansible/inventories/*
+!deploy/ansible/inventories/example/

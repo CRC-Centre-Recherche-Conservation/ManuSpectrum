@@ -3,9 +3,14 @@ Django settings for manuspectrum project.
 """
 
 import os
+import string
 import inspect
+
+from manuspectrum.cache_version import cache_code_version
 import semantic_version
 from datetime import datetime, timedelta
+
+from celery.schedules import crontab
 from django.utils.translation import gettext_lazy as _
 
 try:
@@ -14,7 +19,7 @@ except ImportError:
     pass
 
 APP_NAME = "manuspectrum"
-APP_VERSION = semantic_version.Version(major=0, minor=0, patch=0)
+APP_VERSION = semantic_version.Version(major=1, minor=0, patch=0)
 APP_ROOT = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 
 WEBPACK_LOADER = {
@@ -28,23 +33,53 @@ FUNCTION_LOCATIONS.append("manuspectrum.functions")
 ETL_MODULE_LOCATIONS.append("manuspectrum.etl_modules")
 SEARCH_COMPONENT_LOCATIONS.append("manuspectrum.search_components")
 
+# Resolved under manuspectrum/permissions/ (see the module docstring).
+PERMISSION_FRAMEWORK = "default_allow.ManuSpectrumDefaultAllowPermissionFramework"
+
 LOCALE_PATHS.insert(0, os.path.join(APP_ROOT, "locale"))
 
 FILE_TYPE_CHECKING = "lenient"
+
+# Upload whitelist, enforced by arches.app.utils.file_validator for the
+# file-list datatype and for the ETL importers alike. The validator tests the
+# SNIFFED type when the bytes carry a signature and falls back to the declared
+# extension otherwise, so an archive is accepted as long as "zip" is listed
+# here whatever it is named, and removing "zip" also disables the .zip mode of
+# the Branch/Tile Excel importers.
+#
+# Instrument exports carry no signature and are admitted by extension. They are
+# the raw formats the project ingests; XY_TEXT_FILE_FORMATS below names the one
+# the reader parses.
+#
+# This is the ONLY definition. settings_local.py may extend it
+# (FILE_TYPES += [...]) but must never reassign it.
 FILE_TYPES = [
+    # images
     "bmp",
     "gif",
-    "jpg",
     "jpeg",
-    "json",
-    "pdf",
+    "jpg",
     "png",
     "psd",
-    "rtf",
     "tif",
     "tiff",
+    # documents
+    "md",
+    "pdf",
+    "rtf",
     "xlsx",
+    # structured text
     "csv",
+    "json",
+    "tsv",
+    "txt",
+    # instrument exports
+    "0",
+    "asd",
+    "h5",
+    "hdf5",
+    "mca",
+    # archives
     "zip",
 ]
 
@@ -52,16 +87,19 @@ FILENAME_GENERATOR = "arches.app.utils.storage_filename_generator.generate_filen
 UPLOADED_FILES_DIR = "uploadedfiles"
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-7q$l+ji@$gmfe=^5v3%3y!)=5%g8$d06zzx%t+6)vv$3+&2(f!"
+# The fallback is a development value, published in this repository. Any host
+# reachable from outside MUST set MANUSPECTRUM_SECRET_KEY in the environment.
+# Rotating it invalidates every session cookie and password-reset token.
+SECRET_KEY = os.environ.get(
+    "MANUSPECTRUM_SECRET_KEY",
+    "django-insecure-7q$l+ji@$gmfe=^5v3%3y!)=5%g8$d06zzx%t+6)vv$3+&2(f!",
+)
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
 ROOT_URLCONF = "manuspectrum.urls"
-ROOT_HOSTCONF = "manuspectrum.hosts"
-
-DEFAULT_HOST = "manuspectrum"
 
 # Modify this line as needed for your project to connect to elasticsearch with a password that you generate
 ELASTICSEARCH_CONNECTION_OPTIONS = {
@@ -87,14 +125,17 @@ ELASTICSEARCH_PREFIX = "manuspectrum"
 
 # arches_controlled_lists indexes reference-datatype values in their own ES
 # index, separate from the resource index, so list items stay searchable as
-# terms. Adding an entry here requires a reindex.
+# terms. Adding an entry here requires a reindex. It is updated synchronously:
+# `Resource.index` queues the task inside the tile transaction, before the
+# COMMIT, so the worker fails to read the tile (and the index does nothing for
+# a resource anyway).
 REFERENCES_INDEX_NAME = "references"
 
 ELASTICSEARCH_CUSTOM_INDEXES = [
     {
         "module": "arches_controlled_lists.search_indexes.reference_index.ReferenceIndex",
         "name": REFERENCES_INDEX_NAME,
-        "should_update_asynchronously": True,
+        "should_update_asynchronously": False,
     }
 ]
 # [{
@@ -152,6 +193,12 @@ DATABASES = {
         "NAME": "manuspectrum",
         "OPTIONS": {
             "sslmode": "disable",
+            # The only server-side cursors in the project (.iterator(): full
+            # reindex, bulk deletion, management-command backfills) are always
+            # consumed to the end, so the planner should optimise total cost
+            # rather than time to first row. Running behind pgbouncer in
+            # transaction mode requires DISABLE_SERVER_SIDE_CURSORS = True and
+            # makes this setting moot.
             "options": "-c cursor_tuple_fraction=1",
         },
         "PASSWORD": "postgis",
@@ -163,8 +210,6 @@ DATABASES = {
     }
 }
 
-SEARCH_THUMBNAILS = False
-
 INSTALLED_APPS = (
     "webpack_loader",
     "django.contrib.auth",
@@ -174,7 +219,9 @@ INSTALLED_APPS = (
     "django.contrib.staticfiles",
     "django.contrib.sitemaps",
     "django.contrib.gis",
-    "django_hosts",
+    # Before "arches" so its `packages` command (which also loads controlled
+    # lists) takes precedence over the core one.
+    "arches_controlled_lists",
     "arches",
     "arches.app.models",
     "arches.management",
@@ -184,17 +231,17 @@ INSTALLED_APPS = (
     "corsheaders",
     "oauth2_provider",
     "django_celery_results",
+    "axes",
     # "silk",
     "manuspectrum",  # Ensure the project is listed before any other arches applications
     "pgtrigger",
     "django_migrate_sql",
     "arches_querysets",
     "rest_framework",
-    # Arches applications. They must precede the "arches.app" append below,
-    # which is what actually provides the core templates — that ordering, not
-    # the position relative to "arches", is what lets them win.
+    # Arches applications. Project templates win through TEMPLATES[0]["DIRS"];
+    # these precede the "arches.app" append below, which provides the core
+    # templates.
     "arches_vue_components",
-    "arches_controlled_lists",
     "django.contrib.postgres",
 )
 
@@ -203,10 +250,13 @@ INSTALLED_APPS = (
 INSTALLED_APPS += ("arches.app", "django.contrib.admin")
 
 MIDDLEWARE = [
+    "manuspectrum.observability.middleware.RequestIdMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     #'arches.app.utils.middleware.TokenMiddleware',
+    # Before LocaleMiddleware: drops the language headers it adds to /iiif/.
+    "manuspectrum.utils.iiif_middleware.IIIFLanguageNeutralMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -216,16 +266,13 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "arches.app.utils.middleware.SetAnonymousUser",
+    "manuspectrum.accounts.lockout.CurrentRequestMiddleware",
+    "axes.middleware.AxesMiddleware",
+    "manuspectrum.accounts.lockout.TwoFactorLoginMiddleware",
+    "manuspectrum.accounts.activation.TermsAcceptanceMiddleware",
+    "manuspectrum.accounts.twofactor.RequireTwoFactorMiddleware",
     # "silk.middleware.SilkyMiddleware",
 ]
-
-MIDDLEWARE.insert(  # this must resolve to first MIDDLEWARE entry
-    0, "django_hosts.middleware.HostsRequestMiddleware"
-)
-
-MIDDLEWARE.append(  # this must resolve last MIDDLEWARE entry
-    "django_hosts.middleware.HostsResponseMiddleware"
-)
 
 STATICFILES_DIRS = build_staticfiles_dirs(app_root=APP_ROOT)
 
@@ -253,6 +300,33 @@ WSGI_APPLICATION = "manuspectrum.wsgi.application"
 MEDIA_URL = "/files/"
 
 # Absolute filesystem path to the directory that will hold user-uploaded files.
+#
+# MEDIA_ROOT is the PARENT of UPLOADED_FILES_DIR, never the upload directory
+# itself: stored paths are relative and already carry the prefix
+# ("uploadedfiles/<name>", produced by FILENAME_GENERATOR). Moving the root
+# means moving the directory with it; the paths in the `files` table stay
+# valid, so there is no data migration.
+#
+# KNOWN EXPOSURE, to close before a public deployment. It resolves to the
+# Python package, which also holds settings.py and arches.log. Its subtree
+# carries data too: Arches stages BulkDataManager exports under archestemp/
+# (upload_to="archestemp", so always under MEDIA_ROOT) and those archives hold
+# whole resource-data exports.
+# django.conf.urls.static.static() mounts MEDIA_ROOT as a raw file tree under
+# /files/<path> whenever DEBUG is on, and arches_controlled_lists.urls:106
+# registers that mount independently of this project; a front-end
+# `location /files/ { alias ...; }` reproduces it without DEBUG. Whatever
+# serves MEDIA_ROOT therefore serves the source tree.
+#
+# Closing it takes DEBUG=False AND moving the root out of the package:
+#
+#     MEDIA_ROOT = os.path.join(os.path.dirname(APP_ROOT), "var")
+#     mv manuspectrum/uploadedfiles manuspectrum/archestemp ../var/
+#
+# plus the matching .gitignore paths and a recreated Cantaloupe container —
+# its bind mount holds the old inode, so the image server keeps working until
+# it restarts and then serves an empty directory. Full procedure in
+# settings_local.py (PRODUCTION CHECKLIST).
 MEDIA_ROOT = os.path.join(APP_ROOT)
 
 # URL prefix for static files.
@@ -303,6 +377,12 @@ LOGGING = {
             "level": "DEBUG",  # or consider ERROR if this is too noisy
             "propagate": True,
         },
+        # One INFO line per Explorer corpus bundle build (explorer.memo).
+        "manuspectrum.explorer": {
+            "handlers": ["file", "console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         # consider adding your own project here if it logs
     },
 }
@@ -319,16 +399,44 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 15728640
 SESSION_COOKIE_NAME = "manuspectrum"
 
 # For more info on configuring your cache: https://docs.djangoproject.com/en/2.2/topics/cache/
+#
+# Digest of the payload-shaping modules, computed once per process; also
+# part of the model-graph ETag so browsers refetch after a deploy.
+CACHE_CODE_VERSION = cache_code_version(APP_ROOT)
+
+# Redis database allocation, shared with CELERY_BROKER_URL below:
+#   0 = Celery broker
+#   1 = default cache + iiif_auth (IIIF sign-ins, key prefix "ms-iiif-auth"):
+#       a FLUSHDB on 1 signs every external viewer out
+#   2 = permission checker
+#
+# This is the ONLY definition. settings_local.py may point an entry at another
+# host or index, but must never reassign the dict.
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.redis.RedisCache",
         "LOCATION": "redis://localhost:6379/1",
+        # Every key of this cache carries the code version of the modules that
+        # shape cached payloads (manuspectrum/cache_version.py): a process
+        # running new serializer code never reads an entry built by old code.
+        "KEY_PREFIX": f"ms:{CACHE_CODE_VERSION}",
     },
+    # Arches stores a pickled CachedObjectPermissionChecker here on nearly
+    # every request. On a database backend that is a write and a read of a
+    # pickled blob in PostgreSQL, through a raw cursor, per request.
     "user_permission": {
-        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
-        "LOCATION": "user_permission_cache",
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": "redis://localhost:6379/2",
+    },
+    # IIIF sign-ins (manuspectrum/iiif/tokens.py): a fixed prefix, so a new
+    # code version does not sign every external viewer out.
+    "iiif_auth": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": "redis://localhost:6379/1",
+        "KEY_PREFIX": "ms-iiif-auth",
     },
 }
+IIIF_AUTH_CACHE = "iiif_auth"
 
 # Hide nodes and cards in a report that have no data
 HIDE_EMPTY_NODES_IN_REPORT = False
@@ -348,6 +456,11 @@ EXPORT_DATA_FIELDS_IN_CARD_ORDER = False
 CACHE_BY_USER = {"default": 3600 * 24, "anonymous": 3600 * 24}  # 24hrs  # 24hrs
 
 TILE_CACHE_TIMEOUT = 600  # seconds
+# max-age of an empty vector tile (manuspectrum.views.mvt). A geometry drawn in
+# a tile a reader saw empty can stay off that reader's overlay for
+# TILE_CACHE_TIMEOUT (Arches' per-reader tile cache, never invalidated) plus
+# this delay.
+MVT_EMPTY_TILE_MAX_AGE = 60 * 60
 CLUSTER_DISTANCE_MAX = 5000  # meters
 GRAPH_MODEL_CACHE_TIMEOUT = None
 
@@ -356,6 +469,11 @@ OAUTH_CLIENT_ID = ""  #'9JCibwrWQ4hwuGn5fu2u1oRZSs9V6gK8Vu8hpRC4'
 APP_TITLE = "ManuSpectrum"
 COPYRIGHT_TEXT = "All Rights Reserved."
 COPYRIGHT_YEAR = "2019"
+
+# Accounts are created by an administrator (invitation), never by the visitor.
+# The Arches signup routes stay registered; nginx answers them with a 404 and
+# a Django check refuses a production profile with signup enabled.
+ENABLE_USER_SIGNUP = False
 
 ENABLE_CAPTCHA = False
 # RECAPTCHA_PUBLIC_KEY = ''
@@ -373,6 +491,10 @@ EMAIL_HOST_USER = "xxxx@xxx.com"
 
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
+# Administrators' copy of the account notices (accounts.notices); the image
+# reads the host's ALERT_EMAILS.
+ACCOUNT_SUMMARY_RECIPIENTS = []
+
 # Public contact inbox for the About > Contact form (mailto link).
 # Leave empty until a dedicated address exists; overridable in settings_local.py.
 # Falls back to DEFAULT_FROM_EMAIL (set once SMTP is configured) via the
@@ -385,6 +507,9 @@ CONTACT_EMAIL = ""
 
 CELERY_BROKER_URL = "redis://localhost:6379/0"  # RabbitMQ --> "amqp://guest:guest@localhost",  Redis --> "redis://localhost:6379/0"
 CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TIMEZONE = "Europe/Paris"
+# Naive datetimes (USE_TZ False): the zone the timestamptz columns are read in.
+TIME_ZONE = "Europe/Paris"
 CELERY_RESULT_BACKEND = (
     "django-db"  # Use 'django-cache' if you want to use your cache as your backend
 )
@@ -394,10 +519,59 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_SEARCH_EXPORT_EXPIRES = 24 * 3600  # seconds
 CELERY_SEARCH_EXPORT_CHECK = 3600  # seconds
 
+# The daily passes below mail people and change their data: they run only at
+# their hour. Beat skips any crontab entry (every crontab of this schedule, not
+# only the passes) that fell due more than this many seconds ago (after a stop,
+# a restore) instead of catching it up at start, and each pass's message expires
+# as long after it was sent, so a worker that was down discards it; the next
+# night runs it at its normal hour.
+CELERY_BEAT_CRON_STARTING_DEADLINE = 2 * 3600
+
 CELERY_BEAT_SCHEDULE = {
     "delete-expired-search-export": {
         "task": "arches.app.tasks.delete_file",
         "schedule": CELERY_SEARCH_EXPORT_CHECK,
+    },
+    # Rows of the Explorer's data-version ledger older than a week.
+    "prune-data-changes": {
+        "task": "manuspectrum.prune_data_changes",
+        "schedule": 24 * 3600,
+    },
+    # Accounts with a login in the last 30 days, exported as one aggregated gauge.
+    "record-active-accounts": {
+        "task": "manuspectrum.record_active_accounts",
+        "schedule": 24 * 3600,
+    },
+    # Records, warns about and lifts restrictions at 06:00 Europe/Paris
+    # (accounts/embargo.py); the crontab runs in CELERY_TIMEZONE.
+    "embargo-pass": {
+        "task": "manuspectrum.embargo_pass",
+        "schedule": crontab(hour=6, minute=0),
+        "options": {"expires": CELERY_BEAT_CRON_STARTING_DEADLINE},
+    },
+    # Notices and cleanup of abandoned workflow runs at 03:30 Europe/Paris
+    # (accounts/workflows.py).
+    "workflow-cleanup-pass": {
+        "task": "manuspectrum.workflow_cleanup_pass",
+        "schedule": crontab(hour=3, minute=30),
+        "options": {"expires": CELERY_BEAT_CRON_STARTING_DEADLINE},
+    },
+    # Notices and anonymisation of long-inactive accounts at 04:30 Europe/Paris
+    # (accounts/retention.py).
+    "account-retention-pass": {
+        "task": "manuspectrum.account_retention_pass",
+        "schedule": crontab(hour=4, minute=30),
+        "options": {"expires": CELERY_BEAT_CRON_STARTING_DEADLINE},
+    },
+    # Login records older than LOGIN_RECORDS_RETENTION_DAYS.
+    "prune-login-records": {
+        "task": "manuspectrum.prune_login_records",
+        "schedule": 24 * 3600,
+    },
+    # Resources per model, changes of the last 24 hours and open workflows, as gauges.
+    "record-activity": {
+        "task": "manuspectrum.record_activity",
+        "schedule": 3600,
     },
     # Off: arches.app.tasks.message is `def message(arg): return arg`. It
     # notifies nothing and costs one broker round-trip plus an INSERT and an
@@ -417,7 +591,9 @@ CELERY_BEAT_SCHEDULE = {
 # way of monitoring celery so you can detect the background task not being available.
 CELERY_CHECK_ONLY_INSPECT_BROKER = False
 
-CANTALOUPE_DIR = os.path.join(ROOT_DIR, UPLOADED_FILES_DIR)
+# The image root the IIIF image server reads, bind-mounted into the Cantaloupe
+# container as /imageroot. Derived from MEDIA_ROOT so the two cannot drift.
+CANTALOUPE_DIR = os.path.join(MEDIA_ROOT, UPLOADED_FILES_DIR)
 CANTALOUPE_HTTP_ENDPOINT = "http://localhost:8182/"
 
 ACCESSIBILITY_MODE = False
@@ -448,7 +624,14 @@ RENDERERS = [
 ]
 
 # THUMBNAIL
+# Search results fetch a thumbnail from each resource's IIIF manifest; set to
+# False to stop those outbound fetches. Unrelated to THUMBNAIL_GENERATOR below.
 SEARCH_THUMBNAILS = True
+
+# Deliberately None. Arches' ThumbnailGenerator is abstract and its
+# make_thumbnail() always raises NotImplementedError, so naming it here costs a
+# row insert plus a full copy of the file to a temp file on every /files/<uuid>
+# request before failing, and logs a traceback each time.
 THUMBNAIL_GENERATOR = None
 GENERATE_THUMBNAILS_ON_DEMAND = False
 
@@ -458,7 +641,13 @@ RESTRICT_MEDIA_ACCESS = False
 # By setting RESTRICT_CELERY_EXPORT_FOR_ANONYMOUS_USER to True, if the user is attempting
 # to export search results above the SEARCH_EXPORT_IMMEDIATE_DOWNLOAD_THRESHOLD
 # value and is not signed in with a user account then the request will not be allowed.
-RESTRICT_CELERY_EXPORT_FOR_ANONYMOUS_USER = False
+RESTRICT_CELERY_EXPORT_FOR_ANONYMOUS_USER = True
+
+# Upper bound of the relations Arches loads at once (paginate=false): the related
+# resources graph, « load all » on a report and the report API's summary. Arches'
+# default (10000) freezes the graph's browser tab on a resource with ~1650 relations;
+# 500 kept it responsive on the rehearsal VM.
+RELATED_RESOURCES_EXPORT_LIMIT = 500
 
 # Dictionary containing any additional context items for customising email templates
 EXTRA_EMAIL_CONTEXT = {
@@ -549,8 +738,6 @@ RENDERERS += [
     },
 ]
 
-FILE_TYPES += ["csv", "tsv", "txt"]
-
 # The single text format the XY reader treats as canonical. Read server-side by
 # manuspectrum.functions.xy_technique_config to decide whether a saved file
 # should receive a renderer and a technique-derived configuration — Arches' own
@@ -568,6 +755,61 @@ XY_TEXT_FILE_FORMATS = ["csv"]
 
 
 PACKAGE_DIR = os.path.join(os.path.dirname(APP_ROOT), "pkg")
+
+
+# ---------------------------------------------------------------------------
+# Outbound HTTP
+# ---------------------------------------------------------------------------
+# Budget and policy for a single outbound fetch, consumed by
+# manuspectrum.utils.http.safe_fetch — the one path every project fetch of an
+# external URL goes through.
+#
+# SSRF_TIMEOUT is the per-fetch connect/read budget in seconds (manifest reads
+# keep a longer read half: a provider builds them on the fly).
+# SSRF_MAX_REDIRECTS bounds a chain whose every hop is re-checked against the
+# guard; the hops themselves are never handed to requests.
+# SSRF_MAX_RESPONSE_BYTES caps the DECOMPRESSED body, which is what a
+# decompression bomb spends.
+# SSRF_ALLOW_PRIVATE opens the guard to loopback/private targets. It is NOT
+# derived from DEBUG: a developer running a local IIIF server sets it in
+# settings_local.py, and nothing else can open the guard by accident.
+SSRF_TIMEOUT = 10
+SSRF_MAX_REDIRECTS = 5
+SSRF_MAX_RESPONSE_BYTES = 25 * 1024 * 1024
+SSRF_ALLOW_PRIVATE = False
+
+# Longest sleep, in seconds, honouring a remote IIIF server's Retry-After on a
+# 429/503. The session retries up to 3 times, so one fetch waits at most
+# 3 x this value on top of its backoff. Under gthread no gunicorn timeout kills
+# a request thread asleep in a retry.
+IIIF_RETRY_AFTER_MAX = 10
+
+# How long a fetched IIIF manifest stays in the cache. Manifests are versioned
+# documents that change when a library re-digitises a codex; a day of staleness
+# costs nothing next to re-fetching one per search result.
+IIIF_MANIFEST_CACHE_TTL = 60 * 60 * 24
+
+# max-age advertised on a search thumbnail. Each miss costs a manifest fetch
+# plus an image fetch from the provider, so the browser and any intermediary
+# must be told the answer keeps.
+SEARCH_THUMBNAIL_MAX_AGE = 60 * 60 * 24
+# One search thumbnail's outbound calls (manifest, then image) share this
+# budget in seconds, without retry, each connect within the timeout below. A
+# host that does not accept a connection is skipped by every thumbnail for
+# SEARCH_THUMBNAIL_HOST_DOWN_TTL seconds, so a server that is down never holds
+# a request thread for long (views/thumbnail.py).
+SEARCH_THUMBNAIL_DEADLINE = 8
+SEARCH_THUMBNAIL_CONNECT_TIMEOUT = 2.5
+SEARCH_THUMBNAIL_HOST_DOWN_TTL = 5 * 60
+
+# Knockout component templates (manuspectrum.views.knockout_templates).
+# max-age: how long a browser reuses a template without asking. The URL carries
+# no build version, so it is also the longest a page can pair a new bundle with
+# an old template after a deploy; the ETag makes the next request a 304.
+KNOCKOUT_TEMPLATE_MAX_AGE = 60 * 10
+# Lifetime of a rendered template in the default cache. Template and catalogue
+# edits change its key; a setting a template prints reaches it within this delay.
+KNOCKOUT_TEMPLATE_CACHE_TTL = 60 * 60
 
 
 # ---------------------------------------------------------------------------
@@ -595,17 +837,66 @@ BIBLISSIMA_PORTAL_REQUEST_TIMEOUT = 30
 # generous for large-but-reachable manifests, but a DEAD IIIF host must fail
 # in seconds — otherwise the illumination-detail request blocks for minutes
 # (a 45 s connect timeout x connect retries once held a gunicorn worker for
-# ~138 s when api.irht.cnrs.fr was unreachable).
+# ~138 s when api.irht.cnrs.fr was unreachable). Also the connect cap of every
+# call made under a request budget (BIBLISSIMA_VIEW_DEADLINE).
 BIBLISSIMA_IIIF_CONNECT_TIMEOUT = 5
 
-# Maximum concurrent outbound HTTP calls to Biblissima across the whole
-# Django process — keeps us a good API citizen when many users import
-# at once.
-BIBLISSIMA_CONCURRENCY_LIMIT = 12
+# Maximum concurrent outbound HTTP calls to Biblissima per worker PROCESS: the
+# semaphore is shared by every thread of the process (request threads and the
+# parent-resolver pool alike), so Biblissima sees at most this many calls per
+# process, times the number of gunicorn workers. Under the sync worker a process
+# never carried more than one request, hence at most the pool's 6 calls, and the
+# limit never bound. Under gthread (several request threads per process) it
+# does: 8 lets one request's pool run in full while two other requests each
+# make a call, and keeps 5 workers at 40 calls at most, where the old 12 would
+# have allowed 60.
+BIBLISSIMA_CONCURRENCY_LIMIT = 8
 
-# 24h Django-cache TTL for resolved Wikibase entities and manuscript
-# enrichment results.
+# Whole seconds a request waits for a Biblissima concurrency slot before
+# answering 503; also sent as Retry-After.
+BIBLISSIMA_SLOT_TIMEOUT = 15
+
+# Whole-request budget, in seconds, of one /api/biblissima/suggest miss. Each
+# upstream call's slot wait, connect and read are capped by what is left of it,
+# and no call starts once it is spent: the answer then carries the results
+# already in hand. Calls on this path are never retried.
+BIBLISSIMA_SUGGEST_DEADLINE = 4
+
+# Backstop, in seconds, of the Biblissima calls one interactive view makes
+# (entity, searches, illuminations). Under it calls never retry, connect within
+# BIBLISSIMA_IIIF_CONNECT_TIMEOUT and read within their own timeout, both capped
+# by what is left; no call starts once it is spent, and a host found down is not
+# called again in the same request. Kept under the 60 s abort of the create
+# step's client; the raw-memo waits (10 s) and each read's overshoot come on
+# top of it, so gunicorn --timeout must stay >= 60 s under the sync worker.
+#
+# Under the gthread worker that flag no longer bounds a request at all: the
+# worker heartbeats from its main thread, so a request thread stuck in a
+# network call is never killed. This deadline, the SSRF_* budgets and
+# SUMMARY_ES_TIMEOUT are then the only guards, which is why every outbound
+# call in the project carries a timeout (prod checklist).
+BIBLISSIMA_VIEW_DEADLINE = 30
+
+# Budget, in seconds, of EACH item the Biblissima create views write
+# (create-resource and every item of create-all): manifest import, Wikibase
+# claims. Same mechanism as BIBLISSIMA_VIEW_DEADLINE (utils.budget): no call
+# starts once it is spent, each call's connect and read timeouts are capped by
+# what is left, the body read and the per-host throttle wait stop with it, and
+# the IIIF fetches of the item are not retried. An item that
+# runs out is reported failed (504 for a single create) and the batch goes on;
+# nothing of it is committed. This is the guard of the write path under the
+# gthread worker, where no gunicorn timeout kills a request thread stuck in a
+# network call. A create-all POST carries at most 5 items, so one request
+# holds its thread at most 5 x this value (300 s, the gunicorn graceful_timeout).
+BIBLISSIMA_WRITE_ITEM_DEADLINE = 60
+
+# 24h Django-cache TTL for resolved Wikibase entities, manuscript enrichment
+# results and complete suggest prefix entries.
 BIBLISSIMA_CACHE_TTL = 24 * 60 * 60
+
+# Parsed search canvases, scraped illumination lists and manifest canvas
+# lookups: bulky and perishable, kept one hour by default.
+BIBLISSIMA_RAW_CACHE_TTL = 60 * 60
 
 
 # ---------------------------------------------------------------------------
@@ -616,6 +907,231 @@ BIBLISSIMA_CACHE_TTL = 24 * 60 * 60
 # the broker is unreachable. Default OFF
 # until a broker is confirmed available and this flag is explicitly
 BIBLISSIMA_ASYNC_INDEXING = False
+
+
+# ---------------------------------------------------------------------------
+# Summary popup ("fiche essentielle")
+# ---------------------------------------------------------------------------
+# Server ceilings for the per-graph summary configuration and the spectrum
+# preview. A configuration may ask for less, never for more: the normaliser in
+# manuspectrum/functions/resource_summary.py clamps to these values. Bounds
+# from docs/superpowers/specs/2026-09-22-summary-popups-design.md §4.3.
+SUMMARY_MAX_RELATED = 500
+SUMMARY_MAX_IDS = 25
+SUMMARY_CACHE_TTL = 300
+SUMMARY_ES_TIMEOUT = 3
+SUMMARY_MAX_LIMIT = 10
+SUMMARY_MAX_VALUES = 10
+SPECTRUM_PREVIEW_MAX_BYTES = 20 * 1024 * 1024
+# Point budgets a spectrum preview may be asked for (?n=); the first is the
+# default. 4096 keeps a FORS spectrum (~2151 points) undecimated. ?n=full
+# serves every point of a file up to SPECTRUM_PREVIEW_MAX_BYTES (the workshop).
+SPECTRUM_PREVIEW_TIERS = (200, 4096)
+
+# Explorer (spec v3). Raw instrument formats are downloads only, never parsed.
+RAW_INSTRUMENT_EXTENSIONS = (".mca", ".asd", ".spc", ".spa")
+# A stored URL whose host is one of these is rewritten to PUBLIC_SERVER_ADDRESS.
+EXPLORER_LEGACY_HOSTS = ()
+EXPLORER_ITEMS_MAX = 30
+# Seconds a compressed corpus bundle of the Explorer stays in the default cache
+# (~3 MB each). Entries stored under a previous code prefix are never read again
+# and expire by this TTL.
+EXPLORER_BUNDLE_TTL = 2 * 60 * 60
+# Rebuild a corpus bundle after a data change in a background thread, readers
+# answered from the previous bundle meanwhile; False rebuilds in the request.
+EXPLORER_BACKGROUND_REBUILD = True
+
+# Observability (manuspectrum/observability/README.md). Off on the development VM;
+# settings_docker turns them on.
+METRICS_ENABLED = False
+READYZ_ENABLED = False
+# Seconds each /readyz probe may take; the probes run concurrently.
+READYZ_TIMEOUT = 2.0
+# Redis instances /readyz pings, by component name.
+READYZ_REDIS_URLS = {}
+READYZ_CANTALOUPE = False
+# django-prometheus request latency buckets, aligned on the search SLO (2 s);
+# 60 and 120 s bound the search exports (SearchExportSlow, nginx 504 at 120 s).
+PROMETHEUS_LATENCY_BUCKETS = (
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    0.75,
+    1,
+    1.5,
+    2,
+    3,
+    5,
+    8,
+    13,
+    60,
+    120,
+    float("inf"),
+)
+# Seconds no background rebuild of a language starts after one failed.
+EXPLORER_REBUILD_RETRY_AFTER = 60
+# Seconds no background rebuild of a language starts after one stored its
+# bundle; readers of newer data keep the previous bundle meanwhile. 0: none.
+EXPLORER_REBUILD_MIN_INTERVAL = 30
+# Largest data package the Explorer streams (sum of the stored file sizes); above it, 413.
+EXPLORER_EXPORT_MAX_BYTES = 500 * 1024 * 1024
+# Most files one data package holds; above it, 413.
+EXPLORER_EXPORT_MAX_FILES = 2000
+# Most canvases one Explorer IIIF manifest lists; above it, 413.
+EXPLORER_MANIFEST_MAX_CANVASES = 1000
+# Mirador viewer (mirador-xyviewer) the Explorer opens its IIIF products in, as
+# ?manifest=<url> or ?iiif-content=<content state>; empty hides « Open in Mirador ».
+EXPLORER_MIRADOR_URL = ""
+# The Explorer's internal APIs answer the page's own requests only (Fetch
+# Metadata, views/explorer/guard.py): "enforce" refuses the others with a 403,
+# "observe" answers them and counts, "off" checks nothing.
+EXPLORER_UI_ONLY = "observe"
+
+# Site announcement (views/site_notice.py). Memo lifetime of the payload, in
+# seconds; the zone its start and end are typed in; the directory nginx reads
+# the last payload from while Django is down (empty: no snapshot).
+SITE_NOTICE_TTL = 300
+SITE_NOTICE_TIME_ZONE = "Europe/Paris"
+SITE_NOTICE_SNAPSHOT_DIR = ""
+
+# IIIF documents (manuspectrum/iiif/). Radius, in canvas pixels, of the circle
+# a point zone is drawn as (SvgSelector next to its PointSelector).
+IIIF_POINT_RADIUS = 12
+# Most analysis ids a page restricted by ?only= may name; above it, 400.
+IIIF_PAGE_FILTER_MAX = 100
+# Seconds a memoised IIIF document (visitor view) is kept; its key moves with
+# the data version, the permission epoch, the translations and the code version.
+IIIF_MEMO_TTL = 24 * 60 * 60
+# Seconds the visitor's 404 for a missing page or zone is kept under its key.
+IIIF_ABSENT_TTL = 5 * 60
+# Seconds a IIIF document built while its source manifest could not be read
+# (remote fetch failed, local manifest missing) is kept: a symptom, not a fact.
+IIIF_DEGRADED_TTL = 30
+# Seconds a request waits for another request building the same IIIF document
+# before building it itself: longer than a cold build (about 1 s on the densest
+# document), shorter than the worker timeout minus one build.
+IIIF_BUILD_WAIT = 10
+
+# IIIF Auth 1.0 / 2.0 (manuspectrum/iiif/tokens.py). A IIIF token is a
+# read-only credential for the /iiif/ read routes, bound to the Arches session
+# that minted it and to one viewer origin; it lives IIIF_AUTH_TOKEN_TTL
+# seconds. The access cookie (Path=/iiif/auth/) lives at most
+# IIIF_AUTH_COOKIE_TTL seconds and never beyond the session.
+IIIF_AUTH_TOKEN_TTL = 3600
+IIIF_AUTH_COOKIE_TTL = 8 * 3600
+# Viewer origins the token service answers, besides the origin of
+# PUBLIC_SERVER_ADDRESS (always trusted). Never "*".
+IIIF_AUTH_TRUSTED_ORIGINS = ["https://crc-centre-recherche-conservation.github.io"]
+# Token requests per client IP (django-ratelimit); over it: « unavailable ».
+IIIF_AUTH_TOKEN_RATE = "30/m"
+# django-cors-headers leaves /iiif/ alone: every IIIF view answers its own
+# CORS (Access-Control-Allow-Origin: *, preflight with Authorization, on
+# every status) and the auth pages answer none.
+CORS_URLS_REGEX = r"^(?!/iiif/).*$"
+
+####### PASSWORDS #######
+# Argon2 first. A PBKDF2 hash stays valid and is rehashed at the next sign-in;
+# so is an Argon2 hash whose parameters a Django upgrade changes. The hashes
+# are plain Django (auth_user): a plain Arches install, on Django's default
+# list (which includes Argon2 and which Arches keeps), reads them as long as
+# argon2-cffi is installed. Never remove Argon2PasswordHasher from this list,
+# nor argon2-cffi from pyproject.toml, while a hash or a django-oauth-toolkit
+# client secret (verified, never rehashed) starts with "argon2$": those
+# accounts and clients would stop signing in. To leave Argon2, move PBKDF2
+# first and keep Argon2 listed until every account has signed in again and
+# every OAuth client secret has been regenerated.
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+]
+
+# At least 12 characters with upper case, lower case, a digit and a symbol;
+# common passwords and passwords close to the account's attributes are refused.
+# The composition rules are Arches' own (their help texts feed its forms) plus
+# the lower-case rule Arches' validator lacks; the symbol list is widened to
+# ASCII punctuation.
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "arches.app.utils.password_validation.NumericPasswordValidator"},
+    {
+        "NAME": "arches.app.utils.password_validation.SpecialCharacterValidator",
+        "OPTIONS": {"special_characters": tuple(string.punctuation)},
+    },
+    {"NAME": "arches.app.utils.password_validation.HasNumericCharacterValidator"},
+    {"NAME": "arches.app.utils.password_validation.HasUpperAndLowerCaseValidator"},
+    {"NAME": "manuspectrum.password_validation.HasLowerCaseValidator"},
+    {
+        "NAME": "manuspectrum.password_validation.MinLengthValidator",
+        "OPTIONS": {"min_length": 12},
+    },
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+    },
+]
+
+####### TWO-FACTOR AUTHENTICATION #######
+# TOTP authenticator, enrolled on /{lang}/account/two-factor
+# (manuspectrum/accounts/twofactor.py). Enrolment comes first and enforcement
+# after: with FORCE on, Arches refuses a sign-in to any account without a
+# secret, and that account has no session to enrol from. Switch FORCE on only
+# once every account is enrolled (production: FORCE_TWO_FACTOR_AUTHENTICATION=true).
+ENABLE_TWO_FACTOR_AUTHENTICATION = True
+FORCE_TWO_FACTOR_AUTHENTICATION = False
+# A repeated post of the second-factor code is redirected, any other CSRF
+# failure gets a page of the site (manuspectrum/accounts/csrf_failure.py).
+CSRF_FAILURE_VIEW = "manuspectrum.accounts.csrf_failure.csrf_failure"
+
+####### SIGN-IN LOCKOUT AND LOGIN RECORDS #######
+# Five failures lock one account for 15 minutes from one client address; the
+# account stays usable from another address. Lockout and records:
+# manuspectrum/accounts/lockout.py.
+AUTHENTICATION_BACKENDS = ("manuspectrum.accounts.lockout.ArchesAxesBackend",) + tuple(
+    AUTHENTICATION_BACKENDS
+)
+AXES_HANDLER = "manuspectrum.accounts.lockout.ArchesAxesHandler"
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = timedelta(minutes=15)
+AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+AXES_RESET_ON_SUCCESS = True
+# An attempt made while locked neither extends the lock nor counts as a new failure.
+AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False
+AXES_ENABLE_ACCESS_FAILURE_LOG = True
+AXES_CLIENT_IP_CALLABLE = "manuspectrum.utils.client_ip.client_ip"
+AXES_USERNAME_CALLABLE = "manuspectrum.accounts.lockout.lockout_username"
+AXES_LOCKOUT_TEMPLATE = "accounts/lockout.htm"
+# Login records (successes, failures, expired attempts) are kept six months.
+LOGIN_RECORDS_RETENTION_DAYS = 183
+
+####### EMBARGOES AND ABANDONED WORKFLOWS #######
+# A restriction lasts at most this many months from the day it was recorded;
+# only a superuser sets a later end. A restriction with no end is never lifted
+# automatically.
+EMBARGO_MAX_MONTHS = 12
+EMBARGO_NOTICE_DAYS = (30, 7)
+# An open workflow run with no activity for this many days is cleaned (and
+# counted as stale by the activity report); the owners are told this many days
+# before.
+WORKFLOW_CLEANUP_AFTER_DAYS = 90
+WORKFLOW_NOTICE_DAYS = (21, 7)
+# An account with no sign-in for this many months (or, never signed in, none
+# since its creation) is anonymised, never deleted (accounts/retention.py); its
+# owner is told this many days before. Superusers are listed, never anonymised.
+ACCOUNT_RETENTION_MONTHS = 24
+ACCOUNT_RETENTION_NOTICE_DAYS = 30
+
+# ---------------------------------------------------------------------------
+# Maps
+# ---------------------------------------------------------------------------
+# The basemap is OpenFreeMap (manuspectrum/basemaps.py): no Mapbox key. The
+# System Settings tile of each node wins over these values at start
+# (update_from_db). Migration 0013 rewrites the tiles of EXISTING databases; a
+# fresh setup_db takes them from the overlay system_settings/System_Settings.json
+# (dev) or from the package (make init).
+MAPBOX_API_KEY = ""
+MAPBOX_SPRITES = "https://tiles.openfreemap.org/sprites/ofm_f384/ofm"
+MAPBOX_GLYPHS = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf"
 
 try:
     from .package_settings import *

@@ -25,10 +25,28 @@ function generateConfig(): Promise<UserConfig> {
 
         const rawData = fs.readFileSync(path.join(__dirname, 'frontend_configuration', 'webpack-metadata.json'), 'utf-8');
         const parsedData = JSON.parse(rawData);
+        // `APP_RELATIVE_PATH` is relative to the directory Django was started
+        // from; `APP_ROOT` is absolute, so the app directory is resolved from it.
+        const appRelativePath = path.relative(filePath, parsedData['APP_ROOT']);
 
         const alias: { [key: string]: string } = {
             '@/arches': path.join(parsedData['ROOT_DIR'], 'app', 'src', 'arches'),
+            // Mirrors the `arches/arches/app` alias of
+            // `webpack/webpack.common.js`: a project file that shadows a core
+            // one reaches the core module through this prefix.
+            // It must come before the bare `arches` entry, which matches every
+            // specifier starting with `arches/` and would send this one into
+            // `arches.js`.
+            'arches/arches/app': path.join(parsedData['ROOT_DIR'], 'app'),
             'arches': path.join(parsedData['ROOT_DIR'], 'app', 'media', 'js', 'arches.js'),
+            // Mirrors the project's `nodeModulesPaths` entry (package.json).
+            'uuid-esm': path.join(filePath, 'node_modules', 'uuid', 'dist', 'esm-browser', 'index.js'),
+            // Webpack's media/js alias for a root-level core module; specs mock it.
+            'file-renderers': path.join(parsedData['ROOT_DIR'], 'app', 'media', 'js', 'file-renderers.js'),
+            // Mirrors Arches' `nodeModulesPaths` entry; specs mock the module.
+            'leaflet-side-by-side': path.join(parsedData['ROOT_DIR'], 'app', 'media', 'plugins', 'leaflet-side-by-side', 'index.js'),
+            // Mirrors Arches' `nodeModulesPaths` entry; specs mock the module.
+            'mapbox-gl-geocoder': path.join(filePath, 'node_modules', '@mapbox', 'mapbox-gl-geocoder', 'dist', 'mapbox-gl-geocoder.min.js'),
         };
 
         for (
@@ -101,6 +119,11 @@ function generateConfig(): Promise<UserConfig> {
 
         resolve({
             plugins: [vue() as any, webpackCompatStubs],
+            resolve: {
+                // Bare imports inside Arches application sources resolve from
+                // the project root, as `resolve.modules` does in webpack.common.js.
+                dedupe: ['pinia', 'primevue', 'vue3-gettext', '@primeuix/themes'],
+            },
             test: {
                 alias: alias,
                 coverage: {
@@ -110,9 +133,9 @@ function generateConfig(): Promise<UserConfig> {
                     // (bindings, widgets, workflows…) would crater the ratio and
                     // trip CI's "no coverage decrease" gate for every branch.
                     include: [
-                        path.join(parsedData['APP_RELATIVE_PATH'], 'src', path.sep),
-                        path.join(parsedData['APP_RELATIVE_PATH'], 'media', 'js', 'utils', path.sep),
-                        path.join(parsedData['APP_RELATIVE_PATH'], 'media', 'js', 'views', 'pages', path.sep),
+                        path.join(appRelativePath, 'src', path.sep),
+                        path.join(appRelativePath, 'media', 'js', 'utils', path.sep),
+                        path.join(appRelativePath, 'media', 'js', 'views', 'pages', path.sep),
                     ],
                     exclude: [...exclude, '**/*.spec.js'],
                     reporter: [

@@ -1,0 +1,352 @@
+"""The decimated series behind the sparkline of a summary popup.
+
+One file per request, kept out of the summary payload: the popup stays small,
+the browser caches spectra across popups, and a file that cannot be drawn fails
+on its own. A file id names one uploaded file for good — replacing a file
+writes a new row — so both the memo and the browser may hold the answer for a
+day without any invalidation.
+
+The curve is the one the XY reader draws: the file entry names a renderer
+configuration, and that configuration decides the columns and the reference
+normalisation the series goes through. It is part of the memo key, so restamping
+a file with another preset is another entry rather than a stale drawing.
+
+The resource a file hangs from never changes, so its row is memoised under the
+file id for as long as a summary payload lives (``SUMMARY_CACHE_TTL``). Two
+gates are still checked on every request, before anything is read from disk or
+from the series memo, by ``iiif.data.file_allowed``, the guard the IIIF data
+routes share: whether the resource is in the reader's ``visible_set``, then
+whether the nodegroup of the tile holding the file is one
+``readable_nodegroups`` lets through — the rule the summary popup filters its
+fields with. Either refusal answers the same bodyless 404 as an unknown file.
+The renderer configuration id and the nodegroup id travel in the memo with the
+join, and the configuration id keeps keying the series memo: a file restamped
+with another preset is drawn with it once the join entry expires, within the
+same lifetime a summary payload has for an edited resource. Deleting the file
+row drops its entry on commit (``signals.py``). A request that read the row
+while the delete was committing can put the entry back, for at most
+``SUMMARY_CACHE_TTL``; during that time the guard still runs, but Arches
+permits reading a resource that no longer exists.
+
+``?n=full`` is the workshop's series (spec D61, D63): every point
+``read_series`` reads, read on every request and never memoised, guarded for
+the anonymous visitor whoever asks, as the whole Explorer is (D59). A file over
+``SPECTRUM_PREVIEW_MAX_BYTES`` answers a bodyless 413 there, after the guard,
+so a refused file stays indistinguishable from an unknown one.
+
+A file of a readable format whose row and tile exist but whose bytes are gone
+from storage answers a bodyless 410, after the guard: it is a fault to report
+(« file not found »), not a spectrum with nothing to draw. One warning per file and
+``MISSING_LOG_TTL`` names the file id, never its path.
+
+``None`` (no row, no stored file, no tile) is not memoised, and no caller waits
+on the join's lock: an unknown id costs one query per request, never a 2 s
+poll for a value that will never be stored, and a file created later is found
+at once. The primary-key read costs less than the stampede protection it would
+buy.
+"""
+
+import hashlib
+import logging
+import os
+
+import orjson
+from django.conf import settings
+from django.core.cache import cache
+from django.core.exceptions import ValidationError
+from django.http import (
+    HttpResponse,
+    HttpResponseBadRequest,
+    HttpResponseNotFound,
+    HttpResponseNotModified,
+)
+from django.utils.cache import patch_cache_control
+from django.utils.decorators import method_decorator
+from django.views import View
+from django.views.decorators.gzip import gzip_page
+
+from arches.app.models.models import File
+
+from manuspectrum.iiif.data import file_allowed
+from manuspectrum.models import RendererConfig
+from manuspectrum.observability import metrics
+from manuspectrum.utils.cache import etag_already_held, get_or_build
+from manuspectrum.utils.public_visibility import anonymous_user
+from manuspectrum.utils.spectrum_preview import build_preview, is_readable, read_series
+from manuspectrum.views.explorer.guard import ui_only
+
+logger = logging.getLogger(__name__)
+
+CACHE_TTL = 86400
+
+# The ``n`` of the whole series, besides the point budgets of SPECTRUM_PREVIEW_TIERS.
+FULL = "full"
+
+# Presets change by migration only, so an hour is short for what it saves.
+CONFIG_TTL = 3600
+
+# A file missing from storage is logged once per file id in this window.
+MISSING_LOG_TTL = 3600
+
+# A lost builder costs one extra read, never a stalled popup.
+LOCK_TIMEOUT = 10
+LOCK_WAIT = 2.0
+
+
+def file_record_key(file_id):
+    return f"spectrum-preview-file:{str(file_id).lower()}"
+
+
+def file_record(file_id):
+    """``(path, resourceid, config_id, nodegroup_id, name)`` of a file, memoised.
+
+    ``config_id`` is the renderer configuration the file entry carries,
+    ``nodegroup_id`` the nodegroup of the tile holding the file, as a string,
+    and ``name`` the entry's file name (``None`` when unstated), which names
+    the format.
+
+    ``None`` covers a row that is gone, a row whose file was never stored, and
+    a file no tile holds: with no resource there is nothing to check a read
+    permission against. Memoised under the file id for ``SUMMARY_CACHE_TTL``;
+    ``None`` is never kept, and a miss never waits on another caller's build.
+    """
+    return get_or_build(
+        file_record_key(file_id),
+        lambda: _load_file_record(file_id),
+        settings.SUMMARY_CACHE_TTL,
+        lock_timeout=LOCK_TIMEOUT,
+        wait=0,
+    )
+
+
+def _load_file_record(file_id):
+    """The one database read behind ``file_record``.
+
+    ``thumbnail_data`` is deferred — the column holds image bytes this route
+    never looks at.
+    """
+    row = (
+        File.objects.filter(pk=file_id)
+        .defer("thumbnail_data")
+        .select_related("tile")
+        .first()
+    )
+    if row is None or not row.path.name or row.tile is None:
+        return None
+    entry = stamped_entry(row.tile.data, file_id)
+    return (
+        row.path.path,
+        str(row.tile.resourceinstance_id),
+        entry.get("rendererConfig") or None,
+        str(row.tile.nodegroup_id),
+        str(entry.get("name") or "") or None,
+    )
+
+
+def stamped_entry(data, file_id):
+    """The file entry of *file_id* in tile *data*; ``{}`` when no file list holds it.
+
+    The entry is looked up by file id across the file-list nodes of the tile:
+    one tile may hold several of them, and their node ids are not known here.
+    """
+    wanted = str(file_id).lower()
+    for values in (data or {}).values():
+        if not isinstance(values, list):
+            continue
+        for entry in values:
+            if not isinstance(entry, dict):
+                continue
+            if str(entry.get("file_id", "")).lower() == wanted:
+                return entry
+    return {}
+
+
+def stamped_config_id(data, file_id):
+    """The renderer configuration id the file entry carries, or ``None``."""
+    return stamped_entry(data, file_id).get("rendererConfig") or None
+
+
+def renderer_config(config_id):
+    """The stored configuration of a renderer, memoised; ``{}`` when unknown.
+
+    An id naming no row is a stamp left behind by a preset that was removed;
+    the file is then drawn on its first two columns rather than not at all.
+    """
+    if not config_id:
+        return {}
+    return (
+        get_or_build(
+            f"spectrum-preview-config:{config_id}",
+            lambda: _load_config(config_id),
+            CONFIG_TTL,
+        )
+        or {}
+    )
+
+
+def _load_config(config_id):
+    try:
+        config = RendererConfig.objects.values_list("config", flat=True).get(
+            configid=config_id
+        )
+    except (RendererConfig.DoesNotExist, ValidationError, ValueError):
+        logger.warning("spectrum preview: no renderer configuration %s", config_id)
+        return {}
+    return config if isinstance(config, dict) else {}
+
+
+class FileMissing(Exception):
+    """The file row names a path with nothing stored at it."""
+
+
+def _series(path, n, config, name=None):
+    """The series of a supported, small enough file; ``{}`` when there is none.
+
+    The extension of the entry *name* (else of *path*) names the format.
+
+    An empty dict is memoised: a format outside ``XY_TEXT_FILE_FORMATS`` or a
+    file over the ceiling is measured once and answers 204 from the memo
+    afterwards. A file that cannot be opened returns ``None`` instead, which
+    ``get_or_build`` keeps out of the cache — it may be there on the next
+    request. A readable format with nothing stored at *path* raises
+    ``FileMissing``, never memoised either.
+    """
+    if not is_readable(path, name):
+        return {}
+    try:
+        if os.path.getsize(path) > settings.SPECTRUM_PREVIEW_MAX_BYTES:
+            return {}
+        return build_preview(path, n, config) or {}
+    except FileNotFoundError:
+        raise FileMissing() from None
+    except OSError:
+        return None
+
+
+def _full_series(path, config, name=None):
+    """Every point of a supported file in the shape of the tiers; ``{}`` when there is none, None when it is too large.
+
+    A file that cannot be opened draws nothing; one missing from storage raises
+    ``FileMissing``, as in ``_series``.
+    """
+    if not is_readable(path, name):
+        return {}
+    try:
+        if os.path.getsize(path) > settings.SPECTRUM_PREVIEW_MAX_BYTES:
+            return None
+        series = read_series(path, config)
+    except FileNotFoundError:
+        raise FileMissing() from None
+    except OSError:
+        return {}
+    if not series:
+        return {}
+    return {
+        "x": series["x"],
+        "y": series["y"],
+        "n_source": len(series["x"]),
+        "decimated": False,
+        "x_reversed": series["x_reversed"],
+    }
+
+
+def _not_found():
+    """The answer for an unknown file and for one the reader may not see alike."""
+    response = HttpResponseNotFound()
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+def _missing(file_id):
+    """The answer for a file whose bytes are gone from storage, logged once per ``MISSING_LOG_TTL``."""
+    if cache.add(
+        f"spectrum-preview-missing:{str(file_id).lower()}", True, MISSING_LOG_TTL
+    ):
+        logger.warning("spectrum preview: file %s is missing from storage", file_id)
+    response = HttpResponse(status=410)
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+def _too_large():
+    response = HttpResponse(status=413)
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+@method_decorator(ui_only, name="dispatch")
+@method_decorator(gzip_page, name="dispatch")
+class SpectrumPreviewView(View):
+    """``GET /api/spectrum-preview/<file_id>``, at most one file read per day and tier; ``full`` reads it every time.
+
+    204 means there is nothing to draw — a format ``read_series`` does not
+    read (``is_readable``), a file over ``SPECTRUM_PREVIEW_MAX_BYTES`` on a
+    tier, or fewer than two points — and carries the same lifetime as a
+    series, because the answer for a given file id cannot change either. The
+    full series of a file over the ceiling is a bodyless 413 the browser does
+    not keep: the ceiling is a setting. A file missing from storage is a
+    bodyless 410, not kept either.
+    """
+
+    def get(self, request, file_id):
+        """Serve the series of one file to a reader who may see its analysis.
+
+        ``n`` picks a point budget among ``SPECTRUM_PREVIEW_TIERS`` (default the
+        first), or ``full`` for every point, guarded for the anonymous visitor
+        whoever asks. A file whose resource is outside ``visible_set``
+        (embargo, hidden chain or Project) or whose nodegroup is unreadable
+        answers the same bodyless 404 as an unknown file.
+        """
+        raw_n = request.GET.get("n")
+        full = raw_n == FULL
+        if not full:
+            tiers = settings.SPECTRUM_PREVIEW_TIERS
+            try:
+                n = int(raw_n) if raw_n is not None else tiers[0]
+            except ValueError:
+                return HttpResponseBadRequest()
+            if n not in tiers:
+                return HttpResponseBadRequest()
+        record = file_record(file_id)
+        if record is None:
+            return _not_found()
+        path, resourceid, config_id, nodegroup_id, name = record
+        reader = anonymous_user() if full else request.user
+        if not file_allowed(resourceid, nodegroup_id, reader):
+            metrics.READ_REFUSALS.labels(surface="spectrum_preview").inc()
+            return _not_found()
+        metrics.SPECTRUM_PREVIEWS.labels(
+            tier=metrics.tier_label(FULL if full else n)
+        ).inc()
+
+        try:
+            if full:
+                payload = _full_series(path, renderer_config(config_id), name)
+                if payload is None:
+                    return _too_large()
+            else:
+                payload = get_or_build(
+                    f"spectrum-preview:{file_id}:{n}:{config_id}",
+                    lambda: _series(path, n, renderer_config(config_id), name),
+                    CACHE_TTL,
+                    lock_timeout=LOCK_TIMEOUT,
+                    wait=LOCK_WAIT,
+                )
+        except FileMissing:
+            return _missing(file_id)
+        if not payload:
+            return self._with_lifetime(HttpResponse(status=204))
+
+        body = orjson.dumps(payload)
+        etag = '"%s"' % hashlib.md5(body, usedforsecurity=False).hexdigest()
+        if etag_already_held(request, etag):
+            response = HttpResponseNotModified()
+        else:
+            response = HttpResponse(body, content_type="application/json")
+        response["ETag"] = etag
+        return self._with_lifetime(response)
+
+    @staticmethod
+    def _with_lifetime(response):
+        patch_cache_control(response, private=True, max_age=CACHE_TTL)
+        return response

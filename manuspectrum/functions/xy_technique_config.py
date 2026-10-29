@@ -8,8 +8,8 @@ The mapping itself lives in :mod:`manuspectrum.constants.xy_presets`.
 
 This function does what a trigger cannot:
 
-* complete each file entry's localised metadata before the write, a shape
-  invariant the upload widget expects (see :func:`normalize_metadata`);
+* complete each file entry's localised metadata and licence before the write,
+  a shape invariant the upload widget expects (see :func:`normalize_metadata`);
 * after the write, reload the row the trigger just stamped into ``tile.data``,
   so the response Arches serialises back to the browser carries the
   configuration and the XY reader mounts without a page reload.

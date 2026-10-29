@@ -1,0 +1,630 @@
+"""Every Prometheus metric of the application, and the vocabularies of their labels.
+
+Names start with ``manuspectrum_`` and carry their unit (``_seconds``, ``_bytes``;
+a counter is exposed with ``_total``). A label comes from ``ALLOWED_LABELS`` and
+takes its value from a closed vocabulary, through ``bounded()`` or a helper below:
+an unknown value becomes ``"other"``. Never an id, a user, a URL, a path or a
+string a client sent. gunicorn and Celery run several processes sharing
+``PROMETHEUS_MULTIPROC_DIR``: a Gauge is created through ``gauge()``, which
+requires its multiprocess mode, and only Counter, Gauge and Histogram are used
+(Info, Enum and Summary quantiles do not aggregate across processes).
+
+Every labelled Counter and Histogram is primed at 0 from its vocabulary in each
+process (``prime_label_sets()``): a series that appears with its first event has
+no earlier sample, and Prometheus' ``increase()`` and ``rate()`` do not count
+that event.
+"""
+
+import itertools
+import logging
+
+from django.conf import settings
+from prometheus_client import Counter, Gauge, Histogram
+
+logger = logging.getLogger(__name__)
+
+OTHER = "other"
+
+ALLOWED_LABELS = frozenset(
+    {
+        "background",
+        "component",
+        "directive",
+        "endpoint",
+        "kind",
+        "language",
+        "level",
+        "memo",
+        "mode",
+        "model",
+        "outcome",
+        "purpose",
+        "reason",
+        "resource_type",
+        "source",
+        "state",
+        "surface",
+        "task",
+        "tier",
+    }
+)
+FORBIDDEN_LABELS = frozenset(
+    {
+        "email",
+        "file_id",
+        "id",
+        "ip",
+        "path",
+        "qid",
+        "query",
+        "request_id",
+        "resource_id",
+        "resourceid",
+        "url",
+        "user",
+        "user_id",
+        "username",
+    }
+)
+GAUGE_MODES = frozenset({"livesum", "mostrecent"})
+
+LOG_LEVELS = ("warning", "error", "critical")
+LOG_SOURCES = ("django", "arches", "manuspectrum", "celery")
+MEMO_NAMES = (
+    "biblissima",
+    "biblissima:illuminations:raw",
+    "biblissima:search:raw",
+    "biblissima:suggest",
+    "biblissima:suggest:prefix",
+    "biblissima:wikibase:entity",
+    "biblissima:wikibase:place-geo",
+    "explorer-bundle",
+    "iiif",
+    "model-graph",
+    "public-visibility",
+    "site-notice",
+    "spectrum-preview",
+    "spectrum-preview-config",
+    "spectrum-preview-file",
+    "summary",
+    "summary-config",
+    "summary-graph",
+    "summary-graph-slugs",
+    "summary-list-labels",
+    "summary-restricted-nodegroups",
+    "summary-restricted-resources",
+)
+_MEMO_BY_LENGTH = sorted(MEMO_NAMES, key=len, reverse=True)
+MEMO_OUTCOMES = ("hit", "built", "waited")
+IIIF_ANSWER_MODES = ("shared", "private", "not_modified")
+IIIF_TOKEN_OUTCOMES = (
+    "issued",
+    "invalidRequest",
+    "invalidOrigin",
+    "missingCredentials",
+    "invalidCredentials",
+    "unavailable",
+)
+EXPLORER_UI_OUTCOMES = ("accepted", "refused", "observed")
+EXPLORER_UI_REASONS = (
+    "same_origin",
+    "referer",
+    "absent",
+    "cross_site",
+    "same_site",
+    "navigate",
+)
+READ_SURFACES = ("summary", "thumbnail", "iiif_file", "spectrum_preview")
+ACCOUNT_MAIL_KINDS = (
+    "embargo_notice",
+    "embargo_lifted",
+    "workflow_notice",
+    "workflow_cleaned",
+    "invitation",
+    "two_factor_reset",
+    "anonymisation_notice",
+    "deactivation_notice",
+    "anonymisation_summary",
+    "password_reset",
+)
+ACCOUNT_MAIL_OUTCOMES = ("sent", "failed", "skipped")
+EMBARGO_STATES = ("active", "undated", "due_soon", "overdue")
+EMBARGO_LIFT_OUTCOMES = ("lifted", "incomplete", "skipped_extended", "failed")
+LOGIN_OUTCOMES = ("success", "failure", "mfa_failure")
+BUNDLE_REASONS = ("cold", "data", "permissions", "visibility")
+BIBLISSIMA_ENDPOINTS = ("wikibase", "portal", "iiif")
+UPSTREAM_OUTCOMES = (
+    "ok",
+    "not_found",
+    "client_error",
+    "rate_limited",
+    "server_error",
+    "timeout",
+    "error",
+    "busy",
+    "budget",
+)
+CACHE_OUTCOMES = ("hit", "miss")
+SUGGEST_SOURCES = ("own", "ancestor", "upstream")
+BUDGET_KINDS = ("read", "write")
+CREATE_OUTCOMES = ("created", "failed", "deadline")
+RESOURCE_TYPES = ("Document", "Component")
+FETCH_PURPOSES = ("manifest", "image_info", "thumbnail", "biblissima")
+FETCH_OUTCOMES = (
+    "ok",
+    "http_error",
+    "unsafe",
+    "too_large",
+    "budget",
+    "timeout",
+    "error",
+)
+CSP_DIRECTIVES = (
+    "script-src",
+    "script-src-elem",
+    "script-src-attr",
+    "style-src",
+    "style-src-elem",
+    "style-src-attr",
+    "img-src",
+    "font-src",
+    "connect-src",
+    "media-src",
+    "object-src",
+    "frame-src",
+    "child-src",
+    "worker-src",
+    "manifest-src",
+    "base-uri",
+    "form-action",
+    "frame-ancestors",
+    "default-src",
+)
+SSRF_REASONS = ("scheme", "malformed", "host", "port", "dns", "private", "redirects")
+TASK_PREFIXES = ("manuspectrum.", "arches.")
+TASK_OUTCOMES = ("success", "failure", "retry")
+INDEX_MODES = ("transaction", "resource")
+INDEX_OUTCOMES = ("indexed", "not_found", "failed")
+RESOURCE_MODELS = (
+    "alteration",
+    "analysis",
+    "characterization",
+    "component",
+    "document",
+    "group",
+    "instrument",
+    "modification",
+    "person",
+    "place",
+    "project",
+    "sample",
+)
+CHANGE_KINDS = ("created", "modified", "deleted", "cleaned")
+WORKFLOW_KINDS = ("create-project-workflow", "import-biblissima-workflow")
+WORKFLOW_STATES = ("open", "stale")
+WORKFLOW_CLEANUP_OUTCOMES = ("cleaned", "kept_resources", "failed")
+WORKFLOW_CLEANUP_RESOURCE_OUTCOMES = ("deleted", "kept")
+ACCOUNT_ANONYMISATION_OUTCOMES = ("anonymised", "failed")
+READYZ_COMPONENTS = (
+    "postgres",
+    "elasticsearch",
+    "celery-broker",
+    "redis-broker",
+    "redis-cache",
+    "cantaloupe",
+)
+
+SECONDS_UPSTREAM = (0.1, 0.25, 0.5, 1, 2, 4, 8, 15, 30)
+SECONDS_BUNDLE = (1, 2, 3, 5, 8, 13, 21, 34, 55, 89)
+SECONDS_TASK = (0.1, 0.5, 1, 5, 15, 60, 300, 900, 3600)
+MIB = 1024 * 1024
+BYTES_EXPORT = tuple(n * MIB for n in (1, 5, 10, 25, 50, 100, 250, 500))
+
+
+def bounded(value, allowed):
+    """*value* as a string when it is in *allowed*, else ``"other"``."""
+    value = "" if value is None else str(value)
+    return value if value in allowed else OTHER
+
+
+def language_label(code):
+    return bounded(code, [language for language, _ in settings.LANGUAGES])
+
+
+def memo_label(key):
+    """The known memo prefix of the cache *key* (longest first), else ``"other"``."""
+    key = str(key)
+    for name in _MEMO_BY_LENGTH:
+        if key == name or key.startswith(name + ":"):
+            return name
+    return OTHER
+
+
+def log_source(logger_name):
+    return bounded(str(logger_name).split(".", 1)[0], LOG_SOURCES)
+
+
+def task_label(name):
+    """A Celery task name under a known prefix (at most 100 characters), else ``"other"``."""
+    if isinstance(name, str) and len(name) <= 100 and name.startswith(TASK_PREFIXES):
+        return name
+    return OTHER
+
+
+def tier_label(n):
+    if n == "full":
+        return "full"
+    return bounded(n, [str(tier) for tier in settings.SPECTRUM_PREVIEW_TIERS])
+
+
+def gauge(name, documentation, labelnames=(), *, mode):
+    """A Gauge aggregated across processes by *mode* (``livesum`` or ``mostrecent``)."""
+    if mode not in GAUGE_MODES:
+        raise ValueError(f"gauge {name}: multiprocess mode {mode!r} is not allowed")
+    return Gauge(name, documentation, labelnames, multiprocess_mode=mode)
+
+
+# Web process
+INFLIGHT_REQUESTS = gauge(
+    "manuspectrum_inflight_requests",
+    "Requests a web process is serving, streamed bodies included.",
+    mode="livesum",
+)
+LOG_RECORDS = Counter(
+    "manuspectrum_log_records",
+    "Log records at WARNING or above.",
+    ["level", "source"],
+)
+READYZ_UP = gauge(
+    "manuspectrum_readyz_component_up",
+    "1 when the component answered the last /readyz probe, else 0.",
+    ["component"],
+    mode="mostrecent",
+)
+
+# Memos, IIIF and access
+MEMO_LOOKUPS = Counter(
+    "manuspectrum_memo_lookups",
+    "get_or_build lookups by memo and outcome (hit, built here, waited for another build).",
+    ["memo", "outcome"],
+)
+IIIF_ANSWERS = Counter(
+    "manuspectrum_iiif_answers",
+    "Memoised IIIF answers: shared (visitor's view), private (built for the reader), 304.",
+    ["mode"],
+)
+IIIF_AUTH_TOKENS = Counter(
+    "manuspectrum_iiif_auth_tokens",
+    "IIIF Auth token requests by outcome.",
+    ["outcome"],
+)
+READ_REFUSALS = Counter(
+    "manuspectrum_read_refusals",
+    "Reads refused by the permission guard, by surface.",
+    ["surface"],
+)
+EXPLORER_UI_CHECKS = Counter(
+    "manuspectrum_explorer_ui_checks",
+    "Fetch Metadata checks of the Explorer's internal APIs, by outcome and reason.",
+    ["outcome", "reason"],
+)
+AUTH_LOGINS = Counter(
+    "manuspectrum_auth_logins",
+    "Login attempts by outcome.",
+    ["outcome"],
+)
+ACCOUNT_MAILS = Counter(
+    "manuspectrum_account_mails",
+    "Account mails by kind and outcome.",
+    ["kind", "outcome"],
+)
+AUTH_LOCKOUTS = Counter(
+    "manuspectrum_auth_lockouts",
+    "Accounts locked after repeated sign-in failures (the transition, not the refused attempts).",
+)
+EMBARGO_LIFTS = Counter(
+    "manuspectrum_embargo_lifts",
+    "Embargo lifts by outcome.",
+    ["outcome"],
+)
+WORKFLOW_CLEANUPS = Counter(
+    "manuspectrum_workflow_cleanups",
+    "Abandoned workflow runs cleaned, by workflow kind and outcome "
+    "(kept_resources: cleaned, some created resources kept).",
+    ["kind", "outcome"],
+)
+WORKFLOW_CLEANUP_RESOURCES = Counter(
+    "manuspectrum_workflow_cleanup_resources",
+    "Resources created by an abandoned workflow run, deleted or kept by the cleanup.",
+    ["outcome"],
+)
+ACCOUNT_ANONYMISATIONS = Counter(
+    "manuspectrum_account_anonymisations",
+    "Inactive accounts anonymised by the retention pass, by outcome.",
+    ["outcome"],
+)
+SPECTRUM_PREVIEWS = Counter(
+    "manuspectrum_spectrum_previews",
+    "Spectrum previews served, by point tier.",
+    ["tier"],
+)
+
+# Explorer
+EXPLORER_BUNDLE_BUILD_SECONDS = Histogram(
+    "manuspectrum_explorer_bundle_build_seconds",
+    "Duration of one Explorer corpus bundle build.",
+    ["language"],
+    buckets=SECONDS_BUNDLE,
+)
+EXPLORER_BUNDLE_BYTES = gauge(
+    "manuspectrum_explorer_bundle_bytes",
+    "Stored (packed) size of the last Explorer corpus bundle built.",
+    ["language"],
+    mode="mostrecent",
+)
+EXPLORER_BUNDLE_ROWS = gauge(
+    "manuspectrum_explorer_bundle_rows",
+    "Analyses in the last Explorer corpus bundle built.",
+    ["language"],
+    mode="mostrecent",
+)
+EXPLORER_BUNDLE_BUILDS = Counter(
+    "manuspectrum_explorer_bundle_builds",
+    "Explorer corpus bundle builds by reason and place (request or background thread).",
+    ["language", "reason", "background"],
+)
+EXPLORER_STALE_SERVED = Counter(
+    "manuspectrum_explorer_stale_served",
+    "Explorer answers given from the previous bundle while a rebuild ran.",
+    ["language"],
+)
+EXPLORER_REBUILD_FAILURES = Counter(
+    "manuspectrum_explorer_rebuild_failures",
+    "Background Explorer rebuilds that raised or returned nothing.",
+    ["language"],
+)
+EXPLORER_EXPORT_BYTES = Histogram(
+    "manuspectrum_explorer_export_bytes",
+    "Size of the Explorer data packages streamed.",
+    buckets=BYTES_EXPORT,
+)
+
+# Biblissima
+BIBLISSIMA_UPSTREAM_REQUESTS = Counter(
+    "manuspectrum_biblissima_upstream_requests",
+    "Outbound Biblissima calls by endpoint family and outcome.",
+    ["endpoint", "outcome"],
+)
+BIBLISSIMA_UPSTREAM_LATENCY = Histogram(
+    "manuspectrum_biblissima_upstream_latency_seconds",
+    "Duration of the outbound Biblissima calls that were made.",
+    ["endpoint"],
+    buckets=SECONDS_UPSTREAM,
+)
+BIBLISSIMA_SLOT_TIMEOUTS = Counter(
+    "manuspectrum_biblissima_slot_timeouts",
+    "Biblissima calls refused because no concurrency slot freed in time.",
+)
+BIBLISSIMA_INFLIGHT = gauge(
+    "manuspectrum_biblissima_inflight",
+    "Biblissima concurrency slots held.",
+    mode="livesum",
+)
+BIBLISSIMA_CACHE = Counter(
+    "manuspectrum_biblissima_cache",
+    "Biblissima cache lookups by outcome.",
+    ["outcome"],
+)
+BIBLISSIMA_SUGGEST_PREFIX = Counter(
+    "manuspectrum_biblissima_suggest_prefix",
+    "Suggest prefix entries: the query's own, an ancestor's, or fetched upstream.",
+    ["source"],
+)
+UPSTREAM_BUDGET_SPENT = Counter(
+    "manuspectrum_upstream_budget_spent",
+    "Upstream budgets whose deadline had passed when their block ended.",
+    ["kind"],
+)
+BIBLISSIMA_CREATED_ITEMS = Counter(
+    "manuspectrum_biblissima_created_items",
+    "Items of Biblissima create-all requests by outcome.",
+    ["resource_type", "outcome"],
+)
+
+# Outbound fetches
+OUTBOUND_FETCHES = Counter(
+    "manuspectrum_outbound_fetches",
+    "Guarded outbound fetches (safe_fetch) by purpose and outcome.",
+    ["purpose", "outcome"],
+)
+OUTBOUND_FETCH_SECONDS = Histogram(
+    "manuspectrum_outbound_fetch_seconds",
+    "Duration of guarded outbound fetches.",
+    ["purpose"],
+    buckets=SECONDS_UPSTREAM,
+)
+SSRF_REJECTIONS = Counter(
+    "manuspectrum_ssrf_rejections",
+    "Outbound URLs refused by the SSRF guard, by reason.",
+    ["reason"],
+)
+CSP_VIOLATIONS = Counter(
+    "manuspectrum_csp_violations",
+    "Content-Security-Policy violations reported by browsers, by effective directive.",
+    ["directive"],
+)
+
+# Celery
+CELERY_TASKS = Counter(
+    "manuspectrum_celery_tasks",
+    "Celery tasks run, by task and outcome.",
+    ["task", "outcome"],
+)
+CELERY_TASK_SECONDS = Histogram(
+    "manuspectrum_celery_task_seconds",
+    "Run time of Celery tasks.",
+    ["task"],
+    buckets=SECONDS_TASK,
+)
+INDEX_RESOURCES = Counter(
+    "manuspectrum_index_resources",
+    "Resources (or transactions) indexed by the index_resources task.",
+    ["mode", "outcome"],
+)
+DATA_CHANGE_ROWS = gauge(
+    "manuspectrum_data_change_rows",
+    "Rows of the ms_data_change ledger after the last prune.",
+    mode="mostrecent",
+)
+DATA_CHANGE_PRUNED = gauge(
+    "manuspectrum_data_change_pruned_timestamp_seconds",
+    "Unix time of the last ms_data_change prune.",
+    mode="mostrecent",
+)
+ACTIVE_ACCOUNTS = gauge(
+    "manuspectrum_active_accounts",
+    "Active accounts with a login in the last 30 days, set by the daily count task.",
+    mode="mostrecent",
+)
+ACTIVE_ACCOUNTS_MEASURED = gauge(
+    "manuspectrum_active_accounts_timestamp_seconds",
+    "Unix time of the count behind manuspectrum_active_accounts.",
+    mode="mostrecent",
+)
+LOGIN_RECORDS_PRUNED = gauge(
+    "manuspectrum_login_records_prune_timestamp_seconds",
+    "Unix time of the last successful prune of the login records.",
+    mode="mostrecent",
+)
+EMBARGOES = gauge(
+    "manuspectrum_embargoes",
+    "Active embargoes by state, set by the daily embargo pass.",
+    ["state"],
+    mode="mostrecent",
+)
+EMBARGO_PASS_TIMESTAMP = gauge(
+    "manuspectrum_embargo_pass_timestamp_seconds",
+    "Unix time of the last completed embargo pass.",
+    mode="mostrecent",
+)
+WORKFLOW_CLEANUP_TIMESTAMP = gauge(
+    "manuspectrum_workflow_cleanup_timestamp_seconds",
+    "Unix time of the last completed abandoned-workflow cleanup pass.",
+    mode="mostrecent",
+)
+ACCOUNT_RETENTION_TIMESTAMP = gauge(
+    "manuspectrum_account_retention_timestamp_seconds",
+    "Unix time of the last completed inactive-account retention pass.",
+    mode="mostrecent",
+)
+RESOURCES = gauge(
+    "manuspectrum_resources",
+    "Resource instances per resource model, set by the hourly activity task.",
+    ["model"],
+    mode="mostrecent",
+)
+RESOURCE_CHANGES = gauge(
+    "manuspectrum_resource_changes",
+    "Resources created, modified or deleted per model in the last 24 hours (edit log).",
+    ["model", "kind"],
+    mode="mostrecent",
+)
+WORKFLOWS = gauge(
+    "manuspectrum_workflows",
+    "Workflow runs not completed, per workflow, and those open for too long.",
+    ["kind", "state"],
+    mode="mostrecent",
+)
+ACTIVITY_MEASURED = gauge(
+    "manuspectrum_activity_timestamp_seconds",
+    "Unix time of the last refresh of the activity gauges.",
+    mode="mostrecent",
+)
+
+
+# Labelled metrics left out of prime_label_sets(), by name: one series per task
+# and bucket, read only by a p95 panel.
+UNPRIMED_METRICS = frozenset({"manuspectrum_celery_task_seconds"})
+
+
+def _vocabularies(tasks):
+    """``(metric, {label: values})`` for every labelled Counter and Histogram except
+    ``UNPRIMED_METRICS``. ``other`` is primed only where open input lands in it
+    every day (log sources)."""
+    languages = tuple(code for code, _ in settings.LANGUAGES)
+    tiers = tuple(str(tier) for tier in settings.SPECTRUM_PREVIEW_TIERS) + ("full",)
+    task_names = tuple(sorted({task_label(name) for name in tasks} - {OTHER}))
+    return (
+        (LOG_RECORDS, {"level": LOG_LEVELS, "source": LOG_SOURCES + (OTHER,)}),
+        (MEMO_LOOKUPS, {"memo": MEMO_NAMES, "outcome": MEMO_OUTCOMES}),
+        (IIIF_ANSWERS, {"mode": IIIF_ANSWER_MODES}),
+        (IIIF_AUTH_TOKENS, {"outcome": IIIF_TOKEN_OUTCOMES}),
+        (READ_REFUSALS, {"surface": READ_SURFACES}),
+        (
+            EXPLORER_UI_CHECKS,
+            {"outcome": EXPLORER_UI_OUTCOMES, "reason": EXPLORER_UI_REASONS},
+        ),
+        (AUTH_LOGINS, {"outcome": LOGIN_OUTCOMES}),
+        (ACCOUNT_MAILS, {"kind": ACCOUNT_MAIL_KINDS, "outcome": ACCOUNT_MAIL_OUTCOMES}),
+        (EMBARGO_LIFTS, {"outcome": EMBARGO_LIFT_OUTCOMES}),
+        (
+            WORKFLOW_CLEANUPS,
+            {"kind": WORKFLOW_KINDS, "outcome": WORKFLOW_CLEANUP_OUTCOMES},
+        ),
+        (WORKFLOW_CLEANUP_RESOURCES, {"outcome": WORKFLOW_CLEANUP_RESOURCE_OUTCOMES}),
+        (ACCOUNT_ANONYMISATIONS, {"outcome": ACCOUNT_ANONYMISATION_OUTCOMES}),
+        (SPECTRUM_PREVIEWS, {"tier": tiers}),
+        (EXPLORER_BUNDLE_BUILD_SECONDS, {"language": languages}),
+        (
+            EXPLORER_BUNDLE_BUILDS,
+            {
+                "language": languages,
+                "reason": BUNDLE_REASONS,
+                "background": ("true", "false"),
+            },
+        ),
+        (EXPLORER_STALE_SERVED, {"language": languages}),
+        (EXPLORER_REBUILD_FAILURES, {"language": languages}),
+        (
+            BIBLISSIMA_UPSTREAM_REQUESTS,
+            {"endpoint": BIBLISSIMA_ENDPOINTS, "outcome": UPSTREAM_OUTCOMES},
+        ),
+        (BIBLISSIMA_UPSTREAM_LATENCY, {"endpoint": BIBLISSIMA_ENDPOINTS}),
+        (BIBLISSIMA_CACHE, {"outcome": CACHE_OUTCOMES}),
+        (BIBLISSIMA_SUGGEST_PREFIX, {"source": SUGGEST_SOURCES}),
+        (UPSTREAM_BUDGET_SPENT, {"kind": BUDGET_KINDS}),
+        (
+            BIBLISSIMA_CREATED_ITEMS,
+            {"resource_type": RESOURCE_TYPES, "outcome": CREATE_OUTCOMES},
+        ),
+        (OUTBOUND_FETCHES, {"purpose": FETCH_PURPOSES, "outcome": FETCH_OUTCOMES}),
+        (OUTBOUND_FETCH_SECONDS, {"purpose": FETCH_PURPOSES}),
+        (SSRF_REJECTIONS, {"reason": SSRF_REASONS}),
+        (CSP_VIOLATIONS, {"directive": CSP_DIRECTIVES}),
+        (CELERY_TASKS, {"task": task_names, "outcome": TASK_OUTCOMES}),
+        (INDEX_RESOURCES, {"mode": INDEX_MODES, "outcome": INDEX_OUTCOMES}),
+    )
+
+
+def prime_label_sets(tasks=()):
+    """Create every known label set of the labelled Counters and Histograms at 0.
+
+    Runs in each process that increments them: ``AppConfig.ready()`` (gunicorn
+    workers, the Celery main process) and Celery's ``worker_process_init``, which
+    passes the registered task names in *tasks* (the only label set without a
+    declared vocabulary; names outside ``TASK_PREFIXES`` are dropped). Under
+    ``PROMETHEUS_MULTIPROC_DIR`` each new child writes a 0 into the process's
+    file. Idempotent; an error is logged, never raised. Returns the number of
+    label sets primed.
+    """
+    try:
+        primed = 0
+        for metric, vocabulary in _vocabularies(tasks):
+            names = tuple(vocabulary)
+            for values in itertools.product(*vocabulary.values()):
+                metric.labels(**dict(zip(names, values)))
+                primed += 1
+        return primed
+    except Exception:
+        logger.warning("metrics: label sets not primed", exc_info=True)
+        return 0

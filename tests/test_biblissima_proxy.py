@@ -27,7 +27,9 @@ Usage:
 
 import json
 import os
+import socket
 from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qsl, urlsplit
 
 import requests
 from django.core.cache import cache
@@ -36,6 +38,23 @@ from django.test import RequestFactory, TestCase
 from manuspectrum.views import biblissima_proxy as bp
 
 FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures", "biblissima")
+
+
+def _resolve_every_host_publicly(testcase):
+    """Keep the SSRF guard real and the DNS lookup it makes offline.
+
+    A manifest URL comes from Wikibase, i.e. a third party, so the resolver
+    checks it before the fetch. What the guard decides is locked in
+    tests/test_http.py; here it must simply not touch the network.
+    """
+    patcher = patch(
+        "manuspectrum.utils.http.socket.getaddrinfo",
+        return_value=[
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
+        ],
+    )
+    patcher.start()
+    testcase.addCleanup(patcher.stop)
 
 
 def _read_fixture(name):
@@ -56,12 +75,39 @@ def _make_response(json_data=None, status_code=200, text=""):
     """Build a Mock that quacks enough like a ``requests.Response``."""
     resp = MagicMock(spec=requests.Response)
     resp.status_code = status_code
+    resp.headers = requests.structures.CaseInsensitiveDict()
     resp.text = text
     resp.json.return_value = json_data if json_data is not None else {}
     if status_code >= 400:
         resp.raise_for_status.side_effect = requests.exceptions.HTTPError(response=resp)
     else:
         resp.raise_for_status.return_value = None
+    return resp
+
+
+def _params_of(call):
+    """Query parameters of a mocked ``_bib_request`` call, from its URL."""
+    return dict(parse_qsl(urlsplit(call.args[1]).query))
+
+
+def _address(ip):
+    return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 443))]
+
+
+def _resolving_to(ip, then=None):
+    """Patch the SSRF guard's resolver: first host to *ip*, next one to *then*."""
+    target = "manuspectrum.utils.http.socket.getaddrinfo"
+    if then is None:
+        return patch(target, return_value=_address(ip))
+    return patch(target, side_effect=[_address(ip), _address(then)])
+
+
+def _redirect_to(location):
+    """A 302 as ``safe_fetch`` reads one, before any body is touched."""
+    resp = MagicMock()
+    resp.status_code = 302
+    resp.is_redirect = True
+    resp.headers = {"Location": location}
     return resp
 
 
@@ -309,17 +355,10 @@ class GetWikibaseEntityTests(TestCase):
 
     def test_handles_missing_entity(self):
         session = MagicMock()
-        # API returns no entity for the QID.
         resp = _make_response(json_data={"entities": {}})
         with patch.object(bp, "_bib_request", return_value=resp):
             result = bp._get_wikibase_entity("Q999", session=session)
-        # _extract_entity_props with empty raw still returns a dict with
-        # qid + empty label and None claims — that's acceptable, but it
-        # should NOT cache an empty dict for too long. The current
-        # implementation does cache it; assert it's at least not None
-        # and shaped right.
-        self.assertIsNotNone(result)
-        self.assertEqual(result["biblissimaQid"], "Q999")
+        self.assertIsNone(result)
 
 
 class BatchGetWikibaseEntitiesTests(TestCase):
@@ -405,69 +444,88 @@ class ResolveCollectionTests(TestCase):
             self.assertEqual(bp._resolve_collection("Q1"), {})
 
     def test_resolves_owner_label_minimally(self):
-        # Only the collection entity is resolvable, no P201/P169 claims.
-        with patch.object(
-            bp,
-            "_get_wikibase_entity",
-            return_value={"label": "Collection BnF"},
+        with (
+            patch.object(
+                bp, "_get_wikibase_entity", return_value={"label": "Collection BnF"}
+            ),
+            patch.object(
+                bp,
+                "_bib_request",
+                return_value=_make_response(
+                    json_data={"entities": {"Q1": {"claims": {}}}}
+                ),
+            ),
         ):
-            session = MagicMock()
-            session.get.return_value = _make_response(
-                json_data={"entities": {"Q1": {"claims": {}}}}
-            )
-            result = bp._resolve_collection("Q1", session=session)
+            result = bp._resolve_collection("Q1")
         self.assertEqual(result["ownerLabel"], "Collection BnF")
         self.assertEqual(result["ownerQid"], "Q1")
         self.assertNotIn("locationLabel", result)
         self.assertNotIn("parentInstitutionLabel", result)
 
+    def test_the_collection_claims_are_fetched_through_the_guarded_path(self):
+        with (
+            patch.object(
+                bp, "_get_wikibase_entity", return_value={"label": "Collection BnF"}
+            ),
+            patch.object(
+                bp,
+                "_bib_request",
+                return_value=_make_response(
+                    json_data={"entities": {"Q1": {"claims": {}}}}
+                ),
+            ) as fetch,
+        ):
+            bp._resolve_collection("Q1")
+
+        args, kwargs = fetch.call_args
+        self.assertTrue(args[1].startswith(bp.BIBLISSIMA_WIKIBASE + "?"))
+        self.assertIn("ids=Q1", args[1])
+        self.assertIn("props=claims", args[1])
+        self.assertTrue(kwargs["guarded"])
+        self.assertEqual(kwargs["timeout"], bp.REQUEST_TIMEOUT)
+        self.assertIs(args[0], bp._get_biblissima_session())
+
     def test_resolves_full_chain_with_location_and_parent(self):
-        # _get_wikibase_entity is called for: collection (Q1), location
-        # (Q2), parent institution (Q3) — return a different label each time.
         labels = {
             "Q1": {"label": "BnF Latin"},
             "Q2": {"label": "Paris"},
             "Q3": {"label": "Bibliothèque nationale de France"},
         }
-
-        def fake_get_entity(qid, session=None):  # noqa: ARG001
-            return labels.get(qid)
-
-        # session.get is invoked twice for raw claims (collection, place).
+        collection_claims = _make_response(
+            json_data={
+                "entities": {
+                    "Q1": {
+                        "claims": {
+                            bp.P201: [
+                                {"mainsnak": {"datavalue": {"value": {"id": "Q2"}}}}
+                            ],
+                            bp.P169: [
+                                {"mainsnak": {"datavalue": {"value": {"id": "Q3"}}}}
+                            ],
+                        }
+                    }
+                }
+            }
+        )
         session = MagicMock()
-        session.get.side_effect = [
-            _make_response(  # collection claims (P201, P169)
-                json_data={
-                    "entities": {
-                        "Q1": {
-                            "claims": {
-                                bp.P201: [
-                                    {"mainsnak": {"datavalue": {"value": {"id": "Q2"}}}}
-                                ],
-                                bp.P169: [
-                                    {"mainsnak": {"datavalue": {"value": {"id": "Q3"}}}}
-                                ],
-                            }
-                        }
-                    }
-                }
-            ),
-            _make_response(  # place claims (P123 = Geonames)
-                json_data={
-                    "entities": {
-                        "Q2": {
-                            "claims": {
-                                bp.P123: [
-                                    {"mainsnak": {"datavalue": {"value": "2988507"}}}
-                                ]
-                            }
-                        }
-                    }
-                }
-            ),
-        ]
 
-        with patch.object(bp, "_get_wikibase_entity", side_effect=fake_get_entity):
+        with (
+            patch.object(
+                bp,
+                "_get_wikibase_entity",
+                side_effect=lambda qid, session=None: labels.get(qid),
+            ),
+            patch.object(bp, "_bib_request", return_value=collection_claims),
+            patch.object(
+                bp,
+                "_get_place_geo",
+                return_value={
+                    "geonamesId": "2988507",
+                    "latitude": 48.85,
+                    "longitude": 2.35,
+                },
+            ) as place_geo,
+        ):
             result = bp._resolve_collection("Q1", session=session)
 
         self.assertEqual(result["ownerLabel"], "BnF Latin")
@@ -478,16 +536,58 @@ class ResolveCollectionTests(TestCase):
             result["parentInstitutionLabel"], "Bibliothèque nationale de France"
         )
         self.assertEqual(result["parentInstitutionQid"], "Q3")
+        place_geo.assert_called_once_with("Q2", session=session)
+
+    def test_a_place_whose_claims_could_not_be_read_has_no_geonames_id(self):
+        labels = {"Q1": {"label": "BnF Latin"}, "Q2": {"label": "Paris"}}
+        collection_claims = _make_response(
+            json_data={
+                "entities": {
+                    "Q1": {
+                        "claims": {
+                            bp.P201: [
+                                {"mainsnak": {"datavalue": {"value": {"id": "Q2"}}}}
+                            ]
+                        }
+                    }
+                }
+            }
+        )
+
+        with (
+            patch.object(
+                bp,
+                "_get_wikibase_entity",
+                side_effect=lambda qid, session=None: labels.get(qid),
+            ),
+            patch.object(bp, "_bib_request", return_value=collection_claims),
+            patch.object(bp, "_get_place_geo", return_value=None),
+        ):
+            result = bp._resolve_collection("Q1")
+
+        self.assertEqual(result["locationLabel"], "Paris")
+        self.assertNotIn("geonamesId", result)
 
     def test_returns_owner_only_when_claims_fetch_fails(self):
-        with patch.object(
-            bp,
-            "_get_wikibase_entity",
-            return_value={"label": "Some Coll"},
+        with (
+            patch.object(
+                bp, "_get_wikibase_entity", return_value={"label": "Some Coll"}
+            ),
+            patch.object(bp, "_bib_request", side_effect=requests.exceptions.Timeout()),
+            self.assertLogs("manuspectrum.views.biblissima_proxy", level="WARNING"),
         ):
-            session = MagicMock()
-            session.get.side_effect = requests.exceptions.Timeout()
-            result = bp._resolve_collection("Q1", session=session)
+            result = bp._resolve_collection("Q1")
+        self.assertEqual(result, {"ownerLabel": "Some Coll", "ownerQid": "Q1"})
+
+    def test_returns_owner_only_when_no_concurrency_slot_is_free(self):
+        with (
+            patch.object(
+                bp, "_get_wikibase_entity", return_value={"label": "Some Coll"}
+            ),
+            patch.object(bp, "_bib_request", side_effect=bp.BiblissimaBusy()),
+            self.assertLogs("manuspectrum.views.biblissima_proxy", level="WARNING"),
+        ):
+            result = bp._resolve_collection("Q1")
         self.assertEqual(result, {"ownerLabel": "Some Coll", "ownerQid": "Q1"})
 
 
@@ -809,6 +909,7 @@ class ParseManuscriptIlluminationsTests(TestCase):
 
 class FetchCanvasDimensionsTests(TestCase):
     def setUp(self):
+        _resolve_every_host_publicly(self)
         cache.clear()
 
     def tearDown(self):
@@ -851,6 +952,33 @@ class FetchCanvasDimensionsTests(TestCase):
 
     def test_returns_empty_for_no_url(self):
         self.assertEqual(bp._fetch_canvas_dimensions("", "1r", MagicMock()), {})
+
+    def test_a_manifest_url_inside_the_network_is_never_fetched(self):
+        # The URL comes from Wikibase; a value naming an internal address is a
+        # request this server would make on a third party's behalf.
+        session = MagicMock()
+
+        with _resolving_to("169.254.169.254"):
+            result = bp._fetch_canvas_dimensions(
+                "https://metadata.example/latest/meta-data/", "1r", session
+            )
+
+        self.assertEqual(result, {})
+        session.get.assert_not_called()
+
+    def test_a_manifest_redirecting_inside_the_network_is_not_followed(self):
+        # The guard has to hold on every hop: a public URL answering 302 to the
+        # metadata service is the bypass a check on the first URL alone misses.
+        session = MagicMock()
+        session.get.return_value = _redirect_to("http://metadata.example/latest/")
+
+        with _resolving_to("93.184.216.34", then="169.254.169.254"):
+            result = bp._fetch_canvas_dimensions(
+                "https://public.example/manifest.json", "1r", session
+            )
+
+        self.assertEqual(result, {})
+        self.assertEqual(session.get.call_count, 1)
 
     def test_returns_empty_when_fetch_fails(self):
         session = MagicMock()
@@ -918,6 +1046,7 @@ class FetchCanvasDimensionsTimeoutTests(TestCase):
     tuple, while the shared session keeps its retry policy for Wikibase calls."""
 
     def setUp(self):
+        _resolve_every_host_publicly(self)
         cache.clear()
 
     def tearDown(self):
@@ -1059,6 +1188,7 @@ class BuildBiblissimaSessionTests(TestCase):
             self.assertEqual(retry.total, 3)
             self.assertIn(429, retry.status_forcelist)
             self.assertIn(503, retry.status_forcelist)
+            self.assertIs(retry.respect_retry_after_header, False)
         finally:
             session.close()
 
@@ -1145,6 +1275,7 @@ class FetchCanvasDimensionsRealManifestTests(TestCase):
     MANIFEST_URL = "https://gallica.bnf.fr/iiif/ark:/12148/btv1b8455927r/manifest.json"
 
     def setUp(self):
+        _resolve_every_host_publicly(self)
         cache.clear()
         self.manifest = _read_json_fixture("manifest_btv1b8455927r.json")
 
@@ -1313,14 +1444,21 @@ class WikibaseEntityFixtureTests(TestCase):
             }
             return mapping.get(qid)
 
-        # session.get is invoked twice for raw claims fetches:
-        # first for the collection, then for the location (place).
-        session.get.side_effect = [
-            _make_response(json_data=self.collection),
-            _make_response(json_data=self.paris),
-        ]
-
-        with patch.object(bp, "_get_wikibase_entity", side_effect=fake_get_entity):
+        with (
+            patch.object(bp, "_get_wikibase_entity", side_effect=fake_get_entity),
+            patch.object(
+                bp,
+                "_bib_request",
+                return_value=_make_response(json_data=self.collection),
+            ),
+            patch.object(
+                bp,
+                "_get_place_geo",
+                side_effect=lambda qid, session=None: bp._place_geo_from_claims(
+                    self.paris["entities"][qid]["claims"]
+                ),
+            ),
+        ):
             result = bp._resolve_collection("Q32812", session=session)
 
         self.assertIn("Bibliothèque nationale de France", result["ownerLabel"])
@@ -1656,7 +1794,7 @@ class EnrichCanvasesDocumentNatureTests(TestCase):
 
         # _bib_request is used for the CirrusSearch fulltext call
         # (action=query, list=search) — return a single matching item.
-        bib_resp = MagicMock()
+        bib_resp = MagicMock(headers={})
         bib_resp.raise_for_status = MagicMock()
         bib_resp.json.return_value = {"query": {"search": [{"title": "Item:Q123"}]}}
         mock_bib.return_value = bib_resp
@@ -1782,6 +1920,7 @@ class BiblissimaSearchManuscriptsViewDocumentTypeTests(TestCase):
 
         cache.clear()
 
+    @patch("manuspectrum.views.biblissima_proxy._besteffort_session", None)
     @patch("manuspectrum.views.biblissima_proxy._get_wikibase_entity")
     @patch("manuspectrum.views.biblissima_proxy._batch_get_wikibase_entities")
     @patch("manuspectrum.views.biblissima_proxy._bib_request")
@@ -1807,11 +1946,11 @@ class BiblissimaSearchManuscriptsViewDocumentTypeTests(TestCase):
 
         ms_type_qid = BiblissimaSearchManuscriptsView.TYPE_FILTERS["manuscript"]
 
-        search_resp = MagicMock()
+        search_resp = MagicMock(headers={})
         search_resp.raise_for_status = MagicMock()
         search_resp.json.return_value = {"search": [{"id": "Q123"}]}
 
-        claims_resp = MagicMock()
+        claims_resp = MagicMock(headers={})
         claims_resp.raise_for_status = MagicMock()
         claims_resp.json.return_value = {
             "entities": {
@@ -1826,7 +1965,7 @@ class BiblissimaSearchManuscriptsViewDocumentTypeTests(TestCase):
         }
 
         # Fulltext search response (used as the second-pass; can be empty)
-        fulltext_resp = MagicMock()
+        fulltext_resp = MagicMock(headers={})
         fulltext_resp.raise_for_status = MagicMock()
         fulltext_resp.json.return_value = {"query": {"search": []}}
 
@@ -1900,9 +2039,10 @@ class LinkToProjectIdempotenceTests(TestCase):
             ]
         }
         mock_tile.objects.filter.return_value.first.return_value = existing
+        user = MagicMock(name="user")
 
         view = BiblissimaCreateResourceView()
-        view._link_to_project(rid, pid, transaction_id=None)
+        view._link_to_project(rid, pid, transaction_id=None, user=user)
 
         # The tile data must still contain exactly one ref.
         self.assertEqual(
@@ -1912,9 +2052,14 @@ class LinkToProjectIdempotenceTests(TestCase):
         )
         existing.save.assert_not_called()
 
+    @patch(
+        "manuspectrum.views.biblissima_proxy.BiblissimaCreateResourceView._attribute_tile_save"
+    )
     @patch("manuspectrum.views.biblissima_proxy.ResourceInstance")
     @patch("manuspectrum.views.biblissima_proxy.Tile")
-    def test_appends_when_resource_not_yet_linked(self, mock_tile, mock_ri):
+    def test_appends_when_resource_not_yet_linked(
+        self, mock_tile, mock_ri, mock_attribute
+    ):
         from manuspectrum.views.biblissima_proxy import (
             BiblissimaCreateResourceView,
             PROJECT_STUDIED_OBJECTS_NODE,
@@ -1922,6 +2067,7 @@ class LinkToProjectIdempotenceTests(TestCase):
 
         rid = "11111111-1111-1111-1111-111111111111"
         pid = "22222222-2222-2222-2222-222222222222"
+        user = MagicMock(name="user")
 
         # The project row exists and is locked (select_for_update).
         mock_ri.objects.select_for_update.return_value.filter.return_value.first.return_value = (
@@ -1933,7 +2079,7 @@ class LinkToProjectIdempotenceTests(TestCase):
         mock_tile.objects.filter.return_value.first.return_value = existing
 
         view = BiblissimaCreateResourceView()
-        view._link_to_project(rid, pid, transaction_id=None)
+        view._link_to_project(rid, pid, transaction_id=None, user=user)
 
         self.assertEqual(len(existing.data[PROJECT_STUDIED_OBJECTS_NODE]), 1)
         self.assertEqual(
@@ -1944,7 +2090,12 @@ class LinkToProjectIdempotenceTests(TestCase):
         # synchronous ES write never runs inside _create_resource's atomic()
         # (a transient ES outage would otherwise roll back a good create). The
         # project is re-indexed post-commit via _create_resource's defer set.
-        existing.save.assert_called_once_with(index=False)
+        existing.save.assert_called_once()
+        save_kwargs = existing.save.call_args.kwargs
+        self.assertIs(save_kwargs["index"], False)
+        mock_attribute.assert_called_once_with(
+            existing.tileid, save_kwargs["transaction_id"], user
+        )
 
     @patch("manuspectrum.views.biblissima_proxy.ResourceInstance")
     @patch("manuspectrum.views.biblissima_proxy.Tile")
@@ -1960,9 +2111,10 @@ class LinkToProjectIdempotenceTests(TestCase):
         mock_ri.objects.select_for_update.return_value.filter.return_value.first.return_value = (
             None
         )
+        user = MagicMock(name="user")
 
         view = BiblissimaCreateResourceView()
-        view._link_to_project(rid, pid, transaction_id=None)
+        view._link_to_project(rid, pid, transaction_id=None, user=user)
 
         # No tile read/write happens for a missing project.
         mock_tile.objects.filter.assert_not_called()
@@ -1989,6 +2141,7 @@ class BiblissimaLinkToProjectViewTests(TestCase):
             data=body,
             content_type="application/json",
         )
+        req.user = MagicMock()
         view = BiblissimaLinkToProjectView()
         resp = view.post(req)
         self.assertEqual(resp.status_code, 200)
@@ -2016,6 +2169,7 @@ class BiblissimaLinkToProjectViewTests(TestCase):
             data=body,
             content_type="application/json",
         )
+        req.user = MagicMock()
         view = BiblissimaLinkToProjectView()
         resp = view.post(req)
         self.assertEqual(resp.status_code, 200)
@@ -2320,16 +2474,25 @@ class BiblissimaSuggestViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_limit_is_clamped_to_15(self):
-        # 17 × 3 > 50 would silently break wbsearchentities (MediaWiki cap,
-        # error reported as JSON in HTTP 200). Clamped: 15 × 3 = 45 ≤ 50.
-        search_resp = _make_response(json_data={"search": []})
-        fulltext_resp = _make_response(json_data={"query": {"search": []}})
+        items = [{"id": f"Q{i}", "label": f"dragon {i}"} for i in range(20)]
+        entities = {
+            f"Q{i}": {
+                "labels": {"fr": {"value": f"dragon {i}"}},
+                "claims": {"P2": [_claim_item("Q304387")]},
+            }
+            for i in range(20)
+        }
         with patch.object(
-            bp, "_bib_request", side_effect=[search_resp, fulltext_resp]
+            bp,
+            "_bib_request",
+            side_effect=[
+                _make_response(json_data={"search": items}),
+                _make_response(json_data={"entities": entities}),
+            ],
         ) as mocked:
-            self._get(q="dragon", type="descriptor", limit="50")
-        first_call_params = mocked.call_args_list[0].kwargs["params"]
-        self.assertEqual(first_call_params["limit"], 45)
+            response = self._get(q="dragon", type="descriptor", limit="50")
+        self.assertEqual(_params_of(mocked.call_args_list[0])["limit"], "50")
+        self.assertEqual(len(json.loads(response.content)["results"]), 15)
 
     DESC_HASH = "desc46a049ef1a1cfed3c4a9c932503ea8497b6ae21f"
 
@@ -2386,11 +2549,11 @@ class BiblissimaSuggestViewTests(TestCase):
         )
         self.assertEqual(payload["results"][0]["label_en"], "Dragon")
 
-    def test_languages_param_deduplicated_with_lang(self):
-        _, mocked = self._descriptor_flow({"fr": {"value": "dragon"}}, lang="de")
-        batch_params = mocked.call_args_list[1].kwargs["params"]
-        self.assertEqual(batch_params["languages"], "de|en|fr")
-        self.assertEqual(batch_params["props"], "claims|labels")
+    def test_the_prefix_batch_reads_every_language(self):
+        _, mocked = self._descriptor_flow({"fr": {"value": "dragon"}}, lang="en")
+        batch_params = _params_of(mocked.call_args_list[1])
+        self.assertNotIn("languages", batch_params)
+        self.assertEqual(batch_params["props"], "claims|labels|aliases")
 
     def test_portal_url_none_when_p129_missing(self):
         search_resp = _make_response(
@@ -2548,19 +2711,24 @@ class BiblissimaSuggestViewTests(TestCase):
         search_resp = _make_response(json_data={})  # no "search" key
         fulltext_resp = _make_response(json_data={"query": {}})  # no "search"
         with patch.object(bp, "_bib_request", side_effect=[search_resp, fulltext_resp]):
-            response = self._get(q="épée", type="descriptor")
+            with self.assertLogs(bp.logger, "WARNING"):
+                response = self._get(q="épée", type="descriptor")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(json.loads(response.content)["results"], [])
 
-    def test_double_upstream_failure_sets_degraded_and_is_not_cached(self):
-        with patch.object(
-            bp, "_bib_request", side_effect=requests.exceptions.Timeout()
-        ):
-            response = self._get(q="dragon", type="descriptor")
+    def test_double_upstream_failure_sets_degraded_and_is_kept_briefly(self):
+        with patch.object(bp.cache, "set", wraps=bp.cache.set) as setter:
+            with patch.object(
+                bp, "_bib_request", side_effect=requests.exceptions.Timeout()
+            ):
+                response = self._get(q="dragon", type="descriptor")
         payload = json.loads(response.content)
         self.assertTrue(payload["degraded"])
         self.assertEqual(payload["results"], [])
         self.assertIn("max-age=0", response["Cache-Control"])
+        key = bp._suggest_key("dragon", "Q304387", "fr", 10)
+        timeouts = [c.args[2] for c in setter.call_args_list if c.args[0] == key]
+        self.assertEqual(timeouts[-1], bp.SUGGEST_PARTIAL_TTL)
 
     def test_successful_response_is_not_degraded(self):
         payload, _ = self._descriptor_flow({"fr": {"value": "dragon"}})

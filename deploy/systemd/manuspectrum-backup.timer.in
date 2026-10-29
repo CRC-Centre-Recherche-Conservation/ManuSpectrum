@@ -1,0 +1,11 @@
+# Every night at 02:00; Persistent=true runs a missed night at the next boot.
+# Enabled by PP-8.
+[Unit]
+Description=Back up ManuSpectrum every night
+
+[Timer]
+OnCalendar=*-*-* 02:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

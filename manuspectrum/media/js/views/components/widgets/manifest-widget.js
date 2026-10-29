@@ -37,7 +37,7 @@ const viewModel = function(params) {
 
     self.transactionId = uuid.generate();
     self.uniqueId = uuid.generate();
-    self.uniqueidClass = ko.computed(function() {
+    self.uniqueidClass = ko.pureComputed(function() {
         return "unique_id_" + self.uniqueId;
     });
 
@@ -55,7 +55,9 @@ const viewModel = function(params) {
         tags: true,
 
         ajax: {
-            url: '/iiifmanifest',
+            // Reversed per language: every Arches route lives under a prefix,
+            // and a bare path would cost a redirect on each keystroke.
+            url: arches.urls.iiifmanifest,
             dataType: 'json',
             delay: 250,
             data: function(params) {
@@ -128,7 +130,7 @@ const viewModel = function(params) {
     };
 
     self._lastManifestValue = null;
-    self.manifest.subscribe(function(newValue) {
+    self.disposables.push(self.manifest.subscribe(function(newValue) {
         if (newValue === self._lastManifestValue) return;
         self._lastManifestValue = newValue;
 
@@ -140,11 +142,14 @@ const viewModel = function(params) {
         } else {
             self.clearManifest();
         }
-    });
+    }));
 
     self.loadManifestFromId = function(manifestId) {
         self.loading(true);
         self.manifestError(false);
+        // Language-neutral on purpose: this value is written to the tile and
+        // read back by ManifestDataType, which stores manifests as bare
+        // /manifest/{uuid}. Do not swap it for a reversed URL.
         var manifestPath = '/manifest/' + manifestId;
         self.manifestUrl(manifestPath);
         self.manifestId(manifestId);
@@ -380,7 +385,7 @@ const viewModel = function(params) {
         }
     };
 
-    self.manifestDisplayUrl = ko.computed(function() {
+    self.manifestDisplayUrl = ko.pureComputed(function() {
         // Show the canonical IIIF id from the JSON if available (original external URL)
         var data = self.manifestData();
         if (data) {
@@ -393,7 +398,7 @@ const viewModel = function(params) {
         return url || '';
     });
 
-    self.displayValue = ko.computed(function() {
+    self.displayValue = ko.pureComputed(function() {
         if (self.state === 'report') {
             return self.manifestDisplayUrl() || self.value() || '';
         }

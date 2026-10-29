@@ -1,0 +1,466 @@
+# Monitoring and alerts
+
+Reference for the monitoring stack of the deployment: what runs, how to open the
+dashboards, which alerts exist, who receives them and how to sort the mail. The
+application side (metrics, logs, `/healthz`, `/readyz`) is in
+`manuspectrum/observability/README.md`; what to do when an alert fires is in
+[`runbooks/`](runbooks/monitoring.md). Nothing here is specific to one host:
+values of a host live in `compose/.env`.
+
+## What runs
+
+The `observability` Compose profile, switched on by `COMPOSE_PROFILES` in `.env`
+(empty keeps it off). It adds seven containers, none of which mounts the Docker
+socket:
+
+| Service | Role |
+| --- | --- |
+| `prometheus` | Scrapes the application, Prometheus and Alertmanager every 30 s and the exporters every 60 s, evaluates the rules; 35 days of data, capped at 8 GB, on a local volume (never the network filesystem) |
+| `alertmanager` | Routes the alerts by severity and mails them through the SMTP relay of the stack |
+| `grafana` | Five read-only dashboards; listens on `127.0.0.1:3000` of the host only |
+| `node-exporter` | Host CPU, memory, load, clock, filesystems, and the textfile metrics below |
+| `postgres-exporter` | PostgreSQL through the read-only `ms_monitor` role (`pg_monitor`); no query text |
+| `redis-exporter` | Broker and cache |
+| `blackbox-exporter` | Probes the public name (`/healthz`, certificate expiry) and Cantaloupe |
+
+The application is scraped directly on the internal network (`web:8000`,
+`worker:9808`): nginx refuses `/metrics` from outside. Two host timers write the
+metrics a container cannot read (next section). Grafana is on the `monitoring`
+network only, so it cannot reach `web`.
+
+Make targets (`make -C deploy <target>`):
+
+| Target | Effect |
+| --- | --- |
+| `monitoring-init` | Once per host, before the first `up` of the monitoring (it starts `postgres` if needed): create or update the `ms_monitor` role and `pg_stat_statements` |
+| `observability-on`, `observability-off` | Start, or stop and remove, the monitoring containers (volumes kept) |
+| `alert-recipients` | After editing `ALERT_EMAILS`, the sender or the relay in `.env`: validate, recreate Alertmanager |
+| `alert-test` | Raise a critical `AlertTest` for five minutes: a mail must arrive |
+| `alerts` | List the alerts Alertmanager holds |
+| `silence` | Silence an alert for maintenance |
+| `silence-fresh-install` | Silence for 48 h the alerts a new install raises before its first backup, restore test, timers and nightly passes |
+| `report-test`, `monthly-report` | Send the monthly report now |
+| `container-metrics`, `disk-usage` | Write the host metrics (the timers call them) |
+
+## Opening Grafana
+
+Grafana is never proxied by nginx and has no public address. Open an SSH tunnel
+from your workstation to the host, with your own account:
+
+```bash
+ssh -L 3000:localhost:3000 <account>@<host>
+```
+
+Leave it open and browse `http://localhost:3000`. The login is `admin` and the
+password is the file `grafana_admin_password` of the secrets directory
+(`SECRETS.md`; sign-up, anonymous access, plugins, update checks and Grafana's own
+alerting are off). Grafana stores only its administrator account and the
+preferences of whoever signs in, on the `grafana_data` volume.
+
+## Dashboards
+
+Provisioned from `compose/observability/grafana/dashboards/*.json`, read-only in
+Grafana. A change is made in Git (edit the JSON, redeploy), never in the browser:
+a modification made there is lost at the next start.
+
+| Dashboard | Answers |
+| --- | --- |
+| Overview | Is it working? Site, readiness, image server, alerts firing, certificate, disks, last good backup |
+| Application | Requests, errors, Explorer latency and corpus builds, Celery tasks, upstream calls, sign-in attempts, CSP violations by directive, active accounts |
+| Infrastructure | Containers (state, memory against its limit, restarts, OOM kills), host CPU, memory, swap, clock, PostgreSQL, Redis, scrape targets |
+| Activity | What people do: consultations by kind, content created and changed, workflows, sign-ins, data packages, the health of writes |
+| Storage and backups | Filesystem use and time until full for `/` and `/data`, size of each data area, database size, backup repository, last backup and restore test |
+
+**Disk numbers.** The `/` and `/data` panels come from the filesystem itself
+(`df`). The area panels (uploads, backup repository, dumps, nginx logs) come from
+`du` of those named directories, once an hour. The database size comes from
+PostgreSQL. They are different measures: the sizes of the areas do not add up to
+the filesystem use, and a network filesystem's `.snapshot` directory counts only
+in the filesystem number.
+
+**Never `du` on a mount root.** `du` of `/data` on the network filesystem is slow
+and counts snapshots. `host-metrics.sh disk` measures only the named
+sub-directories, refuses a path that is a mountpoint, and runs under `nice`,
+`ionice` and a timeout. Do not add a panel, a script or a command that measures
+a mount root.
+
+## CSP violations
+
+nginx sends the policy as `Content-Security-Policy-Report-Only` with
+`report-uri /api/csp-report; report-to csp-endpoint` and a
+`Reporting-Endpoints: csp-endpoint="/api/csp-report"` header (a relative URL is
+resolved against the page). Browsers post their violations to
+`POST /api/csp-report` (legacy `application/csp-report` and Reporting API
+`application/reports+json`), which nginx limits to 30 requests a minute per
+address, 16 KiB and POST only.
+
+- Metric: `manuspectrum_csp_violations_total{directive}`, the effective
+  directive from a closed list (`script-src`, `img-src`, ... , else `other`). Panel
+  « CSP violations by directive » of the Application dashboard (Guards row). No
+  alert: the policy is not enforced, the numbers decide what it may block.
+- Log line, logger `manuspectrum.csp`, INFO, one per violation, fields
+  `directive`, `blocked` (`inline`, `eval`, `wasm-eval`, `data`, `blob`, `self`,
+  `scheme://host`, else `other`; never a path or query), `document` (the route
+  name of the page, `other` when it does not resolve; never its path, which can
+  carry a token or an id) and `disposition` (`enforce`, `report`, else `other`).
+  No address, user, user agent or script sample. At most 20 violations are read
+  per request. The line is visible in the image, where `manuspectrum` logs at
+  INFO; the dev settings do not log that logger.
+
+```bash
+# dc as defined in ACCEPTANCE.md; follows web, Ctrl-C to stop
+dc logs --no-log-prefix -f web | jq -cR 'fromjson? | select(.logger=="manuspectrum.csp") | {directive,blocked,document}'
+```
+
+## Alerts
+
+72 alerts in `compose/observability/prometheus/rules/*.yml`, one file per area
+(site, application, containers, host, storage, backup, release, tls, celery, datastores,
+explorer, biblissima, monitoring; `activity.yml` holds recording rules only). Every rule has a `severity`, a `service`, a
+`summary`, a `description` and a `runbook_url` that points to a section of
+[`runbooks/`](runbooks/site.md) named after the alert.
+
+| Severity | Mail | Timing |
+| --- | --- | --- |
+| `critical` | At once | Grouped by alert and service, first mail 30 s after the alert, repeated every 4 h while it fires |
+| `warning` | Grouped by service, sent only on weekdays 08:00-19:00 (Europe/Paris); one raised outside waits for the window | First mail 2 min after the alert is grouped, then at most every 30 min for new alerts, repeated every 24 h |
+| `info`, `none` | Never | Visible in Grafana and `make alerts` |
+
+Each alert also waits for its `for:` duration in Prometheus. **Event warnings**
+(`ContainerOOMKilled`, `ContainerRestartLoop`, `CeleryTaskFailures`,
+`IndexingFailures`, `ExplorerRebuildFailing`, `WriteBudgetSpent`,
+`PrometheusRuleFailures`) fire on a single event and read a 64 h window of stored
+samples (`increase(counter[64h]) > 0`; `ContainerRestartLoop` takes the
+maximum over 64 h of its hourly rise). A warning raised at night or on a weekend
+would otherwise clear before the next weekday window and, since Alertmanager drops
+the resolved alerts of a muted group, never be mailed. 64 h covers Friday 19:00 to
+Monday 08:00 (61 h); a public holiday delays the mail to the next working day. The
+window lives in the TSDB, so a Prometheus restart or a reboot does not lose the
+event. The cost: an event of Tuesday noon is repeated every 24 h until 64 h have
+passed. The alert then resolves; its `RESOLVED` mail follows only when that moment
+falls inside the weekday 08:00-19:00 window (Alertmanager drops the resolved
+notification of a muted warning group, so an event of Tuesday noon, resolved on
+Friday 04:00, is usually never closed by a mail). The monthly report counts one
+episode per 64 h of such an event.
+`increase()` and `rate()` need a sample before the event: a series whose first
+sample already holds 1 counts 0. Every labelled application counter and histogram
+is therefore primed at 0 from its vocabulary in each process
+(`metrics.prime_label_sets()`, run by Django's `AppConfig.ready` and by Celery's
+`worker_process_init` with the registered task names), so the first failure of
+a known label set fires its alert and counts whole on the panels. Two cases stay
+out: an `other` value outside the log source (a task outside `TASK_PREFIXES`, an
+unknown CSP directive), and an event before the first scrape of a series
+Prometheus has never seen (a new stack or an emptied TSDB). The promtool cases
+of these alerts show both a primed series and one that appears at 1 (not counted).
+`manuspectrum_celery_task_seconds` (one series per task and bucket, read by a p95
+panel) is the one labelled metric left unprimed (`UNPRIMED_METRICS`).
+`ExplorerBundleBuildSlow` and `ExplorerBundleBuildVerySlow` fire when more than
+half of the builds of the last hour (at least three) took longer than 13 s, and
+longer than 55 s, respectively (histogram bucket boundaries): one slow cold build
+among several alerts nobody. `SearchExportSlow` (warning) reads a 64 h window like
+the event warnings, but waits for three search exports slower than 60 s
+(`count - bucket{le="60.0"}`, routes `export_results` and `api_export_results`): one
+export that long may be a curator's, a repeat is a visitor asking the web worker for a
+full export (`deploy/ADMIN.md`, « Search exports by visitors »). nginx answers 504 at 120 s,
+so the 120 s bucket separates the exports that ran past the gateway. The first export of a
+route since the web container started is not counted by `increase`. The two buckets (60 and
+120 s, `PROMETHEUS_LATENCY_BUCKETS`) add two series per view and method to every
+`django_http_requests_latency_seconds_by_view_method_bucket`. Disk thresholds:
+`DiskUsageHigh` warning above 80 %, `DiskAlmostFull` critical above 95 %,
+`DiskFillingUp` warning when the 6 h trend fills a disk within 24 h. There is no
+"no traffic" alert: a quiet site is not a fault.
+
+**Inhibitions.**
+
+- A critical alert hides the warnings of the same `service`.
+- `RecentlyRebooted` (the host booted less than 15 minutes ago) hides every
+  critical and warning alert except the `AlertTest` of `make alert-test`. The nightly 04:50 reboot is therefore silent; a
+  stack that is not back after 15 minutes fires normally.
+
+**Maintenance.** `make -C deploy silence ARGS='alertname=DiskUsageHigh --duration=2h --comment="why"'`
+silences one alert; silences live on a volume and survive a restart.
+`make -C deploy observability-off` stops the stack (volumes kept).
+
+**Node exporter down.** `NfsUnavailable`, `BackupMissing`, `RestoreTestMissing`, `ReleaseWatchStale`,
+`HostMetricsStale`, `DiskUsageStale` and `ContainerMissing` read series that only
+node_exporter carries. They count a missing series only while node_exporter is up,
+so its outage raises `NodeExporterDown` alone (critical, after 15 minutes, since it
+blinds the backup and NFS alerts; `TargetDown` covers the other targets).
+
+**Certificate trust.** `http_edge` measures the expiry without verifying the chain
+(so the local and staging authorities pass); `http_edge_verified` verifies it and
+`CertificateInvalid` (warning) fires when the site answers but the chain or name
+does not verify. The Prometheus entrypoint marks a target `rehearsal="true"` when
+`PUBLIC_HOST` ends in `.test`, which turns the alert off in CI and rehearsal. With
+`CERT_MODE=acme` against the Let's Encrypt staging authority it fires, as it should.
+
+**Fresh install.** Until the first backup, the first Sunday restore test and the
+first run of the systemd timers, `BackupMissing` (critical), `RestoreTestMissing`, `ReleaseWatchStale`,
+`HostMetricsStale`, `DiskUsageStale` and `ContainerMissing` fire, and so do `LoginRecordsPruneStale`, `EmbargoPassStale`,
+`WorkflowCleanupStale` and `AccountRetentionStale` until the first night's passes have run (hour-long `for`, 26 h window). Install the
+timers and take a first backup before `observability-on`, or run
+`make -C deploy silence-fresh-install` (48 h, with a comment) and let the first
+backup, restore test and timers land within it.
+
+**Heartbeat.** The always-firing `Watchdog` alert becomes one mail on Monday at
+08:00 (Europe/Paris, a five-minute window). It proves that Prometheus evaluates
+the rules, that Alertmanager routes them and that the relay delivers. Its limit:
+the absence of the mail is the signal, so someone has to notice it. If the whole
+VM is down, nothing is sent; the external probe of PP-9 covers that case.
+
+**Monitoring the monitors.** `TargetDown`, `NodeExporterDown`, `HostMetricsStale`, `DiskUsageStale`,
+`TextfileError`, `AlertmanagerNotificationsFailing`, `PrometheusRuleFailures` and
+`Watchdog` watch the stack itself ([`runbooks/monitoring.md`](runbooks/monitoring.md#targetdown)).
+
+## Recipients and sender
+
+Every mail setting of the host `.env` at a glance. With one generic institutional
+address, the recipient settings all hold that address and the sender settings all
+hold an address on the host's own domain:
+
+| Setting | Role | Holds |
+| --- | --- | --- |
+| `CONTACT_EMAIL` | address shown on the public pages and used by the contact form | the generic address |
+| `ALERT_EMAILS` | receives alerts, the Monday heartbeat and the monthly report | the generic address |
+| `ADMINS` | unused: the image logs no `mail_admins` handler, server errors are counted and alerted (`ErrorRateHigh`, `ErrorLogRateHigh`) | leave empty |
+| `ACME_EMAIL` | Let's Encrypt account, certificate notices (`CERT_MODE=acme`) | the generic address |
+| `ALERT_EMAIL_FROM` | sender of alerts, heartbeat and report | `noreply@<host domain>` |
+| `DEFAULT_FROM_EMAIL` | sender of application mail (password reset, Arches notices); required | `noreply@<host domain>` |
+| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS` | the outgoing relay | the hosting provider's relay |
+
+Outside `.env`, the host's `root` alias (system mail) points to the same generic
+address (set by the host role, PP-8). Every message carries a subject prefix and
+header to sort it (« Sorting the mail » below).
+
+**Recipients.** One comma-separated list, `ALERT_EMAILS`, in the host `.env`
+(never in Git). It serves the alerts, the monthly report and the Monday
+heartbeat. A generic list address managed by the institution is recommended: who
+receives the mail then changes without touching the host. To change the list:
+SSH to the host, edit `.env`, then
+
+```bash
+make -C deploy alert-recipients
+```
+
+It validates the list on the host first (a bad list leaves Alertmanager running
+unchanged), then recreates Alertmanager. Nothing is stored in the database.
+
+**Sender.** `ALERT_EMAIL_FROM` (alerts, heartbeat, report) and
+`DEFAULT_FROM_EMAIL` (application mail) are the same address on the domain of
+the host itself, for example `noreply@manuspectrum.huma-num.fr`. `DEFAULT_FROM_EMAIL`
+is required: the settings refuse to start without it and never fall back to
+`CONTACT_EMAIL`. Why not an institutional sender:
+
+- The relay delivers mail for the hosting provider's domain; it rewrites the
+  envelope sender to that domain, so SPF and DKIM pass for the provider.
+- A sender on another organisation's domain is checked against that domain's
+  DMARC policy; when it is `p=quarantine` with strict alignment and the relay is
+  not in its SPF, the mail is quarantined.
+- A sender on the host's own domain needs no permission and passes.
+
+Alertmanager introduces itself to the relay (SMTP HELO) with `PUBLIC_HOST`, the host's
+own validated name, whatever the sender's domain.
+
+## Sorting the mail
+
+Every message the platform sends carries a subject prefix
+`[ManuSpectrum][<Category>]` and, when the sender controls headers, an
+`X-ManuSpectrum-Category` header. The header value is the category name exactly as
+it appears in the subject (`Alert`, `Heartbeat`, `Report`). One address receives
+everything; mail filters sort on either.
+
+| Category | Sent by | Subject | Header |
+| --- | --- | --- | --- |
+| Alert | Alertmanager | `[ManuSpectrum][Alert] CRITICAL\|WARNING <alertname> - <summary>`; `RESOLVED …` when it clears | `Alert` |
+| Heartbeat | Alertmanager, Monday 08:00 | `[ManuSpectrum][Heartbeat] Alerting chain OK` | `Heartbeat` |
+| Report | Monthly report | `[ManuSpectrum][Report] Rapport mensuel <YYYY-MM>` | `Report` |
+| Contact | Public contact form | `[ManuSpectrum][Contact] <reason> — <name>` | none (a `mailto:` link cannot set a header: filter on the subject) |
+| Account | The application: invitation (`Your ManuSpectrum account`), embargo notices (`Restriction ending on <date>`, `Your data are now public`), workflow notices (`Unfinished workflow to be cleaned on <date>`, `Unfinished workflow cleaned`), the anonymisation notice (`Your account will be anonymised on <date>`), the deactivation notice (`Your account has been deactivated`), the administrator summaries of those notices, and the password-reset mail | `[ManuSpectrum][Account] …` | `Account` |
+| Release | The release watch and update engine, through the host `postfix` (`sendmail`): release available, scheduled, cancelled, refused, missed, installed, rolled back, `ROLLBACK FAILED` | `[ManuSpectrum][Release] …` | `Release` |
+| System | Host mail (`root` alias: unattended upgrades, cron) | Unchanged | none (filter on the sender `root@<host>`) |
+
+Arches' own two-factor reset mail (`two-factor-authentication-reset`) is no longer reachable: nginx refuses that route and the unsafe settings route (`two-factor-authentication-settings`), so no uncategorised account mail remains. A lost phone is handled by a superuser in the admin (`deploy/ADMIN.md`).
+
+## Monthly report
+
+On the 1st at 08:00 the `manuspectrum-monthly-report` timer sends a report of the
+previous month, in French, to `ALERT_EMAILS`: availability, disks, sizes, backups and
+restore tests, restarts and out-of-memory kills, alerts of the month, consultations, contents,
+workflows, abandoned workflows cleaned, embargoes (lifted, overdue, undated), bulk imports and exports, sign-ins, account
+lockouts, account mails (sent and failed), active accounts (the number at
+the end of the month and its maximum over the month) and inactive accounts. Growth is given "sur le mois"
+when Prometheus still holds the start of the month, else "depuis le <date>" from its oldest sample (retention is 35
+days). A source that could not be read is listed
+under "données indisponibles" and the command exits 1. The report reads Prometheus and the
+database, aggregates only (see "Activity" below).
+**Inactive accounts** are the one section that names people: the active accounts (the `anonymous`
+visitor excluded) with no sign-in for 12 months, and those that never signed in 3 months after their
+creation (an invitation never activated counts there), each with its user name, last sign-in (or
+"jamais") and creation date. They come from `activity_summary` (key `inactive_accounts`) and go to
+`ALERT_EMAILS` only. At 12 months nothing is changed: deactivation is the administrators'
+decision, by hand. At 24 months the daily retention pass anonymises the account (never a
+deletion, `ADMIN.md`); the section also gives the number of accounts anonymised in the month
+(`accounts_anonymised`, read from the `ms_account_retention` ledger). The pass is watched by
+`manuspectrum_account_anonymisations_total{outcome}` (`AccountRetentionFailures`) and
+`manuspectrum_account_retention_timestamp_seconds` (`AccountRetentionStale`).
+**Active accounts** read `manuspectrum_active_accounts`: one number, no label, the
+active accounts (staff and superusers included, the `anonymous` visitor not) whose last
+login is within 30 days. A daily Celery beat task (`manuspectrum.record_active_accounts`)
+and the worker start refresh it on `worker:9808`; no account is named or stored in
+Prometheus. `manuspectrum_active_accounts_timestamp_seconds` is the time of that count: the report prints it
+("mesuré le <date>") and flags a count more than two days old, and `ActiveAccountsStale` warns
+when it is, or when the worker publishes no time at all. The maximum line says "depuis le <date>" when the month is longer than the
+retention. Without a sample the report prints "n/d". `make -C deploy report-test
+[ARGS="--month YYYY-MM"]` sends one now.
+
+## Activity
+
+Counts only: nothing names a person, a resource or a path (GDPR), except the inactive-accounts list of the monthly report (above). Three sources.
+
+**Consultations** need no application code. The recording rules of `activity.yml` map the
+route names of `django_http_*` (the `view` label) to a closed `kind` vocabulary and record
+`manuspectrum:consultations:total{kind}` (GET answers 2xx or 304 only) and
+`manuspectrum:consultations:rate1h{kind}`. `tests/test_consultation_kinds.py` fails when a route of
+`urls.py` is neither mapped nor ignored with a reason. Robots are counted, a 304 counts, the Explorer
+memoises payloads for five minutes per tab, and the IIIF kinds count requests, not views. Map tiles,
+the thumbnail route, plugin pages and the back-office plumbing are not consultations.
+
+A file download is the 302 that `file_access` answers (Arches' `FileView` redirects to the stored file and
+nginx follows it); the 200 answers of that route are card thumbnails and are not counted. The homepage is
+the route `root` (`/index.htm` is an unnamed redirect). The `explorer_search` kind counts API calls
+(debounced filter changes and the first search of each page), not searches typed by a user.
+
+Caveats of the other sources. `saisies enregistrées` (tile saves) include the `tile delete` rows that a
+workflow cancellation writes and the provisional edits of non-reviewers. A later `Resource.save()` of an
+existing resource writes a new `create` row, so it would read as created that month (no project path does
+this today). `biblissima-create-*` answers 504 when its write budget is spent, so an upstream slowdown
+also raises `WriteRequestsFailing` next to `WriteBudgetSpent`. Prometheus creates a labelled series at its
+first increment, so the first error of a new `(view, method, status)` series is invisible to a bare
+`increase()`: the alert and the 4xx/5xx and cancellation panels add the series that did not exist one
+window earlier. The fresh-series term only counts targets that were scraped successfully one window earlier (`up offset 30m == 1`): a scrape gap does not turn every old series into a new one, and a Prometheus started less than 30 minutes ago misses new series until then. A thumbnail request for a file without `thumbnail_data` is answered with the same 302 as a download, so it is counted as one. Bulk runs: `cancelled` (stopped by the user) and `unloaded` are terminal; the Excel exporters insert their row as `validated` and set `indexed` when done, so for an export module `validated` means running or crashed and is reported as unfinished. History is 35 days, capped at 8 GB (`--storage.tsdb.retention.size`): if the cap cuts
+earlier, the consultation and sign-in figures of the monthly report undercount the start of the month
+without a mark, as does the first month after the recording rules are deployed (they have no history
+before their first evaluation).
+
+**Content, workflows and bulk runs** are read from the database by
+`manuspectrum/observability/activity.py`, in a read-only transaction. Created, modified and
+deleted are counted per model as distinct resources from the Arches `edit_log` (a `create` row is
+written by every save, and the Biblissima bulk path writes only tile rows noted `resource creation`);
+totals come from `resource_instances`, workflows from `workflow_history` (a run cancelled by its user
+is deleted by Arches: it is counted from the `transaction_reverse` requests), bulk runs from
+`load_event`. Month bounds are UTC instants and the Arches columns read are `timestamptz`: Arches writes
+a naive `datetime.now()` in the process zone (`TIME_ZONE = "Europe/Paris"`, `USE_TZ = False`) and PostgreSQL
+converts it with the session zone, so the stored values are true instants. That holds while a writer's
+process zone equals its session zone (Django guarantees it; a hand `psql` session in another zone writing
+naive values would not), and a value written during the repeated hour of the autumn change is ambiguous
+(at most one hour a year is placed an hour off). The window of a month counts the log as it is: rows written outside Arches
+(`load_package`, SQL) have no `edit_log` entry but are in the totals. A workflow open for more than
+`WORKFLOW_CLEANUP_AFTER_DAYS` (90) days is "stale": the delay after which the cleanup of abandoned workflows acts.
+`python manage.py activity_summary --month YYYY-MM` prints the month as one line of JSON; the monthly
+report runs it in its own container.
+
+**Gauges** are refreshed hourly by the Celery task `manuspectrum.record_activity` (and when the worker
+starts): `manuspectrum_resources{model}`, `manuspectrum_resource_changes{model,kind}` (last 24 hours),
+`manuspectrum_workflows{kind,state}` and `manuspectrum_activity_timestamp_seconds`. `model` is the closed
+list of resource models, anything else is `other`. `ActivityStale` warns when they are more than three
+hours old or the worker publishes no time at all. `WriteRequestsFailing` (warning) warns when three POST, PUT or DELETE requests answer a 5xx
+within 30 minutes: a curator's input may be lost, which `ErrorRateHigh` does not see.
+
+## Host metrics
+
+Two timers write Prometheus textfiles that `node-exporter` reads from
+`METRICS_TEXTFILE_DIR`, through `scripts/host-metrics.sh` and the shared
+`scripts/lib-metrics.sh` (atomic writes, bounded label values):
+
+| Unit | Schedule | Metrics |
+| --- | --- | --- |
+| `manuspectrum-container-metrics` | Every 30 s | Per Compose service: running, health, restarts, OOM kills, memory against its limit |
+| `manuspectrum-disk-usage` | Every hour at :17 | Size of the uploads, the backup repository, the dumps and the nginx logs, plus the Docker sizes below. The unit file carries the four-times-a-day calendar to use if a measure proves slow on the network filesystem |
+
+Docker sizes (one `docker system df -v` call under `nice` and `ionice`, each kind
+the sum of its entries, about four significant digits; the images figure counts
+the unique size of each image, shared layers left out, so it is about 0.3 % under `docker system df`; a measure of growth, not an accounting total):
+`manuspectrum_docker_disk_bytes{kind=images|build_cache|containers|volumes}` and
+`manuspectrum_docker_volume_bytes{volume=ms_*}` (the external data volumes).
+`manuspectrum_container_oom_cgroup` is 1 when a container's OOM kills are counted
+from the cgroup v2 `memory.events` file (a kill of a child process included) and 0
+when the collector fell back on Docker's `OOMKilled` flag, which misses most kills;
+0 for an hour raises `OomSourceDegraded`. A disk run has a budget of 840 s: `du`
+300 s per target and `docker system df -v` 120 s, all under `timeout`. The
+checks that stat a directory before `du` (existence, mountpoint) run outside any
+timeout, so a hard-hung mount can hold the run until systemd stops the unit at
+`TimeoutStartSec` (15 min); a `du` stuck in uninterruptible I/O is not killed by
+its timeout either. Either case leaves `DiskUsageStale` to report it.
+
+The backup and restore-test timers write their own textfiles (`BACKUP.md`). The
+release watch (`manuspectrum-watch`, hourly) and the update engine write
+`manuspectrum_release.prom` through `scripts/lib-release.sh`: `manuspectrum_release_*`
+for the last run, the failing step (`watch_failed{step=git|registry|sigstore|pull|mail|state}`),
+the verification, the armed release and how long it waits (`pending_since_timestamp_seconds`,
+`pending_security`), rollbacks (`rollbacks_total`, `rollback_failed`), the last
+successful update, the update in flight (`inflight_since_timestamp_seconds`, 0 when none)
+and the scheduled slot (`scheduled_timestamp_seconds`,
+`schedule_failed{reason=refused|missed}`). No tag or version appears in a label.
+Eight alerts read them (`rules/release.yml`, [release runbook](runbooks/release.md)):
+`ReleaseVerificationFailed`, `UpdateRolledBack` and `UpdateRollbackFailed` (critical),
+`UpdateInterrupted` (warning, an update in flight for more than 5.5 hours),
+`ReleaseWatchFailing`, `ReleaseWatchStale`, `ReleasePendingTooLong` (30 days, 14 when the
+release carries a security fix) and `ReleaseScheduleFailed` (warning). A
+stale file raises `HostMetricsStale` or `DiskUsageStale`.
+
+**Labels.** Metric labels are closed vocabularies (service names, area names,
+severities), never an id, a user, a URL or a path. Textfile label values match
+`^[a-z0-9_-]+$`; an application label comes from `ALLOWED_LABELS`
+(`manuspectrum/observability/metrics.py`). Metrics carry no personal data.
+A new labelled application counter or histogram gets its vocabulary in
+`metrics._vocabularies()` (primed at 0 in every process; `smoke.sh monitoring` then
+requires its series), or its name in `UNPRIMED_METRICS` and a reason
+(`tests/test_observability_metrics.py` fails otherwise).
+
+## Checking a running stack
+
+`compose/smoke.sh` (CI and the rehearsal VM; read-only except the test mail):
+
+| Command | Checks |
+| --- | --- |
+| `smoke.sh monitoring` | Every Prometheus target up, every rule evaluating, `Watchdog` firing, the series each rule and dashboard expression reads, Grafana healthy with its five dashboards. Run `make container-metrics disk-usage` (and a backup) first. `SMOKE_EXPECT_BACKUP=1` also requires the backup and restore-test gauges to exist and read 0 |
+| `smoke.sh mail alert` | After `make alert-test`: the `AlertTest` mail reached Mailpit, read from the `web` container (the `wget` of `prometheus` cannot resolve service names under a host `search .`), with the `[ManuSpectrum][Alert]` prefix and its category header (CI and rehearsal, where `COMPOSE_PROFILES` includes `mailpit`) |
+| `smoke.sh mail report` | The same after `make report-test`, for `[ManuSpectrum][Report] Rapport mensuel` |
+
+## Installing and upgrading
+
+The units are installed by the configuration management (PP-8). Until then, on a
+host, render the `deploy/systemd/*.in` files (`@APP_USER@`, `@DEPLOY_DIR@`, `@APP_DIR@`), copy
+them to `/etc/systemd/system/` and `systemctl enable --now` the timers.
+
+A host that already has a `.env` must add `COMPOSE_PROFILES`, `ALERT_EMAILS`,
+`ALERT_EMAIL_FROM` and a `DEFAULT_FROM_EMAIL` (`compose/.env.example` documents
+each) **before pulling this version**: the settings refuse to start without the
+sender. Then:
+
+```bash
+make -C deploy volumes secrets monitoring-init up observability-on
+```
+
+`secrets` creates the two new secrets (`grafana_admin_password`,
+`pg_monitor_password`) and keeps the others; copy both into the vault item
+(`SECRETS.md`). Check the chain with `make -C deploy alert-test` and
+`make -C deploy report-test`.
+
+## What is never backed up
+
+Prometheus data, Alertmanager silences and Grafana's database are monitoring
+state, rebuilt from the configuration in Git. They are not part of any backup
+(`BACKUP.md`); the retention (35 days) is an operational choice, not a legal
+limit on personal data.
+
+## Runbooks
+
+One file per area, one section per alert, each with prerequisites, symptom,
+diagnosis, remediation and escalation:
+[site](runbooks/site.md), [application](runbooks/application.md),
+[containers](runbooks/containers.md), [host](runbooks/host.md),
+[storage](runbooks/storage.md), [backup](runbooks/backup.md), [release](runbooks/release.md),
+[TLS](runbooks/tls.md), [Celery](runbooks/celery.md),
+[datastores](runbooks/datastores.md), [Explorer](runbooks/explorer.md),
+[Biblissima](runbooks/biblissima.md), [monitoring](runbooks/monitoring.md).

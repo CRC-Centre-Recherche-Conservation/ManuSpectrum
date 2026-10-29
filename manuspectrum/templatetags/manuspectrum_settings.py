@@ -1,5 +1,6 @@
 from django import template
 from django.conf import settings
+from django.core.exceptions import DisallowedHost
 from django.urls import translate_url
 
 register = template.Library()
@@ -10,9 +11,9 @@ def translated_page_url(context, lang_code):
     """Absolute URL of the current page in *lang_code*.
 
     Feeds the hreflang alternates and the header language switcher. Uses
-    django.urls.translate_url, which understands i18n_patterns (including
-    prefix_default_language=False, where 'en' URLs carry no prefix). Query
-    strings are dropped on purpose — alternates must mirror the canonical.
+    django.urls.translate_url, which understands i18n_patterns and swaps one
+    language prefix for another. Query strings are dropped on purpose —
+    alternates must mirror the canonical.
 
     SECURITY (open redirect): do NOT pass a request path to
     build_absolute_uri() as its `location` arg. A path beginning with
@@ -31,6 +32,23 @@ def translated_page_url(context, lang_code):
         return ""
     path = translate_url(request.path, lang_code)
     return f"{request.scheme}://{request.get_host()}{path}"
+
+
+@register.simple_tag(takes_context=True)
+def site_origin(context):
+    """scheme://host of the current request, or "" when its Host is not allowed.
+
+    The 400 page renders for a request whose Host failed ALLOWED_HOSTS
+    (DisallowedHost raised by CommonMiddleware): calling request.get_host()
+    again while rendering it raises once more and turns the 400 into a 500.
+    """
+    request = context.get("request")
+    if request is None:
+        return ""
+    try:
+        return f"{request.scheme}://{request.get_host()}"
+    except DisallowedHost:
+        return ""
 
 
 @register.simple_tag

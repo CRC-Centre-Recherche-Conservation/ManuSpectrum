@@ -1,0 +1,89 @@
+"""Code version of the cached payloads, read once per process.
+
+Imported by ``settings.py`` before Django is configured: no Django import here.
+"""
+
+import hashlib
+import os
+from pathlib import Path
+
+# Modules whose code decides the shape of a cached payload. Editing one of
+# them changes the cache key prefix, so a process running the new code never
+# reads an entry built by the old one. Modules that only parse upstream data
+# (Biblissima proxy) are not listed: their entries expire by TTL.
+CACHE_SHAPE_MODULES = (
+    "views/model_graph.py",
+    "views/model_graph_service.py",
+    "views/summary.py",
+    "views/summary_service.py",
+    # The summary payload reads its localized texts through graph_nodes.
+    "views/graph_nodes.py",
+    # What the Knockout template memo stores; its key also carries the
+    # template stamp, since templates are not Python modules.
+    "views/knockout_templates.py",
+    # The spectrum preview memo: its join and its series.
+    "views/spectrum_preview.py",
+    # The site announcement memo: its payload and its encoding.
+    "views/site_notice.py",
+    "utils/spectrum_preview.py",
+    "utils/xy_transforms.py",
+    # The per-reader visibility memos: hidden resources, readable nodegroups.
+    "utils/public_visibility.py",
+    # The Explorer's corpus bundle: its keys and what each layer keeps, the
+    # values of its rows (names, labels, references) and its link maps.
+    "views/explorer/service.py",
+    "views/explorer/memo.py",
+    "views/explorer/values.py",
+    "views/explorer/swatches.py",
+    "views/explorer/terms.py",
+    # The thumbnail-source rule a search hit advertises.
+    "utils/manifest_values.py",
+    # The map's events, their places, materials and colours, stored in the bundle.
+    "views/explorer/events.py",
+    "views/explorer/places.py",
+    "utils/role_links.py",
+    "utils/roles.py",
+    # IIIF documents: the sources and zones the Explorer memo reads, and the
+    # ids, language maps and selectors of the memoised IIIF payloads.
+    "iiif/constants.py",
+    "iiif/ids.py",
+    "iiif/language.py",
+    "iiif/selectors.py",
+    "iiif/sources.py",
+    "iiif/zones.py",
+    # The memoised IIIF pages, collections and annotations: facts, bodies,
+    # annotations, pages, their v2 form, the auth services they declare, the
+    # memo key and the view wrapping.
+    "iiif/facts.py",
+    "iiif/bodies.py",
+    "iiif/annotations.py",
+    "iiif/characterizations.py",
+    "iiif/data.py",
+    "iiif/xy_reading.py",
+    "iiif/pages.py",
+    "iiif/v2.py",
+    "iiif/memo.py",
+    "iiif/services.py",
+    "views/iiif/annotations.py",
+    # The memoised Content State of one zone, and the view wrapping it.
+    "iiif/content_state.py",
+    "views/iiif/content_state.py",
+)
+
+ENV_OVERRIDE = "MANUSPECTRUM_CACHE_VERSION"
+
+
+def cache_code_version(app_root, modules=CACHE_SHAPE_MODULES, environ=os.environ):
+    """A 12-hex digest of the listed module sources under `app_root`.
+
+    ``MANUSPECTRUM_CACHE_VERSION`` in the environment replaces the digest
+    verbatim, which is how a deployment forces every key to start cold.
+    """
+    override = environ.get(ENV_OVERRIDE, "").strip()
+    if override:
+        return override
+    digest = hashlib.sha1(usedforsecurity=False)
+    for relative in modules:
+        digest.update(relative.encode("utf-8"))
+        digest.update(Path(app_root, relative).read_bytes())
+    return digest.hexdigest()[:12]

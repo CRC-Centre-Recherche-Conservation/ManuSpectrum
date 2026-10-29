@@ -1,0 +1,13 @@
+# The slot of a scheduled update. This file has no OnCalendar: `manuspectrum-
+# update --at` writes the slot into the drop-in
+# /etc/systemd/system/manuspectrum-update-at.timer.d/slot.conf and starts the
+# timer; --fire and --cancel remove the drop-in and stop it. Persistent=false:
+# a slot missed while the host was off is reported by the watch and never run
+# at boot. No [Install] section: the timer is started and stopped by hand,
+# never enabled, so no reboot re-arms it.
+[Unit]
+Description=Slot of the scheduled ManuSpectrum update
+
+[Timer]
+Persistent=false
+AccuracySec=1s

@@ -4,6 +4,7 @@ from unittest import mock
 from django.conf import settings
 from django.test import SimpleTestCase
 
+from manuspectrum.constants.licenses import default_license
 from manuspectrum.utils.file_entries import (
     METADATA_FIELDS,
     build_file_entry,
@@ -361,7 +362,7 @@ class FileEntryBuilderTests(SimpleTestCase):
         }
         filled = normalize_metadata(entry, "en")
 
-        self.assertEqual(filled, 3)
+        self.assertEqual(filled, (3, True))
         self.assertEqual(entry["title"]["en"]["value"], "Recto")
         self.assertEqual(entry["altText"]["en"]["value"], "")
         self.assertIn("attribution", entry)
@@ -369,18 +370,50 @@ class FileEntryBuilderTests(SimpleTestCase):
 
     def test_repairing_twice_changes_nothing_the_second_time(self):
         entry = {"name": "scan.asd"}
-        self.assertEqual(normalize_metadata(entry, "en"), 4)
-        self.assertEqual(normalize_metadata(entry, "en"), 0)
+        self.assertEqual(normalize_metadata(entry, "en"), (4, True))
+        self.assertEqual(normalize_metadata(entry, "en"), (0, False))
 
     def test_adds_a_missing_language_beside_an_existing_one(self):
         entry = {"title": {"fr": {"value": "Verso", "direction": "ltr"}}}
-        self.assertEqual(normalize_metadata(entry, "en"), 4)
+        self.assertEqual(normalize_metadata(entry, "en"), (4, True))
         self.assertEqual(entry["title"]["fr"]["value"], "Verso")
         self.assertEqual(entry["title"]["en"]["value"], "")
 
     def test_tolerates_junk(self):
-        self.assertEqual(normalize_metadata(None), 0)
-        self.assertEqual(normalize_metadata("not-a-dict"), 0)
+        self.assertEqual(normalize_metadata(None), (0, False))
+        self.assertEqual(normalize_metadata("not-a-dict"), (0, False))
+
+    def test_gives_a_bare_entry_the_default_licence(self):
+        entry = {"name": "scan.asd"}
+        normalize_metadata(entry, "en")
+        self.assertEqual(entry["license"], default_license())
+
+    def test_gives_a_bare_entry_the_licence_asked_for(self):
+        entry = {"name": "scan.asd"}
+        normalize_metadata(entry, "en", {"id": "CC0-1.0", "url": "https://x.org/"})
+        self.assertEqual(entry["license"], {"id": "CC0-1.0", "url": "https://x.org/"})
+
+    def test_never_replaces_a_stored_licence(self):
+        entry = {"name": "scan.asd", "license": {"id": "GPL-3.0"}}
+        self.assertEqual(normalize_metadata(entry, "en"), (4, False))
+        self.assertEqual(entry["license"], {"id": "GPL-3.0"})
+
+    def test_an_empty_or_malformed_licence_counts_as_missing(self):
+        for value in (None, {}, "CC0-1.0", []):
+            with self.subTest(value=value):
+                entry = {"name": "scan.asd", "license": value}
+                self.assertEqual(normalize_metadata(entry, "en"), (4, True))
+                self.assertEqual(entry["license"], default_license())
+
+    def test_a_built_entry_carries_the_default_licence(self):
+        entry = build_file_entry(
+            file_id="8f14e45f-ceea-467a-9e4a-1b0c8e1a0003",
+            name="spectrum.csv",
+            path="uploadedfiles/spectrum.csv",
+            size=10,
+            content_type="text/csv",
+        )
+        self.assertEqual(entry["license"], default_license())
 
 
 class FileMetadataCompletenessTests(SimpleTestCase):

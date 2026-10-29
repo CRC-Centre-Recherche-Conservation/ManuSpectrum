@@ -1,0 +1,72 @@
+# Alert rules of the monitoring stack: explorer.
+# Severity: critical = mailed at once, warning = grouped weekday e-mail, info = never mailed.
+groups:
+  - name: explorer
+    rules:
+      - alert: ExplorerBundleBuildSlow
+        expr: |
+          (
+            sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_count[1h]))
+            - sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_bucket{le="13.0"}[1h]))
+          )
+          / sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_count[1h])) > 0.5
+          and
+          sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_count[1h])) >= 3
+        for: 1h
+        labels:
+          severity: warning
+          service: explorer
+        annotations:
+          summary: "The Explorer corpus rebuild is slow"
+          description: "{{ $value | humanizePercentage }} of the corpus bundle builds of the last hour took more than 13 seconds for language {{ $labels.language }}."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/explorer.md#explorerbundlebuildslow
+      - alert: ExplorerBundleBuildVerySlow
+        expr: |
+          (
+            sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_count[1h]))
+            - sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_bucket{le="55.0"}[1h]))
+          )
+          / sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_count[1h])) > 0.5
+          and
+          sum by (language) (increase(manuspectrum_explorer_bundle_build_seconds_count[1h])) >= 3
+        for: 30m
+        labels:
+          severity: critical
+          service: explorer
+        annotations:
+          summary: "The Explorer corpus rebuild is very slow"
+          description: "{{ $value | humanizePercentage }} of the corpus bundle builds of the last hour took more than 55 seconds for language {{ $labels.language }}."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/explorer.md#explorerbundlebuildveryslow
+      - alert: ExplorerRebuildFailing
+        expr: |
+          sum by (language) (increase(manuspectrum_explorer_rebuild_failures_total[64h])) > 0
+        for: 15m
+        labels:
+          severity: warning
+          service: explorer
+        annotations:
+          summary: "Background Explorer rebuilds fail"
+          description: "{{ $value | humanize }} background rebuilds failed in the last 64 hours for language {{ $labels.language }}; readers keep the previous corpus."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/explorer.md#explorerrebuildfailing
+      - alert: ExplorerRebuildContinuous
+        expr: |
+          sum by (language) (rate(manuspectrum_explorer_bundle_build_seconds_sum[10m])) > 0.8
+        for: 2h
+        labels:
+          severity: info
+          service: explorer
+        annotations:
+          summary: "The Explorer corpus is rebuilt all the time"
+          description: "A rebuild runs {{ $value | humanizePercentage }} of the time for language {{ $labels.language }}."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/explorer.md#explorerrebuildcontinuous
+      - alert: DataChangeLedgerNotPruned
+        expr: |
+          max(manuspectrum_data_change_rows) > 200000
+        for: 6h
+        labels:
+          severity: warning
+          service: celery
+        annotations:
+          summary: "The data change ledger is not pruned"
+          description: "ms_data_change holds {{ $value | humanize }} rows; the daily prune task should keep it small."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/explorer.md#datachangeledgernotpruned

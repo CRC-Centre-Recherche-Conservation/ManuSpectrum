@@ -1,7 +1,46 @@
-import requests
+import hashlib
 import logging
+import re
+from urllib.parse import unquote
+
+from django.conf import settings
+from django.core.cache import cache
+
+from manuspectrum.utils.http import fetch_iiif_manifest, safe_fetch
 
 logger = logging.getLogger(__name__)
+
+_MANIFEST_CACHE_KEY = "manuspectrum:iiif-manifest:{digest}"
+
+_OWN_IIIF_PATH = re.compile(r"^iiif/[23]/[^?#\\]*$")
+
+
+def own_cantaloupe_target(url):
+    """Return ``(url, extra_kwargs)`` for fetching *url* through ``safe_fetch``.
+
+    A URL under ``<CANTALOUPE_HTTP_ENDPOINT>iiif/2|3/`` names this server's own
+    image service (``CANTALOUPE_HTTP_ENDPOINT`` is the public
+    ``<PUBLIC_SERVER_ADDRESS>iiifserver/`` in the Docker settings). Behind the
+    edge proxy its host resolves to a private address the SSRF guard refuses,
+    so it is fetched from ``CANTALOUPE_INTERNAL_ENDPOINT`` instead, the address
+    operators set in the settings, with ``allow_private`` for that one call.
+    Paths holding a dot segment, literal or percent-encoded, are never
+    rewritten. Any other URL, and every URL when either setting is absent, is
+    returned unchanged with no extra keyword and stays under the guard.
+    """
+    public = getattr(settings, "CANTALOUPE_HTTP_ENDPOINT", "") or ""
+    internal = getattr(settings, "CANTALOUPE_INTERNAL_ENDPOINT", "") or ""
+    if not (public and internal and isinstance(url, str)):
+        return url, {}
+    prefix = f"{public.rstrip('/')}/"
+    if not url.startswith(prefix):
+        return url, {}
+    rest = url[len(prefix) :]
+    if not _OWN_IIIF_PATH.match(rest) or ".." in rest:
+        return url, {}
+    if any(unquote(seg) in (".", "..") for seg in rest.split("/")):
+        return url, {}
+    return f"{internal.rstrip('/')}/{rest}", {"allow_private": True}
 
 
 # -------------------------------
@@ -12,21 +51,51 @@ class CanvasIIIF:
 
     @staticmethod
     def fetch_manifest(manifest_url):
+        """Fetch and cache a IIIF manifest, or return None.
+
+        Cached for ``settings.IIIF_MANIFEST_CACHE_TTL``: a page of search
+        results asks the same fetchers for the same manifests, and each miss is
+        a round trip to a library server. The URL is hashed into the key —
+        manifest URLs carry characters a cache backend rejects, and they can be
+        longer than a key may be.
+        """
+        if not manifest_url:
+            return None
+
+        digest = hashlib.sha1(
+            manifest_url.encode("utf-8"), usedforsecurity=False
+        ).hexdigest()
+        cache_key = _MANIFEST_CACHE_KEY.format(digest=digest)
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         try:
-            response = requests.get(manifest_url, timeout=10)
+            response = fetch_iiif_manifest(manifest_url)
             if response.status_code == 200:
-                return response.json()
+                manifest = response.json()
+                cache.set(
+                    cache_key,
+                    manifest,
+                    timeout=getattr(settings, "IIIF_MANIFEST_CACHE_TTL", 86400),
+                )
+                return manifest
         except Exception as e:
             logger.warning(f"Failed to fetch manifest from {manifest_url}: {e}")
         return None
 
     @staticmethod
     def detect_version(manifest_data):
-        """Detects IIIF version (2 or 3) from context or structure."""
+        """Detects IIIF version (2 or 3) from context or structure.
+
+        ``@context`` is a string or a list of them (valid v3, and what a
+        manifest carrying an extension looks like), so it is normalised before
+        the substring test — on a list, ``in`` would compare whole elements and
+        read a v3 manifest as v2.
+        """
         ctx = manifest_data.get("@context", "")
-        if "presentation/3" in ctx or "iiif.io/api/presentation/3" in ctx:
-            return 3
-        return 2
+        contexts = ctx if isinstance(ctx, (list, tuple)) else [ctx]
+        return 3 if any("presentation/3" in str(c) for c in contexts) else 2
 
     @staticmethod
     def get_thumbnail_url(manifest_data):
@@ -294,7 +363,8 @@ class CanvasIIIF:
     def get_image_service_dimensions(image_service_url):
         try:
             info_url = f"{image_service_url}/info.json"
-            response = requests.get(info_url, timeout=10)
+            target, extra = own_cantaloupe_target(info_url)
+            response = safe_fetch(target, purpose="image_info", **extra)
 
             if response.status_code == 200:
                 info_data = response.json()

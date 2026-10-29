@@ -8,7 +8,6 @@ import arches from 'arches';
 import ko from 'knockout';
 import afsReaderTemplate from 'templates/views/components/cards/file-renderers/xy-reader.htm';
 import AfsInstrumentViewModel from 'viewmodels/afs-instrument';
-import Cookies from 'js-cookie';
 import XyParser from 'utils/xy-parser';
 import {
     TRANSFORM_ANNOTATION_KEYS,
@@ -20,8 +19,9 @@ import {
     expandStoredConfig,
     seriesRoles,
 } from 'utils/xy-transforms';
+import { canUseLogScale } from 'utils/xy-scale';
 import dispose from 'utils/dispose';
-import { getRendererConfig, invalidate, parseOverrides } from 'utils/renderer-cache';
+import { getRendererConfig, parseOverrides } from 'utils/renderer-cache';
 import 'bindings/plotly';
 import 'views/components/plugins/importer-configuration';
 
@@ -56,16 +56,15 @@ const windowWord = () => arches.translations.xyStepWindow;
 
 const CONFIG_SOURCE_MANUAL = 'manual';
 
+// The XY renderer's id, as in RENDERERS (settings.py). Only its configurations
+// exist on the server; asking for any other renderer's finds none.
+const XY_RENDERER_UUID = 'e93b7b27-40d8-4141-996e-e59ff08742f3';
+
 export default ko.components.register('xy-reader', {
     viewModel: function (params) {
         const self = this;
         this.alert = params?.pageVm?.alert;
-        this.showConfigAdd = ko.observable(false);
-        this.configName = ko.observable();
-        this.delimiterCharacter = ko.observable();
         this.invalidDelimiter = ko.observable(false);
-        this.headerDelimiter = ko.observable();
-        this.headerFixedLines = ko.observable();
         this.selectedConfig = params.selectedConfig || ko.observable();
         this.selectedFile = params.selectedFile || ko.observable();
         this.selectedConfiguration = undefined;
@@ -118,14 +117,24 @@ export default ko.components.register('xy-reader', {
             this.commonData.xReversed = ko.observable(false);
             // What the configuration applied, stated under the chart.
             this.commonData.processing = ko.observable(null);
+            // Logarithmic Y axis: display only, off until the reader asks.
+            this.commonData.yLog = ko.observable(false);
         }
         this.xReversed = this.commonData.xReversed;
         this.processing = this.commonData.processing;
+        this.yLog = this.commonData.yLog;
+        this.canLogScale = ko.pureComputed(() => {
+            const data = self.chartData();
+            const series = data?.series || (data ? [{ count: data.count }] : []);
+            return canUseLogScale(series.map((s) => ({ y: s.count, yaxis: s.yaxis })));
+        });
+        this.disposables.push(this.canLogScale);
 
         this.rendererConfigs = ko.observable([]);
 
         // on init, get available renderer configs for display to user.
         const rendererConfigRefresh = async () => {
+            if (self.renderer !== XY_RENDERER_UUID) return;
             try {
                 const renderers = await getRendererConfig(self.renderer);
                 const configs = renderers?.configs;
@@ -721,49 +730,6 @@ export default ko.components.register('xy-reader', {
                 applyDisplayConfig();
                 self.render();
             }
-        };
-
-        this.disposables.push(this.delimiterCharacter.subscribe(() => {
-            try {
-                if (this.delimiterCharacter().length < 2) {
-                    new RegExp(`[${this.delimiterCharacter()}\\s]+`);
-                } else {
-                    new RegExp(`${this.delimiterCharacter()}`);
-                }
-                this.invalidDelimiter(false);
-            } catch {
-                this.invalidDelimiter(true);
-            }
-        }));
-
-        this.addConfiguration = () => {
-            self.showConfigAdd(true);
-        };
-
-        this.saveConfiguration = async () => {
-            const newConfiguration = {
-                name: self.configName(),
-                headerDelimiter: self.headerDelimiter(),
-                headerFixedLines: self.headerFixedLines(),
-                delimiterCharacter: self.delimiterCharacter(),
-                rendererId: self.renderer,
-            };
-            const configSaveResponse = await fetch(
-                arches.urls.renderer_config,
-                {
-                    method: 'POST',
-                    credentials: 'include',
-                    body: JSON.stringify(newConfiguration),
-                    headers: {
-                        'X-CSRFToken': Cookies.get('csrftoken'),
-                    },
-                }
-            );
-            if (configSaveResponse.ok) {
-                invalidate(self.renderer);
-                rendererConfigRefresh();
-            }
-            self.showConfigAdd(false);
         };
 
         // Track computed observables for disposal

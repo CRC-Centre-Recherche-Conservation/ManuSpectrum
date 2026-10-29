@@ -30,16 +30,24 @@ class FailParsingManifestIIIF(Exception):
     pass
 
 
-# Local IIIF manifest reference: /manifest/{uuid4}, optionally absolute.
+# Local IIIF manifest reference: /manifest/{uuid4}, optionally absolute and
+# optionally language-prefixed. Tiles store the bare path, but every Arches
+# route lives under a language prefix, so /en/manifest/{uuid} is the URL a
+# curator copies out of the address bar and pastes back in.
+_LANGUAGE_PREFIX_RE = "|".join(
+    re.escape(code) for code, _label in django_settings.LANGUAGES
+)
 _LOCAL_MANIFEST_RE = re.compile(
-    r"^(?:https?://[^/]+)?/manifest/"
+    r"^(?:https?://[^/]+)?"
+    r"(?:/(?:" + _LANGUAGE_PREFIX_RE + r"))?"
+    r"/manifest/"
     r"(?P<uuid>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$",
     re.IGNORECASE,
 )
 
 # Cheap, network-free URL FORMAT gate. The host / private-IP / SSRF policy lives
-# in manuspectrum.utils.http.assert_url_is_safe (DNS-based, DEBUG-aware), NOT
-# here — so there is no longer a dev/prod regex split.
+# in manuspectrum.utils.http.assert_url_is_safe (DNS-based, opened only by
+# SSRF_ALLOW_PRIVATE), NOT here — so there is no dev/prod regex split.
 _validate_url_format = URLValidator(schemes=["http", "https"])
 
 
@@ -47,9 +55,10 @@ def get_local_hosts():
     """Hostnames that identify THIS server, for local-manifest detection.
 
     Seeded from ``settings.PUBLIC_SERVER_ADDRESS`` (the canonical public URL)
-    plus ``ALLOWED_HOSTS`` defensively. django_hosts leaves ``ALLOWED_HOSTS``
-    empty in production, so ``PUBLIC_SERVER_ADDRESS`` MUST be set per environment
-    for absolute self-URLs to be recognised. Returns bare lowercased hostnames.
+    plus ``ALLOWED_HOSTS`` defensively. ``ALLOWED_HOSTS`` may legitimately be
+    empty on a given host, so ``PUBLIC_SERVER_ADDRESS`` MUST be set per
+    environment for absolute self-URLs to be recognised. Returns bare
+    lowercased hostnames.
     """
     hosts = set()
     public = urlparse(getattr(django_settings, "PUBLIC_SERVER_ADDRESS", "") or "")
@@ -254,15 +263,17 @@ class ManifestDataType(BaseDataType):
                 f"Not a valid manifest URL: {manifest_url}"
             ) from exc
 
-        # SSRF guard: reject URLs resolving to non-public addresses
-        # (loopback / private / link-local / cloud-metadata). Enforced in
-        # production; permissive in DEBUG for local IIIF development.
+        # SSRF guard: reject URLs resolving to non-public addresses (loopback /
+        # private / link-local / cloud-metadata) before anything else happens.
+        # The fetch re-runs it on the URL and on every redirect hop; running it
+        # here too is what makes the failure a rejected WRITE, named as such,
+        # rather than a fetch that did not happen.
         assert_url_is_safe(manifest_url)
 
         # Resilient session (retry/backoff + Retry-After + our User-Agent) and
         # per-host rate limit (e.g. 1 req / 3 s for *.bnf.fr) so a bulk import
-        # does not get the server's IP blocked. allow_redirects=False is
-        # enforced inside the helper.
+        # does not get the server's IP blocked. Redirects are followed only
+        # through the guard, and the body is read under a size cap.
         resp = fetch_iiif_manifest(manifest_url)
         resp.raise_for_status()
         manifest_json = resp.json()

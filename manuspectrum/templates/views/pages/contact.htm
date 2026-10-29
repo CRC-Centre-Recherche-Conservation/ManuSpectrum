@@ -11,11 +11,11 @@
     "@context": "https://schema.org",
     "@graph": [
         {"@type": "BreadcrumbList", "itemListElement": [
-            {"@type": "ListItem", "position": 1, "name": "{% trans 'Home' as ms_b1 %}{{ ms_b1|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'root' %}"},
-            {"@type": "ListItem", "position": 2, "name": "{% trans 'Contact' as ms_b2 %}{{ ms_b2|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'about-contact' %}"}
+            {"@type": "ListItem", "position": 1, "name": "{% trans 'Home' as ms_b1 %}{{ ms_b1|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'root' %}"},
+            {"@type": "ListItem", "position": 2, "name": "{% trans 'Contact' as ms_b2 %}{{ ms_b2|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'about-contact' %}"}
         ]},
         {"@type": "ResearchProject", "name": "ManuSpectrum",
-         "url": "{{ request.scheme }}://{{ request.get_host }}{% url 'root' %}"{% contact_email as ms_ce %}{% if ms_ce %},
+         "url": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'root' %}"{% contact_email as ms_ce %}{% if ms_ce %},
          "contactPoint": {"@type": "ContactPoint", "contactType": "research inquiries", "email": "{{ ms_ce|escapejs }}"}{% endif %}}
     ]
 }
@@ -23,7 +23,7 @@
 {% endblock %}
 
 {% block content %}
-<section class="ms-page-hero reveal">
+<section class="ms-page-hero">
     <div class="ms-page-hero__eyebrow">{% trans "Contact" %}</div>
     <h1 class="ms-page-hero__title">{% trans "Submit a project or reach the team" %}</h1>
     <div class="ms-page-hero__accent"></div>
@@ -68,6 +68,18 @@
                 <span class="ms-req" aria-hidden="true">*</span> {% trans "Required field" %}
             </p>
 
+            <div class="ms-contact-include" id="ms-contact-include">
+                <h3>{% trans "Requesting an account? Please include" %}</h3>
+                <ul>
+                    <li>{% trans "your name" %}</li>
+                    <li>{% trans "your institutional e-mail address" %}</li>
+                    <li>{% trans "your institution or laboratory" %}</li>
+                    <li>{% trans "your position" %}</li>
+                    <li>{% trans "the project or the data you want to describe" %}</li>
+                    <li>{% trans "optionally, your contact at the CRC" %}</li>
+                </ul>
+            </div>
+
             <div class="ms-contact-field">
                 <label for="cf-name">{% trans "Your name" %} <span class="ms-req" aria-hidden="true">*</span></label>
                 <input type="text" id="cf-name" name="name" class="ms-contact-input" required
@@ -87,6 +99,7 @@
                 <select id="cf-type" name="type" class="ms-contact-input">
                     <option value="project">{% trans "Submit a project" %}</option>
                     <option value="access">{% trans "Request an account / access" %}</option>
+                    <option value="reactivation">{% trans "Reactivate my account" %}</option>
                     <option value="question">{% trans "Question" %}</option>
                     <option value="other">{% trans "Other" %}</option>
                 </select>
@@ -146,4 +159,5 @@
 </section>
 {% endblock %}
 
+{% block page_translations %}{% include 'includes/ms_i18n_contact.htm' %}{% endblock %}
 {% block js_bundle %}{% render_bundle 'views/pages/contact' %}{% endblock %}

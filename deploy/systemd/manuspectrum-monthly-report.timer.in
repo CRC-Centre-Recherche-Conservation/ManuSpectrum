@@ -1,0 +1,12 @@
+# The 1st of each month at 08:00, for the month that just ended;
+# Persistent=true sends a report missed while the host was off at the next
+# boot. Enabled by PP-8.
+[Unit]
+Description=Send the ManuSpectrum monthly report on the 1st
+
+[Timer]
+OnCalendar=*-*-01 08:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

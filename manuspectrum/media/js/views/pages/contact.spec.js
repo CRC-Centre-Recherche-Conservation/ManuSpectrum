@@ -39,6 +39,19 @@ beforeEach(() => {
     vi.restoreAllMocks();
 });
 
+describe("contact mail subject", () => {
+    it("starts with the Contact category prefix, then the reason and the name", async () => {
+        vi.resetModules();
+        const { composeSubject } = await import("./contact");
+        expect(composeSubject({ type: "access", name: "Ada" })).toBe(
+            "[ManuSpectrum][Contact] Access request — Ada",
+        );
+        expect(composeSubject({ type: "unknown", name: "Ada" })).toBe(
+            "[ManuSpectrum][Contact] Message — Ada",
+        );
+    });
+});
+
 describe("contact form validation", () => {
     it("flags every empty required field with its own ARIA-wired error", async () => {
         await boot();
@@ -110,6 +123,34 @@ describe("character counter", () => {
         expect(count.textContent).toContain("50");
         expect(count.classList.contains("is-low")).toBe(true);
     });
+
+    it("uses the singular form for one character left", async () => {
+        await boot();
+        const msg = document.getElementById("cf-message");
+        const count = document.getElementById("ms-contact-count");
+        msg.value = "x".repeat(1599);
+        msg.dispatchEvent(new Event("input"));
+        expect(count.textContent).toBe("1 character left");
+    });
+});
+
+describe("character counter in French", () => {
+    it("takes the singular form for zero", async () => {
+        document.documentElement.lang = "fr";
+        try {
+            await boot();
+            const msg = document.getElementById("cf-message");
+            const count = document.getElementById("ms-contact-count");
+            msg.value = "x".repeat(1600);
+            msg.dispatchEvent(new Event("input"));
+            expect(count.textContent).toBe("0 character left");
+            msg.value = "x".repeat(1598);
+            msg.dispatchEvent(new Event("input"));
+            expect(count.textContent).toBe("2 characters left");
+        } finally {
+            document.documentElement.lang = "";
+        }
+    });
 });
 
 describe("copy escape hatch", () => {
@@ -141,5 +182,43 @@ describe("no configured address", () => {
         );
         expect(document.getElementById("ms-contact-note").hidden).toBe(false);
         expect(document.getElementById("ms-contact-direct").hidden).toBe(true);
+    });
+});
+
+describe("contact reason preselection", () => {
+    const select = () => {
+        document.body.innerHTML = `<select id="s"><option value="project" selected>P</option><option value="access">A</option></select>`;
+        return document.getElementById("s");
+    };
+
+    it("selects the reason named by ?reason=access", async () => {
+        vi.resetModules();
+        const { preselectReason } = await import("./contact");
+        const el = select();
+        preselectReason(el, "?reason=access");
+        expect(el.value).toBe("access");
+    });
+
+    it("keeps the default for an unknown or absent reason", async () => {
+        vi.resetModules();
+        const { preselectReason } = await import("./contact");
+        const el = select();
+        preselectReason(el, "?reason=bogus");
+        expect(el.value).toBe("project");
+        preselectReason(el, "");
+        expect(el.value).toBe("project");
+    });
+
+    it("applies on page boot from the URL", async () => {
+        window.history.pushState({}, "", "/en/about/contact?reason=access");
+        document.body.innerHTML = PAGE("team@manuspectrum.fr").replace(
+            '<option value="project" selected>Submit a project</option>',
+            '<option value="project" selected>Submit a project</option><option value="access">Request</option>',
+        );
+        vi.resetModules();
+        await import("./contact");
+        document.dispatchEvent(new Event("DOMContentLoaded"));
+        expect(document.getElementById("cf-type").value).toBe("access");
+        window.history.pushState({}, "", "/");
     });
 });

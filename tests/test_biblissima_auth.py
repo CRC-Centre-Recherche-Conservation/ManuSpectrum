@@ -9,54 +9,49 @@ CI-safe: no Arches package (graphs) is required. Positive-path assertions only
 use request shapes that fail cheaply AFTER the auth check (400 validation
 errors, the stats endpoint, and a short-circuited/mocked suggest proxy).
 
-SECURITY INVARIANT under test: the DB user ``anonymous`` is *authenticated*
-(Arches ``SetAnonymousUser`` middleware) and belongs to Guest + Resource
-Exporter. Only a group check is a real barrier; ``EDITOR_GROUPS`` must never
-contain those two groups.
+SECURITY INVARIANT under test: the Biblissima views require the group
+« Resource Editor » (`group_required("Resource Editor", raise_exception=True)`,
+as Arches gates resource editing); the renderer-config writes require Resource
+Editor or Resource Reviewer. Arches'
+``SetAnonymousUser`` middleware maps every unauthenticated visitor to the DB
+user ``anonymous``, which is *authenticated* and belongs to Guest + Resource
+Exporter: a login or ``is_authenticated`` check is no barrier under Arches,
+only a group check is, and the ``anonymous`` user must never join a writing
+group.
 """
 
+import inspect
 import json
+import uuid
 from unittest import mock
 
 from django.contrib.auth.models import Group, User
 from django.core.cache import cache
 from django.test import TestCase
-from django.urls import reverse
+from django.urls import resolve, reverse
 
-from manuspectrum.views import biblissima_proxy
-from manuspectrum.views.permissions import EDITOR_GROUPS
+from manuspectrum.views import biblissima_proxy, renderer_config
+
+EDITOR_CHECK = 'group_required("Resource Editor", raise_exception=True)'
+RENDERER_WRITE_CHECK = (
+    'group_required("Resource Editor", "Resource Reviewer", raise_exception=True)'
+)
 
 
-class EditorGroupsConstantTests(TestCase):
-    def test_excludes_anonymous_reachable_groups(self):
-        self.assertNotIn("Resource Exporter", EDITOR_GROUPS)
-        self.assertNotIn("Guest", EDITOR_GROUPS)
-
-    def test_expected_members(self):
-        self.assertEqual(
-            EDITOR_GROUPS,
-            (
-                "Resource Editor",
-                "Resource Reviewer",
-                "RDM Administrator",
-                "Application Administrator",
-                "System Administrator",
-                "Graph Editor",
-            ),
-        )
-
-    def test_anonymous_user_is_in_no_editor_group(self):
+class WritingGroupTests(TestCase):
+    def test_anonymous_user_is_not_a_resource_editor(self):
         anonymous = User.objects.get(username="anonymous")
         self.assertFalse(
-            anonymous.groups.filter(name__in=EDITOR_GROUPS).exists(),
-            "The `anonymous` user must never belong to an editor group — "
-            "that would open every gated endpoint to unauthenticated traffic.",
+            anonymous.groups.filter(name="Resource Editor").exists(),
+            "The `anonymous` user must never belong to Resource Editor: that "
+            "would open every gated endpoint to unauthenticated traffic.",
         )
 
-    def test_renderer_config_uses_the_shared_constant(self):
-        from manuspectrum.views import renderer_config
-
-        self.assertIs(renderer_config.EDITOR_GROUPS, EDITOR_GROUPS)
+    def test_renderer_config_writes_require_an_editor_or_a_reviewer(self):
+        view = renderer_config.RendererConfigView
+        for method in (view.post, view.delete):
+            with self.subTest(method=method.__name__):
+                self.assertIn(RENDERER_WRITE_CHECK, inspect.getsource(method))
 
 
 class RendererConfigAuthTests(TestCase):
@@ -75,6 +70,8 @@ class RendererConfigAuthTests(TestCase):
         )
         cls.editor = User.objects.create_user("renderer_editor", password="pw")
         cls.editor.groups.add(Group.objects.get(name="Resource Editor"))
+        cls.reviewer = User.objects.create_user("renderer_reviewer", password="pw")
+        cls.reviewer.groups.add(Group.objects.get(name="Resource Reviewer"))
 
     def _post(self, body):
         # Plain path: SHOW_LANGUAGE_SWITCH is False (single-language LANGUAGES
@@ -98,6 +95,31 @@ class RendererConfigAuthTests(TestCase):
             {"rendererId": "9ec5c8f8-8a3f-4e6f-9dd8-7c1e5f5b0000", "name": "t"}
         )
         self.assertEqual(resp.status_code, 403)
+
+    def test_a_graph_editor_alone_cannot_write(self):
+        modeller = User.objects.create_user("modeller", password="pw")
+        modeller.groups.add(Group.objects.get(name="Graph Editor"))
+        self.client.force_login(modeller)
+        resp = self._post(
+            {"rendererId": "9ec5c8f8-8a3f-4e6f-9dd8-7c1e5f5b0000", "name": "t"}
+        )
+        self.assertEqual(resp.status_code, 403)
+        resp = self.client.delete(f"/renderer_config/{uuid.uuid4()}")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_editor_passes_the_barrier_on_delete(self):
+        self.client.force_login(self.editor)
+        resp = self.client.delete(f"/renderer_config/{uuid.uuid4()}")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_a_reviewer_passes_the_barrier(self):
+        self.client.force_login(self.reviewer)
+        resp = self._post(
+            {"rendererId": "9ec5c8f8-8a3f-4e6f-9dd8-7c1e5f5b0000", "name": "t"}
+        )
+        self.assertEqual(resp.status_code, 200)
+        resp = self.client.delete(f"/renderer_config/{uuid.uuid4()}")
+        self.assertEqual(resp.status_code, 404)
 
     def test_editor_passes_the_barrier(self):
         self.client.force_login(self.editor)
@@ -171,6 +193,23 @@ class BiblissimaAuthBarrierTests(TestCase):
                 resp = self._call(method, name, kwargs, body)
                 self.assertEqual(resp.status_code, 403)
 
+    def test_a_member_of_other_arches_groups_only_gets_403_on_every_route(self):
+        member = User.objects.create_user("reviewer", password="pw")
+        for name in (
+            "Resource Reviewer",
+            "RDM Administrator",
+            "Application Administrator",
+            "System Administrator",
+            "Graph Editor",
+        ):
+            member.groups.add(Group.objects.get(name=name))
+        self.client.force_login(member)
+        for method, name, kwargs, body in self.ROUTES:
+            with self.subTest(route=name):
+                self.assertEqual(
+                    self._call(method, name, kwargs, body).status_code, 403
+                )
+
     def test_routes_list_covers_every_biblissima_route(self):
         # Drift guard: if a new api/biblissima/* route ships, it must be added
         # to ROUTES above so the anonymous-403 sweep covers it.
@@ -183,6 +222,18 @@ class BiblissimaAuthBarrierTests(TestCase):
         }
         covered = {name for _method, name, _kwargs, _body in self.ROUTES}
         self.assertEqual(registered, covered)
+
+    def test_every_route_requires_resource_editor(self):
+        for _method, name, kwargs, _body in self.ROUTES:
+            with self.subTest(route=name):
+                view = resolve(reverse(name, kwargs=kwargs)).func.view_class
+                gated = [
+                    cls.__name__
+                    for cls in view.__mro__
+                    if cls.__module__.startswith("manuspectrum")
+                    and EDITOR_CHECK in inspect.getsource(cls).split("class ", 1)[0]
+                ]
+                self.assertTrue(gated, f"{view.__name__} lacks {EDITOR_CHECK}")
 
 
 class BiblissimaAuthPassThroughTests(TestCase):
@@ -239,8 +290,8 @@ class BiblissimaAuthPassThroughTests(TestCase):
 
 
 class BiblissimaCachePrivacyTests(TestCase):
-    """The cached GET proxies must be private-to-authenticated yet still
-    benefit from Django's server-side page cache."""
+    """The suggest proxy answers private to its editors yet still from its
+    server-side memo."""
 
     @classmethod
     def setUpTestData(cls):
@@ -251,17 +302,25 @@ class BiblissimaCachePrivacyTests(TestCase):
         cache.clear()
 
     def test_suggest_is_private_and_auth_precedes_cache(self):
-        self.client.force_login(self.editor)
-        # q shorter than 2 chars short-circuits before any upstream call
-        url = reverse("biblissima-suggest") + "?q=a"
-        resp = self.client.get(url)
-        self.assertEqual(resp.status_code, 200)
-        self.assertIn("private", resp["Cache-Control"])
-        # The response is now in the page cache; an anonymous request for the
-        # SAME URL must still be rejected (dispatch check precedes the cached get)
-        self.client.logout()
-        resp = self.client.get(url)
-        self.assertEqual(resp.status_code, 403)
+        with mock.patch.object(biblissima_proxy, "_bib_request") as bib:
+            bib.return_value.json.return_value = {
+                "search": [],
+                "query": {"search": []},
+                "entities": {},
+            }
+            self.client.force_login(self.editor)
+            url = reverse("biblissima-suggest") + "?q=auth-probe"
+            resp = self.client.get(url)
+            self.assertEqual(resp.status_code, 200)
+            self.assertIn("private", resp["Cache-Control"])
+            self.assertIsNotNone(
+                cache.get(biblissima_proxy._suggest_key("auth-probe", "", "fr", 10))
+            )
+            upstream_calls = bib.call_count
+            self.client.logout()
+            resp = self.client.get(url)
+            self.assertEqual(resp.status_code, 403)
+            self.assertEqual(bib.call_count, upstream_calls)
 
     def test_private_header_does_not_disable_server_side_cache(self):
         with mock.patch.object(biblissima_proxy, "_bib_request") as bib:
@@ -278,8 +337,5 @@ class BiblissimaCachePrivacyTests(TestCase):
             self.assertGreater(upstream_calls, 0)  # first hit went upstream
             r2 = self.client.get(url)
             self.assertEqual(r2.status_code, 200)
-            # Second hit must be served from the page cache: if private had
-            # been patched INSIDE cache_page, UpdateCacheMiddleware would
-            # refuse to store and this count would grow.
             self.assertEqual(bib.call_count, upstream_calls)
             self.assertIn("private", r2["Cache-Control"])

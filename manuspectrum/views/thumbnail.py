@@ -1,0 +1,85 @@
+"""Search thumbnails, cached at the edge of the request.
+
+Subclass of ``arches.app.views.thumbnail.ThumbnailView`` (Arches 8.0.x): same
+resolution and same body, plus the validators a browser needs to stop asking.
+Every miss on this route costs the fetchers a IIIF manifest fetch and an image
+fetch from a library server, and search results request one per row.
+
+It reaches requests through the route registered in ``urls.py``, not by file
+position: unlike a ``media/js`` shadow, deleting this module breaks the import
+there rather than falling back to the core view.
+
+The manifest fetch itself is cached in ``CanvasIIIF.fetch_manifest``; this is
+the other half — the answer a client already holds is not re-sent, and is not
+re-requested at all for ``settings.SEARCH_THUMBNAIL_MAX_AGE``.
+
+The core view checks no permission. Here a resource the reader may not read
+answers a bodyless 404 before any fetcher, and so any cache, is reached.
+
+The fetchers run under one upstream budget per request
+(``SEARCH_THUMBNAIL_DEADLINE``): no retry, a connect within
+``SEARCH_THUMBNAIL_CONNECT_TIMEOUT``, and a host that did not accept a
+connection is skipped by every request for ``SEARCH_THUMBNAIL_HOST_DOWN_TTL``
+(``THUMBNAIL_HOSTS``). A search page of documents hosted by a server that is
+down then costs each thread at most one short connect, and the next pages none.
+"""
+
+import hashlib
+
+from django.conf import settings
+from django.http import HttpResponseNotFound, HttpResponseNotModified
+from django.utils.cache import patch_cache_control
+
+from arches.app.utils.permission_backend import user_can_read_resource
+from arches.app.views.thumbnail import ThumbnailView
+
+from manuspectrum.observability import metrics
+from manuspectrum.utils.budget import HostBreaker, upstream_budget
+
+THUMBNAIL_HOSTS = HostBreaker(
+    "thumbnail-host-down", lambda: settings.SEARCH_THUMBNAIL_HOST_DOWN_TTL
+)
+
+
+class CachedThumbnailView(ThumbnailView):
+    """``ThumbnailView`` with an ETag and a Cache-Control lifetime.
+
+    ``private`` rather than ``public``: the answer depends on the reader's
+    rights on the resource, and a shared cache cannot run the read check.
+    """
+
+    def head(self, request, resource_id):
+        if not user_can_read_resource(request.user, resourceid=resource_id):
+            metrics.READ_REFUSALS.labels(surface="thumbnail").inc()
+            return HttpResponseNotFound()
+        return self._with_lifetime(super().head(request, resource_id))
+
+    def get(self, request, resource_id):
+        if not user_can_read_resource(request.user, resourceid=resource_id):
+            metrics.READ_REFUSALS.labels(surface="thumbnail").inc()
+            return HttpResponseNotFound()
+        with upstream_budget(
+            settings.SEARCH_THUMBNAIL_DEADLINE,
+            connect_cap=settings.SEARCH_THUMBNAIL_CONNECT_TIMEOUT,
+            breaker=THUMBNAIL_HOSTS,
+        ):
+            response = super().get(request, resource_id)
+        if response.status_code != 200:
+            return response
+
+        digest = hashlib.md5(response.content, usedforsecurity=False).hexdigest()
+        etag = f'"{digest}"'
+        if request.headers.get("If-None-Match") == etag:
+            response = HttpResponseNotModified()
+        response.headers["ETag"] = etag
+        return self._with_lifetime(response)
+
+    @staticmethod
+    def _with_lifetime(response):
+        if response.status_code in (200, 304):
+            patch_cache_control(
+                response,
+                private=True,
+                max_age=getattr(settings, "SEARCH_THUMBNAIL_MAX_AGE", 86400),
+            )
+        return response

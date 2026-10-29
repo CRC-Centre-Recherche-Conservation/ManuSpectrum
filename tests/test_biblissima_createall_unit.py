@@ -48,6 +48,8 @@ from unittest.mock import MagicMock, patch
 import requests
 from django.test import TestCase
 
+from tests.observability_helpers import delta
+
 # ---------------------------------------------------------------------------
 # Patch targets
 # ---------------------------------------------------------------------------
@@ -181,6 +183,9 @@ class CreateAllBase(TestCase):
         self.mock_write_editlog = self._start(
             patch.object(BiblissimaCreateResourceView, "_write_editlog")
         )
+        self.mock_write_creation = self._start(
+            patch.object(BiblissimaCreateResourceView, "_write_creation_edit")
+        )
         self.mock_link = self._start(
             patch.object(BiblissimaCreateResourceView, "_link_to_project_batch")
         )
@@ -217,9 +222,17 @@ class HappyPathTests(CreateAllBase):
         # captureOnCommitCallbacks(execute=True) fires transaction.on_commit
         # callbacks immediately so that _defer_indexing's sync fallback runs
         # inside the test (BIBLISSIMA_ASYNC_INDEXING=False by default in tests).
-        with self.captureOnCommitCallbacks(execute=True):
+        with (
+            self.captureOnCommitCallbacks(execute=True),
+            delta(
+                "manuspectrum_biblissima_created_items_total",
+                resource_type="Document",
+                outcome="created",
+            ) as counted,
+        ):
             response, payload = self._post({"resourceType": "Document", "items": items})
 
+        self.assertEqual(counted.value, 3)
         self.assertEqual(response.status_code, 200)
         results = payload["results"]
         self.assertEqual(len(results), 3)
@@ -400,8 +413,14 @@ class DanglingDependencyTests(CreateAllBase):
             _item("c1", dependencies={"currentLocation": missing_dep}),  # dangling
             _item("c2"),
         ]
-        response, payload = self._post({"resourceType": "Document", "items": items})
+        with delta(
+            "manuspectrum_biblissima_created_items_total",
+            resource_type="Document",
+            outcome="failed",
+        ) as failed:
+            response, payload = self._post({"resourceType": "Document", "items": items})
 
+        self.assertEqual(failed.value, 1)
         self.assertEqual(response.status_code, 200)
         results = payload["results"]
         self.assertEqual(
@@ -433,8 +452,21 @@ class Pass2FailureTests(CreateAllBase):
         )
 
         items = [_item("c0"), _item("c1")]
-        response, payload = self._post({"resourceType": "Document", "items": items})
+        with (
+            delta(
+                "manuspectrum_biblissima_created_items_total",
+                resource_type="Document",
+                outcome="failed",
+            ) as failed,
+            delta(
+                "manuspectrum_biblissima_created_items_total",
+                resource_type="Document",
+                outcome="created",
+            ) as created,
+        ):
+            response, payload = self._post({"resourceType": "Document", "items": items})
 
+        self.assertEqual((failed.value, created.value), (2, 0))
         self.assertEqual(response.status_code, 500)
         self.assertEqual(payload, {"error": "Batch creation failed"})
         # A Pass-2 failure returns 500 and never reaches the post-commit index
@@ -587,6 +619,7 @@ class DanglingProjectTests(CreateAllBase):
         self.mock_index.assert_called_once()
         # The valid project is linked for its survivor.
         self.mock_link.assert_called_once()
+        self.assertEqual(self.mock_link.call_args.args[3].username, "importer")
 
     def test_non_string_project_reported_failed(self):
         # FIX I-2: a non-string (numeric/array) project value must NOT slip past

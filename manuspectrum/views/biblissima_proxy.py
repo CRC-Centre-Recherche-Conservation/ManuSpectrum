@@ -20,11 +20,30 @@ Two surface areas:
   but the endpoints are generic: they take a ``resourceType`` + payload
   and don't assume a specific UI flow.
 
-Outbound HTTP all goes through ``_build_biblissima_session()`` +
-``_bib_request()``, which share a module-level concurrency semaphore and
-force ``Accept-Language: fr`` so that scraped portal field labels
-(``Type :``, ``Lieu de fabrication :``, …) always match our French field
-map regardless of the end-user's browser locale.
+Outbound HTTP goes through ``_bib_request()``, which holds a slot of a
+concurrency semaphore that is per worker process: a request that waits longer
+than ``BIBLISSIMA_SLOT_TIMEOUT`` for a slot gets ``BiblissimaBusy``, answered
+503.
+
+- The suggest view uses the no-retry ``_get_besteffort_session()`` through
+  the guarded fetch, under its own whole-request deadline
+  (``BIBLISSIMA_SUGGEST_DEADLINE``).
+- The entity, search, manuscript-search, manuscript-illuminations and
+  illumination views run their upstream calls under one request budget
+  (``_upstream_budget(VIEW_DEADLINE)``): no retry, a connect within
+  ``BIBLISSIMA_IIIF_CONNECT_TIMEOUT``, a Biblissima host found unreachable or
+  answering 403, 429 or 503 is not called again in the same request, and no
+  call starts after the ``BIBLISSIMA_VIEW_DEADLINE`` backstop. An answer built while a call failed
+  says ``"partial": true`` and is not stored by ``cache_page``
+  (``_budgeted_answer``); when nothing usable came back, the view answers the
+  failure.
+- The write path and the management commands keep the retry policy of
+  ``_build_biblissima_session()`` (the shared ``_get_biblissima_session()``
+  or a session of their own), which does not honour ``Retry-After``.
+
+Sessions force ``Accept-Language: fr`` so that scraped portal field labels
+(``Type :``, ``Lieu de fabrication :``, …) always match our French field map
+regardless of the end-user's browser locale.
 
 ## Attention points for devs
 
@@ -32,9 +51,11 @@ map regardless of the end-user's browser locale.
   ``BiblissimaIlluminationDetailView``). Regex is only used for URL-level
   string transformations on already-extracted values, never to find
   content inside HTML.
-- **Caching**: every scraping view is wrapped with ``@cache_page(3600)``.
-  Code changes to any parser are **invisible** until the cache expires or
-  is flushed::
+- **Caching**: the entity and manuscript-search views are wrapped with
+  ``@cache_page(1800)``, the manuscript-illuminations and illumination views
+  with ``@cache_page(3600)``; the descriptor search view has no page cache and
+  memoises only the parsed IIIF manifest. Code changes to any parser are
+  **invisible** until the cache expires or is flushed::
 
       redis-cli --scan --pattern "*biblissima*" | xargs -r redis-cli DEL
       redis-cli --scan --pattern "*views.decorators.cache*" | xargs -r redis-cli DEL
@@ -47,18 +68,23 @@ map regardless of the end-user's browser locale.
   needing user review must check the flag, not compare valueids.
 """
 
+import contextvars
 import logging
 import re
 import threading
+import time
+import unicodedata
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from copy import deepcopy
 from html import unescape
+from urllib.parse import urlencode, urlsplit
 
 import requests
 from lxml import html as lxml_html
 from requests.adapters import HTTPAdapter
+from urllib3.exceptions import MaxRetryError, ReadTimeoutError
 from urllib3.util.retry import Retry
 from django.core.cache import cache
 from django.http import JsonResponse
@@ -74,13 +100,31 @@ from arches.app.models.tile import Tile
 from arches_controlled_lists.models import ListItem
 from arches.app.utils.decorators import group_required
 
+from manuspectrum.accounts.workflows import (
+    WorkflowTransactionError,
+    workflow_transaction,
+)
+from manuspectrum.observability import metrics
+from manuspectrum.utils.budget import (
+    BudgetSpent,
+    UpstreamBudget,
+    budget_var,
+    capped_timeout,
+    upstream_budget,
+)
+from manuspectrum.utils.cache import get_or_build, stable_cache_key
 from manuspectrum.utils.dates import (
     CENTURY_MAPPING,
     parse_century,
     parse_historical_date,
 )
-from manuspectrum.utils.http import get_user_agent
-from manuspectrum.views.permissions import EDITOR_GROUPS
+from manuspectrum.utils.http import (
+    ResponseTooLargeError,
+    UnsafeURLError,
+    assert_url_is_safe,
+    get_user_agent,
+    safe_fetch,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -106,15 +150,21 @@ IIIF_REQUEST_TIMEOUT = settings.BIBLISSIMA_IIIF_REQUEST_TIMEOUT
 IIIF_CONNECT_TIMEOUT = settings.BIBLISSIMA_IIIF_CONNECT_TIMEOUT
 PORTAL_REQUEST_TIMEOUT = settings.BIBLISSIMA_PORTAL_REQUEST_TIMEOUT
 _BIBLISSIMA_CONCURRENCY_LIMIT = settings.BIBLISSIMA_CONCURRENCY_LIMIT
+_BIBLISSIMA_SLOT_TIMEOUT = settings.BIBLISSIMA_SLOT_TIMEOUT
+SUGGEST_DEADLINE = settings.BIBLISSIMA_SUGGEST_DEADLINE
+VIEW_DEADLINE = settings.BIBLISSIMA_VIEW_DEADLINE
 _BIBLISSIMA_CACHE_TTL = settings.BIBLISSIMA_CACHE_TTL
+_BIBLISSIMA_RAW_CACHE_TTL = settings.BIBLISSIMA_RAW_CACHE_TTL
 
 
 def _build_biblissima_session(retry=None):
-    """Requests session with retry/backoff on transient upstream failures.
+    """Requests session that retries transient upstream failures.
 
-    The Retry adapter honors Retry-After headers by default
-    (respect_retry_after_header=True), so upstream explicit backoff requests
-    on 429/503 are respected transparently.
+    The default policy retries a failed connect or read (twice at most) and a
+    429, 502, 503 or 504 answer, three retries at most in all, sleeping 0, 3
+    then 6 s before them. ``Retry-After`` is not honoured: urllib3 would sleep
+    whatever the server asks while the worker and the concurrency slot are
+    held.
 
     ``Accept-Language: fr`` is forced on every outbound request: the portal
     URLs themselves are already locked to ``/fr/`` paths, but this header
@@ -124,9 +174,8 @@ def _build_biblissima_session(retry=None):
     matches French labels. Whatever locale the end-user's browser runs in
     is irrelevant, only what *this server* sends to Biblissima counts.
 
-    *retry* lets callers override the default retry policy — used by the
-    best-effort session (see ``_get_besteffort_session``) which disables
-    retries so optional enrichment fetches fail fast.
+    *retry* replaces the default policy: ``_NO_RETRY`` for the calls that must
+    fail fast (see ``_get_besteffort_session``).
     """
     session = requests.Session()
     session.headers.update(
@@ -144,6 +193,7 @@ def _build_biblissima_session(retry=None):
             backoff_factor=1.5,
             status_forcelist=(429, 502, 503, 504),
             allowed_methods=frozenset(["GET", "HEAD"]),
+            respect_retry_after_header=False,
             raise_on_status=False,
         )
     adapter = HTTPAdapter(max_retries=retry)
@@ -152,46 +202,146 @@ def _build_biblissima_session(retry=None):
     return session
 
 
-# Dedicated session for OPTIONAL, best-effort enrichment fetches (IIIF
-# manifests -> canvas dimensions + thumbnail). These MUST fail fast: a dead
-# IIIF host must never hold a gunicorn worker + concurrency slot for minutes.
-# Unlike the shared session it does NOT retry (``total=0``); paired with the
-# short ``IIIF_CONNECT_TIMEOUT`` connect timeout, an unreachable host errors in
-# seconds instead of ~138 s (which was 3 connect retries x a 45 s timeout).
-# The data is optional, so the caller degrades to ``{}`` on failure.
+_NO_RETRY = Retry(
+    total=0,
+    connect=0,
+    read=0,
+    redirect=0,
+    status=0,
+    backoff_factor=0,
+    raise_on_status=False,
+)
+"""Retry policy of the calls that must fail fast: one attempt, no sleep."""
+
+# The no-retry session serves the calls that must fail fast: the optional
+# best-effort IIIF fetches (canvas dimensions, thumbnail), the typeahead
+# suggest path and every call made under a request budget (``_upstream_budget``).
+# Paired with the short ``IIIF_CONNECT_TIMEOUT``, an unreachable host errors in
+# seconds instead of holding a gunicorn worker and a concurrency slot through
+# the retries of the shared session.
 _besteffort_session = None
 _besteffort_session_lock = threading.Lock()
 
 
 def _get_besteffort_session():
-    """Lazily build and cache the no-retry best-effort session (thread-safe)."""
+    """Lazily build and cache the no-retry session (thread-safe). Callers never
+    close it."""
     global _besteffort_session
     if _besteffort_session is None:
         with _besteffort_session_lock:
             if _besteffort_session is None:
-                _besteffort_session = _build_biblissima_session(
-                    retry=Retry(
-                        total=0,
-                        connect=0,
-                        read=0,
-                        redirect=0,
-                        status=0,
-                        backoff_factor=0,
-                        raise_on_status=False,
-                    )
-                )
+                _besteffort_session = _build_biblissima_session(retry=_NO_RETRY)
     return _besteffort_session
+
+
+_biblissima_session = None
+_biblissima_session_lock = threading.Lock()
+
+
+def _get_biblissima_session():
+    """Lazily build and cache the process-wide session with the default retry
+    policy (thread-safe). Callers never close it."""
+    global _biblissima_session
+    if _biblissima_session is None:
+        with _biblissima_session_lock:
+            if _biblissima_session is None:
+                _biblissima_session = _build_biblissima_session()
+    return _biblissima_session
 
 
 # ---------------------------------------------------------------------------
 # Concurrency control & monitoring for outbound Biblissima calls
 # ---------------------------------------------------------------------------
 
-# Module-level semaphore bounds how many concurrent HTTP calls to Biblissima
-# can run across the whole Django process, regardless of how many users hit
-# the proxy at the same time. Sized via _BIBLISSIMA_CONCURRENCY_LIMIT in
-# biblissima_constants to stay a good API citizen.
+# Bounds concurrent outbound calls to Biblissima per worker process: every
+# gunicorn worker holds its own semaphore, so the upstream sees at most
+# _BIBLISSIMA_CONCURRENCY_LIMIT × workers calls at once.
 _biblissima_semaphore = threading.BoundedSemaphore(_BIBLISSIMA_CONCURRENCY_LIMIT)
+
+
+class BiblissimaBusy(Exception):
+    """No concurrency slot freed up within ``_BIBLISSIMA_SLOT_TIMEOUT``."""
+
+
+BiblissimaBudgetSpent = BudgetSpent
+
+
+class BiblissimaHostDown(Exception):
+    """An earlier call of the same request found this Biblissima host unreachable."""
+
+
+_BREAKER_STATUSES = frozenset((403, 429, 503))
+
+
+_UpstreamBudget = UpstreamBudget
+_upstream_budget_var = budget_var
+
+
+class BiblissimaApiError(ValueError):
+    """A Biblissima answer that is not the JSON object asked for.
+
+    ``code`` is the MediaWiki API error code (``no-such-entity``,
+    ``ratelimited`` …), ``None`` for a body that is not a JSON object.
+    """
+
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.code = code
+
+
+def _record_failure(exc):
+    """Record *exc* on the active request budget, if any, without tripping a host."""
+    budget = _upstream_budget_var.get()
+    if budget is not None:
+        budget.record(exc)
+
+
+def _upstream_budget(seconds):
+    """Bound every Biblissima call made in this block, pool threads included.
+
+    Calls never retry, connect within ``IIIF_CONNECT_TIMEOUT``, read within
+    their own timeout, and neither waits past the backstop *seconds*. The first
+    connection-level failure or 403/429/503 on a Biblissima host trips that host
+    for the rest of the block (``BiblissimaHostDown``). The first failure of a
+    call to a Biblissima host is kept on the yielded budget's ``error``: a
+    connection failure, a status of 400 or more, a MediaWiki API error, or a
+    body ``_bib_json`` refuses. A 404 of the portal host and third-party IIIF
+    failures are not.
+    """
+    return upstream_budget(seconds)
+
+
+def _default_session():
+    """Session of a Biblissima call made without one: the no-retry session
+    inside a request budget, the shared retrying session otherwise. Callers
+    never close it."""
+    if _upstream_budget_var.get() is not None:
+        return _get_besteffort_session()
+    return _get_biblissima_session()
+
+
+_BIBLISSIMA_HOSTS = frozenset(
+    urlsplit(url).hostname
+    for url in (
+        BIBLISSIMA_WIKIBASE,
+        BIBLISSIMA_PORTAL,
+        BIBLISSIMA_PORTAL_EN,
+        BIBLISSIMA_IIIF_MANIFEST,
+    )
+)
+
+
+_PORTAL_HOST = urlsplit(BIBLISSIMA_PORTAL).hostname
+
+
+def _biblissima_host(url):
+    """The host of *url* when it is a settings-pinned Biblissima host, else ``None``."""
+    host = urlsplit(url).hostname
+    return host if host in _BIBLISSIMA_HOSTS else None
+
+
+_capped_timeout = capped_timeout
+
 
 # Lightweight counters for observing upstream health via /api/biblissima/stats.
 _biblissima_stats = {
@@ -200,55 +350,288 @@ _biblissima_stats = {
     "responses_429": 0,
     "responses_5xx": 0,
     "errors_total": 0,
+    "slot_timeouts": 0,
     "cache_hits": 0,
     "cache_misses": 0,
 }
 _biblissima_stats_lock = threading.Lock()
 
 
+_STAT_METRICS = {
+    "slot_timeouts": lambda delta: metrics.BIBLISSIMA_SLOT_TIMEOUTS.inc(delta),
+    "requests_in_flight": lambda delta: metrics.BIBLISSIMA_INFLIGHT.inc(delta),
+    "cache_hits": lambda delta: metrics.BIBLISSIMA_CACHE.labels(outcome="hit").inc(
+        delta
+    ),
+    "cache_misses": lambda delta: metrics.BIBLISSIMA_CACHE.labels(outcome="miss").inc(
+        delta
+    ),
+}
+
+
 def _incr_stat(key, delta=1):
+    """Count *key* in the per-process stats of /api/biblissima/stats and in its Prometheus metric."""
     with _biblissima_stats_lock:
         _biblissima_stats[key] = _biblissima_stats.get(key, 0) + delta
+    mirror = _STAT_METRICS.get(key)
+    if mirror is not None:
+        mirror(delta)
+
+
+_ENDPOINT_HOSTS = (
+    ("wikibase", urlsplit(BIBLISSIMA_WIKIBASE).hostname),
+    ("portal", urlsplit(BIBLISSIMA_PORTAL).hostname),
+    ("portal", urlsplit(BIBLISSIMA_PORTAL_EN).hostname),
+    ("iiif", urlsplit(BIBLISSIMA_IIIF_MANIFEST).hostname),
+)
+
+
+def _endpoint_family(url):
+    """The metric label of *url*'s host: wikibase, portal, iiif, or other (a third party)."""
+    host = urlsplit(url).hostname
+    for family, known in _ENDPOINT_HOSTS:
+        if host == known:
+            return family
+    return "other"
+
+
+def _status_outcome(status):
+    if status < 400:
+        return "ok"
+    if status == 404:
+        return "not_found"
+    if status == 429:
+        return "rate_limited"
+    if status < 500:
+        return "client_error"
+    return "server_error"
+
+
+def _record_upstream(endpoint, started, outcome):
+    metrics.BIBLISSIMA_UPSTREAM_REQUESTS.labels(
+        endpoint=endpoint, outcome=outcome
+    ).inc()
+    if outcome not in ("busy", "budget"):
+        metrics.BIBLISSIMA_UPSTREAM_LATENCY.labels(endpoint=endpoint).observe(
+            time.monotonic() - started
+        )
 
 
 @contextmanager
-def _biblissima_slot():
-    """Acquire one concurrency slot for an outbound Biblissima call."""
-    _biblissima_semaphore.acquire()
-    _incr_stat("requests_in_flight", 1)
+def _biblissima_slot(timeout=None):
+    """Hold one concurrency slot for an outbound Biblissima call.
+
+    Waits at most *timeout* seconds (``_BIBLISSIMA_SLOT_TIMEOUT`` when None),
+    then raises ``BiblissimaBusy``. Once acquired, the slot is released on
+    every exit.
+    """
+    wait = _BIBLISSIMA_SLOT_TIMEOUT if timeout is None else timeout
+    if not _biblissima_semaphore.acquire(timeout=wait):
+        _incr_stat("slot_timeouts", 1)
+        raise BiblissimaBusy()
     try:
+        _incr_stat("requests_in_flight", 1)
         yield
     finally:
-        _incr_stat("requests_in_flight", -1)
-        _biblissima_semaphore.release()
-
-
-def _bib_request(session, url, **kwargs):
-    """Wrapper around session.get bounding concurrency and recording metrics.
-
-    The session's HTTPAdapter already handles Retry-After and transient 5xx/429
-    retries with backoff, so this wrapper only counts the final response that
-    reaches the caller. Retries inside the adapter are invisible here by design
-    (otherwise we'd double-count them).
-    """
-    with _biblissima_slot():
-        _incr_stat("requests_total", 1)
         try:
-            resp = session.get(url, **kwargs)
-        except Exception:
-            _incr_stat("errors_total", 1)
-            raise
+            _incr_stat("requests_in_flight", -1)
+        finally:
+            _biblissima_semaphore.release()
+
+
+def _bib_request(
+    session, url, *, guarded=False, slot_timeout=None, deadline=None, **kwargs
+):
+    """GET *url* on *session* while holding a concurrency slot, and count it.
+
+    Only the final response that reaches the caller is counted: retries are the
+    session's policy, run inside its adapter and are invisible here.
+
+    ``guarded=True`` sends the call through ``utils.http.safe_fetch`` instead:
+    required whenever the URL is a third party's rather than one of the
+    settings-pinned Biblissima hosts, because only that path re-checks the SSRF
+    guard on each redirect hop and caps the body it reads. Its per-host
+    throttle is off here — a slot of the concurrency semaphore is already held
+    for the whole call, and sleeping inside one would serialise the enrichment
+    pool behind a single provider.
+
+    ``slot_timeout`` bounds the wait for a concurrency slot
+    (``_BIBLISSIMA_SLOT_TIMEOUT`` when None). ``deadline``, a
+    ``time.monotonic()`` instant, also caps that wait when no ``slot_timeout``
+    is given; once the slot is held it caps the connect and read timeouts of
+    the caller's ``timeout`` (``REQUEST_TIMEOUT`` when none is given) by the
+    seconds left, and raises ``BiblissimaBudgetSpent`` when none are left. The
+    read timeout applies to each read of the body, not to the whole of it.
+
+    Inside a request budget (``_upstream_budget``) the budget's deadline
+    applies when no ``deadline`` is given, the connect is also capped by
+    ``IIIF_CONNECT_TIMEOUT``, a Biblissima host found down earlier in the
+    request raises ``BiblissimaHostDown`` without being called, and failures
+    are recorded on the budget.
+
+    Each call is counted with its endpoint family and outcome, and timed when
+    it reached the network.
+    """
+    endpoint, started = _endpoint_family(url), time.monotonic()
+    budget = _upstream_budget_var.get()
+    host = _biblissima_host(url) if budget is not None else None
+    if host is not None and host in budget.down:
+        raise BiblissimaHostDown(host)
+    if deadline is None and budget is not None:
+        deadline = budget.deadline
+    if deadline is not None and slot_timeout is None:
+        slot_timeout = max(
+            0, min(deadline - time.monotonic(), _BIBLISSIMA_SLOT_TIMEOUT)
+        )
+    try:
+        with _biblissima_slot(slot_timeout):
+            if deadline is not None:
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    raise BiblissimaBudgetSpent()
+                kwargs["timeout"] = _capped_timeout(
+                    kwargs.get("timeout", REQUEST_TIMEOUT),
+                    left,
+                    connect_cap=IIIF_CONNECT_TIMEOUT if budget is not None else None,
+                )
+            _incr_stat("requests_total", 1)
+            try:
+                if guarded:
+                    resp = safe_fetch(
+                        url,
+                        session=session,
+                        throttle=False,
+                        purpose="biblissima",
+                        **kwargs,
+                    )
+                else:
+                    resp = session.get(url, **kwargs)
+            except Exception:
+                _incr_stat("errors_total", 1)
+                raise
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+        _record_upstream(endpoint, started, "timeout" if _is_timeout(exc) else "error")
+        if host is not None:
+            budget.record(exc, host)
+        raise
+    except Exception as exc:
+        _record_upstream(
+            endpoint,
+            started,
+            (
+                "busy"
+                if isinstance(exc, BiblissimaBusy)
+                else "budget" if isinstance(exc, BudgetSpent) else "error"
+            ),
+        )
+        if host is not None:
+            budget.record(exc)
+        raise
     status = resp.status_code
+    _record_upstream(endpoint, started, _status_outcome(status))
     if status == 429:
         _incr_stat("responses_429", 1)
     elif 500 <= status < 600:
         _incr_stat("responses_5xx", 1)
+    if host is not None:
+        api_error = resp.headers.get("MediaWiki-API-Error")
+        if status >= 400 and not (status == 404 and host == _PORTAL_HOST):
+            budget.record(
+                requests.exceptions.HTTPError(str(status), response=resp),
+                host if status in _BREAKER_STATUSES else None,
+            )
+        elif api_error:
+            budget.record(
+                BiblissimaApiError(
+                    f"Wikibase answered the API error {api_error}", code=api_error
+                )
+            )
     return resp
 
 
+def _bib_json(resp):
+    """The JSON object of a Biblissima answer read through ``_bib_request``.
+
+    Raises ``BiblissimaApiError`` for a body that is not a JSON object or that
+    reports a MediaWiki API error (``MediaWiki-API-Error`` header or ``error``
+    key). Inside a request budget the failure is recorded on it without
+    tripping the host; one the header names is already recorded by
+    ``_bib_request``.
+    """
+    api_error = resp.headers.get("MediaWiki-API-Error")
+    if api_error:
+        raise BiblissimaApiError(
+            f"Wikibase answered the API error {api_error}", code=api_error
+        )
+    try:
+        payload = resp.json()
+    except ValueError as exc:
+        error = BiblissimaApiError(
+            f"Biblissima answered a body that is not JSON: {exc}"
+        )
+    else:
+        if isinstance(payload, dict) and "error" not in payload:
+            return payload
+        body_error = payload.get("error") if isinstance(payload, dict) else None
+        code = body_error.get("code") if isinstance(body_error, dict) else None
+        error = BiblissimaApiError(f"Biblissima answered an error: {code}", code=code)
+    _record_failure(error)
+    raise error
+
+
+def _annotation_targets_are_safe(canvas_url, manifest_url):
+    """True when both URLs of an annotation may be fetched later.
+
+    The ``canvas`` and ``manifest`` properties of a stored annotation are
+    dereferenced by this server (thumbnail fetchers, IIIF annotation views) and
+    by every viewer that opens the resource, so a scraped value that names an
+    internal address must not be written into a tile in the first place. Same
+    guard as the fetch path, applied one step earlier.
+    """
+    for url in (canvas_url, manifest_url):
+        try:
+            assert_url_is_safe(url)
+        except UnsafeURLError as exc:
+            logger.warning("Skipping annotation with unusable target %s: %s", url, exc)
+            return False
+    return True
+
+
+def _is_timeout(exc):
+    """Whether *exc* is a timeout, a read timeout reported as a connection error included.
+
+    With the project's sessions ``requests`` reports a read timeout as a
+    ``ConnectionError``: wrapping urllib3's ``ReadTimeoutError`` during the
+    body download, or a ``MaxRetryError`` whose reason it is before the
+    headers (the retries of ``_NO_RETRY`` are exhausted at once).
+    """
+    if isinstance(exc, (requests.exceptions.Timeout, BiblissimaBudgetSpent)):
+        return True
+    if not isinstance(exc, requests.exceptions.ConnectionError):
+        return False
+    return any(
+        isinstance(arg, ReadTimeoutError)
+        or (isinstance(arg, MaxRetryError) and isinstance(arg.reason, ReadTimeoutError))
+        for arg in exc.args
+    )
+
+
 def _biblissima_upstream_error(exc, context):
-    """Map a requests exception to a JSON error response with a user-facing message."""
-    if isinstance(exc, requests.exceptions.Timeout):
+    """Map an outbound-call exception to a JSON error response with a user-facing message."""
+    if isinstance(exc, BiblissimaBusy):
+        logger.warning("%s: no Biblissima slot free", context)
+        response = JsonResponse(
+            {
+                "error": "busy",
+                "message": _(
+                    "Too many Biblissima requests are in progress. Please try again in a moment."
+                ),
+            },
+            status=503,
+        )
+        response["Retry-After"] = str(_BIBLISSIMA_SLOT_TIMEOUT)
+        return response
+    if _is_timeout(exc):
         logger.warning("%s timed out", context)
         return JsonResponse(
             {
@@ -259,7 +642,7 @@ def _biblissima_upstream_error(exc, context):
             },
             status=504,
         )
-    if isinstance(exc, requests.exceptions.ConnectionError):
+    if isinstance(exc, (requests.exceptions.ConnectionError, BiblissimaHostDown)):
         logger.warning("%s connection error", context)
         return JsonResponse(
             {
@@ -284,6 +667,16 @@ def _biblissima_upstream_error(exc, context):
             },
             status=502,
         )
+    if isinstance(exc, BiblissimaApiError):
+        logger.warning("%s answered %s", context, exc)
+        return JsonResponse(
+            {
+                "error": "invalid_response",
+                "code": exc.code,
+                "message": _("Invalid response from the Biblissima portal."),
+            },
+            status=502,
+        )
     if isinstance(exc, ValueError):
         logger.exception("%s returned invalid JSON", context)
         return JsonResponse(
@@ -301,6 +694,20 @@ def _biblissima_upstream_error(exc, context):
         },
         status=502,
     )
+
+
+def _budgeted_answer(payload, budget):
+    """JSON answer of a view run under a request budget.
+
+    ``partial`` says whether a Biblissima call failed while it was built; a
+    partial answer is marked private with ``max-age=0``, which ``cache_page``
+    never stores, so the next request retries the lookups that failed.
+    """
+    payload["partial"] = budget.error is not None
+    response = JsonResponse(payload)
+    if payload["partial"]:
+        patch_cache_control(response, private=True, max_age=0)
+    return response
 
 
 def _parse_html_fragment(text):
@@ -417,8 +824,9 @@ def _extract_entity_props(qid, raw_entity):
 def _get_wikibase_entity(qid, session=None):
     """Fetch a single Wikibase entity and extract relevant properties.
 
-    Results are cached in the Django cache for 24h keyed by QID, so repeated
-    lookups across requests hit the cache instead of Biblissima.
+    Cached for ``BIBLISSIMA_CACHE_TTL`` by QID; a miss is fetched by one
+    worker while concurrent callers wait for its result. ``None`` when the fetch
+    fails or Wikibase answers the entity missing; ``None`` is never cached.
     """
     cache_key = _BIBLISSIMA_ENTITY_CACHE_KEY.format(qid=qid)
     cached = cache.get(cache_key)
@@ -427,29 +835,29 @@ def _get_wikibase_entity(qid, session=None):
         return cached
     _incr_stat("cache_misses", 1)
 
-    s = session or _build_biblissima_session()
-    try:
-        resp = _bib_request(
-            s,
-            BIBLISSIMA_WIKIBASE,
-            params={
-                "action": "wbgetentities",
-                "ids": qid,
-                "format": "json",
-                "languages": "fr|en",
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-        resp.raise_for_status()
-        raw = resp.json().get("entities", {}).get(qid, {})
-    except Exception:
-        logger.warning("Failed to fetch Wikibase entity %s", qid)
-        return None
+    def fetch():
+        try:
+            resp = _bib_request(
+                session or _default_session(),
+                BIBLISSIMA_WIKIBASE,
+                params={
+                    "action": "wbgetentities",
+                    "ids": qid,
+                    "format": "json",
+                    "languages": "fr|en",
+                },
+                timeout=REQUEST_TIMEOUT,
+            )
+            resp.raise_for_status()
+            raw = _bib_json(resp).get("entities", {}).get(qid, {})
+        except Exception:
+            logger.warning("Failed to fetch Wikibase entity %s", qid)
+            return None
+        if not raw or "missing" in raw:
+            return None
+        return _extract_entity_props(qid, raw)
 
-    result = _extract_entity_props(qid, raw)
-    if result:
-        cache.set(cache_key, result, _BIBLISSIMA_CACHE_TTL)
-    return result
+    return get_or_build(cache_key, fetch, _BIBLISSIMA_CACHE_TTL, lock_timeout=90)
 
 
 def _batch_get_wikibase_entities(qids, session=None):
@@ -476,7 +884,7 @@ def _batch_get_wikibase_entities(qids, session=None):
     if not uncached:
         return results
 
-    s = session or _build_biblissima_session()
+    s = session or _default_session()
     # wbgetentities supports up to 50 IDs per call
     for i in range(0, len(uncached), 50):
         batch = uncached[i : i + 50]
@@ -493,7 +901,7 @@ def _batch_get_wikibase_entities(qids, session=None):
                 timeout=REQUEST_TIMEOUT * 2,
             )
             resp.raise_for_status()
-            entities = resp.json().get("entities", {})
+            entities = _bib_json(resp).get("entities", {})
             for qid in batch:
                 raw = entities.get(qid, {})
                 if raw and "missing" not in raw:
@@ -510,12 +918,105 @@ def _batch_get_wikibase_entities(qids, session=None):
     return results
 
 
+def _fetch_wikibase_claims(qid, session=None):
+    """Claims of one Wikibase entity, read through the guarded fetch.
+
+    Returns ``{}`` for an entity Wikibase marks missing or that has no claims.
+    Raises ``BiblissimaApiError`` for an answer ``_bib_json`` refuses or that
+    carries no ``entities``, ``HTTPError`` for an error status, and what the
+    fetch raises (``BiblissimaBusy``, ``UnsafeURLError``, ``requests`` errors).
+    """
+    query = urlencode(
+        {"action": "wbgetentities", "ids": qid, "format": "json", "props": "claims"}
+    )
+    resp = _bib_request(
+        session or _default_session(),
+        f"{BIBLISSIMA_WIKIBASE}?{query}",
+        guarded=True,
+        timeout=REQUEST_TIMEOUT,
+    )
+    resp.raise_for_status()
+    payload = _bib_json(resp)
+    if not isinstance(payload.get("entities"), dict):
+        error = BiblissimaApiError(f"Wikibase answered no entities for {qid}")
+        _record_failure(error)
+        raise error
+    return payload["entities"].get(qid, {}).get("claims", {})
+
+
+def _place_geo_from_claims(claims):
+    """GeoNames id (P123) and coordinates (P276) found in a place's claims.
+
+    Returns ``{"geonamesId", "latitude", "longitude"}``. Deprecated statements
+    are skipped. The id is the first P123 value made of ASCII digits; the
+    coordinates are the first P276 value on the Earth globe whose latitude and
+    longitude are numbers (not booleans) within [-90, 90] and [-180, 180]. A
+    value not found is ``None``.
+    """
+    geonames_id = None
+    for claim in claims.get(P123, []):
+        if claim.get("rank") == "deprecated":
+            continue
+        value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
+        if isinstance(value, str) and re.fullmatch(r"[0-9]+", value.strip()):
+            geonames_id = value.strip()
+            break
+
+    latitude = longitude = None
+    for claim in claims.get(P276, []):
+        if claim.get("rank") == "deprecated":
+            continue
+        value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
+        if not isinstance(value, dict):
+            continue
+        lat, lon = value.get("latitude"), value.get("longitude")
+        if (
+            (value.get("globe") or _EARTH_GLOBE) == _EARTH_GLOBE
+            and isinstance(lat, (int, float))
+            and not isinstance(lat, bool)
+            and isinstance(lon, (int, float))
+            and not isinstance(lon, bool)
+            and -90 <= lat <= 90
+            and -180 <= lon <= 180
+        ):
+            latitude, longitude = float(lat), float(lon)
+            break
+
+    return {"geonamesId": geonames_id, "latitude": latitude, "longitude": longitude}
+
+
+def _get_place_geo(place_qid, session=None):
+    """GeoNames id and coordinates of a Wikibase place; see ``_place_geo_from_claims``.
+
+    The result is cached for ``BIBLISSIMA_CACHE_TTL``. Returns ``None`` for a
+    malformed QID or when the claims could not be fetched; that is not cached.
+    """
+    if not _QID_RE.fullmatch(place_qid or ""):
+        return None
+    cache_key = _BIBLISSIMA_PLACE_GEO_CACHE_KEY.format(qid=place_qid)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        claims = _fetch_wikibase_claims(place_qid, session=session)
+    except Exception as exc:
+        logger.warning("Claims of place %s could not be fetched: %s", place_qid, exc)
+        return None
+
+    result = _place_geo_from_claims(claims)
+    cache.set(cache_key, result, _BIBLISSIMA_CACHE_TTL)
+    return result
+
+
 def _resolve_collection(collection_qid, session=None):
     """Resolve a Biblissima collection entity into owner + location data.
 
-    Follows the chain: collection → P201 (localisation) → place with Geonames ID
-                        collection → P169 (partie de) → parent institution
-    Returns dict with ownerLabel, ownerQid, locationLabel, locationQid, geonamesId.
+    Follows the chain: collection → P201 (localisation) → place, whose GeoNames
+    id comes from ``_get_place_geo``; collection → P169 (partie de) → parent
+    institution. Claims are read with ``_fetch_wikibase_claims``.
+    Returns dict with ownerLabel, ownerQid, locationLabel, locationQid, geonamesId,
+    parentInstitutionLabel, parentInstitutionQid.
     """
     if not collection_qid:
         return {}
@@ -529,23 +1030,8 @@ def _resolve_collection(collection_qid, session=None):
         "ownerQid": collection_qid,
     }
 
-    s = session or requests
-    coll_claims = {}
     try:
-        resp = s.get(
-            BIBLISSIMA_WIKIBASE,
-            params={
-                "action": "wbgetentities",
-                "ids": collection_qid,
-                "format": "json",
-                "languages": "fr|en",
-                "props": "claims",
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-        resp.raise_for_status()
-        entity = resp.json().get("entities", {}).get(collection_qid, {})
-        coll_claims = entity.get("claims", {})
+        coll_claims = _fetch_wikibase_claims(collection_qid, session=session)
     except Exception:
         logger.warning("Failed to fetch collection claims for %s", collection_qid)
         return result
@@ -565,33 +1051,9 @@ def _resolve_collection(collection_qid, session=None):
             if loc_entity:
                 result["locationLabel"] = loc_entity.get("label", "")
                 result["locationQid"] = loc_qid
-
-                # Get Geonames ID from the place entity
-                try:
-                    loc_resp = s.get(
-                        BIBLISSIMA_WIKIBASE,
-                        params={
-                            "action": "wbgetentities",
-                            "ids": loc_qid,
-                            "format": "json",
-                            "props": "claims",
-                        },
-                        timeout=REQUEST_TIMEOUT,
-                    )
-                    loc_resp.raise_for_status()
-                    loc_data = loc_resp.json().get("entities", {}).get(loc_qid, {})
-                    geo_claims = loc_data.get("claims", {}).get(P123, [])
-                    if geo_claims:
-                        geo_val = (
-                            geo_claims[0]
-                            .get("mainsnak", {})
-                            .get("datavalue", {})
-                            .get("value")
-                        )
-                        if geo_val:
-                            result["geonamesId"] = str(geo_val)
-                except Exception:
-                    pass
+                geo = _get_place_geo(loc_qid, session=session)
+                if geo and geo["geonamesId"]:
+                    result["geonamesId"] = geo["geonamesId"]
 
     # P169 = partie de (parent institution) — for the top-level owner
     parent_claims = coll_claims.get(P169, [])
@@ -743,6 +1205,13 @@ def _label_from(lang_map, lang):
     return ""
 
 
+# Every Biblissima identifier prefix, plus the iconographic descriptors that
+# never appear in a client-supplied identifier.
+_ANY_HASH_RE = re.compile(
+    "(?:" + "|".join(("desc",) + BIBLISSIMA_HASH_PREFIXES) + r")[0-9a-f]{40}"
+)
+
+
 def _suggest_result(qid, item, entity, lang):
     """Assemble one /api/biblissima/suggest payload entry.
 
@@ -760,11 +1229,8 @@ def _suggest_result(qid, item, entity, lang):
         value = claim.get("mainsnak", {}).get("datavalue", {}).get("value")
         # P129 encodes the persistent portal-ARK hash; the prefix varies by
         # entity kind (desc for iconographic descriptors, mdata for
-        # manuscripts, etc. — same vocabulary as _normalize_descriptors).
-        if isinstance(value, str) and re.fullmatch(
-            r"(?:desc|mdata|ifdata|pdata|oedata|cdata|ldata)[0-9a-f]{40}",
-            value.strip(),
-        ):
+        # manuscripts, etc.).
+        if isinstance(value, str) and _ANY_HASH_RE.fullmatch(value.strip()):
             portal_url = f"{BIBLISSIMA_PORTAL}/{value.strip()}"
             break
     return {
@@ -777,12 +1243,485 @@ def _suggest_result(qid, item, entity, lang):
     }
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+def _suggest_call(params, deadline):
+    """One Wikibase API call of the suggest path, bounded by *deadline*.
+
+    *deadline* is a ``time.monotonic()`` instant. The call goes through the
+    guarded fetch on the no-retry session; the slot wait is capped by the
+    seconds left, the connect and each read by what is left once the slot is
+    held, and no call starts once they are spent (``BiblissimaBudgetSpent``).
+    The DNS lookups of the SSRF guard are not covered by the budget. Returns
+    the decoded JSON object. Raises ``BiblissimaApiError`` (a ``ValueError``)
+    for a body ``_bib_json`` refuses, and what the fetch raises otherwise; a
+    read timeout, before or during the body, surfaces as
+    ``requests.ConnectionError``.
+    """
+    left = deadline - time.monotonic()
+    if left <= 0:
+        raise BiblissimaBudgetSpent()
+    resp = _bib_request(
+        _get_besteffort_session(),
+        f"{BIBLISSIMA_WIKIBASE}?{urlencode(params)}",
+        guarded=True,
+        slot_timeout=min(left, REQUEST_TIMEOUT),
+        deadline=deadline,
+    )
+    resp.raise_for_status()
+    return _bib_json(resp)
+
+
+SUGGEST_MAX_QUERY = 100
+"""Longest ``q`` the suggest endpoint accepts, counted on the raw parameter as
+the selects count their input."""
+
+SUGGEST_PARTIAL_TTL = 60
+"""Seconds a partial or degraded suggest answer stays memoised."""
+
+SUGGEST_ANSWER_TTL = 30 * 60
+"""Lifetime of a complete suggest answer, in the memo and as the browser's ``max-age``."""
+
+_SUGGEST_PREFIX_FETCH = 50
+"""Hits fetched per prefix search: the wbsearchentities ceiling for non-bot clients."""
+
+_ENTITY_ID_TOKEN = re.compile(r"[a-z]\d+")
+
+_FOLD_LETTERS = str.maketrans(
+    {"œ": "oe", "æ": "ae", "ø": "o", "ł": "l", "đ": "d", "ð": "d", "þ": "th"}
+)
+
+
+_WIKIBASE_SPACES = str.maketrans(dict.fromkeys("'\u2019\u02bc_-", " "))
+"""The characters Wikibase's prefix search reads as a space."""
+
+
+def _decompose(text):
+    """*text* without case or accents (NFKD), its whitespace untouched."""
+    decomposed = unicodedata.normalize("NFKD", text.casefold().translate(_FOLD_LETTERS))
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
+def _fold(text):
+    """*text* without case, accents or extra whitespace.
+
+    Wikibase ignores case and accents (``Jéro`` and ``jero`` return the same
+    hits in the same order); runs of whitespace are collapsed by choice (a
+    doubled space is a typing slip). The suggest memo is keyed on this form and
+    the upstream receives it, so a stored answer is always the upstream's
+    answer for its own key.
+    """
+    return " ".join(_decompose(text).split())
+
+
+def _loose(text):
+    """The folded *text* with every run of punctuation read as one space.
+
+    Punctuation includes ``_`` and U+02BC. A label whose loose form does not
+    start with the loose needle is not a Wikibase prefix hit, except through
+    the letters Wikibase's ASCII folding maps and ``_fold`` keeps (ı, ħ, ə …)
+    and the characters whose decomposition holds punctuation (ŀ → l·,
+    ŉ → ʼn): ``_suggest_typed_hits`` reports both as undecidable.
+    """
+    return " ".join(re.sub(r"[\W_ʼ]+", " ", _fold(text)).split())
+
+
+def _strict(text):
+    """*text* as Wikibase's prefix search compares it.
+
+    Case and accents are ignored and ``'``, U+2019, U+02BC, ``_`` and ``-``
+    read as a space; every other punctuation mark and every whitespace run is
+    kept as it is. Measured on data.biblissima.fr: ``draguignan (v`` finds
+    "Draguignan (Var, France)" and ``draguignan v`` does not; ``,``, ``.``,
+    ``:`` and ``/`` behave the same, and a doubled space does not match a
+    single one.
+    """
+    return _decompose(text).translate(_WIKIBASE_SPACES)
+
+
+def _decomposes_to_punctuation(text):
+    """Whether a character of *text* decomposes into a sequence holding
+    punctuation, a symbol or U+02BC (ŀ → l·, ŉ → ʼn, ½ → 1⁄2)."""
+    for char in text:
+        decomposed = unicodedata.normalize(
+            "NFKD", char.casefold().translate(_FOLD_LETTERS)
+        )
+        if decomposed != char and any(
+            c == "ʼ" or unicodedata.category(c)[0] in "PS" for c in decomposed
+        ):
+            return True
+    return False
+
+
+def _suggest_key(folded, type_qid, lang, limit):
+    """Memo key of one suggest answer."""
+    return stable_cache_key("biblissima:suggest", folded, type_qid, lang, limit)
+
+
+def _suggest_prefix_key(folded, lang):
+    """Key of the prefix entry of *folded* in *lang*; both types share it."""
+    return stable_cache_key("biblissima:suggest:prefix", folded, lang)
+
+
+def _suggest_terms(entity):
+    """``(loose, strict, unsure)`` of every label and alias of *entity*, in
+    every language; ``unsure`` when ``_decomposes_to_punctuation``."""
+    values = [v.get("value", "") for v in (entity.get("labels") or {}).values()]
+    for aliases in (entity.get("aliases") or {}).values():
+        values.extend(alias.get("value", "") for alias in aliases)
+    return {
+        (_loose(value), _strict(value), _decomposes_to_punctuation(value))
+        for value in values
+        if _loose(value)
+    }
+
+
+def _suggest_prefix_entry(folded, lang, deadline):
+    """What ``wbsearchentities`` knows of *folded*, as upstream data only.
+
+    Up to 50 hits and, from one batch, their labels and P2/P129 claims.
+    ``complete`` is true when Wikibase reports no further page and the batch
+    holds every hit: the hits are then every entity one of whose labels or
+    aliases starts with *folded*, with their labels and aliases in every
+    language. A search that reports a further page gets a batch of the labels
+    of the lang → en → fr chain only: its entry answers the current query and
+    nothing else. Raises ``ValueError`` for an answer without a ``search`` list
+    or a batch without an ``entities`` object.
+    """
+    search = _suggest_call(
+        {
+            "action": "wbsearchentities",
+            "search": folded,
+            "language": lang,
+            "format": "json",
+            "limit": _SUGGEST_PREFIX_FETCH,
+        },
+        deadline,
+    )
+    items = search.get("search")
+    if not isinstance(items, list):
+        raise ValueError("wbsearchentities answered no search list")
+    items = [
+        {"id": i["id"], "label": i.get("label"), "description": i.get("description")}
+        for i in items
+        if isinstance(i, dict) and i.get("id")
+    ]
+    truncated = "search-continue" in search
+    entities = {}
+    if items:
+        params = {
+            "action": "wbgetentities",
+            "ids": "|".join(dict.fromkeys(item["id"] for item in items)),
+            "format": "json",
+        }
+        if truncated:
+            params.update(languages=_suggest_languages(lang), props="claims|labels")
+        else:
+            params["props"] = "claims|labels|aliases"
+        batch = _suggest_call(params, deadline).get("entities")
+        if not isinstance(batch, dict):
+            raise ValueError("wbgetentities answered no entities")
+        for qid, raw in batch.items():
+            claims = raw.get("claims") or {}
+            entities[qid] = {
+                "labels": raw.get("labels") or {},
+                "aliases": raw.get("aliases") or {},
+                "claims": {P2: claims.get(P2, []), P129: claims.get(P129, [])},
+            }
+    return {
+        "complete": not truncated and all(item["id"] in entities for item in items),
+        "items": items,
+        "entities": entities,
+    }
+
+
+def _suggest_cached_entry(folded, lang):
+    """The stored prefix entry that answers *folded*, and the needle to narrow it with.
+
+    ``(entry, None)`` for the query's own entry; ``(entry, folded)`` for the
+    entry of its longest proper prefix of two characters or more (only complete
+    entries are stored); ``(None, None)`` when the upstream has to be asked.
+    Never an ancestor's entry for a query holding an entity id (``q884``):
+    Wikibase matches ids exactly, not by prefix. One cache round trip, over
+    at most ``SUGGEST_MAX_QUERY`` proper prefixes (the longest ones are skipped).
+    """
+    sizes = range(min(len(folded) - 1, SUGGEST_MAX_QUERY), 1, -1)
+    prefixes = [
+        prefix
+        for prefix in dict.fromkeys(
+            [folded, *(folded[:size].rstrip() for size in sizes)]
+        )
+        if len(prefix) >= 2
+    ]
+    keys = [_suggest_prefix_key(prefix, lang) for prefix in prefixes]
+    found = cache.get_many(keys)
+    if keys[0] in found:
+        return found[keys[0]], None
+    loose = _loose(folded)
+    if not loose or any(_ENTITY_ID_TOKEN.fullmatch(t) for t in loose.split()):
+        return None, None
+    for key in keys[1:]:
+        entry = found.get(key)
+        if entry is not None and entry["complete"]:
+            return entry, folded
+    return None, None
+
+
+def _suggest_typed_hits(entry, type_qid, needle=None):
+    """``(item, entity)`` pairs of *entry* whose P2 claims name *type_qid*.
+
+    In entry order; with *needle* (a folded query), only the entities one of
+    whose labels or aliases starts with it as Wikibase compares them
+    (``_strict``), exact matches first. ``None`` when a typed entity is not
+    such a hit and that cannot be decided here:
+
+    - one of its terms starts with the needle once punctuation is read as
+      space (``_loose``) but not under ``_strict``: ranking it would change
+      what the fulltext search is left room for, so the answer is refetched;
+    - one of its terms first differs from the needle on a non-ASCII Latin
+      letter, which Wikibase's ASCII folding may map (ı→i, ħ→h, ə→e …) where
+      ``_fold`` keeps it;
+    - one of its terms holds a character whose decomposition introduces
+      punctuation (``_decomposes_to_punctuation``).
+    """
+    if needle is not None:
+        loose_needle, strict_needle = _loose(needle), _strict(needle)
+    ranked, seen = [], set()
+    for item in entry["items"]:
+        entity = entry["entities"].get(item["id"])
+        if (
+            item["id"] in seen
+            or entity is None
+            or type_qid not in _entity_types(entity)
+        ):
+            continue
+        seen.add(item["id"])
+        if needle is None:
+            ranked.append((False, item, entity))
+            continue
+        terms = _suggest_terms(entity)
+        strict = {term for _, term, unsure in terms if not unsure}
+        if any(term.startswith(strict_needle) for term in strict):
+            ranked.append((strict_needle not in strict, item, entity))
+        elif any(
+            unsure
+            or term.startswith(loose_needle)
+            or _differs_on_latin_letter(term, loose_needle)
+            for term, _, unsure in terms
+        ):
+            return None
+    ranked.sort(key=lambda row: row[0])
+    return [(item, entity) for _, item, entity in ranked]
+
+
+def _differs_on_latin_letter(term, needle):
+    """Whether *term* and *needle* first differ on a non-ASCII Latin letter.
+
+    Compared over the length of *needle*; a term that ends before any
+    difference does not differ on one.
+    """
+    for term_char, needle_char in zip(term, needle):
+        if term_char != needle_char:
+            return any(
+                not c.isascii() and unicodedata.name(c, "").startswith("LATIN")
+                for c in (term_char, needle_char)
+            )
+    return False
+
+
+def _entity_types(entity):
+    """Item ids named by the P2 (type) claims of a wbgetentities entity."""
+    types = []
+    for claim in (entity.get("claims") or {}).get(P2, []):
+        value = claim.get("mainsnak", {}).get("datavalue", {}).get("value", {})
+        if isinstance(value, dict) and value.get("id"):
+            types.append(value["id"])
+    return types
+
+
+def _suggest_languages(lang):
+    """The ``languages`` parameter of a batch: the chain lang → en → fr."""
+    return "|".join(dict.fromkeys((lang, "en", "fr")))
+
+
+def _suggest_untyped_results(query, lang, limit, deadline):
+    """``wbsearchentities`` hits as suggestions, without a claims batch.
+
+    The enriched fields (``label_en``, ``portal_url``) stay null.
+    """
+    items = _suggest_call(
+        {
+            "action": "wbsearchentities",
+            "search": query,
+            "language": lang,
+            "format": "json",
+            "limit": limit,
+        },
+        deadline,
+    ).get("search", [])
+    results, seen = [], set()
+    for item in items:
+        if item["id"] not in seen:
+            seen.add(item["id"])
+            results.append(_suggest_result(item["id"], item, None, lang))
+    return results
+
+
+def _suggest_prefix_results(folded, lang, type_qid, limit, deadline):
+    """Typed suggestions of ``wbsearchentities``, from a prefix entry.
+
+    A complete ancestor's entry answers only when its narrowed typed hits fit
+    in *limit* and every comparison that narrowed them was decidable under
+    Wikibase's own comparison (``_suggest_typed_hits``): they are then exactly
+    the hits a fresh search would keep, in the ancestor's order, and leave the
+    fulltext search the same room. Otherwise a fresh entry is fetched and, when
+    it is complete, stored for ``BIBLISSIMA_CACHE_TTL``, or for
+    ``SUGGEST_ANSWER_TTL`` when it holds no hit. Kept: up to *limit* hits
+    whose P2 claims name *type_qid*.
+    """
+    entry, needle = _suggest_cached_entry(folded, lang)
+    hits = None
+    source = "own" if needle is None else "ancestor"
+    if entry is not None:
+        hits = _suggest_typed_hits(entry, type_qid, needle)
+        if needle is not None and hits is not None and len(hits) > limit:
+            hits = None
+    if hits is None:
+        source = "upstream"
+        entry = _suggest_prefix_entry(folded, lang, deadline)
+        if entry["complete"]:
+            ttl = _BIBLISSIMA_CACHE_TTL if entry["items"] else SUGGEST_ANSWER_TTL
+            cache.set(_suggest_prefix_key(folded, lang), entry, ttl)
+        hits = _suggest_typed_hits(entry, type_qid)
+    metrics.BIBLISSIMA_SUGGEST_PREFIX.labels(source=source).inc()
+    return [
+        _suggest_result(item["id"], item, entity, lang) for item, entity in hits[:limit]
+    ]
+
+
+def _suggest_fulltext_results(query, lang, type_qid, limit, seen_ids, deadline):
+    """CirrusSearch hits not already suggested, labelled by one batch.
+
+    Fills the room *limit* leaves after the ``len(seen_ids)`` suggestions
+    already made. An entity without a label in the lang → en → fr chain is
+    skipped.
+    """
+    room = limit - len(seen_ids)
+    srsearch = f"{query} haswbstatement:P2={type_qid}" if type_qid else query
+    hits = (
+        _suggest_call(
+            {
+                "action": "query",
+                "list": "search",
+                "srsearch": srsearch,
+                "srnamespace": 120,
+                "format": "json",
+                "srlimit": limit,
+            },
+            deadline,
+        )
+        .get("query", {})
+        .get("search", [])
+    )
+    qids = dict.fromkeys(hit["title"].replace("Item:", "") for hit in hits)
+    qids = [qid for qid in qids if qid not in seen_ids][:room]
+    if not qids:
+        return []
+    entities = _suggest_call(
+        {
+            "action": "wbgetentities",
+            "ids": "|".join(qids),
+            "format": "json",
+            "languages": _suggest_languages(lang),
+            "props": "labels|descriptions|claims",
+        },
+        deadline,
+    ).get("entities", {})
+    results = []
+    for qid in qids:
+        entity = entities.get(qid)
+        if not entity:
+            continue
+        entry = _suggest_result(qid, None, entity, lang)
+        if entry["label"]:
+            results.append(entry)
+    return results
+
+
+_SUGGEST_UPSTREAM_FAILURES = (
+    requests.RequestException,
+    BiblissimaBusy,
+    BiblissimaBudgetSpent,
+    UnsafeURLError,
+    ResponseTooLargeError,
+    ValueError,
+)
+"""What a suggest call raises when the upstream fails or the budget runs out."""
+
+
+def _build_suggestions(folded, lang, type_qid, limit, deadline):
+    """The suggest payload of the folded query *folded*, computed before *deadline*.
+
+    The prefix search runs first and the fulltext search fills the room left;
+    a branch that fails or finds the budget spent keeps the results already in
+    hand. ``degraded``: both branches failed; ``partial``: at least one did.
+    An upstream failure (``_SUGGEST_UPSTREAM_FAILURES``) logs a warning; any
+    other exception fails its branch the same way and logs its traceback.
+    """
+    results, prefix_failed, fulltext_failed = [], False, False
+    try:
+        if type_qid:
+            results = _suggest_prefix_results(folded, lang, type_qid, limit, deadline)
+        else:
+            results = _suggest_untyped_results(folded, lang, limit, deadline)
+    except _SUGGEST_UPSTREAM_FAILURES as exc:
+        prefix_failed = True
+        logger.warning(
+            "[biblissima.suggest] prefix search failed for query=%r: %r", folded, exc
+        )
+    except Exception:
+        prefix_failed = True
+        logger.exception(
+            "[biblissima.suggest] prefix search failed for query=%r", folded
+        )
+    if len(results) < limit:
+        try:
+            results += _suggest_fulltext_results(
+                folded, lang, type_qid, limit, {r["id"] for r in results}, deadline
+            )
+        except _SUGGEST_UPSTREAM_FAILURES as exc:
+            fulltext_failed = True
+            logger.warning(
+                "[biblissima.suggest] fulltext search failed for query=%r: %r",
+                folded,
+                exc,
+            )
+        except Exception:
+            fulltext_failed = True
+            logger.exception(
+                "[biblissima.suggest] fulltext search failed for query=%r", folded
+            )
+    return {
+        "results": results,
+        "degraded": prefix_failed and fulltext_failed,
+        "partial": prefix_failed or fulltext_failed,
+    }
+
+
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaSuggestView(View):
     """Proxy for Biblissima Wikibase entity search (autocomplete).
 
     Combines prefix match (wbsearchentities) and full-text search
     (CirrusSearch) for flexible matching regardless of word order.
+
+    Answers are memoised under the folded query, type, language and limit,
+    after the group check of ``dispatch``: they depend neither on the user nor
+    on the active language. The prefix search is stored apart, per folded
+    query and language, and answers longer queries when it was complete
+    (``_suggest_prefix_results``). A caller whose budget is spent when its
+    turn to build comes (a waiter that polled past the deadline) answers
+    degraded and stores nothing.
     """
 
     # Wikibase type QIDs for filtering
@@ -791,220 +1730,122 @@ class BiblissimaSuggestView(View):
         "descriptor": "Q304387",
     }
 
-    # cache_control OUTSIDE cache_page (listed above it): Django's cache
-    # middleware refuses to store responses already marked private, so the
-    # stored copy stays cacheable and only the outgoing response is patched.
     @method_decorator(cache_control(private=True))
-    @method_decorator(cache_page(1800))
     def get(self, request):
-        query = request.GET.get("q", "").strip()
-        if len(query) < 2:
-            return JsonResponse({"results": [], "degraded": False})
-
+        raw = request.GET.get("q", "")
+        if len(raw) > SUGGEST_MAX_QUERY:
+            return JsonResponse({"error": "query too long"}, status=400)
+        folded = _fold(raw)
+        if len(folded) < 2:
+            return JsonResponse({"results": [], "degraded": False, "partial": False})
         lang = request.GET.get("lang", "fr")
+        if lang not in dict(settings.LANGUAGES):
+            lang = "fr"
         try:
             limit = int(request.GET.get("limit", 10))
         except (TypeError, ValueError):
             limit = 10
-        # MediaWiki caps wbsearchentities at 50 ids for non-bots and reports
-        # overflow as JSON inside HTTP 200 — fetch_limit = 3 × limit must
-        # stay under that or the prefix path silently returns nothing.
         limit = max(1, min(limit, 15))
-        type_filter = request.GET.get("type", "")  # "manuscript" or "descriptor"
-        type_qid = self.TYPE_FILTERS.get(type_filter, "")
-        # wbgetentities only returns the requested languages — ask for the
-        # exact fallback chain lang → en → fr.
-        langs_param = "|".join(dict.fromkeys((lang, "en", "fr")))
-        seen_ids = set()
-        results = []
+        type_qid = self.TYPE_FILTERS.get(request.GET.get("type", ""), "")
+        key = _suggest_key(folded, type_qid, lang, limit)
+        deadline = time.monotonic() + SUGGEST_DEADLINE
 
-        session = _build_biblissima_session()
+        def build():
+            if time.monotonic() >= deadline:
+                return None
+            return _build_suggestions(folded, lang, type_qid, limit, deadline)
 
-        prefix_failed = False
-        fulltext_failed = False
+        def shorten_partial(built):
+            if built["partial"]:
+                cache.set(key, built, SUGGEST_PARTIAL_TTL)
 
-        # 1. Prefix match (fast, good for exact starts)
-        # wbsearchentities doesn't support type filtering, so we fetch more
-        # and filter by checking P2 claims afterwards
-        try:
-            fetch_limit = limit * 3 if type_qid else limit
-            resp = _bib_request(
-                session,
-                BIBLISSIMA_WIKIBASE,
-                params={
-                    "action": "wbsearchentities",
-                    "search": query,
-                    "language": lang,
-                    "format": "json",
-                    "limit": fetch_limit,
-                },
-                timeout=REQUEST_TIMEOUT,
-            )
-            resp.raise_for_status()
-            prefix_items = resp.json().get("search", [])
-
-            if type_qid and prefix_items:
-                # Batch fetch claims (P2 type filter + P129 portal hash) and
-                # labels (EN/FR fallback chain) in the single existing call.
-                batch_ids = [item["id"] for item in prefix_items]
-                type_resp = _bib_request(
-                    session,
-                    BIBLISSIMA_WIKIBASE,
-                    params={
-                        "action": "wbgetentities",
-                        "ids": "|".join(batch_ids),
-                        "format": "json",
-                        "props": "claims|labels",
-                        "languages": langs_param,
-                    },
-                    timeout=REQUEST_TIMEOUT,
-                )
-                type_resp.raise_for_status()
-                entities = type_resp.json().get("entities", {})
-                matching = {}
-                for qid, entity in entities.items():
-                    for claim in entity.get("claims", {}).get(P2, []):
-                        val = (
-                            claim.get("mainsnak", {})
-                            .get("datavalue", {})
-                            .get("value", {})
-                        )
-                        if isinstance(val, dict) and val.get("id") == type_qid:
-                            matching[qid] = entity
-                            break
-
-                for item in prefix_items:
-                    qid = item["id"]
-                    if qid not in matching or qid in seen_ids:
-                        continue
-                    seen_ids.add(qid)
-                    results.append(_suggest_result(qid, item, matching[qid], lang))
-                    if len(results) >= limit:
-                        break
-            else:
-                for item in prefix_items:
-                    if item["id"] not in seen_ids:
-                        seen_ids.add(item["id"])
-                        results.append(_suggest_result(item["id"], item, None, lang))
-        except Exception:
-            prefix_failed = True
-            logger.warning("wbsearchentities failed for query=%s", query)
-
-        # 2. Full-text search (flexible word order, partial matches)
-        # CirrusSearch supports haswbstatement for native type filtering
-        if len(results) < limit:
-            try:
-                srsearch = query
-                if type_qid:
-                    srsearch = f"{query} haswbstatement:P2={type_qid}"
-
-                resp = _bib_request(
-                    session,
-                    BIBLISSIMA_WIKIBASE,
-                    params={
-                        "action": "query",
-                        "list": "search",
-                        "srsearch": srsearch,
-                        "srnamespace": 120,
-                        "format": "json",
-                        "srlimit": limit,
-                    },
-                    timeout=REQUEST_TIMEOUT,
-                )
-                resp.raise_for_status()
-                search_results = resp.json().get("query", {}).get("search", [])
-                qids_to_fetch = [
-                    r["title"].replace("Item:", "")
-                    for r in search_results
-                    if r["title"].replace("Item:", "") not in seen_ids
-                ]
-
-                # Batch fetch labels for full-text results
-                if qids_to_fetch:
-                    resp = _bib_request(
-                        session,
-                        BIBLISSIMA_WIKIBASE,
-                        params={
-                            "action": "wbgetentities",
-                            "ids": "|".join(qids_to_fetch[: limit - len(results)]),
-                            "format": "json",
-                            "languages": langs_param,
-                            "props": "labels|descriptions|claims",
-                        },
-                        timeout=REQUEST_TIMEOUT,
-                    )
-                    resp.raise_for_status()
-                    entities = resp.json().get("entities", {})
-                    for qid in qids_to_fetch:
-                        if len(results) >= limit:
-                            break
-                        entity = entities.get(qid)
-                        if not entity:
-                            continue
-                        entry = _suggest_result(qid, None, entity, lang)
-                        if not entry["label"]:
-                            continue
-                        seen_ids.add(qid)
-                        results.append(entry)
-            except Exception as exc:
-                fulltext_failed = True
-                logger.warning(
-                    "[biblissima.suggest] Wikibase CirrusSearch fulltext search "
-                    "failed for query=%r: %s (results truncated to wbsearchentities prefix matches)",
-                    query,
-                    exc,
-                    exc_info=True,
-                )
-
-        session.close()
-        degraded = prefix_failed and fulltext_failed
-        response = JsonResponse({"results": results, "degraded": degraded})
-        if degraded:
-            # cache_page skips responses whose max-age is 0 — a Biblissima
-            # outage must not poison the 30-minute cache with empty results.
-            patch_cache_control(response, max_age=0)
+        payload = get_or_build(
+            key,
+            build,
+            SUGGEST_ANSWER_TTL,
+            lock_timeout=3 * SUGGEST_DEADLINE,
+            # A holder's build typically ends within twice the deadline;
+            # redirects, trickled bodies and DNS lookups are not bounded.
+            wait=2 * SUGGEST_DEADLINE + 0.5,
+            kept=shorten_partial,
+        )
+        if payload is None:
+            payload = {"results": [], "degraded": True, "partial": True}
+        response = JsonResponse(payload)
+        patch_cache_control(
+            response, max_age=0 if payload["partial"] else SUGGEST_ANSWER_TTL
+        )
         return response
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaEntityView(View):
-    """Proxy for fetching a single Wikibase entity with extracted properties."""
+    """Proxy for fetching a single Wikibase entity with extracted properties.
+
+    ``get`` is cached by ``cache_page`` on the URL alone, before the session
+    and locale middlewares add their ``Vary`` headers: the payload must depend
+    neither on the user nor on the active language. A per-user or localised
+    field here would be served to every editor.
+
+    Upstream calls run under one request budget. An entity that could not be
+    fetched answers the failure; an id Wikibase marks missing or rejects with
+    ``no-such-entity`` answers 404; a failed lookup of a linked entity makes
+    the answer ``partial``. An id other than ``Q`` followed by a number
+    without a leading zero answers 400.
+    """
 
     @method_decorator(cache_control(private=True))
     @method_decorator(cache_page(1800))
     def get(self, request, qid):
-        entity = _get_wikibase_entity(qid)
-        if entity is None:
-            return JsonResponse({"error": "Entity not found"}, status=404)
+        if not _QID_RE.fullmatch(qid):
+            return JsonResponse({"error": "invalid qid"}, status=400)
 
-        # Resolve P2 nature label and pre-compute Document Type valueid
-        # (helper is idempotent and used by SearchManuscriptsView too).
-        _attach_document_type(entity)
+        with _upstream_budget(VIEW_DEADLINE) as budget:
+            entity = _get_wikibase_entity(qid)
+            if entity is None:
+                if (
+                    budget.error is not None
+                    and getattr(budget.error, "code", None) != "no-such-entity"
+                ):
+                    return _biblissima_upstream_error(
+                        budget.error, f"Biblissima entity ({qid})"
+                    )
+                return JsonResponse({"error": "Entity not found"}, status=404)
 
-        # If author is a QID, resolve its label
-        if entity.get("author"):
-            author_entity = _get_wikibase_entity(entity["author"])
-            if author_entity:
-                entity["authorLabel"] = author_entity["label"]
-                entity["authorQid"] = entity["author"]
+            # Resolve P2 nature label and pre-compute Document Type valueid
+            # (helper is idempotent and used by SearchManuscriptsView too).
+            _attach_document_type(entity)
 
-        # If collection is a QID, resolve full collection data (owner + location)
-        if entity.get("collection"):
-            coll_data = _resolve_collection(entity["collection"])
-            entity["collectionLabel"] = coll_data.get("ownerLabel", "")
-            entity["collectionQid"] = entity["collection"]
-            entity["locationLabel"] = coll_data.get("locationLabel", "")
-            entity["locationQid"] = coll_data.get("locationQid", "")
-            entity["geonamesId"] = coll_data.get("geonamesId", "")
-            entity["parentInstitutionLabel"] = coll_data.get(
-                "parentInstitutionLabel", ""
-            )
-            entity["parentInstitutionQid"] = coll_data.get("parentInstitutionQid", "")
+            # If author is a QID, resolve its label
+            if entity.get("author"):
+                author_entity = _get_wikibase_entity(entity["author"])
+                if author_entity:
+                    entity["authorLabel"] = author_entity["label"]
+                    entity["authorQid"] = entity["author"]
 
-        return JsonResponse(entity)
+            # If collection is a QID, resolve full collection data (owner + location)
+            if entity.get("collection"):
+                coll_data = _resolve_collection(entity["collection"])
+                entity["collectionLabel"] = coll_data.get("ownerLabel", "")
+                entity["collectionQid"] = entity["collection"]
+                entity["locationLabel"] = coll_data.get("locationLabel", "")
+                entity["locationQid"] = coll_data.get("locationQid", "")
+                entity["geonamesId"] = coll_data.get("geonamesId", "")
+                entity["parentInstitutionLabel"] = coll_data.get(
+                    "parentInstitutionLabel", ""
+                )
+                entity["parentInstitutionQid"] = coll_data.get(
+                    "parentInstitutionQid", ""
+                )
+
+        return _budgeted_answer(entity, budget)
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaSearchManuscriptsView(View):
     """Search manuscripts on Biblissima with full batch enrichment.
 
@@ -1014,6 +1855,15 @@ class BiblissimaSearchManuscriptsView(View):
     3. Batch author resolution (1 call for unique author QIDs)
     4. Deduplicated collection resolution
     5. Parallel portal date scraping
+
+    ``get`` is cached by ``cache_page`` on the URL alone, before the session
+    and locale middlewares add their ``Vary`` headers: the payload must depend
+    neither on the user nor on the active language. A per-user or localised
+    field here would be served to every editor.
+
+    Upstream calls run under one request budget. A search that found nothing
+    while a call failed answers the failure; results assembled while a call
+    failed are ``partial``.
     """
 
     TYPE_FILTERS = BiblissimaSuggestView.TYPE_FILTERS
@@ -1023,147 +1873,156 @@ class BiblissimaSearchManuscriptsView(View):
     def get(self, request):
         query = request.GET.get("q", "").strip()
         if len(query) < 3:
-            return JsonResponse({"results": []})
+            return JsonResponse({"results": [], "partial": False})
 
-        limit = max(1, int(request.GET.get("limit", 50)))
-        session = _build_biblissima_session()
-
-        # --- Step 1: Suggest (reuse SuggestView logic inline) ---
-        type_qid = self.TYPE_FILTERS.get("manuscript", "")
-        seen_ids = set()
-        suggest_results = []
-
-        # Prefix search
         try:
-            fetch_limit = limit * 3
-            resp = _bib_request(
-                session,
-                BIBLISSIMA_WIKIBASE,
-                params={
-                    "action": "wbsearchentities",
-                    "search": query,
-                    "language": "fr",
-                    "format": "json",
-                    "limit": fetch_limit,
-                },
-                timeout=REQUEST_TIMEOUT,
-            )
-            resp.raise_for_status()
-            prefix_items = resp.json().get("search", [])
+            limit = int(request.GET.get("limit", 50))
+        except (TypeError, ValueError):
+            limit = 50
+        limit = max(1, min(limit, 50))
 
-            if prefix_items:
-                batch_ids = [item["id"] for item in prefix_items]
-                type_resp = _bib_request(
-                    session,
-                    BIBLISSIMA_WIKIBASE,
-                    params={
-                        "action": "wbgetentities",
-                        "ids": "|".join(batch_ids),
-                        "format": "json",
-                        "props": "claims",
-                    },
-                    timeout=REQUEST_TIMEOUT,
-                )
-                type_resp.raise_for_status()
-                entities = type_resp.json().get("entities", {})
-                for item in prefix_items:
-                    qid = item["id"]
-                    for claim in entities.get(qid, {}).get("claims", {}).get(P2, []):
-                        val = (
-                            claim.get("mainsnak", {})
-                            .get("datavalue", {})
-                            .get("value", {})
-                        )
-                        if isinstance(val, dict) and val.get("id") == type_qid:
-                            if qid not in seen_ids:
-                                seen_ids.add(qid)
-                                suggest_results.append(qid)
-                            break
-                    if len(suggest_results) >= limit:
-                        break
-        except Exception:
-            logger.warning("Manuscript search prefix failed for: %s", query)
+        with _upstream_budget(VIEW_DEADLINE) as budget:
+            session = _default_session()
 
-        # Fulltext search
-        if len(suggest_results) < limit:
+            # --- Step 1: Suggest (reuse SuggestView logic inline) ---
+            type_qid = self.TYPE_FILTERS.get("manuscript", "")
+            seen_ids = set()
+            suggest_results = []
+
+            # Prefix search
             try:
-                srsearch = f"{query} haswbstatement:P2={type_qid}"
+                fetch_limit = limit * 3
                 resp = _bib_request(
                     session,
                     BIBLISSIMA_WIKIBASE,
                     params={
-                        "action": "query",
-                        "list": "search",
-                        "srsearch": srsearch,
-                        "srnamespace": 120,
+                        "action": "wbsearchentities",
+                        "search": query,
+                        "language": "fr",
                         "format": "json",
-                        "srlimit": limit,
+                        "limit": fetch_limit,
                     },
                     timeout=REQUEST_TIMEOUT,
                 )
                 resp.raise_for_status()
-                for r in resp.json().get("query", {}).get("search", []):
-                    qid = r["title"].replace("Item:", "")
-                    if qid not in seen_ids:
-                        seen_ids.add(qid)
-                        suggest_results.append(qid)
+                prefix_items = _bib_json(resp).get("search", [])
+
+                if prefix_items:
+                    batch_ids = [item["id"] for item in prefix_items]
+                    type_resp = _bib_request(
+                        session,
+                        BIBLISSIMA_WIKIBASE,
+                        params={
+                            "action": "wbgetentities",
+                            "ids": "|".join(batch_ids),
+                            "format": "json",
+                            "props": "claims",
+                        },
+                        timeout=REQUEST_TIMEOUT,
+                    )
+                    type_resp.raise_for_status()
+                    entities = _bib_json(type_resp).get("entities", {})
+                    for item in prefix_items:
+                        qid = item["id"]
+                        for claim in (
+                            entities.get(qid, {}).get("claims", {}).get(P2, [])
+                        ):
+                            val = (
+                                claim.get("mainsnak", {})
+                                .get("datavalue", {})
+                                .get("value", {})
+                            )
+                            if isinstance(val, dict) and val.get("id") == type_qid:
+                                if qid not in seen_ids:
+                                    seen_ids.add(qid)
+                                    suggest_results.append(qid)
+                                break
                         if len(suggest_results) >= limit:
                             break
             except Exception:
-                logger.warning("Manuscript search fulltext failed for: %s", query)
+                logger.warning("Manuscript search prefix failed for: %s", query)
 
-        if not suggest_results:
-            session.close()
-            return JsonResponse({"total": 0, "results": []})
+            # Fulltext search
+            if len(suggest_results) < limit:
+                try:
+                    srsearch = f"{query} haswbstatement:P2={type_qid}"
+                    resp = _bib_request(
+                        session,
+                        BIBLISSIMA_WIKIBASE,
+                        params={
+                            "action": "query",
+                            "list": "search",
+                            "srsearch": srsearch,
+                            "srnamespace": 120,
+                            "format": "json",
+                            "srlimit": limit,
+                        },
+                        timeout=REQUEST_TIMEOUT,
+                    )
+                    resp.raise_for_status()
+                    for r in _bib_json(resp).get("query", {}).get("search", []):
+                        qid = r["title"].replace("Item:", "")
+                        if qid not in seen_ids:
+                            seen_ids.add(qid)
+                            suggest_results.append(qid)
+                            if len(suggest_results) >= limit:
+                                break
+                except Exception:
+                    logger.warning("Manuscript search fulltext failed for: %s", query)
 
-        # --- Step 2: Batch entity fetch (1 call instead of N) ---
-        entities = _batch_get_wikibase_entities(suggest_results, session=session)
+            # --- Step 2: Batch entity fetch (1 call instead of N) ---
+            entities = _batch_get_wikibase_entities(suggest_results, session=session)
 
-        # --- Step 3: Batch author resolution (1 call for unique authors) ---
-        author_qids = list({e["author"] for e in entities.values() if e.get("author")})
-        authors = _batch_get_wikibase_entities(author_qids, session=session)
+            # --- Step 3: Batch author resolution (1 call for unique authors) ---
+            author_qids = list(
+                {e["author"] for e in entities.values() if e.get("author")}
+            )
+            authors = _batch_get_wikibase_entities(author_qids, session=session)
 
-        # --- Step 4: Deduplicated collection resolution ---
-        collection_qids = list(
-            {e["collection"] for e in entities.values() if e.get("collection")}
-        )
-        collections = {}
-        for coll_qid in collection_qids:
-            collections[coll_qid] = _resolve_collection(coll_qid, session=session)
+            # --- Step 4: Deduplicated collection resolution ---
+            collection_qids = list(
+                {e["collection"] for e in entities.values() if e.get("collection")}
+            )
+            collections = {}
+            for coll_qid in collection_qids:
+                collections[coll_qid] = _resolve_collection(coll_qid, session=session)
 
-        session.close()
+            # --- Assemble results ---
+            results = []
+            for qid in suggest_results:
+                e = entities.get(qid)
+                if not e:
+                    continue
 
-        # --- Assemble results ---
-        results = []
-        for qid in suggest_results:
-            e = entities.get(qid)
-            if not e:
-                continue
+                # Author
+                author_qid = e.get("author")
+                if author_qid and author_qid in authors:
+                    e["authorLabel"] = authors[author_qid].get("label", "")
+                    e["authorQid"] = author_qid
 
-            # Author
-            author_qid = e.get("author")
-            if author_qid and author_qid in authors:
-                e["authorLabel"] = authors[author_qid].get("label", "")
-                e["authorQid"] = author_qid
+                # Collection
+                coll_qid = e.get("collection")
+                if coll_qid and coll_qid in collections:
+                    coll = collections[coll_qid]
+                    e["collectionLabel"] = coll.get("ownerLabel", "")
+                    e["locationLabel"] = coll.get("locationLabel", "")
+                    e["locationQid"] = coll.get("locationQid", "")
+                    e["geonamesId"] = coll.get("geonamesId", "")
+                    e["parentInstitutionLabel"] = coll.get("parentInstitutionLabel", "")
+                    e["parentInstitutionQid"] = coll.get("parentInstitutionQid", "")
 
-            # Collection
-            coll_qid = e.get("collection")
-            if coll_qid and coll_qid in collections:
-                coll = collections[coll_qid]
-                e["collectionLabel"] = coll.get("ownerLabel", "")
-                e["locationLabel"] = coll.get("locationLabel", "")
-                e["locationQid"] = coll.get("locationQid", "")
-                e["geonamesId"] = coll.get("geonamesId", "")
-                e["parentInstitutionLabel"] = coll.get("parentInstitutionLabel", "")
-                e["parentInstitutionQid"] = coll.get("parentInstitutionQid", "")
+                # Document Type — resolve P2 nature → label → Arches valueid
+                # (idempotent; cached lookup on _get_wikibase_entity).
+                _attach_document_type(e)
 
-            # Document Type — resolve P2 nature → label → Arches valueid
-            # (idempotent; cached lookup on _get_wikibase_entity).
-            _attach_document_type(e)
+                results.append(e)
 
-            results.append(e)
-
-        return JsonResponse({"total": len(results), "results": results})
+        if not results:
+            if budget.error is not None:
+                return _biblissima_upstream_error(
+                    budget.error, "Biblissima manuscript search"
+                )
+        return _budgeted_answer({"total": len(results), "results": results}, budget)
 
 
 # Canvas labels from Biblissima IIIF descriptor manifests look like
@@ -1204,252 +2063,287 @@ def _enrich_canvases(canvases, session=None):
 
     Only the manuscripts referenced by the given canvases are resolved, which
     makes it cheap to call on a page slice rather than on the whole result set.
+    A manuscript record is cached only when its lookup, its candidate entities
+    up to the matching one and its author and nature entities all resolved.
+
+    *session* (default: ``_default_session()``) serves the caller-thread batch
+    calls and is not closed here; the CirrusSearch pool uses one session per
+    thread.
     """
     if not canvases:
         return
 
-    owned_session = session is None
-    if owned_session:
-        session = _build_biblissima_session()
+    session = session or _default_session()
 
-    try:
-        # Phase 1: collect unique manuscripts. The "name" we keep here is the
-        # query string used to look up the manuscript in Wikibase later — we
-        # extract the institution+shelfmark context from the canvas label
-        # (e.g. "Paris, Arsenal, 12") rather than the bare ``manuscript``
-        # field which is often just the shelfmark fragment.
-        unique_manuscripts = {}
-        for canvas in canvases:
-            ms_ark = canvas.get("manuscriptArk")
-            if not ms_ark:
-                continue
-            ark_hash = ms_ark.replace("ark:/43093/", "")
-            if ark_hash and ark_hash not in unique_manuscripts:
-                unique_manuscripts[ark_hash] = _extract_ms_search_query(canvas)
+    # Phase 1: collect unique manuscripts. The "name" we keep here is the
+    # query string used to look up the manuscript in Wikibase later — we
+    # extract the institution+shelfmark context from the canvas label
+    # (e.g. "Paris, Arsenal, 12") rather than the bare ``manuscript``
+    # field which is often just the shelfmark fragment.
+    unique_manuscripts = {}
+    for canvas in canvases:
+        ms_ark = canvas.get("manuscriptArk")
+        if not ms_ark:
+            continue
+        ark_hash = ms_ark.replace("ark:/43093/", "")
+        if ark_hash and ark_hash not in unique_manuscripts:
+            unique_manuscripts[ark_hash] = _extract_ms_search_query(canvas)
 
-        resolved_manuscripts = {}
-        to_resolve = {}
+    resolved_manuscripts = {}
+    to_resolve = {}
 
-        # Phase 2a: Django cache lookup per manuscript
-        for ark_hash, ms_name in unique_manuscripts.items():
-            cached = cache.get(
-                _BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=ark_hash)
+    # Phase 2a: Django cache lookup per manuscript
+    for ark_hash, ms_name in unique_manuscripts.items():
+        cached = cache.get(_BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=ark_hash))
+        if cached is not None:
+            resolved_manuscripts[ark_hash] = cached
+            _incr_stat("cache_hits", 1)
+        else:
+            to_resolve[ark_hash] = ms_name
+            _incr_stat("cache_misses", 1)
+
+    # Phase 2b: parallel CirrusSearch fulltext lookup for uncached
+    # manuscripts. We use ``action=query&list=search`` rather than
+    # ``wbsearchentities`` because the latter only matches against
+    # labels/aliases as a prefix and silently returns garbage for the
+    # bare-shelfmark labels that the IIIF manifest provides ("12",
+    # "579"). The richer ``ms_name`` extracted from the canvas label
+    # (e.g. "Paris, Arsenal, 12") is distinctive enough that fulltext
+    # search returns the correct entity in the top results, and the
+    # Phase 2d ``portalHash == ark_hash`` filter rejects any false
+    # positive — so reconciliation is done without scraping.
+
+    # requests.Session is not thread-safe: each pool thread gets its own,
+    # closed once the pool has finished, without retries under a request
+    # budget. Each task runs in its own copy of the request's context, so the
+    # budget reaches the pool threads.
+    thread_local = threading.local()
+    thread_sessions = []
+    thread_sessions_lock = threading.Lock()
+
+    def _thread_session():
+        thread_session = getattr(thread_local, "session", None)
+        if thread_session is None:
+            thread_session = thread_local.session = _build_biblissima_session(
+                retry=_NO_RETRY if _upstream_budget_var.get() is not None else None
             )
-            if cached is not None:
-                resolved_manuscripts[ark_hash] = cached
-                _incr_stat("cache_hits", 1)
-            else:
-                to_resolve[ark_hash] = ms_name
-                _incr_stat("cache_misses", 1)
+            with thread_sessions_lock:
+                thread_sessions.append(thread_session)
+        return thread_session
 
-        # Phase 2b: parallel CirrusSearch fulltext lookup for uncached
-        # manuscripts. We use ``action=query&list=search`` rather than
-        # ``wbsearchentities`` because the latter only matches against
-        # labels/aliases as a prefix and silently returns garbage for the
-        # bare-shelfmark labels that the IIIF manifest provides ("12",
-        # "579"). The richer ``ms_name`` extracted from the canvas label
-        # (e.g. "Paris, Arsenal, 12") is distinctive enough that fulltext
-        # search returns the correct entity in the top results, and the
-        # Phase 2d ``portalHash == ark_hash`` filter rejects any false
-        # positive — so reconciliation is done without scraping.
-        def _search_candidates(item):
-            ark_hash, ms_name = item
-            if not ms_name:
-                return ark_hash, [], None
-            try:
-                resp = _bib_request(
-                    session,
-                    BIBLISSIMA_WIKIBASE,
-                    params={
-                        "action": "query",
-                        "list": "search",
-                        "srsearch": ms_name,
-                        "srnamespace": 120,
-                        "format": "json",
-                        "srlimit": 5,
-                    },
-                    timeout=REQUEST_TIMEOUT,
-                )
-                resp.raise_for_status()
-                hits = resp.json().get("query", {}).get("search", [])
-                qids = []
-                for hit in hits:
-                    title = hit.get("title", "")
-                    qid = title.split(":")[-1] if ":" in title else title
-                    if qid:
-                        qids.append(qid)
-                return ark_hash, qids, None
-            except Exception as exc:
-                logger.debug(
-                    "[biblissima.parent-resolver] Wikibase CirrusSearch lookup "
-                    "failed for manuscript=%r: %s",
-                    ms_name,
-                    exc,
-                    exc_info=True,
-                )
-                return ark_hash, [], ms_name
+    def _search_candidates(item):
+        ark_hash, ms_name = item
+        if not ms_name:
+            return ark_hash, [], None
+        try:
+            resp = _bib_request(
+                _thread_session(),
+                BIBLISSIMA_WIKIBASE,
+                params={
+                    "action": "query",
+                    "list": "search",
+                    "srsearch": ms_name,
+                    "srnamespace": 120,
+                    "format": "json",
+                    "srlimit": 5,
+                },
+                timeout=REQUEST_TIMEOUT,
+            )
+            resp.raise_for_status()
+            hits = _bib_json(resp).get("query", {}).get("search", [])
+            qids = []
+            for hit in hits:
+                title = hit.get("title", "")
+                qid = title.split(":")[-1] if ":" in title else title
+                if qid:
+                    qids.append(qid)
+            return ark_hash, qids, None
+        except Exception as exc:
+            logger.debug(
+                "[biblissima.parent-resolver] Wikibase CirrusSearch lookup "
+                "failed for manuscript=%r: %s",
+                ms_name,
+                exc,
+                exc_info=True,
+            )
+            return ark_hash, [], ms_name
 
-        candidates_by_ark_hash = {}
-        cirrus_failures = []
-        if to_resolve:
-            max_workers = min(6, len(to_resolve))
+    candidates_by_ark_hash = {}
+    cirrus_failures = []
+    incomplete = set()
+    if to_resolve:
+        max_workers = min(6, len(to_resolve))
+        context = contextvars.copy_context()
+        try:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                for ark_hash, candidate_qids, failure in executor.map(
-                    _search_candidates, to_resolve.items()
-                ):
+                futures = [
+                    executor.submit(context.copy().run, _search_candidates, item)
+                    for item in to_resolve.items()
+                ]
+                for future in futures:
+                    ark_hash, candidate_qids, failure = future.result()
                     candidates_by_ark_hash[ark_hash] = candidate_qids
                     if failure:
                         cirrus_failures.append(failure)
-            if cirrus_failures:
-                logger.warning(
-                    "[biblissima.parent-resolver] Wikibase CirrusSearch failed "
-                    "for %d/%d manuscripts (graceful fallback applied; "
-                    "common causes: rate-limit, timeout, 5xx). Sample: %s",
-                    len(cirrus_failures),
-                    len(to_resolve),
-                    cirrus_failures[:3],
-                )
+                        incomplete.add(ark_hash)
+        finally:
+            for thread_session in thread_sessions:
+                thread_session.close()
+        if cirrus_failures:
+            logger.warning(
+                "[biblissima.parent-resolver] Wikibase CirrusSearch failed "
+                "for %d/%d manuscripts (graceful fallback applied; "
+                "common causes: rate-limit, timeout, 5xx). Sample: %s",
+                len(cirrus_failures),
+                len(to_resolve),
+                cirrus_failures[:3],
+            )
 
-        # Phase 2c: batch-fetch all candidate entities in one go
-        all_candidate_qids = list(
-            {qid for qids in candidates_by_ark_hash.values() for qid in qids}
-        )
-        entities_by_qid = _batch_get_wikibase_entities(
-            all_candidate_qids, session=session
-        )
+    # Phase 2c: batch-fetch all candidate entities in one go
+    all_candidate_qids = list(
+        {qid for qids in candidates_by_ark_hash.values() for qid in qids}
+    )
+    entities_by_qid = _batch_get_wikibase_entities(all_candidate_qids, session=session)
 
-        # Phase 2d: match each manuscript to its QID via portalHash, and
-        # collect both author and nature (P2) QIDs for the batch fetch.
-        author_qids = set()
-        nature_qids = set()
-        for ark_hash, candidate_qids in candidates_by_ark_hash.items():
-            ms_data = {}
-            for qid in candidate_qids:
-                entity = entities_by_qid.get(qid)
-                if entity and entity.get("portalHash") == ark_hash:
-                    ms_data = dict(entity)
-                    if ms_data.get("author"):
-                        author_qids.add(ms_data["author"])
-                    if ms_data.get("documentNatureQid"):
-                        nature_qids.add(ms_data["documentNatureQid"])
-                    break
-            resolved_manuscripts[ark_hash] = ms_data
+    # Phase 2d: match each manuscript to its QID via portalHash, and
+    # collect both author and nature (P2) QIDs for the batch fetch.
+    # A candidate absent from the batch marks the manuscript incomplete only
+    # when it comes before the match or is the match; with no match, every
+    # candidate counts.
+    author_qids = set()
+    nature_qids = set()
+    for ark_hash, candidate_qids in candidates_by_ark_hash.items():
+        ms_data = {}
+        examined_qids = candidate_qids
+        for position, qid in enumerate(candidate_qids):
+            entity = entities_by_qid.get(qid)
+            if entity and entity.get("portalHash") == ark_hash:
+                examined_qids = candidate_qids[: position + 1]
+                ms_data = dict(entity)
+                if ms_data.get("author"):
+                    author_qids.add(ms_data["author"])
+                if ms_data.get("documentNatureQid"):
+                    nature_qids.add(ms_data["documentNatureQid"])
+                break
+        if any(qid not in entities_by_qid for qid in examined_qids):
+            incomplete.add(ark_hash)
+        resolved_manuscripts[ark_hash] = ms_data
 
-        # Phase 2e: batch-fetch authors and natures together (single round-trip).
-        # Cached natures (which is most of them — Biblissima only uses ~5
-        # distinct nature concepts) hit the Django cache and don't go to
-        # Biblissima at all.
-        secondary_qids = list(author_qids | nature_qids)
-        secondaries_by_qid = (
-            _batch_get_wikibase_entities(secondary_qids, session=session)
-            if secondary_qids
-            else {}
-        )
+    # Phase 2e: batch-fetch authors and natures together (single round-trip).
+    # Cached natures (which is most of them — Biblissima only uses ~5
+    # distinct nature concepts) hit the Django cache and don't go to
+    # Biblissima at all.
+    secondary_qids = list(author_qids | nature_qids)
+    secondaries_by_qid = (
+        _batch_get_wikibase_entities(secondary_qids, session=session)
+        if secondary_qids
+        else {}
+    )
 
-        # Phase 2f: attach author and nature labels, pre-resolve the Arches
-        # Document-Type valueid once per manuscript, and persist newly-resolved
-        # manuscripts to cache so subsequent enrichments are zero-cost. Doing
-        # the type resolution here (vs. per-canvas in phase 3) avoids calling
-        # the resolver N times for an N-page manuscript with identical nature
-        # label across canvases.
-        for ark_hash in to_resolve:
-            ms_data = resolved_manuscripts.get(ark_hash, {})
-            if ms_data:
-                author_qid = ms_data.get("author")
-                if author_qid and author_qid in secondaries_by_qid:
-                    author = secondaries_by_qid[author_qid]
-                    ms_data["authorLabel"] = author.get("label", "")
-                    ms_data["authorQid"] = author_qid
-                nature_qid = ms_data.get("documentNatureQid")
-                if nature_qid and nature_qid in secondaries_by_qid:
-                    nature = secondaries_by_qid[nature_qid]
-                    ms_data["documentNatureLabel"] = nature.get("label", "") or None
-                type_concept_id, type_is_fallback = _resolve_biblissima_document_type(
-                    ms_data.get("documentNatureLabel")
-                )
-                ms_data["documentTypeConceptId"] = type_concept_id
-                ms_data["documentTypeIsFallback"] = type_is_fallback
+    # Phase 2f: attach author and nature labels, pre-resolve the Arches
+    # Document-Type valueid once per manuscript, and persist newly-resolved
+    # manuscripts to cache so subsequent enrichments are zero-cost. Doing
+    # the type resolution here (vs. per-canvas in phase 3) avoids calling
+    # the resolver N times for an N-page manuscript with identical nature
+    # label across canvases.
+    for ark_hash in to_resolve:
+        ms_data = resolved_manuscripts.get(ark_hash, {})
+        if ms_data:
+            author_qid = ms_data.get("author")
+            if author_qid and author_qid in secondaries_by_qid:
+                author = secondaries_by_qid[author_qid]
+                ms_data["authorLabel"] = author.get("label", "")
+                ms_data["authorQid"] = author_qid
+            elif author_qid:
+                incomplete.add(ark_hash)
+            nature_qid = ms_data.get("documentNatureQid")
+            if nature_qid and nature_qid in secondaries_by_qid:
+                nature = secondaries_by_qid[nature_qid]
+                ms_data["documentNatureLabel"] = nature.get("label", "") or None
+            elif nature_qid:
+                incomplete.add(ark_hash)
+            type_concept_id, type_is_fallback = _resolve_biblissima_document_type(
+                ms_data.get("documentNatureLabel")
+            )
+            ms_data["documentTypeConceptId"] = type_concept_id
+            ms_data["documentTypeIsFallback"] = type_is_fallback
+        if ark_hash not in incomplete:
             cache.set(
                 _BIBLISSIMA_MANUSCRIPT_CACHE_KEY.format(ark_hash=ark_hash),
                 ms_data,
                 _BIBLISSIMA_CACHE_TTL,
             )
 
-        # Phase 2g: resolve collection chains (location + parent institution)
-        # for each unique collection QID, so downstream consumers get
-        # collectionLabel / locationLabel / parentInstitutionLabel.
-        collection_data = {}
-        collection_qids = {
-            ms.get("collection")
-            for ms in resolved_manuscripts.values()
-            if ms.get("collection")
-        }
-        for coll_qid in collection_qids:
-            try:
-                collection_data[coll_qid] = _resolve_collection(
-                    coll_qid, session=session
-                )
-            except Exception:
-                logger.warning("Collection resolution failed for %s", coll_qid)
+    # Phase 2g: resolve collection chains (location + parent institution)
+    # for each unique collection QID, so downstream consumers get
+    # collectionLabel / locationLabel / parentInstitutionLabel.
+    collection_data = {}
+    collection_qids = {
+        ms.get("collection")
+        for ms in resolved_manuscripts.values()
+        if ms.get("collection")
+    }
+    for coll_qid in collection_qids:
+        try:
+            collection_data[coll_qid] = _resolve_collection(coll_qid, session=session)
+        except Exception:
+            logger.warning("Collection resolution failed for %s", coll_qid)
 
-        # Phase 3: decorate every canvas from the resolved manuscript map.
-        # All manuscript-level fields that downstream consumers need (dep
-        # resolution for Places/Groups, identifier creation, etc.) must be
-        # copied here — _illuminationToResult in the search-step JS reads
-        # entityData.* for the manuscript scrape path, but the IIIF
-        # descriptor search path gets its data entirely from this enrichment.
-        for canvas in canvases:
-            ms_ark = canvas.get("manuscriptArk")
-            if not ms_ark:
-                continue
-            ark_hash = ms_ark.replace("ark:/43093/", "")
-            ms_data = resolved_manuscripts.get(ark_hash) or {}
-            # Prefer the full Wikibase entity label (e.g. "Paris. Bibliothèque
-            # de l'Arsenal, 12") over the raw IIIF metadata value, which is
-            # often just the shelfmark fragment ("12") for Arsenal/BnF
-            # manifests where Biblissima only inlines the shelfmark text in
-            # the <a>Manuscrit</a> link.
-            if ms_data.get("label"):
-                canvas["manuscript"] = ms_data["label"]
-            canvas["manifestUrl"] = ms_data.get("manifestUrl")
-            canvas["authorLabel"] = ms_data.get("authorLabel")
-            canvas["authorQid"] = ms_data.get("authorQid")
-            canvas["biblissimaQid"] = ms_data.get("biblissimaQid")
-            canvas["shelfmark"] = ms_data.get("shelfmark")
-            canvas["mandragoreId"] = ms_data.get("mandragoreId")
-            # Institution / location chain from the collection resolution.
-            coll_qid = ms_data.get("collection")
-            coll = collection_data.get(coll_qid) or {} if coll_qid else {}
-            canvas["collectionLabel"] = coll.get("ownerLabel", "")
-            canvas["collectionQid"] = coll.get("ownerQid", "")
-            canvas["locationLabel"] = coll.get("locationLabel", "")
-            canvas["locationQid"] = coll.get("locationQid", "")
-            canvas["geonamesId"] = coll.get("geonamesId", "")
-            canvas["parentInstitutionLabel"] = coll.get("parentInstitutionLabel", "")
-            canvas["parentInstitutionQid"] = coll.get("parentInstitutionQid", "")
-            # Document Type — pre-resolved once in phase 2f for fresh manuscripts;
-            # for cache-hit manuscripts that pre-date this change we resolve here
-            # as a one-time fallback. Falls back to MANUSCRIT with
-            # is_fallback=True if the nature label is missing or unknown.
-            canvas["documentNatureLabel"] = ms_data.get("documentNatureLabel")
-            if "documentTypeConceptId" in ms_data:
-                canvas["documentTypeConceptId"] = ms_data["documentTypeConceptId"]
-                canvas["documentTypeIsFallback"] = ms_data["documentTypeIsFallback"]
-            else:
-                type_concept_id, type_is_fallback = _resolve_biblissima_document_type(
-                    ms_data.get("documentNatureLabel")
-                )
-                canvas["documentTypeConceptId"] = type_concept_id
-                canvas["documentTypeIsFallback"] = type_is_fallback
-    finally:
-        if owned_session:
-            session.close()
+    # Phase 3: decorate every canvas from the resolved manuscript map.
+    # All manuscript-level fields that downstream consumers need (dep
+    # resolution for Places/Groups, identifier creation, etc.) must be
+    # copied here — _illuminationToResult in the search-step JS reads
+    # entityData.* for the manuscript scrape path, but the IIIF
+    # descriptor search path gets its data entirely from this enrichment.
+    for canvas in canvases:
+        ms_ark = canvas.get("manuscriptArk")
+        if not ms_ark:
+            continue
+        ark_hash = ms_ark.replace("ark:/43093/", "")
+        ms_data = resolved_manuscripts.get(ark_hash) or {}
+        # Prefer the full Wikibase entity label (e.g. "Paris. Bibliothèque
+        # de l'Arsenal, 12") over the raw IIIF metadata value, which is
+        # often just the shelfmark fragment ("12") for Arsenal/BnF
+        # manifests where Biblissima only inlines the shelfmark text in
+        # the <a>Manuscrit</a> link.
+        if ms_data.get("label"):
+            canvas["manuscript"] = ms_data["label"]
+        canvas["manifestUrl"] = ms_data.get("manifestUrl")
+        canvas["authorLabel"] = ms_data.get("authorLabel")
+        canvas["authorQid"] = ms_data.get("authorQid")
+        canvas["biblissimaQid"] = ms_data.get("biblissimaQid")
+        canvas["shelfmark"] = ms_data.get("shelfmark")
+        canvas["mandragoreId"] = ms_data.get("mandragoreId")
+        # Institution / location chain from the collection resolution.
+        coll_qid = ms_data.get("collection")
+        coll = collection_data.get(coll_qid) or {} if coll_qid else {}
+        canvas["collectionLabel"] = coll.get("ownerLabel", "")
+        canvas["collectionQid"] = coll.get("ownerQid", "")
+        canvas["locationLabel"] = coll.get("locationLabel", "")
+        canvas["locationQid"] = coll.get("locationQid", "")
+        canvas["geonamesId"] = coll.get("geonamesId", "")
+        canvas["parentInstitutionLabel"] = coll.get("parentInstitutionLabel", "")
+        canvas["parentInstitutionQid"] = coll.get("parentInstitutionQid", "")
+        # Document Type — pre-resolved once in phase 2f for fresh manuscripts;
+        # for cache-hit manuscripts that pre-date this change we resolve here
+        # as a one-time fallback. Falls back to MANUSCRIT with
+        # is_fallback=True if the nature label is missing or unknown.
+        canvas["documentNatureLabel"] = ms_data.get("documentNatureLabel")
+        if "documentTypeConceptId" in ms_data:
+            canvas["documentTypeConceptId"] = ms_data["documentTypeConceptId"]
+            canvas["documentTypeIsFallback"] = ms_data["documentTypeIsFallback"]
+        else:
+            type_concept_id, type_is_fallback = _resolve_biblissima_document_type(
+                ms_data.get("documentNatureLabel")
+            )
+            canvas["documentTypeConceptId"] = type_concept_id
+            canvas["documentTypeIsFallback"] = type_is_fallback
 
 
 def _normalize_descriptors(descriptors):
     """Normalize a raw descriptors query string to the canonical desc-prefixed list."""
     hash_list = [h.strip() for h in descriptors.split(",") if h.strip()]
-    known_prefixes = ("pdata", "mdata", "oedata", "cdata", "ldata", "ifdata")
+    known_prefixes = BIBLISSIMA_HASH_PREFIXES
     normalized = []
     for h in hash_list:
         if h.startswith("desc"):
@@ -1490,19 +2384,79 @@ def _fetch_biblissima_canvases(desc_hashes, session):
             timeout=IIIF_REQUEST_TIMEOUT,
         )
     resp.raise_for_status()
-    return _parse_iiif_canvases(resp.json())
+    return _parse_iiif_canvases(_bib_json(resp))
 
-
-# Raw parsed canvases are cached server-side under this key to avoid
-# refetching the (big, slow) IIIF manifest for every paginated request.
-_BIBLISSIMA_RAW_SEARCH_CACHE_KEY = "biblissima:search:raw:{descriptors_key}"
-_BIBLISSIMA_RAW_SEARCH_TTL = 3600  # 1h
 
 _DEFAULT_SEARCH_PAGE_SIZE = 50
 _MAX_SEARCH_PAGE_SIZE = 200
+_MAX_SEARCH_DESCRIPTORS = 5
+_MAX_CHECK_DUPLICATES_ITEMS = 200
+
+# Items one create-all POST may carry. Each runs under its own write budget
+# (``BIBLISSIMA_WRITE_ITEM_DEADLINE``), so this bounds the time one request
+# thread is held; the client sends larger batches in chunks of this size.
+_MAX_CREATE_ALL_ITEMS = 5
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+def _count_created_items(resource_type, results, out_of_budget):
+    """Count the items of one create-all answer: created, failed, and failed for lack of budget."""
+    resource_type = metrics.bounded(resource_type, metrics.RESOURCE_TYPES)
+    created = sum(1 for result in results if result.get("status") == "created")
+    failed = sum(1 for result in results if result.get("status") == "failed")
+    counts = {
+        "created": created,
+        "failed": failed - out_of_budget,
+        "deadline": out_of_budget,
+    }
+    for outcome, count in counts.items():
+        if count:
+            metrics.BIBLISSIMA_CREATED_ITEMS.labels(
+                resource_type=resource_type, outcome=outcome
+            ).inc(count)
+
+
+class WriteDeadlineExceeded(Exception):
+    """A create ran out of its write budget; the message is shown to the user."""
+
+
+@contextmanager
+def _item_write_budget():
+    """Open the write budget of one item; a failure caused by it surfaces as
+    ``WriteDeadlineExceeded``, any other exception is left untouched."""
+    budget = None
+    try:
+        with upstream_budget(
+            settings.BIBLISSIMA_WRITE_ITEM_DEADLINE, kind="write"
+        ) as budget:
+            yield budget
+    except Exception as exc:
+        message = _write_deadline_error(budget, exc)
+        if message:
+            raise WriteDeadlineExceeded(message) from exc
+        raise
+
+
+def _write_deadline_error(budget, exc):
+    """The message of an item that ran out of write budget, else ``None``.
+
+    True when *exc* is ``BudgetSpent``, or a transport timeout or connection
+    failure raised once the budget had passed.
+    """
+    if budget is None:
+        return None
+    timed_out = isinstance(
+        exc, (requests.exceptions.Timeout, requests.exceptions.ConnectionError)
+    )
+    if isinstance(exc, BudgetSpent) or (timed_out and budget.spent()):
+        return _("Time limit of %(seconds)s s for this item exceeded.") % {
+            "seconds": settings.BIBLISSIMA_WRITE_ITEM_DEADLINE
+        }
+    return None
+
+
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaSearchView(View):
     """Search Biblissima via IIIF manifest by iconographic descriptors.
 
@@ -1510,9 +2464,15 @@ class BiblissimaSearchView(View):
     (incurs the one-time IIIF manifest fetch), then continues with pages 2..N
     in the background while the user is already interacting with page 1.
 
-    Raw parsed canvases are cached server-side for 1h under the normalized
-    descriptor key, so paginated follow-up requests skip the IIIF fetch and
-    only enrich the requested slice.
+    Raw parsed canvases are cached server-side for
+    ``BIBLISSIMA_RAW_CACHE_TTL`` under the normalized descriptor key, so
+    paginated follow-up requests skip the IIIF fetch and only enrich the
+    requested slice. One worker fetches a miss while concurrent callers wait
+    for its result; the lock outlives the request budget.
+
+    Upstream calls run under one request budget. A failed manifest fetch
+    answers the failure; a page whose enrichment met a failed call is
+    ``partial``.
     """
 
     def get(self, request):
@@ -1533,21 +2493,41 @@ class BiblissimaSearchView(View):
         desc_hashes = _normalize_descriptors(descriptors)
         if not desc_hashes:
             return JsonResponse({"error": "descriptors parameter required"}, status=400)
+        if len(desc_hashes) > _MAX_SEARCH_DESCRIPTORS:
+            return JsonResponse(
+                {
+                    "error": "too many descriptors",
+                    "max": _MAX_SEARCH_DESCRIPTORS,
+                    "message": _("Select at most %(max)s descriptors.")
+                    % {"max": _MAX_SEARCH_DESCRIPTORS},
+                },
+                status=400,
+            )
+        if not all(_DESC_HASH_RE.fullmatch(h) for h in desc_hashes):
+            return JsonResponse(
+                {
+                    "error": "invalid descriptors",
+                    "message": _("The descriptor list is malformed."),
+                },
+                status=400,
+            )
 
-        descriptors_key = ",".join(sorted(desc_hashes))
-        raw_cache_key = _BIBLISSIMA_RAW_SEARCH_CACHE_KEY.format(
-            descriptors_key=descriptors_key
+        raw_cache_key = stable_cache_key(
+            "biblissima:search:raw", ",".join(sorted(desc_hashes))
         )
 
-        session = _build_biblissima_session()
-        try:
-            all_canvases = cache.get(raw_cache_key)
-            if all_canvases is None:
-                try:
-                    all_canvases = _fetch_biblissima_canvases(desc_hashes, session)
-                except Exception as exc:
-                    return _biblissima_upstream_error(exc, "Biblissima IIIF search")
-                cache.set(raw_cache_key, all_canvases, _BIBLISSIMA_RAW_SEARCH_TTL)
+        with _upstream_budget(VIEW_DEADLINE) as budget:
+            session = _default_session()
+            try:
+                all_canvases = get_or_build(
+                    raw_cache_key,
+                    lambda: _fetch_biblissima_canvases(desc_hashes, session),
+                    _BIBLISSIMA_RAW_CACHE_TTL,
+                    lock_timeout=240,
+                    wait=10.0,
+                )
+            except Exception as exc:
+                return _biblissima_upstream_error(exc, "Biblissima IIIF search")
 
             total = len(all_canvases)
             total_pages = max(1, (total + page_size - 1) // page_size) if total else 0
@@ -1558,21 +2538,22 @@ class BiblissimaSearchView(View):
 
             # Enrich in place on the slice we're about to return.
             _enrich_canvases(page_canvases, session=session)
-        finally:
-            session.close()
 
-        return JsonResponse(
+        return _budgeted_answer(
             {
                 "total": total,
                 "page": page,
                 "page_size": page_size,
                 "total_pages": total_pages,
                 "results": page_canvases,
-            }
+            },
+            budget,
         )
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaCheckDuplicatesView(View):
     """Find potential duplicate resources in Arches using flexible matching.
 
@@ -1589,6 +2570,15 @@ class BiblissimaCheckDuplicatesView(View):
             return JsonResponse({"error": "Invalid JSON"}, status=400)
 
         items = body.get("items", [])
+        if not isinstance(items, list):
+            return JsonResponse({"error": "items must be a list"}, status=400)
+        if not all(isinstance(item, dict) for item in items):
+            return JsonResponse({"error": "items must be objects"}, status=400)
+        if len(items) > _MAX_CHECK_DUPLICATES_ITEMS:
+            return JsonResponse(
+                {"error": "too many items", "max": _MAX_CHECK_DUPLICATES_ITEMS},
+                status=400,
+            )
         graph_id = body.get("graphId", DOCUMENT_GRAPH_ID)
 
         if not items:
@@ -1599,12 +2589,12 @@ class BiblissimaCheckDuplicatesView(View):
         se = SearchEngineInstance
 
         # ---------------------------------------------------------------------------
-        # Strategy 1 — hoist corpus load to O(1) in len(items)
+        # Strategy 1 — identifier matching through an atom index
         #
-        # id_ng / id_node depend only on graph_id, not on any individual item.
-        # Load the entire identifier-tile corpus ONCE before the items loop and
-        # keep it as an in-memory list of (tile_value, rid) pairs.  The per-item
-        # loop then matches search_tokens against this list with no DB call.
+        # id_ng / id_node depend only on graph_id, so the whole identifier-tile
+        # corpus loads ONCE into a dict mapping each atom of a tile value to the
+        # rows carrying it. A per-item match is then a handful of dict lookups
+        # keyed by the atoms of its own tokens, with no DB call.
         # ---------------------------------------------------------------------------
         id_ng = (
             DOC_IDENTIFIER_NG if graph_id == DOCUMENT_GRAPH_ID else COMP_IDENTIFIER_NG
@@ -1614,7 +2604,8 @@ class BiblissimaCheckDuplicatesView(View):
             if graph_id == DOCUMENT_GRAPH_ID
             else COMP_IDENTIFIER_VALUE
         )
-        tile_index = []  # list of (tile_value: str, rid: str)
+        atom_index: dict = {}  # atom -> list of (tile_value: str, rid: str)
+        corpus_pos: dict = {}  # rid -> rank of the resource's first corpus row
         try:
             # Use ``TileModel`` + ``.values_list`` (NOT the arches proxy ``Tile``):
             # the proxy's ``__init__`` unconditionally calls
@@ -1638,7 +2629,10 @@ class BiblissimaCheckDuplicatesView(View):
                 except Exception:
                     continue
                 if tv:
-                    tile_index.append((tv, str(rid)))
+                    rid_s = str(rid)
+                    corpus_pos.setdefault(rid_s, len(corpus_pos))
+                    for atom in self._identifier_atoms(tv):
+                        atom_index.setdefault(atom, []).append((tv, rid_s))
         except Exception:
             logger.warning("Tile identifier corpus load failed for graph %s", graph_id)
 
@@ -1646,7 +2640,8 @@ class BiblissimaCheckDuplicatesView(View):
         # Collect all rids matched by strategy 1 across all items so we can
         # resolve their displaynames in a single batched query after the loop.
         matched_rids: set = set()
-        # Per-item list of (rid, tile_value) hits in corpus-iteration order.
+        # Per-item list of (rid, tile_value) hits, ordered by the corpus rank
+        # of each matched resource's first row.
         per_item_id_hits: list = [[] for _ in items]
         # Parallel state structure: avoids mutating caller-supplied input dicts.
         # Each slot holds (seen_ids, label, shelfmark, ark_id) for item[idx].
@@ -1660,40 +2655,42 @@ class BiblissimaCheckDuplicatesView(View):
 
             seen_ids: set = set()
 
-            # Strategy 1: match search_tokens against the in-memory tile_index.
+            # Strategy 1: probe the atom index with the atoms of each token.
             # Build all possible search tokens from Biblissima data.
+            # Client data is unchecked, and only a string has atoms: a token
+            # of any other type is dropped rather than compared.
             search_tokens: set = set()
-            if ark_id:
+            if isinstance(ark_id, str) and ark_id:
                 search_tokens.add(ark_id)
                 # Hash without ark: prefix
                 ark_hash = ark_id.replace("ark:/43093/", "")
                 if ark_hash != ark_id:
                     search_tokens.add(ark_hash)
-            if qid:
+            if isinstance(qid, str) and qid:
                 search_tokens.add(qid)
                 # Also match full URL form used in Arches identifiers
                 search_tokens.add(f"https://data.biblissima.fr/entity/{qid}")
 
             portal_hash = item.get("portalHash", "")
-            if portal_hash:
+            if isinstance(portal_hash, str) and portal_hash:
                 search_tokens.add(portal_hash)
                 search_tokens.add(f"ark:/43093/{portal_hash}")
 
             manifest_url = item.get("manifestUrl", "")
-            if manifest_url:
+            if isinstance(manifest_url, str) and manifest_url:
                 search_tokens.add(manifest_url)
 
-            if search_tokens:
-                for tile_value, rid in tile_index:
+            token_atoms: set = set()
+            for t in search_tokens:
+                token_atoms |= self._identifier_atoms(t)
+            for atom in sorted(token_atoms):
+                for tile_value, rid in atom_index.get(atom, ()):
                     if rid in seen_ids:
                         continue
-                    if any(
-                        t == tile_value or t in tile_value or tile_value in t
-                        for t in search_tokens
-                    ):
-                        seen_ids.add(rid)
-                        per_item_id_hits[idx].append((rid, tile_value))
-                        matched_rids.add(rid)
+                    seen_ids.add(rid)
+                    per_item_id_hits[idx].append((rid, tile_value))
+                    matched_rids.add(rid)
+            per_item_id_hits[idx].sort(key=lambda hit: corpus_pos[hit[0]])
 
             # Stash per-item state in parallel structure (not in the input dict).
             item_state[idx] = (seen_ids, label, shelfmark, ark_id)
@@ -1719,7 +2716,8 @@ class BiblissimaCheckDuplicatesView(View):
             suggestions: list = []
             seen_ids, label, shelfmark, ark_id = item_state[idx]
 
-            # Identifier suggestions (strategy 1) — in corpus-iteration order.
+            # Identifier suggestions (strategy 1) — by corpus rank of the
+            # matched resource's first row.
             for rid, tile_value in per_item_id_hits[idx]:
                 suggestions.append(
                     {
@@ -1763,6 +2761,24 @@ class BiblissimaCheckDuplicatesView(View):
             )
 
         return JsonResponse({"results": results})
+
+    @staticmethod
+    def _identifier_atoms(value):
+        """The comparable forms of an identifier.
+
+        Two identifiers match when they share an atom: the whole string, the
+        hash of an ARK (``ark:/43093/<hash>``, also inside a portal URL), or a
+        QID standing alone, or after a slash and before the end, a slash, ``?``
+        or ``#``. A QID inside free text is not an atom, and partial strings
+        never match: ``Q12`` is not ``Q123``.
+        """
+        atoms = {value}
+        for hash_ in _ARK_RE.findall(value):
+            atoms.add(hash_)
+        qid = re.search(r"(?:^|/)(Q\d+)(?:[/?#]|$)", value)
+        if qid:
+            atoms.add(qid.group(1))
+        return atoms
 
     @staticmethod
     def _extract_tile_value(raw_value):
@@ -2016,23 +3032,33 @@ def _parse_manuscript_illuminations(html):
     return results
 
 
-# Raw parsed illumination lists are cached server-side under this key to
-# avoid re-scraping the (slow) portal HTML page on every paginated request.
+# Raw parsed illumination lists are cached server-side under this key for
+# ``BIBLISSIMA_RAW_CACHE_TTL`` to avoid re-scraping the (slow) portal HTML
+# page on every paginated request.
 _BIBLISSIMA_RAW_ILLUMINATIONS_CACHE_KEY = "biblissima:illuminations:raw:{portal_hash}"
-_BIBLISSIMA_RAW_ILLUMINATIONS_TTL = 3600  # 1h
 
 _DEFAULT_ILLUMINATIONS_PAGE_SIZE = 20
 _MAX_ILLUMINATIONS_PAGE_SIZE = 200
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaManuscriptIlluminationsView(View):
     """Scrape Biblissima portal page for a manuscript to list its illuminations.
 
     Paginated like BiblissimaSearchView so the frontend can render the first
     page quickly and stream the rest in the background with a progress bar.
-    Raw parsed illuminations are cached for 1h under the manuscript portal
-    hash so follow-up page requests skip the (slow) HTML scrape.
+    Raw parsed illuminations are cached for ``BIBLISSIMA_RAW_CACHE_TTL``
+    under the manuscript portal hash so follow-up page requests skip the
+    (slow) HTML scrape; one worker scrapes a miss while concurrent callers
+    wait for its result, and the lock outlives the request budget under which
+    the page is fetched.
+
+    ``get`` is cached by ``cache_page`` on the URL alone, before the session
+    and locale middlewares add their ``Vary`` headers: the payload must depend
+    neither on the user nor on the active language. A per-user or localised
+    field here would be served to every editor.
     """
 
     @method_decorator(cache_control(private=True))
@@ -2041,6 +3067,14 @@ class BiblissimaManuscriptIlluminationsView(View):
         portal_hash = request.GET.get("portalHash", "").strip()
         if not portal_hash:
             return JsonResponse({"error": "portalHash required"}, status=400)
+        if not _PORTAL_HASH_RE.fullmatch(portal_hash):
+            return JsonResponse(
+                {
+                    "error": "invalid portalHash",
+                    "message": _("The manuscript identifier is malformed."),
+                },
+                status=400,
+            )
 
         try:
             page = max(1, int(request.GET.get("page", 1)))
@@ -2057,29 +3091,28 @@ class BiblissimaManuscriptIlluminationsView(View):
         raw_cache_key = _BIBLISSIMA_RAW_ILLUMINATIONS_CACHE_KEY.format(
             portal_hash=portal_hash
         )
-        all_illuminations = cache.get(raw_cache_key)
 
-        if all_illuminations is None:
-            session = _build_biblissima_session()
-            try:
-                try:
-                    resp = _bib_request(
-                        session,
-                        f"{BIBLISSIMA_PORTAL}/{portal_hash}",
-                        timeout=PORTAL_REQUEST_TIMEOUT,
-                    )
-                    resp.raise_for_status()
-                    html = resp.text
-                except Exception as exc:
-                    return _biblissima_upstream_error(
-                        exc, f"Biblissima portal fetch ({portal_hash})"
-                    )
-            finally:
-                session.close()
+        def scrape():
+            resp = _bib_request(
+                _default_session(),
+                f"{BIBLISSIMA_PORTAL}/{portal_hash}",
+                timeout=PORTAL_REQUEST_TIMEOUT,
+            )
+            resp.raise_for_status()
+            return _parse_manuscript_illuminations(resp.text)
 
-            all_illuminations = _parse_manuscript_illuminations(html)
-            cache.set(
-                raw_cache_key, all_illuminations, _BIBLISSIMA_RAW_ILLUMINATIONS_TTL
+        try:
+            with _upstream_budget(VIEW_DEADLINE):
+                all_illuminations = get_or_build(
+                    raw_cache_key,
+                    scrape,
+                    _BIBLISSIMA_RAW_CACHE_TTL,
+                    lock_timeout=240,
+                    wait=10.0,
+                )
+        except Exception as exc:
+            return _biblissima_upstream_error(
+                exc, f"Biblissima portal fetch ({portal_hash})"
             )
 
         total = len(all_illuminations)
@@ -2131,7 +3164,9 @@ def _fetch_canvas_dimensions(manifest_url, folio, session=None):
     """
     if not manifest_url:
         return {}
-    cache_key = f"biblissima:manifest-canvas:{manifest_url}:{folio or ''}"
+    cache_key = stable_cache_key(
+        "biblissima:manifest-canvas", manifest_url, folio or ""
+    )
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
@@ -2141,15 +3176,24 @@ def _fetch_canvas_dimensions(manifest_url, folio, session=None):
     # rather than blocking this request for minutes. The read timeout stays
     # generous for large-but-reachable manifests. A caller may still pass an
     # explicit session (e.g. in tests) to override.
+    #
+    # The URL is the one Wikibase gives for the manuscript (P196), i.e. a third
+    # party's string reaching an outbound GET, so the fetch is guarded: the SSRF
+    # check covers the redirect chain, not only the URL we were handed, and the
+    # body is read under a cap. A rejection degrades to {} like any other failure.
     try:
         resp = _bib_request(
             session or _get_besteffort_session(),
             manifest_url,
+            guarded=True,
             headers={"Accept": "application/ld+json, application/json"},
             timeout=(IIIF_CONNECT_TIMEOUT, IIIF_REQUEST_TIMEOUT),
         )
         resp.raise_for_status()
         manifest = resp.json()
+    except UnsafeURLError as exc:
+        logger.warning("Refusing Biblissima manifest URL %s: %s", manifest_url, exc)
+        return {}
     except Exception as exc:
         logger.warning("Biblissima manifest fetch failed for %s: %s", manifest_url, exc)
         return {}
@@ -2209,7 +3253,7 @@ def _fetch_canvas_dimensions(manifest_url, folio, session=None):
         # IIIF Image API tile requests for the Leaflet layer.
         "imageServiceUrl": service_id,
     }
-    cache.set(cache_key, result, 3600)
+    cache.set(cache_key, result, _BIBLISSIMA_RAW_CACHE_TTL)
     return result
 
 
@@ -2225,7 +3269,9 @@ def _iiif_thumbnail_from_service(service_id, width=200):
     return f"{service_id.rstrip('/')}/full/{width},/0/default.jpg"
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaIlluminationDetailView(View):
     """Scrape a single illumination page from the Biblissima portal.
 
@@ -2387,10 +3433,20 @@ class BiblissimaIlluminationDetailView(View):
 
         The /en/ fetch is best-effort: if it fails the French-only
         result is returned and date parsing may degrade for century
-        idioms, but the create step still works.
+        idioms, but the create step still works. Its failure makes the
+        answer ``partial``, like a failed manuscript lookup; a failed
+        fetch of the third-party IIIF manifest does not.
+
+        Cached by ``cache_page`` on the URL alone, before the session and locale
+        middlewares add their ``Vary`` headers: the payload must depend neither
+        on the user nor on the active language. A per-user or localised field
+        here would be served to every editor.
         """
-        session = _build_biblissima_session()
-        try:
+        if not _IFDATA_HASH_RE.fullmatch(ifdata_hash):
+            return JsonResponse({"error": "invalid identifier"}, status=400)
+
+        with _upstream_budget(VIEW_DEADLINE) as budget:
+            session = _default_session()
             try:
                 fr_resp = _bib_request(
                     session,
@@ -2473,9 +3529,8 @@ class BiblissimaIlluminationDetailView(View):
                 if centuries:
                     result["centuryConcept"] = centuries
 
-            # Canvas dimensions + thumbnail via one cached manifest fetch.
-            # Uses its own no-retry best-effort session (fast-fail on a dead
-            # IIIF host) — the shared ``session`` is intentionally not passed.
+            # Canvas dimensions + thumbnail via one cached fetch of the
+            # third-party manifest, on the no-retry best-effort session.
             if result.get("manifestUrl"):
                 canvas_info = _fetch_canvas_dimensions(
                     result["manifestUrl"], result.get("folio", "")
@@ -2499,12 +3554,12 @@ class BiblissimaIlluminationDetailView(View):
                 if not result.get("manifestUrl") and manifest_before:
                     result["manifestUrl"] = manifest_before
 
-            return JsonResponse(result)
-        finally:
-            session.close()
+        return _budgeted_answer(result, budget)
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaCreateResourceView(View):
     """Create one Arches resource per POST — the only write-path view.
 
@@ -2512,7 +3567,7 @@ class BiblissimaCreateResourceView(View):
 
         {
             "resourceType": "Document" | "Component" | "Place" | "Group" | "Person",
-            "transactionId": <uuid | null>,
+            "transactionId": <workflow uuid | null>,
             "biblissimaData": { ... ko.toJS(item) ... },
             "dependencies": {
                 "parentDocument":   <uuid>,      // Component only, required
@@ -2527,15 +3582,32 @@ class BiblissimaCreateResourceView(View):
 
     Dispatch:
 
+    ``transactionId`` is the workflow id, the transaction id of every edit-log
+    row of the request, dependencies included (Arches' convention, so a Quit of
+    the workflow reverses what it created). It must be a UUID (400) and not
+    another user's (403, ``workflow_transaction``); absent, the request gets a
+    fresh one.
+
     - ``Place | Group | Person`` → ``_create_dependency_resource`` (lightweight
       name + optional ``memberOf`` / ``location``). Called recursively by
       the frontend cascade, so parent deps are always created first.
     - ``Document`` → ``_create_document_tiles``.
     - ``Component`` → ``_create_component_tiles``.
 
-    Tile writes run inside a single ``transaction.atomic()``. ES indexing is
-    deferred until after the DB transaction commits — a rollback therefore
-    leaves no orphan ES docs.
+    Validation and ``pre_tile_save`` run before the write transaction opens
+    (see ``_stage_tiles``); the writes themselves run in one
+    ``transaction.atomic()``. ES indexing is deferred until after the commit
+    — a rollback therefore leaves no orphan ES docs.
+
+    The created resource's own tiles are bulk-inserted, not saved through
+    ``Tile.save()``: Arches provisional edits do not apply to them, a Resource
+    Editor's write is authoritative at once, and their edit log names the
+    requesting user. The project link (``_link_to_project``,
+    ``_link_to_project_batch``) and ``BiblissimaAddAltNameView`` save through
+    ``Tile.save()`` without a user, so provisional edits do not apply there
+    either; ``_attribute_tile_save`` then names the requesting user on the
+    edit-log rows those saves wrote. The endpoints are restricted to
+    the group « Resource Editor ».
     """
 
     # Graph ID mapping for all supported resource types
@@ -2556,7 +3628,12 @@ class BiblissimaCreateResourceView(View):
             return JsonResponse({"error": "Invalid JSON body"}, status=400)
 
         resource_type = body.get("resourceType", "Document")
-        transaction_id = body.get("transactionId")
+        try:
+            transaction_id = workflow_transaction(
+                body.get("transactionId"), request.user
+            )
+        except WorkflowTransactionError as exc:
+            return JsonResponse({"error": str(exc)}, status=exc.status)
         bbma_data = body.get("biblissimaData", {})
         dependencies = body.get("dependencies", {})
         concept_mappings = body.get("conceptMappings", {})
@@ -2569,7 +3646,9 @@ class BiblissimaCreateResourceView(View):
 
         # Dependency types (Place/Group/Person): lightweight creation with just a name
         if resource_type in ("Place", "Group", "Person"):
-            return self._create_dependency_resource(graph_id, resource_type, bbma_data)
+            return self._create_dependency_resource(
+                graph_id, resource_type, bbma_data, request.user, transaction_id
+            )
 
         try:
             resource_id, created_deps = self._create_resource(
@@ -2581,6 +3660,9 @@ class BiblissimaCreateResourceView(View):
                 concept_mappings=concept_mappings,
                 user=request.user,
             )
+        except WriteDeadlineExceeded as exc:
+            logger.warning("Biblissima create abandoned: %s", exc.__cause__)
+            return JsonResponse({"error": str(exc)}, status=504)
         except ValueError as exc:
             # Dangling / malformed dependency (or project) rejected by the
             # existence guard — a client-data problem, so a clean 400 rather
@@ -2598,9 +3680,19 @@ class BiblissimaCreateResourceView(View):
             }
         )
 
-    def _create_dependency_resource(self, graph_id, resource_type, bbma_data):
-        """Create a Place/Group/Person resource with name and relationships."""
+    def _create_dependency_resource(
+        self, graph_id, resource_type, bbma_data, user, transaction_id=None
+    ):
+        """Create a Place/Group/Person resource with its name and relationships.
+
+        Its edit-log rows carry *transaction_id* (the workflow id), else a fresh one.
+
+        A Place given ``biblissimaQid`` also receives its GeoNames identifier
+        and point when Wikibase has them (``_stage_place_geo``, best-effort).
+        The edit log attributes the created tiles to *user*.
+        """
         from django.db import transaction
+        from arches.app.datatypes.datatypes import DataTypeFactory
         from arches.app.models.resource import Resource
 
         label = (bbma_data.get("label") or "").strip()
@@ -2612,54 +3704,62 @@ class BiblissimaCreateResourceView(View):
         location_id = bbma_data.get("location")
 
         try:
-            with transaction.atomic():
-                self._tile_buffer = []
-                resource_instance = ResourceInstance(graph_id=graph_id)
-                resource_instance.save()
-                resource_id = resource_instance.resourceinstanceid
+            self._tile_buffer = []
+            resource_instance = ResourceInstance(graph_id=graph_id)
+            resource_id = resource_instance.resourceinstanceid
 
-                # Name tile
+            # Name tile
+            self._create_tile(
+                name_conf["ng"],
+                resource_id,
+                {
+                    name_conf["label"]: self._i18n_string(label),
+                    name_conf["language"]: self._concept_list([CONCEPT_FRENCH]),
+                    name_conf["type"]: self._concept_list([CONCEPT_PREFERRED_TERMS]),
+                },
+            )
+
+            # Group: Member of (parent group)
+            if resource_type == "Group" and member_of_id:
                 self._create_tile(
-                    name_conf["ng"],
+                    GROUP_MEMBER_OF_NG,
                     resource_id,
                     {
-                        name_conf["label"]: self._i18n_string(label),
-                        name_conf["language"]: self._concept_list([CONCEPT_FRENCH]),
-                        name_conf["type"]: self._concept_list(
-                            [CONCEPT_PREFERRED_TERMS]
-                        ),
+                        GROUP_MEMBER_OF_NODE: self._resource_instance_ref(member_of_id),
                     },
                 )
 
-                # Group: Member of (parent group)
-                if resource_type == "Group" and member_of_id:
-                    self._create_tile(
-                        GROUP_MEMBER_OF_NG,
+            # Group: Location (place)
+            if resource_type == "Group" and location_id:
+                self._create_tile(
+                    GROUP_LOCATION_NG,
+                    resource_id,
+                    {
+                        GROUP_LOCATION_NODE: self._resource_instance_list(location_id),
+                    },
+                )
+
+            serialized_graph = Resource(graph_id=graph_id).get_serialized_graph() or {}
+            nodes_by_id = self._nodes_by_id(serialized_graph)
+            factory = DataTypeFactory()
+            with upstream_budget(settings.BIBLISSIMA_WRITE_ITEM_DEADLINE, kind="write"):
+                self._stage_tiles(self._tile_buffer, nodes_by_id, factory)
+                if resource_type == "Place":
+                    self._stage_place_geo(
                         resource_id,
-                        {
-                            GROUP_MEMBER_OF_NODE: self._resource_instance_ref(
-                                member_of_id
-                            ),
-                        },
+                        bbma_data.get("biblissimaQid"),
+                        nodes_by_id,
+                        factory,
                     )
 
-                # Group: Location (place)
-                if resource_type == "Group" and location_id:
-                    self._create_tile(
-                        GROUP_LOCATION_NG,
-                        resource_id,
-                        {
-                            GROUP_LOCATION_NODE: self._resource_instance_list(
-                                location_id
-                            ),
-                        },
-                    )
-
+            with transaction.atomic():
+                resource_instance.save()
                 resource = Resource.objects.select_related("graph__publication").get(
                     pk=resource_id
                 )
+                resource.set_serialized_graph(serialized_graph)
                 self._flush_tile_buffer(
-                    resource, user=None, default_transaction_id=None
+                    resource, user=user, default_transaction_id=transaction_id
                 )
 
             # Route through the defer seam (post-commit; honors
@@ -2690,9 +3790,15 @@ class BiblissimaCreateResourceView(View):
     ):
         """Create a resource with all its tiles from Biblissima data.
 
-        Wrapped in a DB transaction — if anything fails, everything rolls back.
-        Elasticsearch indexing is deferred until after all DB writes succeed,
-        so a rollback leaves no orphan documents in ES.
+        Dependency checks, tile building and staging (validation and
+        ``pre_tile_save``, which may fetch a IIIF manifest over HTTP) run
+        before any transaction opens. A IIIF manifest imported by
+        ``pre_tile_save`` is committed on its own and stays if the create then
+        fails. The resource row, its tiles, their edit log and the project
+        link are then written in one ``transaction.atomic()``; a failure rolls
+        all of them back. Elasticsearch indexing runs after the commit. A
+        missing *transaction_id* is replaced by a fresh one shared by every
+        edit-log row of the create.
 
         Tiles are buffered and flushed via two bulk INSERTs (tiles +
         edit_log) plus a single ``save_descriptors`` UPDATE on the
@@ -2702,38 +3808,30 @@ class BiblissimaCreateResourceView(View):
         for a single Component create against ~30-50 with this path.
         """
         from django.db import transaction
+        from arches.app.datatypes.datatypes import DataTypeFactory
         from arches.app.models.resource import Resource
 
-        with transaction.atomic():
-            self._tile_buffer = []
+        transaction_id = transaction_id or uuid.uuid4()
+        self._tile_buffer = []
 
-            # Dangling-dependency guard (parity with BiblissimaCreateAllView
-            # Pass 1): a dependency — or the project — referencing a
-            # since-deleted resource would otherwise commit a dangling
-            # resource_x_resource row as a successful "created" (strict=False in
-            # _validate_tiles does NOT catch it). Verify existence up front; a
-            # bad ref raises ValueError, surfaced by the caller as a clean 400.
-            valid_dep_ids = self._precollect_valid_dep_ids(
-                [{"dependencies": dependencies}]
-            )
-            self._assert_deps_exist(dependencies, valid_dep_ids)
-            project_id = dependencies.get("project")
-            if project_id:
-                if not isinstance(project_id, str):
-                    raise ValueError(
-                        f"Project {project_id!r} is not a valid resource id; "
-                        "cannot link."
-                    )
-                if project_id.strip() and project_id.strip() not in valid_dep_ids:
-                    raise ValueError(
-                        f"Project {project_id} does not exist; cannot link."
-                    )
+        valid_dep_ids = self._precollect_valid_dep_ids([{"dependencies": dependencies}])
+        self._assert_deps_exist(dependencies, valid_dep_ids)
+        project_id = dependencies.get("project")
+        if project_id:
+            if not isinstance(project_id, str):
+                raise ValueError(
+                    f"Project {project_id!r} is not a valid resource id; "
+                    "cannot link."
+                )
+            if project_id.strip() and project_id.strip() not in valid_dep_ids:
+                raise ValueError(f"Project {project_id} does not exist; cannot link.")
 
-            created_deps = {"places": {}, "persons": {}, "groups": {}}
-            resource_instance = ResourceInstance(graph_id=graph_id)
-            resource_instance.save()
-            resource_id = resource_instance.resourceinstanceid
+        created_deps = {"places": {}, "persons": {}, "groups": {}}
+        resource_instance = ResourceInstance(graph_id=graph_id)
+        resource_id = resource_instance.resourceinstanceid
 
+        serialized_graph = Resource(graph_id=graph_id).get_serialized_graph() or {}
+        with _item_write_budget():
             if resource_type == "Document":
                 self._create_document_tiles(
                     resource_id,
@@ -2752,30 +3850,27 @@ class BiblissimaCreateResourceView(View):
                     concept_mappings,
                     created_deps,
                 )
+            self._stage_tiles(
+                self._tile_buffer,
+                self._nodes_by_id(serialized_graph),
+                DataTypeFactory(),
+            )
 
+        with transaction.atomic():
+            resource_instance.save()
             resource = Resource.objects.select_related("graph__publication").get(
                 pk=resource_id
             )
+            resource.set_serialized_graph(serialized_graph)
             self._flush_tile_buffer(resource, user, transaction_id)
 
-            # Linking to a project writes a tile on a *different* resource
-            # (the project) and must refresh the project's descriptors.
-            # Run it after the buffer flush so it goes through the
-            # standard Tile.save() path on its own resource. project_id was
-            # resolved and existence-checked by the guard above.
+            # The project link writes a tile on the project through
+            # Tile.save(), after the flush of this resource's own tiles.
             if project_id:
-                self._link_to_project(resource_id, project_id, transaction_id)
+                self._link_to_project(resource_id, project_id, transaction_id, user)
 
-        # Schedule ES indexing to run after the DB transaction commits.
-        # The on_commit wrapper inside _defer_indexing guarantees that a
-        # rollback never enqueues an indexing job for data that no longer
-        # exists. With BIBLISSIMA_ASYNC_INDEXING=False (the default), this
-        # is behaviourally identical to the previous inline resource.index()
-        # call but runs strictly post-commit.
-        #
-        # When the resource was linked to a project, the project's tile was
-        # written with index=False (I-3), so the project must be re-indexed
-        # here too — otherwise its ES doc's studied_objects stays stale.
+        # The project tile is saved with index=False, so the project is
+        # re-indexed here with the new resource.
         index_ids = [str(resource_id)]
         if project_id:
             index_ids.append(str(project_id))
@@ -2959,31 +4054,298 @@ class BiblissimaCreateResourceView(View):
                         raise TileValidationError(err.get("message", ""))
 
     def _run_hook(self, tiles, nodes_by_id, factory, method_name):
-        """Replay ``pre_tile_save`` / ``post_tile_save`` for every (tile, node).
+        """Replay a datatype hook the bulk write skips, named by *method_name*.
 
-        Mirrors the side effects that ``Tile.save()`` would run around the
-        ``bulk_create``:
+        ``pre_tile_save`` / ``post_tile_save`` run for every (tile, node), as
+        ``Tile.save()`` runs them:
 
         - ``pre_tile_save``: IIIF manifest import rewrites the URL to
           ``/manifest/{globalid}`` so Mirador can serve external manifests.
         - ``post_tile_save``: R2R relationship creation via the Arches SQL
           function that populates ``resource_x_resource``.
 
-        ``method_name`` is intentionally the last argument so that Task 3.4
-        can call ``_run_hook(tiles, nodes_by_id, factory, "pre_tile_save")``
-        with a consistent, reusable signature.
+        ``after_update_all`` is called as ``method(tile=tile)``, once per
+        datatype of a tile. ``Tile.after_update_all()`` calls it once per
+        node of the nodegroup; the hook only receives the tile, so a datatype
+        present on several nodes would do the same work several times (the
+        geojson datatype refreshes ``geojson_geometries`` for the whole tile).
         """
         for tile in tiles:
+            replayed_datatypes = set()
             for nodeid in list(tile.data.keys()):
                 node = nodes_by_id.get(str(nodeid))
                 if node is None:
                     continue
+                if method_name == "after_update_all":
+                    if node["datatype"] in replayed_datatypes:
+                        continue
+                    replayed_datatypes.add(node["datatype"])
                 datatype = factory.get_instance(node["datatype"])
                 method = getattr(datatype, method_name)
                 if method_name == "post_tile_save":
                     method(tile, nodeid, request=None)
+                elif method_name == "after_update_all":
+                    method(tile=tile)
                 else:
                     method(tile, nodeid)
+
+    @staticmethod
+    def _nodes_by_id(serialized_graph):
+        """Nodes of a serialized graph keyed by their id as a string."""
+        return {str(n["nodeid"]): n for n in (serialized_graph or {}).get("nodes", [])}
+
+    def _stage_tiles(self, tiles, nodes_by_id, factory):
+        """Validate *tiles* and run their ``pre_tile_save`` hooks.
+
+        Runs before the write transaction opens, never inside it:
+        ``pre_tile_save`` on a IIIF manifest node fetches the manifest over
+        HTTP (per-host throttled, and without retries under a write budget),
+        and a transaction held open meanwhile keeps its connection and row
+        locks. Writes nothing to
+        the resource tables. Raises what the validators and hooks raise
+        (``TileValidationError``, ``requests.HTTPError``, ``UnsafeURLError``…).
+        """
+        self._validate_tiles(tiles, nodes_by_id, factory)
+        self._run_hook(tiles, nodes_by_id, factory, "pre_tile_save")
+
+    def _place_geo_tiles(self, resource_id, geo, parts):
+        """Buffer the GeoNames tiles of *geo* on a Place, for the *parts* named.
+
+        ``identifier``: value ``https://www.geonames.org/<id>/``, source
+        Geonames, type record identifier. ``location``: a FeatureCollection
+        holding one WGS84 Point in "Literal location". A part *geo* has no
+        value for is not buffered. Each tile carries its part name as
+        ``_mspectrum_place_part``. Returns the names of the parts buffered.
+        """
+        buffered = []
+        if "identifier" in parts and geo.get("geonamesId"):
+            tile = self._create_tile(
+                PLACE_IDENTIFIER_NG,
+                resource_id,
+                {
+                    PLACE_IDENTIFIER_VALUE: self._i18n_string(
+                        f"https://www.geonames.org/{geo['geonamesId']}/"
+                    ),
+                    PLACE_IDENTIFIER_SOURCE: self._concept_list(
+                        [CONCEPT_SOURCE_GEONAMES]
+                    ),
+                    PLACE_IDENTIFIER_TYPE: self._concept_list([CONCEPT_RECORD_ID]),
+                },
+            )
+            tile._mspectrum_place_part = "identifier"
+            buffered.append("identifier")
+        if (
+            "location" in parts
+            and geo.get("latitude") is not None
+            and geo.get("longitude") is not None
+        ):
+            tile = self._create_tile(
+                PLACE_LITERAL_LOCATION_NG,
+                resource_id,
+                {
+                    PLACE_LITERAL_LOCATION_NODE: {
+                        "type": "FeatureCollection",
+                        "features": [
+                            {
+                                "id": str(uuid.uuid4()),
+                                "type": "Feature",
+                                "geometry": {
+                                    "type": "Point",
+                                    "coordinates": [geo["longitude"], geo["latitude"]],
+                                },
+                                "properties": {"nodeId": PLACE_LITERAL_LOCATION_NODE},
+                            }
+                        ],
+                    }
+                },
+            )
+            tile._mspectrum_place_part = "location"
+            buffered.append("location")
+        return buffered
+
+    def _stage_place_geo(
+        self,
+        resource_id,
+        place_qid,
+        nodes_by_id,
+        factory,
+        parts=("identifier", "location"),
+    ):
+        """Append the staged GeoNames tiles of *place_qid* to the tile buffer.
+
+        Best-effort, part by part. Wikibase is read once; when it cannot be
+        read, nothing is appended. When a concept cannot be resolved or
+        staging refuses a part's tile, that part is removed from the buffer
+        and the other parts stay. An empty *place_qid* fetches nothing.
+        Returns the names of the parts appended; see ``_place_geo_tiles``.
+        """
+        if not place_qid:
+            return []
+        try:
+            geo = _get_place_geo(place_qid)
+        except Exception:
+            logger.warning(
+                "GeoNames data of place %s not fetched", place_qid, exc_info=True
+            )
+            return []
+        if not geo:
+            return []
+        appended = []
+        for part in parts:
+            start = len(self._tile_buffer)
+            try:
+                buffered = self._place_geo_tiles(resource_id, geo, (part,))
+                self._stage_tiles(self._tile_buffer[start:], nodes_by_id, factory)
+            except Exception:
+                logger.warning(
+                    "GeoNames %s of place %s not staged",
+                    part,
+                    place_qid,
+                    exc_info=True,
+                )
+                del self._tile_buffer[start:]
+                continue
+            appended.extend(buffered)
+        return appended
+
+    @staticmethod
+    def _missing_place_geo_parts(resource_id):
+        """The GeoNames parts a Place has no tile for, among ``identifier`` and ``location``.
+
+        ``identifier`` is present when an Identifier tile has the Geonames
+        source; ``location`` when a "Literal location" tile exists (its card
+        holds a single tile).
+        """
+        tiles = TileModel.objects.filter(resourceinstance_id=resource_id)
+        missing = []
+        if not tiles.filter(
+            nodegroup_id=PLACE_IDENTIFIER_NG,
+            data__contains={
+                PLACE_IDENTIFIER_SOURCE: [
+                    {"labels": [{"list_item_id": CONCEPT_SOURCE_GEONAMES}]}
+                ]
+            },
+        ).exists():
+            missing.append("identifier")
+        if not tiles.filter(nodegroup_id=PLACE_LITERAL_LOCATION_NG).exists():
+            missing.append("location")
+        return missing
+
+    def _enrich_existing_place(self, resource_id, place_qid, user):
+        """Add to an existing Place the GeoNames parts of *place_qid* it lacks.
+
+        A *place_qid* that is not a Wikibase item id adds nothing and queries
+        nothing. Only the missing parts Wikibase has a value for are staged
+        (``identifier``: a GeoNames id; ``location``: a latitude and a
+        longitude); when none remains, or Wikibase cannot be read, nothing is
+        added and the graph is not loaded.
+
+        The tiles are staged before the transaction. Inside it the resource row
+        is locked and the missing parts are read again, so a part added by a
+        concurrent enrichment of the same Place is not written twice. Each added
+        tile takes as ``sortorder`` the highest one the resource holds in its
+        nodegroup plus one, or 0 when it holds none
+        (``TileModel.set_next_sort_order``). The edit log names *user*; indexing
+        follows the commit. Best-effort: a failure is logged and adds nothing.
+        Returns the names of the parts added.
+        """
+        from django.db import transaction
+        from arches.app.datatypes.datatypes import DataTypeFactory
+        from arches.app.models.resource import Resource
+
+        if not isinstance(place_qid, str) or not _QID_RE.fullmatch(place_qid):
+            return []
+        try:
+            if not ResourceInstance.objects.filter(
+                pk=resource_id, graph_id=PLACE_GRAPH_ID
+            ).exists():
+                return []
+            missing = self._missing_place_geo_parts(resource_id)
+            if not missing:
+                return []
+            geo = _get_place_geo(place_qid)
+            if not geo:
+                return []
+            has_value = {
+                "identifier": bool(geo.get("geonamesId")),
+                "location": geo.get("latitude") is not None
+                and geo.get("longitude") is not None,
+            }
+            missing = [part for part in missing if has_value[part]]
+            if not missing:
+                return []
+            self._tile_buffer = []
+            serialized_graph = (
+                Resource(graph_id=PLACE_GRAPH_ID).get_serialized_graph() or {}
+            )
+            staged = self._stage_place_geo(
+                resource_id,
+                place_qid,
+                self._nodes_by_id(serialized_graph),
+                DataTypeFactory(),
+                parts=missing,
+            )
+            if not staged:
+                return []
+            with transaction.atomic():
+                list(
+                    ResourceInstance.objects.select_for_update()
+                    .filter(pk=resource_id)
+                    .values_list("pk", flat=True)
+                )
+                still_missing = self._missing_place_geo_parts(resource_id)
+                self._tile_buffer = [
+                    t
+                    for t in self._tile_buffer
+                    if t._mspectrum_place_part in still_missing
+                ]
+                added = [t._mspectrum_place_part for t in self._tile_buffer]
+                if added:
+                    for tile in self._tile_buffer:
+                        tile.set_next_sort_order()
+                    resource = Resource.objects.select_related(
+                        "graph__publication"
+                    ).get(pk=resource_id)
+                    resource.set_serialized_graph(serialized_graph)
+                    self._flush_tile_buffer(resource, user, uuid.uuid4())
+            if added:
+                self._defer_indexing(resource_ids=[str(resource_id)])
+            return added
+        except Exception:
+            logger.warning(
+                "GeoNames data not added to place %s", resource_id, exc_info=True
+            )
+            self._tile_buffer = []
+            return []
+
+    @staticmethod
+    def _editlog_user_fields(user):
+        """``EditLog`` user columns for *user*: a null id and empty names when
+        *user* is ``None``."""
+        return {
+            "userid": (
+                str(user.id) if user is not None and getattr(user, "id", None) else None
+            ),
+            "user_username": getattr(user, "username", "") or "",
+            "user_firstname": getattr(user, "first_name", "") or "",
+            "user_lastname": getattr(user, "last_name", "") or "",
+            "user_email": getattr(user, "email", "") or "",
+        }
+
+    def _attribute_tile_save(self, tileid, transaction_id, user):
+        """Name *user* on the edit-log rows a user-less ``Tile.save()`` wrote.
+
+        Biblissima calls ``Tile.save()`` without a user: for a user who is not
+        a resource reviewer, Arches would store the write as a provisional
+        edit. Arches then records an empty user id; this replaces it on the
+        rows of *tileid* under *transaction_id*. Call it inside the
+        transaction of the save.
+        """
+        from arches.app.models.models import EditLog
+
+        EditLog.objects.filter(
+            transactionid=transaction_id, tileinstanceid=str(tileid), userid=""
+        ).update(**self._editlog_user_fields(user))
 
     def _write_editlog(self, tiles, resource, user, tx_id):
         """Build one ``EditLog`` row per tile and bulk-insert them.
@@ -2998,13 +4360,7 @@ class BiblissimaCreateResourceView(View):
 
         displayname = resource.displayname()
 
-        user_id = (
-            str(user.id) if user is not None and getattr(user, "id", None) else None
-        )
-        user_username = getattr(user, "username", "") or ""
-        user_firstname = getattr(user, "first_name", "") or ""
-        user_lastname = getattr(user, "last_name", "") or ""
-        user_email = getattr(user, "email", "") or ""
+        user_fields = self._editlog_user_fields(user)
 
         now = timezone.now()
         fallback_tx = tx_id or uuid.uuid4()
@@ -3021,16 +4377,32 @@ class BiblissimaCreateResourceView(View):
                 newvalue=t.data,
                 oldvalue={},
                 timestamp=now,
-                userid=user_id,
-                user_username=user_username,
-                user_firstname=user_firstname,
-                user_lastname=user_lastname,
-                user_email=user_email,
+                **user_fields,
                 note="resource creation",
             )
             for t in tiles
         ]
         EditLog.objects.bulk_create(edits)
+
+    def _write_creation_edit(self, resource, user, tx_id):
+        """Write the ``create`` edit-log row of a resource created by bulk insert.
+
+        Arches' transaction reversal (a workflow's Quit) deletes a resource by
+        its ``create`` row; the bulk path writes only ``tile create`` rows, so
+        without this one the reversal would leave the emptied resource.
+        """
+        from arches.app.models.models import EditLog
+        from django.utils import timezone
+
+        EditLog.objects.create(
+            transactionid=tx_id or uuid.uuid4(),
+            resourcedisplayname=resource.displayname(),
+            resourceclassid=str(resource.graph_id),
+            resourceinstanceid=str(resource.pk),
+            edittype="create",
+            timestamp=timezone.now(),
+            **self._editlog_user_fields(user),
+        )
 
     def _batch_save_descriptors(self, resources):
         """Refresh descriptors for a batch, hoisting the per-graph Node fetch
@@ -3074,17 +4446,15 @@ class BiblissimaCreateResourceView(View):
         """Persist ``self._tile_buffer`` in two bulk INSERTs and refresh
         descriptors once.
 
-        Thin orchestrator: captures and resets the buffer, builds the shared
-        ``DataTypeFactory`` and ``nodes_by_id`` lookup, then delegates to the
-        three reusable primitives in order:
+        The buffer must already have gone through ``_stage_tiles``, before the
+        transaction this method runs in was opened. Steps, in order:
 
-        1. ``_validate_tiles`` — Tier-2 validate-net (raises
-           ``TileValidationError`` on any ERROR before any DB write).
-        2. ``_run_hook(…, "pre_tile_save")`` — IIIF manifest import, etc.
-        3. ``TileModel.objects.bulk_create`` — single INSERT for all tiles.
-        4. ``_run_hook(…, "post_tile_save")`` — R2R relationship creation.
-        5. ``resource.save_descriptors()`` — one UPDATE replacing N updates.
-        6. ``_write_editlog`` — one ``EditLog`` bulk_create for all tiles.
+        1. ``TileModel.objects.bulk_create`` — single INSERT for all tiles.
+        2. ``_run_hook(…, "post_tile_save")`` — R2R relationship creation.
+        3. ``_run_hook(…, "after_update_all")`` — refreshes
+           ``geojson_geometries``, the table Arches map layers read.
+        4. ``resource.save_descriptors()`` — one UPDATE replacing N updates.
+        5. ``_write_editlog`` — one ``EditLog`` bulk_create for all tiles.
 
         After this method, ``self._tile_buffer`` is reset to an empty
         list — any further ``_create_tile`` call inside the same
@@ -3099,26 +4469,18 @@ class BiblissimaCreateResourceView(View):
         if not tiles:
             return
 
-        # Reuse the published graph that ``select_related`` already
-        # fetched on ``resource`` (see _create_resource): one in-memory
-        # dict shared by validate, pre_tile_save, and post_tile_save
-        # for the whole batch. Using ``resource.get_serialized_graph()``
-        # avoids the extra ``Node.objects.filter(graph_id=...)`` SQL
-        # round-trip a fresh ``Node`` queryset would cost.
+        default_transaction_id = default_transaction_id or uuid.uuid4()
         factory = DataTypeFactory()
-        serialized_graph = resource.get_serialized_graph() or {}
-        nodes_by_id = {str(n["nodeid"]): n for n in serialized_graph.get("nodes", [])}
+        nodes_by_id = self._nodes_by_id(resource.get_serialized_graph())
 
-        self._validate_tiles(tiles, nodes_by_id, factory)
-        self._run_hook(tiles, nodes_by_id, factory, "pre_tile_save")
         TileModel.objects.bulk_create(tiles)
         self._run_hook(tiles, nodes_by_id, factory, "post_tile_save")
+        self._run_hook(tiles, nodes_by_id, factory, "after_update_all")
         # MultiDescriptor reads tiles via TileModel.objects.filter(...) —
-        # so it sees the rows just inserted. save_descriptors also calls
-        # super().save() on the resource, which is the single UPDATE
-        # replacing the N updates the per-tile path would emit.
+        # so it sees the rows just inserted.
         resource.save_descriptors()
         self._write_editlog(tiles, resource, user, default_transaction_id)
+        self._write_creation_edit(resource, user, default_transaction_id)
 
     def _defer_indexing(self, resource_ids=None, tx_id=None):
         """Schedule ES indexing to run after the current DB transaction commits.
@@ -3804,7 +5166,11 @@ class BiblissimaCreateResourceView(View):
             or bbma_data.get("imageUrl")
         )
         manifest_url = bbma_data.get("manifestUrl")
-        if canvas_url and manifest_url:
+        if (
+            canvas_url
+            and manifest_url
+            and _annotation_targets_are_safe(canvas_url, manifest_url)
+        ):
             width = int(bbma_data.get("canvasWidth") or 0) or 4000
             height = int(bbma_data.get("canvasHeight") or 0) or 5000
 
@@ -3861,7 +5227,7 @@ class BiblissimaCreateResourceView(View):
                 parenttile=item_feature_tile,
             )
 
-    def _link_to_project(self, resource_id, project_id, transaction_id):
+    def _link_to_project(self, resource_id, project_id, transaction_id, user):
         """Add the created resource to the project's Studied Objects.
 
         Locks the project's ResourceInstance row (``select_for_update``) for the
@@ -3870,6 +5236,9 @@ class BiblissimaCreateResourceView(View):
         tile (a lock on the not-yet-existing Tile row would protect nothing).
         MUST run inside a transaction — callers wrap it in
         ``transaction.atomic()``.
+
+        The tile is saved under *transaction_id* (a fresh one when ``None``)
+        and the edit is attributed to *user* through ``_attribute_tile_save``.
         """
         # Validate project_id is a proper UUID
         try:
@@ -3879,6 +5248,7 @@ class BiblissimaCreateResourceView(View):
             return
 
         project_id = str(project_uuid)
+        transaction_id = transaction_id or uuid.uuid4()
 
         # Serialize concurrent linkers on the project row itself. A missing
         # project means the link target is gone — skip rather than raise a
@@ -3919,7 +5289,8 @@ class BiblissimaCreateResourceView(View):
             # inline here (default index=True) runs a synchronous ES write inside
             # _create_resource's atomic() -> a transient ES outage would raise
             # and roll back the freshly-created resource (500 on a good create).
-            existing.save(index=False)
+            existing.save(index=False, transaction_id=transaction_id)
+            self._attribute_tile_save(existing.tileid, transaction_id, user)
         else:
             # Direct Tile.save() — this writes one tile on the *project*
             # (a different resource than the one being created), and
@@ -3934,9 +5305,8 @@ class BiblissimaCreateResourceView(View):
                 data={PROJECT_STUDIED_OBJECTS_NODE: [new_ref]},
                 sortorder=0,
             )
-            if transaction_id:
-                tile.transaction_id = transaction_id
-            tile.save(index=False)
+            tile.save(index=False, transaction_id=transaction_id)
+            self._attribute_tile_save(tile.tileid, transaction_id, user)
 
     def _bulk_create_resources(self, graph_id, n, user, ids=None):
         """Bulk-create ``n`` ResourceInstance rows for the given graph in one INSERT.
@@ -4003,7 +5373,7 @@ class BiblissimaCreateResourceView(View):
         ResourceInstance.objects.bulk_create(instances)
         return [inst.resourceinstanceid for inst in instances]
 
-    def _link_to_project_batch(self, created_ids, project_id, tx_id):
+    def _link_to_project_batch(self, created_ids, project_id, tx_id, user):
         """Link a batch of newly-created resources to the project's Studied Objects
         tile in a single locked read-modify-write.
 
@@ -4021,6 +5391,8 @@ class BiblissimaCreateResourceView(View):
         buffer) because the project is a different resource needing its own
         descriptor refresh, and ``_flush_tile_buffer`` only handles the
         resource currently being imported.
+
+        The edit is attributed to *user* through ``_attribute_tile_save``.
         """
         # Lock the project ROW first so concurrent batches serialise even when
         # the studied-objects tile does not exist yet: a select_for_update on the
@@ -4035,6 +5407,7 @@ class BiblissimaCreateResourceView(View):
         if project_row is None:
             logger.warning("Project %s does not exist; skipping batch link", project_id)
             return
+        tx_id = tx_id or uuid.uuid4()
 
         existing = (
             Tile.objects.select_for_update()
@@ -4064,6 +5437,7 @@ class BiblissimaCreateResourceView(View):
                     present_ids.add(ref["resourceId"])
             existing.data[PROJECT_STUDIED_OBJECTS_NODE] = current_data
             existing.save(index=False, transaction_id=tx_id)
+            self._attribute_tile_save(existing.tileid, tx_id, user)
         else:
             tile = Tile(
                 tileid=uuid.uuid4(),
@@ -4073,6 +5447,7 @@ class BiblissimaCreateResourceView(View):
                 sortorder=0,
             )
             tile.save(index=False, transaction_id=tx_id)
+            self._attribute_tile_save(tile.tileid, tx_id, user)
 
     def _resource_instance_ref(self, resource_id):
         """Build a resource-instance reference for a single resource.
@@ -4129,6 +5504,7 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
         POST /api/biblissima/create-all
         {
             "resourceType": "Document" | "Component",
+            "transactionId": <workflow uuid | null>,
             "items": [
                 {"clientId", "biblissimaData", "dependencies", "conceptMappings"},
                 ...
@@ -4140,45 +5516,49 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
                ...
         ]}
 
+    ``transactionId`` (one per POST; an item's own is ignored) is the id every
+    edit-log row of the batch carries: the workflow id. It must be a UUID
+    (400) and not another user's (403, ``workflow_transaction``); absent, the
+    batch gets a fresh one.
+
     Integration task (Phase 3.4). Inherits ALL write-path primitives from
-    :class:`BiblissimaCreateResourceView` (``_validate_tiles``, ``_run_hook``, ``_write_editlog``, the tile builders,
-    ``_batch_save_descriptors``, ``_bulk_create_resources``,
-    ``_link_to_project_batch``) — nothing is redefined, so a patch on the base
-    class is observed here.
+    :class:`BiblissimaCreateResourceView`: ``_stage_tiles`` for Pass 1 (it runs
+    ``_validate_tiles`` and ``_run_hook``), ``_run_hook``, ``_write_editlog``,
+    the tile builders, ``_batch_save_descriptors``, ``_bulk_create_resources``
+    and ``_link_to_project_batch``. Nothing is redefined, so a patch on the
+    base class is observed here.
 
-    Two-pass, best-effort algorithm
-    -------------------------------
-    Everything runs inside ONE outer ``transaction.atomic()``; ES indexing is
-    strictly AFTER it commits (``ATOMIC_REQUESTS=False`` in this project, so the
-    post-``with`` reindex is genuinely post-commit and a rollback leaves no
-    orphan ES docs).
+    Two passes, best effort
+    -----------------------
+    * **Pass 1 — per item, no transaction.** Dependency and project existence
+      checks (``_assert_deps_exist``), tile building, then ``_stage_tiles``:
+      validation and ``pre_tile_save``, which fetches IIIF manifests over
+      HTTP. A failing item is reported ``"failed"`` and its staged tiles are
+      dropped from the shared buffer (``del self._tile_buffer[start:]``).
+      Nothing is written to the resource tables: resource ids are generated
+      here and their rows are inserted in Pass 2. A manifest imported by
+      ``pre_tile_save`` is committed on its own and stays if its item fails.
 
-    * **Pass 1 — per item, in a nested ``atomic()`` SAVEPOINT.** The per-item
-      ``try/except`` is placed AROUND the ``with`` block, so an exception
-      triggers ``ROLLBACK TO SAVEPOINT`` for just that item and the loop
-      continues. A dependency-existence pre-pass (``_assert_deps_exist``) runs
-      *before* the resourceinstance is created, so a dangling relationship
-      becomes a clean ``"failed"`` instead of a silently committed
-      ``resource_x_resource`` row with a NULL ``to_graphid``. On failure the
-      item's staged tiles are dropped from the shared buffer
-      (``del self._tile_buffer[start:]``) so no residue reaches Pass 2.
+    * **Pass 2 — survivors only, one ``transaction.atomic()``.** One
+      ``_bulk_create_resources`` with the survivor ids, one
+      ``TileModel.bulk_create``, the ``post_tile_save`` replay, one
+      ``_batch_save_descriptors``, one ``_write_editlog`` per survivor under a
+      single ``batch_tx``, then ``_link_to_project_batch`` per distinct
+      project.
 
-    * **Pass 2 — survivors only, still inside the outer atomic.** One
-      ``TileModel.bulk_create`` of all survivor tiles, one
-      ``post_tile_save`` replay, one ``_batch_save_descriptors``, one
-      ``_write_editlog`` per survivor under a single ``batch_tx``, then a
-      grouped ``_link_to_project_batch`` per distinct project.
+    Pass 1 stays outside any transaction: ``pre_tile_save`` can hold a request
+    for minutes on a slow IIIF host. ES indexing is scheduled after Pass 2
+    commits (``ATOMIC_REQUESTS`` is off), so a rollback leaves no orphan ES
+    document.
 
-    Contract holes closed
-    ---------------------
-    * **Hole 1 — Pass 2 is documented all-or-nothing.** Any Pass-2 exception
-      rolls the whole outer atomic back and returns HTTP 500
-      ``{"error": "Batch creation failed"}`` with no per-survivor attribution.
-      Because Hole 2 removes the only *data-driven* Pass-2 failure mode
-      (dangling R2R), a remaining Pass-2 exception is genuine infrastructure
-      failure where an unattributed 500 is acceptable. Per-survivor Pass-2
-      savepoints are a deferred hardening.
-    * **Hole 2 — dangling resource-instance deps.** ``_validate_tiles`` runs
+    Failure contract
+    ----------------
+    * **Pass 2 is all-or-nothing.** Any Pass-2 exception rolls the whole pass
+      back and the view answers HTTP 500 ``{"error": "Batch creation failed"}``
+      with no per-survivor attribution. Pass 1 removes the only data-driven
+      Pass-2 failure (a dangling relationship), so what remains is an
+      infrastructure failure.
+    * **Dangling resource-instance deps.** ``_validate_tiles`` runs
       ``strict=False`` and would let a stale dep UUID commit as ``"created"``.
       The batched ``_precollect_valid_dep_ids`` + per-item ``_assert_deps_exist``
       turn a missing dep into a Pass-1 ``"failed"``.
@@ -4215,24 +5595,30 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
             )
         graph_id = self.GRAPH_IDS[resource_type]
 
+        if len(items) > _MAX_CREATE_ALL_ITEMS:
+            return JsonResponse(
+                {"error": "too many items", "max": _MAX_CREATE_ALL_ITEMS}, status=400
+            )
+
         if not items:
             return JsonResponse({"results": []})
 
         # ---- Setup once (shared by the whole batch) ----------------------
         # Read-only pre-pass. A malformed payload (e.g. a non-dict item) must not
         # surface as a raw 500 with a traceback, so guard it into a clean 400.
-        batch_tx = uuid.uuid4()
+        try:
+            workflow_tx = workflow_transaction(body.get("transactionId"), request.user)
+        except WorkflowTransactionError as exc:
+            return JsonResponse({"error": str(exc)}, status=exc.status)
+        batch_tx = workflow_tx or uuid.uuid4()
         try:
             valid_dep_ids = self._precollect_valid_dep_ids(items)
             factory = DataTypeFactory()
 
-            # Hoist the serialized-graph -> nodes_by_id ONCE: all items share one
-            # graph. Mirror how _flush_tile_buffer derives nodes_by_id (via a
-            # Resource bound to the graph), so validate / hooks reuse one dict.
-            serialized_graph = Resource(graph_id=graph_id).get_serialized_graph() or {}
-            nodes_by_id = {
-                str(n["nodeid"]): n for n in serialized_graph.get("nodes", [])
-            }
+            # One graph per call: nodes are looked up once for the whole batch.
+            nodes_by_id = self._nodes_by_id(
+                Resource(graph_id=graph_id).get_serialized_graph()
+            )
         except Exception:
             logger.exception("Biblissima batch pre-pass failed")
             return JsonResponse({"error": "Invalid batch payload"}, status=400)
@@ -4245,12 +5631,13 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
 
         self._tile_buffer = []
         results = []
+        out_of_budget = 0
         # survivors: list of (client_id, rid, item_tiles, project_id)
         survivors = []
 
         # ---- Pass 1 — per item, NO transaction held --------------------------
-        # Build + validate + run pre_tile_save (the per-host throttled, retrying
-        # IIIF manifest fetch) OUTSIDE any DB transaction, so importing many
+        # Build + validate + run pre_tile_save (the per-host throttled IIIF manifest
+        # fetch, budgeted and not retried) OUTSIDE any DB transaction, so importing many
         # manifests never holds the batch transaction open for minutes — a worker
         # or idle-in-transaction timeout mid-fetch would otherwise roll back and
         # discard every already-succeeded survivor (finding #2). Nothing is
@@ -4266,45 +5653,54 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
             concept_mappings = item.get("conceptMappings", {}) or {}
 
             start = len(self._tile_buffer)
+            budget = None
             try:
-                # BEFORE building anything: dangling dep -> failed.
-                self._assert_deps_exist(deps, valid_dep_ids)
-                # A dangling OR malformed project id would make
-                # _link_to_project_batch build a Tile whose FK points at a
-                # nonexistent project (dangling) or coerce a non-string value
-                # with str() (malformed) -> IntegrityError/DataError in Pass 2 ->
-                # whole-batch 500 losing every survivor. Validate it here
-                # (mirroring _assert_deps_exist) so a bad project is a clean
-                # per-item fail, not a batch detonation.
-                proj = deps.get("project")
-                if proj:
-                    if not isinstance(proj, str):
-                        raise ValueError(
-                            f"Project {proj!r} is not a valid resource "
-                            "id; cannot link."
-                        )
-                    if proj.strip() and proj.strip() not in valid_dep_ids:
-                        raise ValueError(f"Project {proj} does not exist; cannot link.")
+                with upstream_budget(
+                    settings.BIBLISSIMA_WRITE_ITEM_DEADLINE, kind="write"
+                ) as budget:
+                    # BEFORE building anything: dangling dep -> failed.
+                    self._assert_deps_exist(deps, valid_dep_ids)
+                    # A dangling OR malformed project id would make
+                    # _link_to_project_batch build a Tile whose FK points at a
+                    # nonexistent project (dangling) or coerce a non-string value
+                    # with str() (malformed) -> IntegrityError/DataError in Pass 2 ->
+                    # whole-batch 500 losing every survivor. Validate it here
+                    # (mirroring _assert_deps_exist) so a bad project is a clean
+                    # per-item fail, not a batch detonation.
+                    proj = deps.get("project")
+                    if proj:
+                        if not isinstance(proj, str):
+                            raise ValueError(
+                                f"Project {proj!r} is not a valid resource "
+                                "id; cannot link."
+                            )
+                        if proj.strip() and proj.strip() not in valid_dep_ids:
+                            raise ValueError(
+                                f"Project {proj} does not exist; cannot link."
+                            )
 
-                # Generate the rid up front (no DB write) so tiles can reference
-                # it; the ResourceInstance row is inserted in Pass 2.
-                rid = uuid.uuid4()
-                created_deps = {"places": {}, "persons": {}, "groups": {}}
-                builder(rid, None, bbma_data, deps, concept_mappings, created_deps)
-                item_tiles = self._tile_buffer[start:]
+                    # Generate the rid up front (no DB write) so tiles can reference
+                    # it; the ResourceInstance row is inserted in Pass 2.
+                    rid = uuid.uuid4()
+                    created_deps = {"places": {}, "persons": {}, "groups": {}}
+                    builder(rid, None, bbma_data, deps, concept_mappings, created_deps)
+                    item_tiles = self._tile_buffer[start:]
 
-                self._validate_tiles(item_tiles, nodes_by_id, factory)
-                # pre_tile_save = IIIF manifest fetch; can raise
-                # requests.HTTPError / UnsafeURLError / FailParsingManifestIIIF /
-                # TileValidationError. Runs here, OUTSIDE the transaction.
-                self._run_hook(item_tiles, nodes_by_id, factory, "pre_tile_save")
+                    self._stage_tiles(item_tiles, nodes_by_id, factory)
             except Exception as exc:
                 # Drop this item's staged tiles so no residue reaches Pass 2 and
                 # report it failed. No DB rollback needed — nothing was written
                 # to the resource tables for this item.
                 del self._tile_buffer[start:]
+                deadline_error = _write_deadline_error(budget, exc)
+                if deadline_error:
+                    out_of_budget += 1
                 results.append(
-                    {"clientId": client_id, "status": "failed", "error": str(exc)}
+                    {
+                        "clientId": client_id,
+                        "status": "failed",
+                        "error": deadline_error or str(exc),
+                    }
                 )
                 continue
 
@@ -4352,36 +5748,69 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
                             request.user,
                             batch_tx,
                         )
+                        self._write_creation_edit(
+                            resources_by_id[str(rid)], request.user, batch_tx
+                        )
 
                     by_project = {}
                     for _cid, rid, _tiles, project_id in survivors:
                         if project_id:
                             by_project.setdefault(str(project_id), []).append(rid)
                     for project_id, ids in by_project.items():
-                        self._link_to_project_batch(ids, project_id, batch_tx)
+                        self._link_to_project_batch(
+                            ids, project_id, batch_tx, request.user
+                        )
             except Exception:
                 # ANY Pass-2 failure rolls this atomic back -> no survivor
-                # committed -> unattributed 500 (Hole 1). Manifests imported in
+                # committed -> unattributed 500. Manifests imported in
                 # Pass 1 remain (benign/dedupable).
                 logger.exception("Biblissima batch creation failed")
+                _count_created_items(
+                    resource_type,
+                    [
+                        (
+                            {**result, "status": "failed"}
+                            if result.get("status") == "created"
+                            else result
+                        )
+                        for result in results
+                    ],
+                    out_of_budget,
+                )
                 return JsonResponse({"error": "Batch creation failed"}, status=500)
 
         # Schedule ES indexing for the committed batch via the on_commit seam.
         # With BIBLISSIMA_ASYNC_INDEXING=False (default), this is a
         # behaviour-identical replacement for the previous inline
         # index_resources_by_transaction call, but strictly post-commit.
-        if survivors:
+        if survivors and workflow_tx:
+            # A workflow's id spans every chunk: index this chunk's resources
+            # and projects, not everything the run wrote so far.
+            index_ids = [str(rid) for _cid, rid, _tiles, _proj in survivors]
+            index_ids += sorted({str(p) for *_head, p in survivors if p})
+            self._defer_indexing(resource_ids=index_ids)
+        elif survivors:
             self._defer_indexing(tx_id=batch_tx)
 
+        _count_created_items(resource_type, results, out_of_budget)
         return JsonResponse({"results": results})
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaAddAltNameView(View):
-    """Add a Biblissima label as alternative name to an existing resource."""
+    """Add a Biblissima label as alternative name to an existing resource.
+
+    A Place given ``biblissimaQid`` also receives the GeoNames identifier and
+    point it lacks (``_enrich_existing_place``), whether or not the name was
+    already present; the answer lists them under ``placeGeo``.
+    """
 
     def post(self, request):
         import json
+
+        from django.db import transaction
 
         try:
             body = json.loads(request.body)
@@ -4398,51 +5827,76 @@ class BiblissimaAddAltNameView(View):
             )
 
         name_conf = DEP_NAME_CONFIG[graph_id]
-
-        # Check if this name already exists on the resource
-        existing_tiles = Tile.objects.filter(
-            nodegroup_id=name_conf["ng"],
-            resourceinstance_id=resource_id,
-        )
-        for tile in existing_tiles:
-            existing_label = tile.data.get(name_conf["label"], {})
-            for lang_data in existing_label.values():
-                if (
-                    isinstance(lang_data, dict)
-                    and lang_data.get("value", "").strip().lower() == label.lower()
-                ):
-                    return JsonResponse(
-                        {"status": "already_exists", "message": "Name already present"}
-                    )
-
         creator = BiblissimaCreateResourceView()
-        try:
-            tile = Tile(
-                tileid=uuid.uuid4(),
+
+        already_present = any(
+            isinstance(lang_data, dict)
+            and lang_data.get("value", "").strip().lower() == label.lower()
+            for tile in Tile.objects.filter(
                 nodegroup_id=name_conf["ng"],
                 resourceinstance_id=resource_id,
-                data={
-                    name_conf["label"]: creator._i18n_string(label),
-                    name_conf["language"]: creator._concept_list([CONCEPT_FRENCH]),
-                    name_conf["type"]: creator._concept_list(
-                        [CONCEPT_ALTERNATE_TITLES]
-                    ),
-                },
-                sortorder=0,
             )
-            tile.save(index=False)
+            for lang_data in tile.data.get(name_conf["label"], {}).values()
+        )
 
-            # Route through the defer seam (post-commit; honors
-            # BIBLISSIMA_ASYNC_INDEXING) rather than an inline resource.index().
-            creator._defer_indexing(resource_ids=[str(resource_id)])
-        except Exception:
-            logger.exception("Failed to add alt name to resource %s", resource_id)
-            return JsonResponse({"error": "Failed to add alternative name"}, status=500)
+        if not already_present:
+            try:
+                tile = Tile(
+                    tileid=uuid.uuid4(),
+                    nodegroup_id=name_conf["ng"],
+                    resourceinstance_id=resource_id,
+                    data={
+                        name_conf["label"]: creator._i18n_string(label),
+                        name_conf["language"]: creator._concept_list([CONCEPT_FRENCH]),
+                        name_conf["type"]: creator._concept_list(
+                            [CONCEPT_ALTERNATE_TITLES]
+                        ),
+                    },
+                    sortorder=0,
+                )
+                transaction_id = uuid.uuid4()
+                with transaction.atomic():
+                    tile.save(index=False, transaction_id=transaction_id)
+                    creator._attribute_tile_save(
+                        tile.tileid, transaction_id, request.user
+                    )
 
-        return JsonResponse({"status": "added", "message": "Alternative name added"})
+                # Route through the defer seam (post-commit; honors
+                # BIBLISSIMA_ASYNC_INDEXING) rather than an inline resource.index().
+                creator._defer_indexing(resource_ids=[str(resource_id)])
+            except Exception:
+                logger.exception("Failed to add alt name to resource %s", resource_id)
+                return JsonResponse(
+                    {"error": "Failed to add alternative name"}, status=500
+                )
+
+        place_geo = []
+        place_qid = body.get("biblissimaQid")
+        if graph_id == PLACE_GRAPH_ID and place_qid:
+            place_geo = creator._enrich_existing_place(
+                resource_id, place_qid, request.user
+            )
+
+        if already_present:
+            return JsonResponse(
+                {
+                    "status": "already_exists",
+                    "message": "Name already present",
+                    "placeGeo": place_geo,
+                }
+            )
+        return JsonResponse(
+            {
+                "status": "added",
+                "message": "Alternative name added",
+                "placeGeo": place_geo,
+            }
+        )
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaStatsView(View):
     """Debug/admin tool exposing outbound Biblissima traffic counters.
 
@@ -4475,7 +5929,9 @@ class BiblissimaStatsView(View):
         return JsonResponse(stats)
 
 
-@method_decorator(group_required(*EDITOR_GROUPS, raise_exception=True), name="dispatch")
+@method_decorator(
+    group_required("Resource Editor", raise_exception=True), name="dispatch"
+)
 class BiblissimaLinkToProjectView(View):
     """Idempotently link an existing resource to a Project's studied objects.
 
@@ -4510,7 +5966,7 @@ class BiblissimaLinkToProjectView(View):
             return JsonResponse({"error": "Invalid UUID"}, status=400)
 
         # Reuse the helper on BiblissimaCreateResourceView so the dedup logic
-        # stays in a single place. transaction_id is None for ad-hoc links.
+        # stays in a single place. An ad-hoc link gets a transaction id of its own.
         # _link_to_project takes a select_for_update row lock, so it MUST run
         # inside a transaction.
         creator = BiblissimaCreateResourceView()
@@ -4520,6 +5976,7 @@ class BiblissimaLinkToProjectView(View):
                     resource_id,
                     project_id,
                     transaction_id=None,
+                    user=request.user,
                 )
         except Exception:
             logger.exception(

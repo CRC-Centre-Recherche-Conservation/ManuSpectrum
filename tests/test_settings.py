@@ -53,14 +53,25 @@ CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "test-cache",
+        "KEY_PREFIX": f"ms:{CACHE_CODE_VERSION}",
     },
     "user_permission": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "user_permission_cache",
     },
+    "iiif_auth": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "iiif-auth-cache",
+        "KEY_PREFIX": "ms-iiif-auth",
+    },
 }
 
 LOGGING["loggers"]["arches"]["level"] = "ERROR"
+LOGGING["loggers"]["manuspectrum.explorer"]["level"] = "WARNING"
+
+# A test runs in one transaction another thread's connection cannot see.
+EXPLORER_BACKGROUND_REBUILD = False
+EXPLORER_REBUILD_MIN_INTERVAL = 0
 
 ELASTICSEARCH_PREFIX = "test"
 
@@ -84,3 +95,7 @@ MANIFEST_FETCH_RATE_LIMITS = {}
 # developer's settings_local.py, nor enqueue real messages on the broker. Tests
 # covering the async path turn it on with override_settings.
 BIBLISSIMA_ASYNC_INDEXING = False
+
+# The Explorer API guard is exercised by tests/test_explorer_ui_only.py, which
+# switches it on with override_settings.
+EXPLORER_UI_ONLY = "off"

@@ -9,12 +9,16 @@
  * The save path has its own rule: a refusal must reach the curator, and must not
  * close the panel over the edit that was refused.
  *
+ * Deleting refreshes the list when the configuration is gone, including when
+ * someone else deleted it first, and names the reason of any other refusal.
+ *
  * Note: this file lives under media/js/views/components/, which coverage.include
  * does not target, so it executes without touching the coverage gate.
  */
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import ko from 'knockout';
+import { getRendererConfig, invalidate } from 'utils/renderer-cache';
 
 vi.mock('arches', () => ({
     default: {
@@ -22,6 +26,8 @@ vi.mock('arches', () => ({
             configurationProtected: 'Protected configuration',
             configurationNotSaved: 'Configuration not saved',
             configurationNotSavedWarning: 'The server refused the change.',
+            importerInUse: 'Importer in Use',
+            importerInUseWarning: 'Files still use this configuration.',
         },
         urls: { renderer_config: '/renderer/config' },
     },
@@ -125,6 +131,17 @@ describe('loadConfiguration', () => {
     });
 });
 
+const respondWith = (status, body) => {
+    window.fetch = vi.fn(async () => ({
+        ok: status >= 200 && status < 300,
+        status,
+        json: async () => {
+            if (body === undefined) throw new Error('no body');
+            return body;
+        },
+    }));
+};
+
 describe('saveConfigEdit', () => {
     let vm;
     let alerts;
@@ -135,17 +152,6 @@ describe('saveConfigEdit', () => {
             rendererConfigs: ko.observableArray([]),
             alert: (viewModel) => alerts.push(viewModel),
         });
-    };
-
-    const respondWith = (status, body) => {
-        window.fetch = vi.fn(async () => ({
-            ok: status >= 200 && status < 300,
-            status,
-            json: async () => {
-                if (body === undefined) throw new Error('no body');
-                return body;
-            },
-        }));
     };
 
     beforeEach(() => {
@@ -183,6 +189,24 @@ describe('saveConfigEdit', () => {
         expect(alerts[0].text).toBe(
             'This configuration is part of the shared baseline.'
         );
+    });
+
+    it('refreshes the list when the configuration no longer exists', async () => {
+        respondWith(404, {
+            saved: false,
+            reason: 'not_found',
+            message: 'This configuration no longer exists.',
+        });
+        invalidate.mockClear();
+        getRendererConfig.mockClear();
+
+        await vm.saveConfigEdit();
+
+        expect(vm.showConfigurationPanel()).toBe(true);
+        expect(alerts).toHaveLength(1);
+        expect(alerts[0].text).toBe('This configuration no longer exists.');
+        expect(invalidate).toHaveBeenCalledTimes(1);
+        expect(getRendererConfig).toHaveBeenCalledTimes(1);
     });
 
     it('still reports a failure that carries no body', async () => {
@@ -252,5 +276,71 @@ describe('startNewConfiguration', () => {
         vm.startNewConfiguration();
 
         expect(vm.invalidDelimiter()).toBe(false);
+    });
+});
+
+describe('performDelete', () => {
+    const stored = { configid: 'b0000000-0000-4000-8000-000000000003' };
+    let vm;
+    let alerts;
+
+    beforeEach(() => {
+        alerts = [];
+        vm = new ImporterConfigurationViewModel({
+            rendererConfigs: ko.observableArray([]),
+            alert: (viewModel) => alerts.push(viewModel),
+        });
+        invalidate.mockClear();
+        getRendererConfig.mockClear();
+    });
+
+    it('refreshes the list once the configuration is deleted', async () => {
+        respondWith(200, { deleted: true, config: { ...stored, name: 'Mine' } });
+
+        await vm.performDelete(stored);
+
+        expect(alerts).toHaveLength(0);
+        expect(invalidate).toHaveBeenCalledTimes(1);
+        expect(getRendererConfig).toHaveBeenCalledTimes(1);
+    });
+
+    it('says the configuration is in use when files still point at it', async () => {
+        respondWith(200, { deleted: false, reason: 'in_use' });
+
+        await vm.performDelete(stored);
+
+        expect(alerts).toHaveLength(1);
+        expect(alerts[0].title).toBe('Importer in Use');
+        expect(alerts[0].text).toBe('Files still use this configuration.');
+        expect(invalidate).not.toHaveBeenCalled();
+    });
+
+    it('treats a configuration already gone as deleted', async () => {
+        respondWith(404, {
+            deleted: false,
+            reason: 'not_found',
+            message: 'This configuration no longer exists.',
+        });
+
+        await vm.performDelete(stored);
+
+        expect(alerts).toHaveLength(0);
+        expect(invalidate).toHaveBeenCalledTimes(1);
+        expect(getRendererConfig).toHaveBeenCalledTimes(1);
+    });
+
+    it('names the reason on a protected refusal', async () => {
+        respondWith(403, {
+            deleted: false,
+            reason: 'protected',
+            message: 'This configuration cannot be deleted.',
+        });
+
+        await vm.performDelete(stored);
+
+        expect(alerts).toHaveLength(1);
+        expect(alerts[0].title).toBe('Protected configuration');
+        expect(alerts[0].text).toBe('This configuration cannot be deleted.');
+        expect(invalidate).not.toHaveBeenCalled();
     });
 });

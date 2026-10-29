@@ -1,0 +1,64 @@
+---
+# Renders `.env`, the units and the logrotate file. Shared by prepare.yml
+# (real destinations) and render.yml (a scratch directory, no privileges).
+# Inputs: app_uid, app_gid, app_render_env_dest, app_render_units_dir,
+# app_render_logrotate_dir, app_render_owner (omit for no ownership change),
+# app_render_env_owner, app_render_env_group, app_group, app_render_notify. The unit and
+# logrotate sources are the `.in` files of deploy/systemd and deploy/logrotate,
+# whose @...@ placeholders are replaced here.
+
+- name: Look for an existing environment file
+  ansible.builtin.stat:
+    path: "{{ app_render_env_dest }}"
+  register: app_env_file
+
+- name: Read the existing environment file
+  ansible.builtin.slurp:
+    src: "{{ app_render_env_dest }}"
+  register: app_env_current
+  when: app_env_file.stat.exists
+
+# Ansible never changes the image in service: the inventory value is used
+# only while no .env exists (first installation); the update command changes it.
+- name: Keep the image already in service
+  ansible.builtin.set_fact:
+    app_image_in_service: >-
+      {{ (app_env_current.content | b64decode | regex_findall('(?m)^MANUSPECTRUM_IMAGE=(.*)$')
+      | last | default(env_manuspectrum_image, true) | trim)
+      if app_env_file.stat.exists else env_manuspectrum_image }}
+
+- name: Render the application environment file
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ app_render_env_dest }}"
+    owner: "{{ app_render_env_owner | default(omit) }}"
+    group: "{{ app_render_env_group | default(omit) }}"
+    mode: "0640"
+
+- name: Render the systemd units
+  ansible.builtin.copy:
+    content: >-
+      {{ lookup('ansible.builtin.file', playbook_dir ~ '/../systemd/' ~ item ~ '.in', rstrip=false)
+      | replace('@APP_USER@', service_user)
+      | replace('@DEPLOY_DIR@', app_dir ~ '/deploy')
+      | replace('@APP_DIR@', app_dir) }}
+    dest: "{{ app_render_units_dir }}/{{ item }}"
+    owner: "{{ app_render_owner | default(omit) }}"
+    group: "{{ app_render_owner | default(omit) }}"
+    mode: "0644"
+  loop: >-
+    {{ app_unit_names | product(['.service', '.timer']) | map('join') | list
+    + app_oneshot_unit_names | product(['.service']) | map('join') | list }}
+  notify: "{{ app_render_notify | default([]) }}"
+
+- name: Render the nginx logrotate rule
+  ansible.builtin.copy:
+    content: >-
+      {{ lookup('ansible.builtin.file', playbook_dir ~ '/../logrotate/manuspectrum-nginx.in', rstrip=false)
+      | replace('@NGINX_LOG_HOST_DIR@', env_nginx_log_host_dir)
+      | replace('@APP_USER@', service_user)
+      | replace('@APP_GROUP@', app_group | default(service_user)) }}
+    dest: "{{ app_render_logrotate_dir }}/manuspectrum-nginx"
+    owner: "{{ app_render_owner | default(omit) }}"
+    group: "{{ app_render_owner | default(omit) }}"
+    mode: "0644"

@@ -101,6 +101,9 @@ const COMPONENT_FALLBACK_TYPE_CONCEPT = 'b4a3fe54-2d82-4361-9adf-8b6b780f3aa4';
 // 'loading' forever (an unbounded fetch once left items stuck for minutes).
 const ENRICH_FETCH_TIMEOUT_MS = 60000;
 
+// Items per create-all POST; the server's _MAX_CREATE_ALL_ITEMS refuses more.
+const CREATE_ALL_CHUNK_SIZE = 5;
+
 // Label lookup for known Component type concepts — mirrors
 // BIBLISSIMA_TYPE_LABELS in constants/biblissima.py. Used when the
 // user picks a new type via the inline editor so the badge can update
@@ -119,6 +122,9 @@ const BIBLISSIMA_TYPE_LABELS = {
     'b4a3fe54-2d82-4361-9adf-8b6b780f3aa4': 'Enluminure',
 };
 
+const normaliseLabel = (label) => String(label ?? '').normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+const sameLabel = (a, b) => normaliseLabel(a) === normaliseLabel(b);
+
 const viewModel = function(params) {
     const self = this;
 
@@ -129,6 +135,9 @@ const viewModel = function(params) {
 
     // Workflow step interface
     this.complete = params.form?.complete || ko.observable(false);
+    // Arches' convention: the workflow id is the transaction id of every write
+    // of the run, so Quit reverses them and the cleanup knows what the run created.
+    this.workflowId = ko.unwrap(params.form?.workflowId) || null;
     this.saving = ko.observable(false);
     this.loading = ko.observable(true);
 
@@ -854,16 +863,22 @@ const viewModel = function(params) {
         const deps = [];
         const seen = new Set();
 
-        const addDep = (key, type, graphId, parentKey, locationKey) => {
+        const addDep = (key, type, graphId, parentKey, locationKey, biblissimaQid) => {
             const mapKey = `${type}:${key}`;
-            if (seen.has(mapKey)) return null;
+            if (seen.has(mapKey)) {
+                const known = deps.find((d) => `${d.type}:${d.key}` === mapKey);
+                if (known && !known.biblissimaQid && biblissimaQid) {
+                    known.biblissimaQid = biblissimaQid;
+                }
+                return null;
+            }
             seen.add(mapKey);
             const reused = existing.get(mapKey);
             if (reused) {
                 deps.push(reused);
                 return null; // already has an action, don't re-check
             }
-            const dep = self._makeDep(key, type, graphId, parentKey, locationKey);
+            const dep = self._makeDep(key, type, graphId, parentKey, locationKey, biblissimaQid);
             deps.push(dep);
             return dep; // new dep → needs duplicate check
         };
@@ -896,7 +911,7 @@ const viewModel = function(params) {
             const productionPlace = self.isComponent ? (item.location || "") : "";
 
             if (ownerPlace && ownerPlace !== "Origine inconnue") {
-                const d = addDep(ownerPlace, "Place", PLACE_GRAPH_ID);
+                const d = addDep(ownerPlace, "Place", PLACE_GRAPH_ID, null, null, item.locationQid);
                 if (d) newDeps.push(d);
             }
             if (
@@ -953,7 +968,8 @@ const viewModel = function(params) {
                         dep.action('use_existing');
                         dep.existingId(best.resourceId);
                         dep.existingLabel(best.displayname || dep.key);
-                        self._addAltName(dep);
+                        // An automatic match sends the place QID only when both names are the same.
+                        self._addAltName(dep, { withQid: sameLabel(dep.key, best.displayname) });
                     } else {
                         dep.action('has_suggestions');
                     }
@@ -969,10 +985,15 @@ const viewModel = function(params) {
         self.dependenciesResolved(true);
     };
 
-    this._makeDep = (label, type, graphId, parentKey, locationKey) => ({
+    // Reversed per language by Arches; a bare /resource/<id> would redirect.
+    this.resourceEditorUrl = arches.urls.resource_editor;
+
+    this._makeDep = (label, type, graphId, parentKey, locationKey, biblissimaQid) => ({
         key: label,
         type: type,
         graphId: graphId,
+        // Wikibase QID of a Place, which carries its GeoNames id and coordinates.
+        biblissimaQid: biblissimaQid || null,
         label: ko.observable(label),
         // search | has_suggestions | pending_confirm | use_existing | create | creating | created
         action: ko.observable('search'),
@@ -1066,10 +1087,12 @@ const viewModel = function(params) {
                 },
                 body: JSON.stringify({
                     resourceType: dep.type,
+                    transactionId: self.workflowId,
                     biblissimaData: {
                         label: dep.key,
                         memberOf: memberOfId,
                         location: locationId,
+                        biblissimaQid: dep.biblissimaQid,
                     },
                 }),
             });
@@ -1097,7 +1120,7 @@ const viewModel = function(params) {
     };
 
     // Add Biblissima label as alt name to existing resource (non-blocking)
-    this._addAltName = async (dep) => {
+    this._addAltName = async (dep, { withQid = true } = {}) => {
         if (!dep.existingId() || !dep.key) return;
         try {
             await fetch('/api/biblissima/add-alt-name', {
@@ -1110,6 +1133,7 @@ const viewModel = function(params) {
                     resourceId: dep.existingId(),
                     graphId: dep.graphId,
                     label: dep.key,
+                    biblissimaQid: withQid ? dep.biblissimaQid : null,
                 }),
             });
         } catch (err) {
@@ -1132,7 +1156,7 @@ const viewModel = function(params) {
      *   - `asParent`        flip Component→Document mode for this call.
      *   - `biblissimaData`  override payload body (defaults to `ko.toJS(item)`).
      *   - `conceptMappings` override (defaults to `{type: item.typeConceptId}`).
-     *   - `transactionId`   optional tx id string (defaults to `null`).
+     *   - `transactionId`   optional tx id string (defaults to the workflow id).
      *
      * Returns `{resourceType, transactionId, biblissimaData, dependencies, conceptMappings}`.
      */
@@ -1189,7 +1213,7 @@ const viewModel = function(params) {
 
         return {
             resourceType: asParent ? 'Document' : self.resourceType,
-            transactionId: options.transactionId || null,
+            transactionId: options.transactionId || self.workflowId,
             biblissimaData: options.biblissimaData || ko.toJS(item),
             dependencies: deps,
             conceptMappings: options.conceptMappings || {
@@ -1310,6 +1334,71 @@ const viewModel = function(params) {
         }
     };
 
+    this._failCreating = (items) => {
+        items.forEach((i) => {
+            if (i.status() === 'creating') {
+                i.status('error');
+                i.errorMessage(
+                    arches.translations.biblissimaBatchError
+                    || 'Batch creation failed. Please retry.'
+                );
+            }
+        });
+    };
+
+    /** One create-all POST for `chunk` (at most CREATE_ALL_CHUNK_SIZE items); fans results back by clientId. */
+    this._createAllChunk = async (chunk) => {
+        try {
+            const resp = await fetch('/api/biblissima/create-all', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': self.getCSRFToken(),
+                },
+                body: JSON.stringify({
+                    resourceType: self.resourceType,
+                    transactionId: self.workflowId,
+                    items: chunk.map((i) => ({
+                        clientId: i.clientId,
+                        ...self._buildCreatePayload(i),
+                    })),
+                }),
+            });
+
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({}));
+                throw new Error(errData.error || `HTTP ${resp.status}`);
+            }
+
+            const data = await resp.json();
+            const results = data.results || [];
+
+            const itemByClientId = {};
+            chunk.forEach((i) => { itemByClientId[i.clientId] = i; });
+
+            // (d) Fan results[] back by clientId: status-preserving transitions.
+            results.forEach((r) => {
+                const item = itemByClientId[r.clientId];
+                if (!item) return; // unknown clientId from backend — skip
+                if (r.status === 'created') {
+                    item.resourceId(r.resourceId);
+                    item.status('created');
+                } else {
+                    item.status('error');
+                    item.errorMessage(
+                        r.error
+                        || arches.translations.biblissimaBatchError
+                        || 'Batch creation failed. Please retry.'
+                    );
+                }
+            });
+        } catch (err) {
+            console.error('Batch creation failed:', err);
+        }
+        // (e) Any still-'creating' item of the chunk (request failure, or not in results) → error.
+        self._failCreating(chunk);
+    };
+
     this.createAll = async () => {
         self.creatingAll(true);
         self.batchSummary(null);
@@ -1345,74 +1434,16 @@ const viewModel = function(params) {
             // (b) Mark all pending items as 'creating' before the bulk request.
             pending.forEach((i) => i.status('creating'));
 
-            // (c) ONE POST to /api/biblissima/create-all for the whole batch.
-            const resp = await fetch('/api/biblissima/create-all', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': self.getCSRFToken(),
-                },
-                body: JSON.stringify({
-                    resourceType: self.resourceType,
-                    items: pending.map((i) => ({
-                        clientId: i.clientId,
-                        ...self._buildCreatePayload(i),
-                    })),
-                }),
-            });
-
-            if (!resp.ok) {
-                const errData = await resp.json().catch(() => ({}));
-                throw new Error(errData.error || `HTTP ${resp.status}`);
+            // (c) POST /api/biblissima/create-all, sequentially, CREATE_ALL_CHUNK_SIZE
+            // items at a time (the server refuses more per request). A chunk
+            // that fails as a whole errors its own items only; later chunks run.
+            for (let at = 0; at < pending.length; at += CREATE_ALL_CHUNK_SIZE) {
+                await self._createAllChunk(pending.slice(at, at + CREATE_ALL_CHUNK_SIZE));
             }
-
-            const data = await resp.json();
-            const results = data.results || [];
-
-            // Build clientId → item map for O(1) fan-out.
-            const itemByClientId = {};
-            pending.forEach((i) => { itemByClientId[i.clientId] = i; });
-
-            // (d) Fan results[] back by clientId: status-preserving transitions.
-            results.forEach((r) => {
-                const item = itemByClientId[r.clientId];
-                if (!item) return; // unknown clientId from backend — skip
-                if (r.status === 'created') {
-                    item.resourceId(r.resourceId);
-                    item.status('created');
-                } else {
-                    item.status('error');
-                    item.errorMessage(
-                        r.error
-                        || arches.translations.biblissimaBatchError
-                        || 'Batch creation failed. Please retry.'
-                    );
-                }
-            });
-
-            // (e) Any still-'creating' item not in results → error (missing clientId).
-            pending.forEach((i) => {
-                if (i.status() === 'creating') {
-                    i.status('error');
-                    i.errorMessage(
-                        arches.translations.biblissimaBatchError
-                        || 'Batch creation failed. Please retry.'
-                    );
-                }
-            });
-
         } catch (err) {
-            // (e) Request-level / !resp.ok failure → flip every still-'creating' to error.
+            // Dependency pass failure: flip every still-'creating' item to error.
             console.error('Batch creation failed:', err);
-            pending.forEach((i) => {
-                if (i.status() === 'creating') {
-                    i.status('error');
-                    i.errorMessage(
-                        arches.translations.biblissimaBatchError
-                        || 'Batch creation failed. Please retry.'
-                    );
-                }
-            });
+            self._failCreating(pending);
         } finally {
             // (f) Summarize outcome and release the spinner.
             const created = pending.filter((i) => i.status() === 'created').length;

@@ -3,25 +3,41 @@ from django.urls import reverse
 
 from arches.app.models.resource import Resource
 
+from manuspectrum.utils.public_visibility import anonymous_user, hidden_resource_ids
+
 # Document graph UUID
 DOCUMENT_GRAPH_ID = "0c8226c1-11a9-4c48-9601-a7a0c6f2df6b"
 
 
 class StaticSitemap(Sitemap):
-    """Homepage and the public About pages.
+    """Homepage, the Analysis Explorer and the public About pages.
 
     `home` (/index.htm) is deliberately absent: it duplicates `root` and now
     301-redirects to it (see urls.py). i18n + alternates emit one <url> per
-    language with xhtml:link hreflang entries — the most reliable hreflang
-    channel (x_default falls back to LANGUAGE_CODE, i.e. English).
+    language with xhtml:link hreflang entries.
+
+    No x-default here: Django builds it by stripping the language prefix,
+    which under prefix_default_language=True is a URL that only redirects.
+    The pages emit their own x-default in <head>, pointing at /en/.
     """
 
     i18n = True
     alternates = True
-    x_default = True
+    x_default = False
 
     def items(self):
-        return ["root", "about-model", "about-explorer", "about-team", "about-contact"]
+        return [
+            "root",
+            "analysis-explorer",
+            "about-model",
+            "about-explorer",
+            "about-data",
+            "about-team",
+            "about-contact",
+            "about-legal",
+            "about-privacy",
+            "about-terms",
+        ]
 
     def location(self, item):
         return reverse(item)
@@ -34,17 +50,23 @@ class StaticSitemap(Sitemap):
 
 
 class DocumentSitemap(Sitemap):
-    """Public Document resource reports."""
+    """Document resource reports the anonymous visitor may read.
+
+    A Document carrying a grant that denies the ``anonymous`` user read access
+    (an embargo) is left out.
+    """
 
     priority = 0.7
     changefreq = "monthly"
     i18n = True
     alternates = True
-    x_default = True
+    x_default = False
 
     def items(self):
-        return Resource.objects.filter(graph_id=DOCUMENT_GRAPH_ID).values_list(
-            "resourceinstanceid", flat=True
+        return (
+            Resource.objects.filter(graph_id=DOCUMENT_GRAPH_ID)
+            .exclude(resourceinstanceid__in=hidden_resource_ids(anonymous_user()))
+            .values_list("resourceinstanceid", flat=True)
         )
 
     def location(self, resourceid):

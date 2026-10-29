@@ -61,6 +61,21 @@ module.exports = () => {
             ...projectEntryPointConfiguration,
         };
 
+        // Vitest specs sit next to the modules they test and run under Node
+        // (they may import `fs`); they are neither browser entry points nor
+        // members of the component context modules (see the `IgnorePlugin`
+        // below). The extension is optional because a context registers each
+        // file under its extension-less request as well (`./utils/foo.spec`).
+        const isTestFile = (request) => /\.(spec|test)(\.[jt]sx?)?$/.test(request);
+
+        // The project tree is scanned twice (as the project and as an Arches
+        // application), so the filter runs on the merged map.
+        for (const [key, entry] of Object.entries(entryPoints)) {
+            if (entry && isTestFile(entry.import)) {
+                delete entryPoints[key];
+            }
+        }
+
         // END create entry point configurations
         // BEGIN create JavaScript filepath lookups
 
@@ -303,6 +318,12 @@ module.exports = () => {
             },
             plugins: [
                 new CleanWebpackPlugin(),
+                // Arches' `loadComponentDependencies` requires components through a
+                // template literal, which turns each `media/js` tree into a context
+                // module holding every file, specs included.
+                new webpack.IgnorePlugin({
+                    checkResource: (resource) => isTestFile(resource),
+                }),
                 new webpack.DefinePlugin(universalConstants),
                 new webpack.DefinePlugin({
                     ARCHES_URLS: webpack.DefinePlugin.runtimeValue(

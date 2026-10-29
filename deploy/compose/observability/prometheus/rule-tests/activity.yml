@@ -1,0 +1,75 @@
+rule_files:
+  - ../rules/activity.yml
+evaluation_interval: 1m
+
+
+tests:
+- name: consultations are GET answers 2xx or 304 of the mapped views, summed by kind per target
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="root", method="GET", job="web", instance="web:8000"}
+    values: 0+60x120
+  - series: django_http_responses_total_by_status_view_method_total{status="304", view="root", method="GET", job="web", instance="web:8000"}
+    values: 0+60x120
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="root", method="GET", job="web", instance="web:8000"}
+    values: 0+60x120
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="root", method="POST", job="web", instance="web:8000"}
+    values: 0+60x120
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="explorer-search", method="GET", job="web", instance="web:8000"}
+    values: 0+120x120
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="iiif-v2-annotation-page", method="GET", job="web", instance="web:8000"}
+    values: 0+60x120
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="iiif-v3-content-state", method="GET", job="web", instance="web:8000"}
+    values: 0+60x120
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="mvt", method="GET", job="web", instance="web:8000"}
+    values: 0+600x120
+  promql_expr_test:
+  - expr: manuspectrum:consultations:total{kind="home"}
+    eval_time: 100m
+    exp_samples:
+    - labels: 'manuspectrum:consultations:total{kind="home", job="web", instance="web:8000"}'
+      value: 12000
+  - expr: manuspectrum:consultations:total{kind="explorer_search"}
+    eval_time: 100m
+    exp_samples:
+    - labels: 'manuspectrum:consultations:total{kind="explorer_search", job="web", instance="web:8000"}'
+      value: 12000
+  - expr: manuspectrum:consultations:total{kind="iiif_annotations"}
+    eval_time: 100m
+    exp_samples:
+    - labels: 'manuspectrum:consultations:total{kind="iiif_annotations", job="web", instance="web:8000"}'
+      value: 12000
+  - expr: count(manuspectrum:consultations:total{kind=~"export_zip|about|resource_report"})
+    eval_time: 100m
+    exp_samples: []
+  - expr: count({__name__="manuspectrum:consultations:total"})
+    eval_time: 100m
+    exp_samples:
+    - labels: '{}'
+      value: 3
+  - expr: manuspectrum:consultations:rate1h
+    eval_time: 100m
+    exp_samples:
+    - labels: 'manuspectrum:consultations:rate1h{kind="home"}'
+      value: 2
+    - labels: 'manuspectrum:consultations:rate1h{kind="explorer_search"}'
+      value: 2
+    - labels: 'manuspectrum:consultations:rate1h{kind="iiif_annotations"}'
+      value: 2
+- name: a file download is the 302 of file_access, its 200 thumbnails are not counted
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="302", view="file_access", method="GET", job="web", instance="web:8000"}
+    values: 0+10x60
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="file_access", method="GET", job="web", instance="web:8000"}
+    values: 0+100x60
+  - series: django_http_responses_total_by_status_view_method_total{status="404", view="file_access", method="GET", job="web", instance="web:8000"}
+    values: 0+100x60
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="iiif-data-raw", method="GET", job="web", instance="web:8000"}
+    values: 0+5x60
+  promql_expr_test:
+  - expr: manuspectrum:consultations:total{kind="file_download"}
+    eval_time: 30m
+    exp_samples:
+    - labels: 'manuspectrum:consultations:total{kind="file_download", job="web", instance="web:8000"}'
+      value: 450

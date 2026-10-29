@@ -1,0 +1,33 @@
+---
+- name: Test the sshd configuration
+  ansible.builtin.command: sshd -t
+  changed_when: false
+  listen: reload sshd
+
+- name: Reload sshd
+  ansible.builtin.service:
+    name: ssh
+    state: reloaded
+  listen: reload sshd
+
+- name: Restart fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    state: restarted
+  listen: restart fail2ban
+
+- name: Update the apt cache
+  ansible.builtin.apt:
+    update_cache: true
+  listen: update apt cache
+
+- name: Reload postfix
+  ansible.builtin.service:
+    name: postfix
+    state: reloaded
+  listen: reload postfix
+
+- name: Rebuild the alias database
+  ansible.builtin.command: newaliases
+  changed_when: true
+  listen: rebuild the alias database

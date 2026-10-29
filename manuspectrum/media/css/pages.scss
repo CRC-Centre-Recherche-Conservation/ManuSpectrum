@@ -38,6 +38,7 @@
 .ms-page-hero {
     @include ms-container;
     padding-top: 140px; padding-bottom: 48px;
+    animation: ms-page-hero-in 0.8s var(--ease-out-expo) 0.1s both;
     &__eyebrow { font-family: $ms-font-mono; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: $ms-blue-text; }
     &__title { font-family: $ms-font-serif; font-weight: 400; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1.08; margin: 12px 0 16px; }
     &__lead { max-width: 720px; color: $ms-ink-soft; font-size: 1.1rem; line-height: 1.6; }
@@ -47,7 +48,11 @@
     // give it air; on team nothing follows, so this rule changes nothing there.
     &__accent + * { margin-top: 28px; }
 }
+@keyframes ms-page-hero-in {
+    from { opacity: 0; transform: translateY(24px); }
+}
 @media (max-width: 768px) { .ms-page-hero { padding-top: 108px; padding-bottom: 32px; } }
+@media (prefers-reduced-motion: reduce) { .ms-page-hero { animation: none; } }
 
 // NOTE: `.ms-nav-dropdown*` / `.ms-mobile-nav-group*` used to live here. They were
 // moved to _ms-chrome.scss because includes/ms_header.htm is shared with index.htm,
@@ -159,13 +164,6 @@ select.ms-contact-input { appearance: none; background-image: none; cursor: poin
     &:focus-visible { outline: 2px solid $ms-blue-text; outline-offset: 2px; } }
 .ms-contact-copied { margin: 0; font-size: 0.8rem; color: $ms-ink-soft;
     &:empty { display: none; } }
-
-// Off-screen host for the execCommand('copy') fallback textarea. `display:none`
-// would make the selection uncopyable, so it has to stay rendered.
-.ms-visually-hidden {
-    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-    overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
-}
 
 .ms-contact-aside { padding: 8px 4px;
     h3 { font-family: $ms-font-serif; font-weight: 500; font-size: 1.5rem; margin: 0 0 10px; }
@@ -408,6 +406,10 @@ abbr.ms-gloss { text-decoration: underline dotted; text-underline-offset: 3px; c
 // summed from the live payload. Sits directly under the stats so the volume is
 // read at the same time as the schema size, not discovered later by clicking
 // into an empty drawer.
+.ms-ge-reuse { @include ms-container; @include ms-section-rhythm; }
+.ms-ge-reuse-lead, .ms-ge-reuse-note { max-width: 720px; color: $ms-ink-soft; line-height: 1.6; }
+.ms-ge-reuse-list { margin: 18px 0; padding-left: 20px; display: grid; gap: 10px; max-width: 860px; color: $ms-ink-soft; line-height: 1.6;
+    code { font-size: 0.88rem; overflow-wrap: anywhere; } }
 .ms-ge-volume { margin: 16px 0 0; font-size: 0.95rem; color: $ms-ink-soft;
     padding-left: 14px; border-left: 3px solid var(--accent);
     &:empty { display: none; } }
@@ -838,3 +840,71 @@ abbr.ms-gloss { text-decoration: underline dotted; text-underline-offset: 3px; c
 // The prefers-reduced-motion block now lives in _ms-chrome.scss so it also
 // covers the css/homepage bundle (aurora, prism, count-ups) — both bundles
 // import that partial.
+
+// ── Legal pages (legal notice, privacy policy, terms of use) and the
+// « what to include » block of the contact page.
+.ms-legal { @include ms-container; @include ms-section-rhythm; max-width: 860px;
+    h2 { font-family: $ms-font-serif; font-weight: 500; font-size: 1.7rem; margin: 2.2rem 0 0.6rem; }
+    h3 { font-weight: 600; font-size: 1rem; margin: 1.4rem 0 0.4rem; }
+    p, li, dd { color: $ms-ink-soft; line-height: 1.7; }
+    ul, ol { padding-left: 1.4rem; }
+    a { color: $ms-blue-text; }
+    dl { margin: 0; }
+    dt { font-weight: 600; color: $ms-ink; margin-top: 1rem; }
+    dd { margin: 0.2rem 0 0; }
+    table { border-collapse: collapse; width: 100%; margin: 0.6rem 0 1rem; font-size: 0.95rem;
+        th, td { text-align: left; vertical-align: top; padding: 8px 12px; border-bottom: 1px solid $ms-line; color: $ms-ink-soft; }
+        th { color: $ms-ink; font-weight: 600; } } }
+.ms-legal-version { font-family: $ms-font-mono; font-size: 0.8rem; color: $ms-ink-soft; }
+.ms-legal-warning { border-left: 4px solid $ms-red-text; background: #fff; border-radius: 0 12px 12px 0;
+    padding: 18px 22px; margin: 1.4rem 0 1.6rem;
+    &:first-child { margin-top: 0; }
+    p { margin: 0 0 0.75rem; color: $ms-ink; }
+    p:last-child { margin-bottom: 0; } }
+.ms-legal-pending { background: #fef3c7; color: $ms-ink; padding: 0 6px; border-radius: 4px; }
+.ms-account-form { margin: 0 0 1.6rem;
+    p { margin: 0 0 1.25rem; }
+    .ms-pw-field { position: relative; margin: 0 0 1.25rem; }
+    label { display: inline-block; margin-bottom: 4px; font-weight: 600; }
+    input[type="password"] { width: 100%; max-width: 28rem; padding: 8px 10px; border: 1px solid $ms-line; border-radius: 8px; }
+    .ms-form-check { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 1rem; font-weight: 600; }
+    .ms-form-error { display: block; color: $ms-red-text; font-size: 0.9rem; }
+    button { padding: 8px 18px; border: 0; border-radius: 8px; background: $ms-red-text; color: #fff; font-weight: 600; cursor: pointer; } }
+.ms-contact-include { margin: 0 0 1.4rem; padding: 14px 18px; background: #fff; border: 1px solid $ms-line; border-radius: 12px;
+    h3 { font-size: 1rem; font-weight: 600; margin: 0 0 6px; }
+    ul { margin: 0; padding-left: 1.2rem; color: $ms-ink-soft; font-size: 0.92rem; } }
+
+// Password fields (accounts/_password_field.htm, utils/accounts/password-field.js)
+.ms-pw-wrap { position: relative; display: block; max-width: 28rem;
+    input[type="password"], input[type="text"] { width: 100%; max-width: none; box-sizing: border-box; padding: 8px 44px 8px 10px; border: 1px solid $ms-line; border-radius: 8px; } }
+.ms-account-form .ms-pw-toggle { position: absolute; top: 0; right: 0; bottom: 0; width: 42px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+    background: transparent; color: $ms-ink-soft; border-radius: 0 8px 8px 0;
+    &[hidden] { display: none; }
+    &:hover, &:focus-visible { color: $ms-ink; }
+    &:focus-visible { outline: 2px solid $ms-red-text; outline-offset: -2px; }
+    .ms-pw-toggle__eye-off { display: none; }
+    &.is-shown .ms-pw-toggle__eye { display: none; }
+    &.is-shown .ms-pw-toggle__eye-off { display: block; } }
+.ms-pw-meter { display: block; max-width: 28rem; margin-top: 8px;
+    &[hidden] { display: none; } }
+.ms-pw-bar { display: block; height: 6px; border-radius: 3px; background: $ms-line; overflow: hidden; }
+.ms-pw-bar__fill { display: block; height: 100%; width: 0; background: $ms-red-text; transition: width 0.2s ease; }
+.ms-pw-meter[data-level="weak"] .ms-pw-bar__fill { width: 33%; }
+.ms-pw-meter[data-level="fair"] .ms-pw-bar__fill { width: 66%; background: #b45309; }
+.ms-pw-meter[data-level="strong"] .ms-pw-bar__fill { width: 100%; background: #15803d; }
+.ms-pw-word { display: block; min-height: 1.4em; margin-top: 4px; font-size: 0.9rem; font-weight: 600; color: $ms-ink; }
+.ms-pw-rules { list-style: none; margin: 4px 0 0; padding: 0; font-size: 0.88rem; color: $ms-ink-soft;
+    li { position: relative; padding-left: 1.5rem; margin: 2px 0;
+        &::before { content: "\25CB"; position: absolute; left: 0; }
+        &.is-met { color: #15803d; &::before { content: "\2713"; } } } }
+.ms-pw-note { display: block; margin-top: 6px; font-size: 0.88rem; color: $ms-ink-soft; }
+.ms-pw-info { display: inline-block; vertical-align: middle; margin-left: 6px;
+    summary { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; color: $ms-ink-soft; cursor: pointer; list-style: none;
+        &::-webkit-details-marker { display: none; }
+        &:hover { color: $ms-ink; }
+        &:focus-visible { outline: 2px solid $ms-red-text; outline-offset: 2px; } }
+    &[open] summary { color: $ms-ink; } }
+.ms-pw-info__list { position: absolute; left: 0; right: 0; z-index: 2; box-sizing: border-box; max-width: 28rem; margin: 6px 0 0; padding: 10px 14px 10px 2rem; background: #fff; border: 1px solid $ms-line; border-radius: 8px; font-size: 0.88rem; font-weight: 400; color: $ms-ink-soft; }
+.ms-pw-match { display: block; min-height: 1.4em; margin-top: 6px; font-size: 0.9rem; max-width: 28rem;
+    &[data-state="match"] { color: #15803d; }
+    &[data-state="mismatch"] { color: $ms-red-text; } }

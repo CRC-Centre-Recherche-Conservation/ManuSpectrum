@@ -1,0 +1,530 @@
+---
+# One assertion list on the effective state (sshd -T, ufw status, apt-config
+# dump, findmnt...), played alone in verify mode and after the pose in apply
+# mode. Nothing here reads a file the baseline writes: a host set up by its
+# system administrator passes on its effect, not on our files.
+
+- name: Read the effective sshd configuration
+  ansible.builtin.command: sshd -T
+  register: baseline_sshd
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Assert root cannot log in over SSH
+  ansible.builtin.assert:
+    that:
+      - baseline_sshd.rc == 0
+      - "'permitrootlogin no' in baseline_sshd.stdout_lines"
+    quiet: true
+    fail_msg: >-
+      sshd allows root to log in (sshd -T). Set PermitRootLogin no in a drop-in that sorts before
+      the other files of /etc/ssh/sshd_config.d: sshd keeps the first value it reads.
+  register: baseline_chk_01
+  failed_when: false
+
+- name: Assert the SSH password authentication setting
+  ansible.builtin.assert:
+    that:
+      - "('passwordauthentication ' ~ ssh_password_authentication) in baseline_sshd.stdout_lines"
+    quiet: true
+    fail_msg: >-
+      sshd does not report PasswordAuthentication {{ ssh_password_authentication }} (sshd -T). Fix the
+      configuration or ssh_password_authentication in the inventory.
+  register: baseline_chk_02
+  failed_when: false
+
+- name: Read the UFW status
+  ansible.builtin.command: ufw status verbose
+  register: baseline_ufw
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Assert UFW is active with deny in and allow out
+  ansible.builtin.assert:
+    that:
+      - baseline_ufw.rc == 0
+      - "'Status: active' in baseline_ufw.stdout_lines"
+      - "baseline_ufw.stdout_lines | select('match', '^Default: deny [(]incoming[)], allow [(]outgoing[)]') | list | length == 1"
+    quiet: true
+    fail_msg: >-
+      UFW is not active with the default policy deny in / allow out. Run ufw default deny incoming,
+      ufw default allow outgoing and ufw enable, after allowing SSH.
+  register: baseline_chk_03
+  failed_when: false
+
+- name: Assert UFW rate-limits SSH
+  ansible.builtin.assert:
+    that:
+      - baseline_ufw.stdout_lines | select('match', '^22/tcp +LIMIT IN') | list | length == 1
+      - baseline_ufw.stdout_lines | select('match', '^22/tcp \(v6\) +LIMIT IN') | list | length == 1
+    quiet: true
+    fail_msg: "UFW must have exactly one 22/tcp LIMIT IN rule per IP family (ufw limit 22/tcp)."
+  register: baseline_chk_04
+  failed_when: false
+
+- name: Assert UFW allows HTTP
+  ansible.builtin.assert:
+    that:
+      - baseline_ufw.stdout_lines | select('match', '^80/tcp +ALLOW IN') | list | length == 1
+      - baseline_ufw.stdout_lines | select('match', '^80/tcp \(v6\) +ALLOW IN') | list | length == 1
+    quiet: true
+    fail_msg: "UFW must allow 80/tcp in, for IPv4 and IPv6 (ufw allow 80/tcp)."
+  register: baseline_chk_05
+  failed_when: false
+
+- name: Assert UFW allows HTTPS
+  ansible.builtin.assert:
+    that:
+      - baseline_ufw.stdout_lines | select('match', '^443/tcp +ALLOW IN') | list | length == 1
+      - baseline_ufw.stdout_lines | select('match', '^443/tcp \(v6\) +ALLOW IN') | list | length == 1
+    quiet: true
+    fail_msg: "UFW must allow 443/tcp in, for IPv4 and IPv6 (ufw allow 443/tcp)."
+  register: baseline_chk_06
+  failed_when: false
+
+- name: Assert UFW has no other inbound rule
+  ansible.builtin.assert:
+    that:
+      - baseline_ufw.stdout_lines | select('search', ' (ALLOW|LIMIT|DENY|REJECT) IN') | reject('search', '\(v6\)') | list | length == 3
+      - baseline_ufw.stdout_lines | select('search', ' (ALLOW|LIMIT|DENY|REJECT) IN') | select('search', '\(v6\)') | list | length == 3
+    quiet: true
+    fail_msg: >-
+      UFW holds inbound rules besides 22 (limit), 80 and 443. Published container ports are the
+      stack's business: remove the extra rules with ufw delete.
+  register: baseline_chk_07
+  failed_when: false
+
+- name: Read the fail2ban sshd jail
+  ansible.builtin.command: fail2ban-client status sshd
+  register: baseline_fail2ban
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Assert the fail2ban sshd jail runs
+  ansible.builtin.assert:
+    that:
+      - baseline_fail2ban.rc == 0
+    quiet: true
+    fail_msg: "The fail2ban jail sshd does not run. Enable it in jail.local ([sshd] enabled = true) and restart fail2ban."
+  register: baseline_chk_08
+  failed_when: false
+
+- name: Read the Docker server version
+  ansible.builtin.command: docker version --format '{% raw %}{{.Server.Version}}{% endraw %}'
+  register: baseline_docker
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Assert the Docker server answers
+  ansible.builtin.assert:
+    that:
+      - baseline_docker.rc == 0
+    quiet: true
+    fail_msg: "The Docker server does not answer (docker version). Install Docker CE and start the service."
+  register: baseline_chk_09
+  failed_when: false
+
+- name: Read the Docker packages
+  ansible.builtin.command: >-
+    dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n'
+    docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  register: baseline_docker_packages
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Assert the five Docker packages are installed
+  ansible.builtin.assert:
+    that:
+      - baseline_docker_packages.stdout_lines | select('match', '^ii ') | list | length == 5
+    quiet: true
+    fail_msg: >-
+      docker-ce, docker-ce-cli, containerd.io, docker-buildx-plugin and docker-compose-plugin must all
+      be installed from the official Docker repository.
+  register: baseline_chk_10
+  failed_when: false
+
+- name: Search the Docker apt repository
+  ansible.builtin.command: apt-cache policy docker-ce
+  register: baseline_docker_source
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Assert the Docker apt repository is configured
+  ansible.builtin.assert:
+    that:
+      - baseline_docker_source.rc == 0
+      - baseline_docker_source.stdout is search('download\.docker\.com')
+    quiet: true
+    fail_msg: >-
+      apt offers docker-ce from no download.docker.com source (apt-cache policy docker-ce): Docker would
+      not follow the official releases. A commented or disabled line does not count.
+  register: baseline_chk_11
+  failed_when: false
+
+- name: Read the Docker Compose version
+  ansible.builtin.command: docker compose version
+  register: baseline_compose
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Assert the Docker Compose plugin answers
+  ansible.builtin.assert:
+    that:
+      - baseline_compose.rc == 0
+    quiet: true
+    fail_msg: "docker compose does not answer: install docker-compose-plugin."
+  register: baseline_chk_12
+  failed_when: false
+
+- name: Read the Docker Buildx version
+  ansible.builtin.command: docker buildx version
+  register: baseline_buildx
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Assert the Docker Buildx plugin answers
+  ansible.builtin.assert:
+    that:
+      - baseline_buildx.rc == 0
+    quiet: true
+    fail_msg: "docker buildx does not answer: install docker-buildx-plugin."
+  register: baseline_chk_13
+  failed_when: false
+
+- name: Read the accounts
+  ansible.builtin.getent:
+    database: passwd
+    fail_key: false
+
+- name: Read the groups
+  ansible.builtin.getent:
+    database: group
+    fail_key: false
+
+- name: Assert the administrator and service accounts exist
+  ansible.builtin.assert:
+    that:
+      - (admin_users | map(attribute='name') | list + [service_user]) is subset(ansible_facts['getent_passwd'].keys() | list)
+    quiet: true
+    fail_msg: >-
+      An account of admin_users or {{ service_user }} is missing:
+      {{ (admin_users | map(attribute='name') | list + [service_user]) | difference(ansible_facts['getent_passwd'].keys() | list) | join(', ') }}.
+  register: baseline_chk_14
+  failed_when: false
+
+- name: Assert the administrators are in the sudo group
+  ansible.builtin.assert:
+    that:
+      - (admin_users | map(attribute='name') | list) is subset(ansible_facts['getent_group'].get('sudo', ['', '', ''])[2] | split(','))
+    quiet: true
+    fail_msg: "Every account of admin_users must be a member of the sudo group."
+  register: baseline_chk_15
+  failed_when: false
+
+- name: Assert only the service account is in the docker group
+  ansible.builtin.assert:
+    that:
+      - service_user in (ansible_facts['getent_group'].get('docker', ['', '', ''])[2] | split(','))
+      - (admin_users | map(attribute='name') | list) | intersect(ansible_facts['getent_group'].get('docker', ['', '', ''])[2] | split(',')) | length == 0
+    quiet: true
+    fail_msg: >-
+      {{ service_user }} must be in the docker group and no administrator may be: membership of docker is
+      root-equivalent without the sudo password. Administrators use sudo -iu {{ service_user }}.
+  register: baseline_chk_16
+  failed_when: false
+
+- name: Read the sudo rights of the service account
+  ansible.builtin.command: sudo -n -l -U {{ service_user | quote }} true
+  register: baseline_service_sudo
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Assert the service account has no sudo rights
+  ansible.builtin.assert:
+    that:
+      - baseline_service_sudo.rc != 0
+    quiet: true
+    fail_msg: "{{ service_user }} has sudo rights: remove them, the service account only runs the stack."
+  register: baseline_chk_17
+  failed_when: false
+
+- name: Read the password status of the service account
+  ansible.builtin.command: passwd -S {{ service_user | quote }}
+  register: baseline_service_passwd
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Assert the service account password is locked
+  ansible.builtin.assert:
+    that:
+      - baseline_service_passwd.stdout.split()[1] | default('') == 'L'
+    quiet: true
+    fail_msg: "The password of {{ service_user }} is not locked: run passwd -l {{ service_user }}."
+  register: baseline_chk_18
+  failed_when: false
+
+- name: Look for the service account SSH keys
+  ansible.builtin.stat:
+    path: "{{ ansible_facts['getent_passwd'][service_user][4] }}/.ssh/authorized_keys"
+  register: baseline_service_keys
+
+- name: Assert the service account has no authorized_keys
+  ansible.builtin.assert:
+    that:
+      - not baseline_service_keys.stat.exists
+    quiet: true
+    fail_msg: "{{ service_user }} has an authorized_keys file: nobody signs in as the service account over SSH."
+  register: baseline_chk_19
+  failed_when: false
+
+- name: Look for the administrators' SSH keys
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -cxF
+      - --
+      - "{{ item.pubkey }}"
+      - "{{ ansible_facts['getent_passwd'][item.name][4] }}/.ssh/authorized_keys"
+  register: baseline_admin_keys
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  loop: "{{ admin_users | selectattr('pubkey', 'truthy') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Assert the administrators' SSH keys are installed
+  ansible.builtin.assert:
+    that:
+      - baseline_admin_keys.results | map(attribute='rc') | select('ne', 0) | list | length == 0
+    quiet: true
+    fail_msg: >-
+      The public key of an administrator is not in the authorized_keys of their account:
+      {{ baseline_admin_keys.results | rejectattr('rc', 'equalto', 0) | map(attribute='item.name') | join(', ') }}.
+  register: baseline_chk_20
+  failed_when: false
+
+- name: Read the mount of the data directory
+  ansible.builtin.command: findmnt -n -o FSTYPE,OPTIONS --mountpoint {{ data_mount.path | quote }}
+  register: baseline_data_mount
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Read the fstab entry of the data directory
+  ansible.builtin.command: findmnt --fstab -n -o SOURCE,FSTYPE --mountpoint {{ data_mount.path | quote }}
+  register: baseline_data_fstab
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Look for the data directory
+  ansible.builtin.stat:
+    path: "{{ data_mount.path }}"
+  register: baseline_data_dir
+
+- name: Assert the data directory is mounted as configured
+  ansible.builtin.assert:
+    that:
+      - baseline_data_mount.rc == 0
+      - baseline_data_mount.stdout.split()[0] == 'nfs4'
+      - baseline_data_mount.stdout.split()[1] is regex('(^|,)vers=' ~ (data_mount.nfs_version | string | regex_escape) ~ '(\.[0-9]+)?(,|$)')
+    quiet: true
+    fail_msg: >-
+      {{ data_mount.path }} is not mounted over NFS {{ data_mount.nfs_version }}
+      (findmnt: "{{ baseline_data_mount.stdout | default('') }}"). Mount the export, or fix data_mount.
+  register: baseline_chk_21
+  failed_when: false
+  when: data_mount.type == 'nfs'
+
+- name: Assert the data directory exists
+  ansible.builtin.assert:
+    that:
+      - baseline_data_dir.stat.isdir | default(false)
+    quiet: true
+    fail_msg: "{{ data_mount.path }} does not exist: create the directory (data_mount.type is local)."
+  register: baseline_chk_22
+  failed_when: false
+  when: data_mount.type == 'local'
+
+- name: Assert the data mount is in fstab
+  ansible.builtin.assert:
+    that:
+      - baseline_data_fstab.rc == 0
+      - baseline_data_fstab.stdout.split() == [data_mount.src, 'nfs4']
+    quiet: true
+    fail_msg: >-
+      /etc/fstab has no "{{ data_mount.src }} nfs4" entry for {{ data_mount.path }}: without it the
+      mount is lost at the next reboot.
+  register: baseline_chk_23
+  failed_when: false
+  when: data_mount.type == 'nfs'
+
+- name: Read the effective apt configuration
+  ansible.builtin.command: apt-config dump
+  register: baseline_apt_config
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Assert the unattended-upgrades reboot settings
+  ansible.builtin.assert:
+    that:
+      - ('Unattended-Upgrade::Automatic-Reboot "' ~ (unattended_reboot | string | lower) ~ '";') in baseline_apt_config.stdout_lines
+      - ('Unattended-Upgrade::Automatic-Reboot-WithUsers "' ~ (unattended_reboot | string | lower) ~ '";') in baseline_apt_config.stdout_lines
+      - ('Unattended-Upgrade::Automatic-Reboot-Time "' ~ unattended_reboot_time ~ '";') in baseline_apt_config.stdout_lines
+    quiet: true
+    fail_msg: >-
+      apt-config does not report Automatic-Reboot, -WithUsers and -Time "{{ unattended_reboot_time }}" as
+      the inventory says (unattended_reboot: {{ unattended_reboot | string | lower }}). A later file of
+      /etc/apt/apt.conf.d may override them.
+  register: baseline_chk_24
+  failed_when: false
+
+- name: Assert the unattended-upgrades cleanup options
+  ansible.builtin.assert:
+    that:
+      - "'Unattended-Upgrade::Remove-Unused-Kernel-Packages \"true\";' in baseline_apt_config.stdout_lines"
+      - "'Unattended-Upgrade::Remove-Unused-Dependencies \"true\";' in baseline_apt_config.stdout_lines"
+    quiet: true
+    fail_msg: "unattended-upgrades must remove unused kernel packages and dependencies (apt-config dump)."
+  register: baseline_chk_25
+  failed_when: false
+
+- name: Assert unattended-upgrades has its four origins
+  ansible.builtin.assert:
+    that:
+      - baseline_apt_config.stdout_lines | select('match', '^Unattended-Upgrade::Allowed-Origins::') | list | length >= 4
+    quiet: true
+    fail_msg: "unattended-upgrades needs four allowed origins: release, security, ESM apps and ESM infra."
+  register: baseline_chk_26
+  failed_when: false
+
+- name: Assert the four APT::Periodic settings
+  ansible.builtin.assert:
+    that:
+      - "'APT::Periodic::Update-Package-Lists \"1\";' in baseline_apt_config.stdout_lines"
+      - "'APT::Periodic::Unattended-Upgrade \"1\";' in baseline_apt_config.stdout_lines"
+      - "'APT::Periodic::Download-Upgradeable-Packages \"1\";' in baseline_apt_config.stdout_lines"
+      - "'APT::Periodic::AutocleanInterval \"10\";' in baseline_apt_config.stdout_lines"
+    quiet: true
+    fail_msg: "The four APT::Periodic settings of 20auto-upgrades are not in effect (apt-config dump)."
+  register: baseline_chk_27
+  failed_when: false
+
+- name: Read the host time zone
+  ansible.builtin.command: timedatectl show -p Timezone --value
+  register: baseline_timezone_current
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Assert the host time zone
+  ansible.builtin.assert:
+    that:
+      - baseline_timezone_current.rc == 0
+      - baseline_timezone_current.stdout | trim == baseline_timezone
+    quiet: true
+    fail_msg: >-
+      The host time zone is "{{ baseline_timezone_current.stdout | default('') | trim }}", not {{ baseline_timezone }}:
+      the unattended-upgrades reboot time and the backup timer would run at other hours than documented.
+      Run timedatectl set-timezone {{ baseline_timezone }}.
+  register: baseline_chk_32
+  failed_when: false
+
+- name: Look for the rehearsal host marker
+  ansible.builtin.stat:
+    path: /etc/manuspectrum/rehearsal-host
+  register: baseline_rehearsal_marker
+  when: rehearsal_host | bool
+
+- name: Assert the rehearsal host marker
+  ansible.builtin.assert:
+    that:
+      - baseline_rehearsal_marker.stat.exists
+      - baseline_rehearsal_marker.stat.pw_name == 'root'
+      - baseline_rehearsal_marker.stat.mode == '0644'
+    quiet: true
+    fail_msg: "/etc/manuspectrum/rehearsal-host must exist, owned by root, mode 0644 (rehearsal_host is true)."
+  register: baseline_chk_28
+  failed_when: false
+  when: rehearsal_host | bool
+
+- name: Read the postfix service state
+  ansible.builtin.systemd_service:
+    name: postfix
+  register: baseline_postfix_state
+  failed_when: false
+
+- name: Assert postfix is active
+  ansible.builtin.assert:
+    that:
+      - baseline_postfix_state.status.ActiveState | default('') == 'active'
+    quiet: true
+    fail_msg: "postfix is not active: systemctl enable --now postfix, then journalctl -u postfix."
+  register: baseline_chk_29
+  failed_when: false
+
+- name: Read the postfix relay host
+  ansible.builtin.command: postconf -h relayhost
+  register: baseline_postfix_relay
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Assert the postfix relay host
+  ansible.builtin.assert:
+    that:
+      - baseline_postfix_relay.rc == 0
+      - baseline_postfix_relay.stdout | trim == smtp_relay
+    quiet: true
+    fail_msg: >-
+      postfix relays through "{{ baseline_postfix_relay.stdout | default('') | trim }}", the inventory says
+      "{{ smtp_relay }}": run postconf -e relayhost=... or fix smtp_relay.
+  register: baseline_chk_30
+  failed_when: false
+
+- name: Read vm.max_map_count
+  ansible.builtin.command: sysctl -n vm.max_map_count
+  register: baseline_max_map_count
+  changed_when: false
+  check_mode: false
+
+- name: Assert vm.max_map_count suits Elasticsearch
+  ansible.builtin.assert:
+    that:
+      - (baseline_max_map_count.stdout | trim | int) >= 262144
+    quiet: true
+    fail_msg: >-
+      vm.max_map_count is {{ baseline_max_map_count.stdout | trim }}; Elasticsearch needs at least 262144.
+      Set it persistently in a file of /etc/sysctl.d (for example 99-elasticsearch.conf holding
+      vm.max_map_count=262144), then run sysctl --system. Debian 13 no longer reads /etc/sysctl.conf,
+      so a line added there is ignored. This playbook only verifies it.
+  register: baseline_chk_31
+  failed_when: false
+
+# Every assertion above records its outcome without failing (`failed_when:
+# false`, registered as baseline_chk_NN); this task fails once and lists them all.
+- name: Fail once, listing every mismatch
+  ansible.builtin.assert:
+    that:
+      - baseline_mismatches | length == 0
+    quiet: true
+    fail_msg: >-
+      {{ baseline_mismatches | length }} baseline check(s) failed:
+      {{ baseline_mismatches | map('trim') | map('regex_replace', '^', '- ') | join('  ') }}
+  vars:
+    baseline_mismatches: >-
+      {{ hostvars[inventory_hostname] | dict2items | selectattr('key', 'match', '^baseline_chk_')
+      | map(attribute='value') | selectattr('evaluated_to', 'defined') | rejectattr('evaluated_to')
+      | map(attribute='msg') | list }}

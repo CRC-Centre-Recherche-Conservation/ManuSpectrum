@@ -2,7 +2,10 @@
 {% load i18n %}
 
 {% comment %}
-Adds the file metadata fields to the File Viewer side panel.
+Adds the file metadata fields and the licence picker to the File Viewer side
+panel, and the licence notice of the displayed file above the main panel. The
+picker sits outside the metadata form, which needs a title in the active
+language, and is read-only when the card is (same rule as the core widgets).
 
 The panel renders every widget of the card for the selected file except the
 file-list one, which it skips on the assumption that the workbench replaces it.
@@ -52,7 +55,28 @@ so on a card using this component they have no editor at all.
     </div>
 </form>
 <!-- /ko -->
+
+<div class="widgets ms-file-metadata ms-file-license-block">
+    <!-- ko component: {
+        name: 'ms-file-license',
+        params: {entry: entry, tile: tile, editable: !!(self.card.isWritable || self.preview)}
+    } --><!-- /ko -->
+</div>
 <!-- /ko -->
 <!-- /ko -->
 <!-- /ko -->
 {% endblock form_widgets %}
+
+{% block content_management %}
+<!-- ko if: displayContent() -->
+<div class="ms-file-license-panel">
+    <!-- ko foreach: { data: ko.unwrap(displayContent().tile.data[fileListNodeId]) || [], as: 'entry' } -->
+    <!-- ko component: {
+        name: 'ms-file-license',
+        params: {entry: entry, tile: $component.displayContent().tile}
+    } --><!-- /ko -->
+    <!-- /ko -->
+</div>
+<!-- /ko -->
+{{ block.super }}
+{% endblock content_management %}

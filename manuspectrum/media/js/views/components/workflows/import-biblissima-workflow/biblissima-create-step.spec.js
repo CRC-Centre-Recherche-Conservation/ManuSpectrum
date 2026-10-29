@@ -156,8 +156,9 @@ import viewModel from './biblissima-create-step.js';
 // ---- Helpers ---------------------------------------------------------------
 
 /** Minimal params to instantiate the viewModel without real workflow context. */
-const makeParams = (items = [], resourceType = 'Document') => ({
-    form: null, // triggers ko.observable(false) fallback for `complete`
+const makeParams = (items = [], resourceType = 'Document', workflowId = null) => ({
+    // null triggers the ko.observable(false) fallback for `complete`
+    form: workflowId ? { workflowId } : null,
     configStepData: { resourceType, projectId: 'proj-123' },
     searchStepData: { selectedItems: items },
     value: vi.fn(),
@@ -187,15 +188,20 @@ const makeRawItem = (overrides = {}) => ({
  * background async init (resolveDependencies + checkDuplicates) so that
  * subsequent test fetch stubs intercept only what the test cares about.
  */
-const makeViewModel = async (items = [], resourceType = 'Document') => {
+const makeViewModel = async (
+    items = [],
+    resourceType = 'Document',
+    initFetch = null,
+    workflowId = null,
+) => {
     // Generic stub for the background init calls (check-duplicates etc.)
-    vi.stubGlobal('fetch', vi.fn().mockImplementation(() =>
+    vi.stubGlobal('fetch', initFetch || vi.fn().mockImplementation(() =>
         Promise.resolve({
             ok: true,
             json: () => Promise.resolve({ results: [], resourceId: null }),
         })
     ));
-    const vm = new viewModel(makeParams(items, resourceType));
+    const vm = new viewModel(makeParams(items, resourceType, workflowId));
     // Drain the async init queue (resolveDependencies awaits a fetch promise).
     await new Promise((resolve) => setTimeout(resolve, 0));
     return vm;
@@ -340,6 +346,20 @@ describe('biblissima-create-step', () => {
             const vm = await makeViewModel([makeRawItem()]);
             const item = vm.items()[0];
             const { transactionId } = vm._buildCreatePayload(item, { transactionId: 'tx-abc' });
+            expect(transactionId).toBe('tx-abc');
+        });
+
+        it('carries the workflow id as the transaction id', async () => {
+            const vm = await makeViewModel([makeRawItem()], 'Document', null, 'wf-1');
+            const { transactionId } = vm._buildCreatePayload(vm.items()[0]);
+            expect(transactionId).toBe('wf-1');
+        });
+
+        it('lets options.transactionId win over the workflow id', async () => {
+            const vm = await makeViewModel([makeRawItem()], 'Document', null, 'wf-1');
+            const { transactionId } = vm._buildCreatePayload(vm.items()[0], {
+                transactionId: 'tx-abc',
+            });
             expect(transactionId).toBe('tx-abc');
         });
 
@@ -500,6 +520,165 @@ describe('biblissima-create-step', () => {
 
             await vm.createAll();
             expect(vm.creatingAll()).toBe(false);
+        });
+    });
+
+    describe('workflow transaction', () => {
+        it('sends the workflow id with every create-all chunk', async () => {
+            const vm = await makeViewModel(
+                Array.from({ length: 7 }, (_, n) => makeRawItem({ label: `MS ${n}` })),
+                'Document',
+                null,
+                'wf-1',
+            );
+            const fetchMock = vi.fn().mockImplementation(async (url, init) => ({
+                ok: true,
+                json: () =>
+                    Promise.resolve(
+                        url === '/api/biblissima/create-all'
+                            ? {
+                                  results: JSON.parse(init.body).items.map((i) => ({
+                                      clientId: i.clientId,
+                                      status: 'created',
+                                      resourceId: `r-${i.clientId}`,
+                                  })),
+                              }
+                            : { resourceId: 'dep', results: [] },
+                    ),
+            }));
+            vi.stubGlobal('fetch', fetchMock);
+
+            await vm.createAll();
+
+            const bodies = fetchMock.mock.calls
+                .filter(([url]) => url === '/api/biblissima/create-all')
+                .map(([, init]) => JSON.parse(init.body));
+            expect(bodies).toHaveLength(2);
+            bodies.forEach((body) => expect(body.transactionId).toBe('wf-1'));
+        });
+
+        it('sends the workflow id when a dependency is created', async () => {
+            const vm = await makeViewModel(
+                [makeRawItem({ locationQid: 'Q27392' })],
+                'Document',
+                null,
+                'wf-1',
+            );
+            const dep = vm.dependencies().find((d) => d.type === 'Place');
+            dep.action('create');
+            const fetchMock = vi.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({ resourceId: 'place-1', displayname: 'Paris' }),
+            });
+            vi.stubGlobal('fetch', fetchMock);
+
+            await vm.createDependency(dep);
+
+            const [, init] = fetchMock.mock.calls.find(
+                ([url]) => url === '/api/biblissima/create-resource',
+            );
+            expect(JSON.parse(init.body).transactionId).toBe('wf-1');
+        });
+
+        it('sends none outside a workflow', async () => {
+            const vm = await makeViewModel([makeRawItem()]);
+            expect(vm._buildCreatePayload(vm.items()[0]).transactionId).toBeNull();
+        });
+    });
+
+    describe('createAll — chunks of 5', () => {
+        const createAllCalls = (fetchMock) =>
+            fetchMock.mock.calls.filter(([url]) => url === '/api/biblissima/create-all');
+
+        it('sends 12 items as sequential POSTs of 5, 5 and 2 and merges the results', async () => {
+            const vm = await makeViewModel(
+                Array.from({ length: 12 }, (_, n) => makeRawItem({ label: `MS ${n}` }))
+            );
+            const items = vm.items();
+            let inFlight = 0;
+            let maxInFlight = 0;
+            const fetchMock = vi.fn().mockImplementation(async (url, init) => {
+                if (url !== '/api/biblissima/create-all') {
+                    return { ok: true, json: () => Promise.resolve({ resourceId: 'dep', results: [] }) };
+                }
+                inFlight += 1;
+                maxInFlight = Math.max(maxInFlight, inFlight);
+                await new Promise((resolve) => setTimeout(resolve, 0));
+                inFlight -= 1;
+                const sent = JSON.parse(init.body).items;
+                return {
+                    ok: true,
+                    json: () => Promise.resolve({
+                        results: sent.map((i) => (
+                            i.clientId === items[7].clientId
+                                ? { clientId: i.clientId, status: 'failed', error: 'Time limit' }
+                                : { clientId: i.clientId, status: 'created', resourceId: `r-${i.clientId}` }
+                        )),
+                    }),
+                };
+            });
+            vi.stubGlobal('fetch', fetchMock);
+
+            await vm.createAll();
+
+            const calls = createAllCalls(fetchMock);
+            expect(calls.map(([, init]) => JSON.parse(init.body).items.length)).toEqual([5, 5, 2]);
+            expect(maxInFlight).toBe(1);
+            expect(items.filter((i) => i.status() === 'created')).toHaveLength(11);
+            expect(items[7].status()).toBe('error');
+            expect(items[7].errorMessage()).toBe('Time limit');
+            expect(vm.batchSummary()).toEqual({ created: 11, failed: 1 });
+        });
+
+        it('errors only the items of a failed chunk and still sends the next one', async () => {
+            const vm = await makeViewModel(
+                Array.from({ length: 8 }, (_, n) => makeRawItem({ label: `MS ${n}` }))
+            );
+            const items = vm.items();
+            let call = 0;
+            vi.stubGlobal('fetch', vi.fn().mockImplementation((url, init) => {
+                if (url !== '/api/biblissima/create-all') {
+                    return Promise.resolve({ ok: true, json: () => Promise.resolve({ resourceId: 'dep', results: [] }) });
+                }
+                call += 1;
+                if (call === 1) {
+                    return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
+                }
+                const sent = JSON.parse(init.body).items;
+                return Promise.resolve({
+                    ok: true,
+                    json: () => Promise.resolve({
+                        results: sent.map((i) => ({ clientId: i.clientId, status: 'created', resourceId: 'r' })),
+                    }),
+                });
+            }));
+
+            await vm.createAll();
+
+            expect(items.slice(0, 5).every((i) => i.status() === 'error')).toBe(true);
+            expect(items.slice(5).every((i) => i.status() === 'created')).toBe(true);
+            expect(vm.batchSummary()).toEqual({ created: 3, failed: 5 });
+        });
+
+        it('keeps a single POST up to 5 items', async () => {
+            const vm = await makeViewModel(
+                Array.from({ length: 5 }, (_, n) => makeRawItem({ label: `MS ${n}` }))
+            );
+            const fetchMock = vi.fn().mockImplementation((url, init) => {
+                const sent = url === '/api/biblissima/create-all' ? JSON.parse(init.body).items : [];
+                return Promise.resolve({
+                    ok: true,
+                    json: () => Promise.resolve({
+                        resourceId: 'dep',
+                        results: sent.map((i) => ({ clientId: i.clientId, status: 'created', resourceId: 'r' })),
+                    }),
+                });
+            });
+            vi.stubGlobal('fetch', fetchMock);
+
+            await vm.createAll();
+
+            expect(createAllCalls(fetchMock)).toHaveLength(1);
         });
     });
 
@@ -675,6 +854,140 @@ describe('biblissima-create-step', () => {
 
             expect(vm.unresolvedDepsLabel(item)).toBe('');
             expect(vm.canCreateItem(item)).toBe(true);
+        });
+    });
+
+    describe('Place dependency QID', () => {
+        const placeDep = (vm) => vm.dependencies().find((d) => d.type === 'Place');
+
+        const stubPost = () => {
+            const fetchMock = vi.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({ resourceId: 'place-1', displayname: 'Paris (France)' }),
+            });
+            vi.stubGlobal('fetch', fetchMock);
+            return fetchMock;
+        };
+
+        const bodyOf = (fetchMock, url) => {
+            const call = fetchMock.mock.calls.find(([u]) => u === url);
+            return JSON.parse(call[1].body);
+        };
+
+        const highPlaceMatch = (displayname) => vi.fn().mockImplementation((url, init) => {
+            const label = url === '/api/biblissima/check-duplicates'
+                ? JSON.parse(init.body).items[0]?.label
+                : null;
+            const results = label === 'Paris (France)'
+                ? [{ index: 0, suggestions: [{ resourceId: 'place-1', displayname, confidence: 'high' }] }]
+                : [];
+            return Promise.resolve({ ok: true, json: () => Promise.resolve({ results, resourceId: null }) });
+        });
+
+        it('sends the QID when an automatic match has the same name up to case and spaces', async () => {
+            const fetchMock = highPlaceMatch('  paris  (france) ');
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })], 'Document', fetchMock);
+
+            expect(placeDep(vm).action()).toBe('use_existing');
+            expect(bodyOf(fetchMock, '/api/biblissima/add-alt-name').biblissimaQid).toBe('Q27392');
+        });
+
+        it('sends the QID when an automatic match spells the same name in decomposed Unicode', async () => {
+            const fetchMock = highPlaceMatch('Paris (France)'.normalize('NFD'));
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })], 'Document', fetchMock);
+
+            expect(placeDep(vm).action()).toBe('use_existing');
+            expect(bodyOf(fetchMock, '/api/biblissima/add-alt-name').biblissimaQid).toBe('Q27392');
+        });
+
+        it('links without a QID, instead of failing, when the match has no textual name', async () => {
+            const fetchMock = highPlaceMatch(42);
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })], 'Document', fetchMock);
+
+            expect(placeDep(vm).action()).toBe('use_existing');
+            expect(bodyOf(fetchMock, '/api/biblissima/add-alt-name').biblissimaQid).toBeNull();
+        });
+
+        it('sends a null QID when an automatic match has another name', async () => {
+            const fetchMock = highPlaceMatch('Paris');
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })], 'Document', fetchMock);
+
+            expect(placeDep(vm).action()).toBe('use_existing');
+            const body = bodyOf(fetchMock, '/api/biblissima/add-alt-name');
+            expect(body.label).toBe('Paris (France)');
+            expect(body.biblissimaQid).toBeNull();
+        });
+
+        it('sends the QID when the user picks a match with another name', async () => {
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })]);
+            const fetchMock = stubPost();
+
+            vm.useExistingDep(placeDep(vm), { resourceId: 'place-1', displayname: 'Paris' });
+
+            expect(bodyOf(fetchMock, '/api/biblissima/add-alt-name').biblissimaQid).toBe('Q27392');
+        });
+
+        it('carries the Wikibase QID of the item location', async () => {
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })]);
+
+            expect(placeDep(vm).biblissimaQid).toBe('Q27392');
+        });
+
+        it('takes the QID of a later item when the first one has none', async () => {
+            const vm = await makeViewModel([
+                makeRawItem({ locationQid: '' }),
+                makeRawItem({ arkId: 'ark:/12345/other', locationQid: 'Q27392' }),
+            ]);
+
+            expect(placeDep(vm).biblissimaQid).toBe('Q27392');
+        });
+
+        it('sends the QID when the Place is created', async () => {
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })]);
+            const dep = placeDep(vm);
+            dep.action('create');
+            const fetchMock = stubPost();
+
+            await vm.createDependency(dep);
+
+            const body = bodyOf(fetchMock, '/api/biblissima/create-resource');
+            expect(body.biblissimaData.biblissimaQid).toBe('Q27392');
+        });
+
+        it('sends the QID when the Place is linked', async () => {
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })]);
+            const dep = placeDep(vm);
+            dep.existingId('place-1');
+            const fetchMock = stubPost();
+
+            await vm._addAltName(dep);
+
+            expect(bodyOf(fetchMock, '/api/biblissima/add-alt-name').biblissimaQid).toBe('Q27392');
+        });
+
+        it('leaves the production place of a Component without a QID', async () => {
+            const vm = await makeViewModel([
+                makeRawItem({ location: 'Naples (Campanie, Italie)', locationQid: 'Q27392' }),
+            ], 'Component');
+            const placeByKey = (key) => vm.dependencies().find((d) => d.type === 'Place' && d.key === key);
+
+            expect(placeByKey('Naples (Campanie, Italie)').biblissimaQid).toBeNull();
+            expect(placeByKey('Paris (France)').biblissimaQid).toBe('Q27392');
+        });
+
+        it('sends a null QID when a Group is created', async () => {
+            const vm = await makeViewModel([makeRawItem({ locationQid: 'Q27392' })]);
+            const dep = vm.dependencies().find((d) => d.type === 'Group');
+            dep.action('create');
+            const fetchMock = stubPost();
+
+            await vm.createDependency(dep);
+
+            const groupBody = fetchMock.mock.calls
+                .filter(([u]) => u === '/api/biblissima/create-resource')
+                .map(([, init]) => JSON.parse(init.body))
+                .find((body) => body.resourceType === 'Group');
+            expect(groupBody.biblissimaData.biblissimaQid).toBeNull();
         });
     });
 });

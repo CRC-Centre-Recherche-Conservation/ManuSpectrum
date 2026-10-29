@@ -1,0 +1,14 @@
+# Grafana dashboard provider: the JSON files of ../dashboards, read only.
+# Edit them in Git; a change made in the UI is refused and never persists.
+apiVersion: 1
+providers:
+  - name: manuspectrum
+    orgId: 1
+    folder: ManuSpectrum
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 60
+    options:
+      path: /etc/grafana/dashboards
+      foldersFromFilesStructure: false

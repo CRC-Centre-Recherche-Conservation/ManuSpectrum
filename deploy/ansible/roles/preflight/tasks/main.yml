@@ -1,0 +1,237 @@
+---
+- name: Assert the inventory defines every variable the roles read
+  ansible.builtin.assert:
+    that:
+      - baseline_mode in ['verify', 'apply']
+      - rehearsal_host is defined
+      - min_ram_gb is defined
+      - min_cpus is defined
+      - min_free_root_gb is defined
+      - min_free_data_gb is defined
+      - supported_os is defined
+      - docker_min_version is defined
+      - admin_users is defined
+      - service_user is defined
+      - ssh_password_authentication in ['yes', 'no']
+      - docker_apt_codename is defined
+      - data_mount.type in ['nfs', 'local']
+      - data_mount.path is defined
+      - unattended_reboot is defined
+      - unattended_reboot_time is defined
+      - smtp_relay is defined
+      - root_alias is defined
+      - app_dir is defined
+      - app_git_url is defined
+      - app_git_ref is defined
+      - data_dir is defined
+      - env_cert_mode is defined
+      - env_domain_names is defined
+      - env_release_channel in ['prod', 'rc']
+      - (env_release_ready_wait_seconds | string) is match('^[0-9]+$')
+      - (env_release_ready_wait_seconds | int) >= 1
+      - (env_release_ready_wait_seconds | int) <= 1800
+    quiet: true
+    fail_msg: >-
+      The inventory misses a variable, or baseline_mode / ssh_password_authentication /
+      data_mount.type / env_release_channel (prod or rc) / env_release_ready_wait_seconds (digits, 1 to 1800)
+      holds an unknown value. Compare it with inventories/example/group_vars/all.yml.
+
+- name: Assert the operating system is supported
+  ansible.builtin.assert:
+    that:
+      - >-
+        supported_os
+        | selectattr('distribution', 'equalto', ansible_facts['distribution'])
+        | selectattr('version', 'in', [ansible_facts['distribution_version'], ansible_facts['distribution_major_version']])
+        | list | length > 0
+    quiet: true
+    fail_msg: >-
+      {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }} is not in
+      supported_os. Install a supported release or extend supported_os after testing the stack on it.
+
+- name: Assert the memory and the processors meet the floor
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['memtotal_mb'] >= min_ram_gb * 1000
+      - ansible_facts['processor_nproc'] >= min_cpus
+    quiet: true
+    fail_msg: >-
+      The host has {{ ansible_facts['memtotal_mb'] }} MB of memory and {{ ansible_facts['processor_nproc'] }} CPUs;
+      the floor is {{ min_ram_gb }} GB and {{ min_cpus }} CPUs. Resize the host or lower min_ram_gb / min_cpus
+      in the inventory.
+
+- name: Read the free space of the root filesystem
+  ansible.builtin.command: df --output=avail -k /
+  register: preflight_df_root
+  changed_when: false
+  check_mode: false
+
+- name: Assert the root filesystem has room
+  ansible.builtin.assert:
+    that:
+      - (preflight_df_root.stdout_lines[-1] | trim | int) >= min_free_root_gb * 1048576
+    quiet: true
+    fail_msg: >-
+      Less than {{ min_free_root_gb }} GB is free on /. Free some space or enlarge the volume
+      (images and logs live there).
+
+- name: Look for the data directory
+  ansible.builtin.stat:
+    path: "{{ data_mount.path }}"
+  register: preflight_data_path
+
+- name: Read the free space of the data filesystem
+  ansible.builtin.command: df --output=avail -k {{ data_mount.path | quote }}
+  register: preflight_df_data
+  changed_when: false
+  check_mode: false
+  when:
+    - preflight_data_path.stat.exists
+    - baseline_mode == 'verify' or data_mount.type == 'local'
+
+- name: Assert the data filesystem has room
+  ansible.builtin.assert:
+    that:
+      - (preflight_df_data.stdout_lines[-1] | trim | int) >= min_free_data_gb * 1048576
+    quiet: true
+    fail_msg: >-
+      Less than {{ min_free_data_gb }} GB is free on {{ data_mount.path }}. Extend the volume or the NFS
+      quota, or lower min_free_data_gb.
+  when: preflight_df_data is not skipped
+
+- name: Read the Docker server version
+  ansible.builtin.command: docker version --format '{% raw %}{{.Server.Version}}{% endraw %}'
+  register: preflight_docker_version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: baseline_mode == 'verify'
+
+- name: Read the Docker Compose version
+  ansible.builtin.command: docker compose version --short
+  register: preflight_compose_version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: baseline_mode == 'verify'
+
+- name: Assert Docker and its Compose plugin are recent enough
+  ansible.builtin.assert:
+    that:
+      - preflight_docker_version.rc == 0
+      - preflight_docker_version.stdout | trim is version(docker_min_version, '>=')
+      - preflight_compose_version.rc == 0
+      - preflight_compose_version.stdout | trim | regex_replace('^v', '') is version('2', '>=')
+    quiet: true
+    fail_msg: >-
+      Docker {{ docker_min_version }} or later and the Compose v2 plugin are required
+      (docker said "{{ preflight_docker_version.stdout | default('') | trim }}", compose
+      "{{ preflight_compose_version.stdout | default('') | trim }}"). Install them from the
+      official Docker repository, or run with baseline_mode: apply.
+  when: baseline_mode == 'verify'
+
+- name: Read vm.max_map_count
+  ansible.builtin.command: sysctl -n vm.max_map_count
+  register: preflight_max_map_count
+  changed_when: false
+  check_mode: false
+
+- name: Assert vm.max_map_count suits Elasticsearch
+  ansible.builtin.assert:
+    that:
+      - (preflight_max_map_count.stdout | trim | int) >= 262144
+    quiet: true
+    fail_msg: >-
+      vm.max_map_count is {{ preflight_max_map_count.stdout | trim }}; Elasticsearch needs at least 262144.
+      Set it persistently in a file of /etc/sysctl.d (for example 99-elasticsearch.conf holding
+      vm.max_map_count=262144), then run sysctl --system. Debian 13 no longer reads /etc/sysctl.conf,
+      so a line added there is ignored. This playbook only verifies it.
+
+- name: Read the clock synchronisation state
+  ansible.builtin.command: timedatectl show -p NTPSynchronized --value
+  register: preflight_ntp
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  retries: 6
+  delay: 10
+  until: preflight_ntp.stdout | trim == 'yes'
+
+- name: Assert the clock is synchronised
+  ansible.builtin.assert:
+    that:
+      - preflight_ntp.stdout | trim == 'yes'
+    quiet: true
+    fail_msg: >-
+      The clock is not synchronised. Enable an NTP client (systemd-timesyncd or chrony) and wait for it:
+      certificates and the two-factor codes depend on the time. Right after a snapshot revert or a boot
+      the clock needs a minute or two to resynchronise: run the playbook again.
+
+- name: List what listens on ports 80 and 443
+  ansible.builtin.command: ss -H -ltnp '( sport = :80 or sport = :443 )'
+  register: preflight_listeners
+  changed_when: false
+  check_mode: false
+
+- name: Assert only Docker holds ports 80 and 443
+  ansible.builtin.assert:
+    that:
+      - preflight_listeners.stdout_lines | reject('search', 'docker-proxy') | list | length == 0
+    quiet: true
+    fail_msg: >-
+      Something other than the stack's nginx listens on port 80 or 443:
+      {{ preflight_listeners.stdout_lines | reject('search', 'docker-proxy') | join(' | ') }}.
+      Stop that service before installing.
+
+- name: Resolve the first public domain name
+  ansible.builtin.command: getent ahosts {{ (env_domain_names | replace(',', ' ') | split | first) | quote }}
+  register: preflight_dns
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: env_cert_mode == 'acme'
+
+- name: Resolve the address the playbook connects to
+  ansible.builtin.command: getent ahosts {{ (ansible_host | default(inventory_hostname)) | quote }}
+  register: preflight_host_dns
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: env_cert_mode == 'acme'
+
+- name: Warn when the public domain name does not point to this host
+  ansible.builtin.debug:
+    msg: >-
+      {{ env_domain_names | replace(',', ' ') | split | first }} does not resolve to this host yet.
+      Expected before cert-init in acme mode; during a move the DNS switches last.
+  vars:
+    preflight_domain_ips: "{{ preflight_dns.stdout_lines | map('split') | map('first') | unique | list }}"
+    preflight_host_ips: >-
+      {{ preflight_host_dns.stdout_lines | map('split') | map('first') | list
+      + [ansible_host | default(inventory_hostname)]
+      + ansible_facts['all_ipv4_addresses'] | default([])
+      + ansible_facts['all_ipv6_addresses'] | default([]) }}
+  when:
+    - env_cert_mode == 'acme'
+    - preflight_domain_ips | intersect(preflight_host_ips) | length == 0
+
+- name: Reach the SMTP relay
+  ansible.builtin.wait_for:
+    host: "{{ smtp_relay | regex_replace('^\\[?([^]]+?)\\]?(:[0-9]+)?$', '\\1') }}"
+    port: "{{ (smtp_relay | regex_search(':([0-9]+)$', '\\1') | default([25], true) | first) | int }}"
+    timeout: 5
+  register: preflight_smtp
+  failed_when: false
+  check_mode: false
+  when: smtp_relay | length > 0
+
+- name: Assert the SMTP relay answers
+  ansible.builtin.assert:
+    that:
+      - preflight_smtp.state | default('') == 'started'
+    quiet: true
+    fail_msg: >-
+      The SMTP relay {{ smtp_relay }} does not answer on TCP from this host
+      ({{ preflight_smtp.msg | default('') }}). Check the address and the firewall between the two,
+      or set smtp_relay to an empty string to run without a relay.
+  when: smtp_relay | length > 0

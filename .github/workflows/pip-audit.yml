@@ -1,0 +1,111 @@
+name: pip-audit
+
+# Weekly audit of a fresh install of the project: every package at the newest
+# version its dependants allow. A fixable finding therefore means the fix lies
+# outside a range some dependency (usually an exact pin of arches) imposes,
+# which tells whether a floor in pyproject.toml can reach it. Not run on pull
+# requests: the image is judged by Trivy (deploy-lint.yml, trivy-weekly.yml).
+# A failure opens or updates one issue.
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pip-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpq-dev
+
+      - name: Install the project
+        run: |
+          python -m venv /tmp/project
+          /tmp/project/bin/python -m pip install --upgrade pip
+          /tmp/project/bin/python -m pip install .
+          /tmp/project/bin/python -m pip freeze \
+            | grep -v '^manuspectrum' > /tmp/requirements.txt
+          [ -s /tmp/requirements.txt ]
+
+      - name: Install pip-audit
+        run: |
+          python -m venv /tmp/audit
+          /tmp/audit/bin/python -m pip install pip-audit==2.10.1
+
+      # Ignored findings: fixed only in a version nobody can install today.
+      # urllib3 < 2 is pinned by arches (Requires-Dist: urllib3<2); the
+      # project's own reads are bounded (read_limited, PR #70).
+      #   PYSEC-2026-1994 CVE-2025-66471   PYSEC-2026-1996 CVE-2026-21441
+      #   PYSEC-2026-1998 CVE-2025-66418   PYSEC-2026-1999 CVE-2025-50181
+      #   PYSEC-2026-141  CVE-2026-44431
+      #   CVE-2026-97687  CVE-2026-97689 (fixed in 2.8.0)
+      # A finding with no fixed version at all is reported, never fatal.
+      - name: Audit
+        run: |
+          for attempt in 1 2 3; do
+            /tmp/audit/bin/pip-audit \
+              --requirement /tmp/requirements.txt --no-deps --disable-pip \
+              --vulnerability-service osv \
+              --ignore-vuln PYSEC-2026-1994 \
+              --ignore-vuln PYSEC-2026-1996 \
+              --ignore-vuln PYSEC-2026-1998 \
+              --ignore-vuln PYSEC-2026-1999 \
+              --ignore-vuln PYSEC-2026-141 \
+              --ignore-vuln CVE-2026-97687 \
+              --ignore-vuln CVE-2026-97689 \
+              --format json --output /tmp/audit.json && break
+            jq -e '.dependencies' /tmp/audit.json >/dev/null 2>&1 && break
+            [ "$attempt" = 3 ] && { echo "::error::pip-audit could not query the vulnerability service"; exit 1; }
+            sleep 30
+          done
+          jq -r '.dependencies[] | select(.skip_reason) | "skipped \(.name): \(.skip_reason)"' /tmp/audit.json
+          jq -r '.dependencies[] | .name as $n | .version as $v | (.vulns // [])[]
+            | "\($n) \($v) \(.id) fix: \(.fix_versions | join(", ") | if . == "" then "none" else . end)"' \
+            /tmp/audit.json | sort -u
+          fixable=$(jq '[.dependencies[] | (.vulns // [])[] | select(.fix_versions | length > 0)] | length' /tmp/audit.json)
+          if [ "$fixable" -gt 0 ]; then
+            echo "::error::$fixable known vulnerabilities are fixed only outside the ranges our dependencies allow: add a floor in pyproject.toml if it can reach the fix, otherwise ignore by id naming the pin that blocks it"
+            exit 1
+          fi
+
+      - name: Open or update the issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Weekly pip-audit: fixable findings in the Python dependencies"
+          body="The weekly pip-audit failed: $RUN_URL. Add a floor in pyproject.toml if it can reach the fix, otherwise ignore by id naming the pin that blocks it."
+          number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$title\"" \
+            --json number,title --jq ".[] | select(.title == \"$title\") | .number" | head -n1)"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi

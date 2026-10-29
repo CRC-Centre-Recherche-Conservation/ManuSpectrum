@@ -1,0 +1,3 @@
+{% load static %}
+{# Announcement banner: a native ES module (no webpack), included once per page. #}
+<script type="module" src="{% static 'js/utils/site-notice/banner.js' %}" id="ms-site-notice" data-url="{% url 'site-notice' %}"></script>

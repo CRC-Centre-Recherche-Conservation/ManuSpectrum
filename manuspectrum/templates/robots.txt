@@ -1,47 +1,65 @@
 # ManuSpectrum — Crawl directives
 # Only allow homepage, public About pages and public resource reports.
 # Block application routes (search, editor, API, admin) to protect the site.
-# English URLs are unprefixed (prefix_default_language=False); French twins
-# live under /fr/ — every Disallow needs both forms because robots rules
-# match by path prefix.
+# Robots rules match by path prefix from the root, and every page URL carries
+# its language, so each rule needs three forms: /en/ and /fr/ are the real
+# URLs, and the bare one is the entry point LocaleMiddleware redirects from.
 
 User-agent: *
 Allow: /
 Allow: /report/
+Allow: /en/report/
 Allow: /fr/report/
 Disallow: /search
+Disallow: /en/search
 Disallow: /fr/search
 Disallow: /resource/
+Disallow: /en/resource/
 Disallow: /fr/resource/
 Disallow: /api/
+Disallow: /en/api/
 Disallow: /fr/api/
 Disallow: /auth/
+Disallow: /en/auth/
 Disallow: /fr/auth/
 Disallow: /admin/
+Disallow: /en/admin/
 Disallow: /fr/admin/
 Disallow: /password_reset/
+Disallow: /en/password_reset/
 Disallow: /fr/password_reset/
 Disallow: /user_profile/
+Disallow: /en/user_profile/
 Disallow: /fr/user_profile/
 Disallow: /renderer/
+Disallow: /en/renderer/
 Disallow: /fr/renderer/
 Disallow: /renderer_config/
+Disallow: /en/renderer_config/
 Disallow: /fr/renderer_config/
 Disallow: /files/
+Disallow: /en/files/
 Disallow: /fr/files/
 Disallow: /concepts/
+Disallow: /en/concepts/
 Disallow: /fr/concepts/
 Disallow: /rdm/
+Disallow: /en/rdm/
 Disallow: /fr/rdm/
 Disallow: /graph/
+Disallow: /en/graph/
 Disallow: /fr/graph/
 Disallow: /plugins/
+Disallow: /en/plugins/
 Disallow: /fr/plugins/
 Disallow: /etl_manager
+Disallow: /en/etl_manager
 Disallow: /fr/etl_manager
 Disallow: /notifications
+Disallow: /en/notifications
 Disallow: /fr/notifications
 Disallow: /i18n/
+Disallow: /en/i18n/
 Disallow: /fr/i18n/
 
 Sitemap: {{ request.scheme }}://{{ request.get_host }}/sitemap.xml

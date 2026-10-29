@@ -11,8 +11,8 @@
     "@context": "https://schema.org",
     "@graph": [
         {"@type": "BreadcrumbList", "itemListElement": [
-            {"@type": "ListItem", "position": 1, "name": "{% trans 'Home' as ms_b1 %}{{ ms_b1|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'root' %}"},
-            {"@type": "ListItem", "position": 2, "name": "{% trans 'About & Team' as ms_b2 %}{{ ms_b2|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host }}{% url 'about-team' %}"}
+            {"@type": "ListItem", "position": 1, "name": "{% trans 'Home' as ms_b1 %}{{ ms_b1|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'root' %}"},
+            {"@type": "ListItem", "position": 2, "name": "{% trans 'About & Team' as ms_b2 %}{{ ms_b2|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'about-team' %}"}
         ]},
         {"@type": "Person", "name": "Anne Michelin",
          "jobTitle": "{% trans 'Maîtresse de conférences, physical chemistry' as ms_j1 %}{{ ms_j1|escapejs }}",
@@ -32,7 +32,7 @@
 {% endblock %}
 
 {% block content %}
-<section class="ms-page-hero reveal">
+<section class="ms-page-hero">
     <div class="ms-page-hero__eyebrow">{% trans "About & Team" %}</div>
     <h1 class="ms-page-hero__title">{% trans "The project & the people" %}</h1>
     <div class="ms-page-hero__accent"></div>
@@ -86,7 +86,7 @@
             </div>
             <div class="ms-about-fact">
                 <dt>{% trans "Licence" %}</dt>
-                <dd><span class="ms-about-fact-code">GPL-3.0</span></dd>
+                <dd><span class="ms-about-fact-code">AGPL-3.0</span></dd>
             </div>
         </dl>
     </aside>
@@ -171,8 +171,8 @@
         </article>
         <article class="ms-reuse-card">
             <h3>{% trans "Licence" %}</h3>
-            <p>{% trans "The platform's source code is published under the GNU General Public License v3. Reading and downloading published data needs no account." %}</p>
-            <p class="ms-reuse-code"><span class="ms-about-fact-code">GPL-3.0</span></p>
+            <p>{% trans "The platform's source code is published under the GNU Affero General Public License v3. Reading and downloading published data needs no account." %}</p>
+            <p class="ms-reuse-code"><span class="ms-about-fact-code">AGPL-3.0</span></p>
             <p class="ms-reuse-note"><a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener">{% trans "Source code on GitHub" %} <i class="fa-brands fa-github" aria-hidden="true"></i></a></p>
         </article>
     </div>

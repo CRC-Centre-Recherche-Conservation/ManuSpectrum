@@ -1,63 +1,111 @@
 """Public, cached JSON endpoint serving the graph-explorer payload.
 
-The DB introspection (build_model_graph) is memoized by a publication
-fingerprint so it is not re-run on every request. When any resource graph
-is republished — or when resources/concepts are added or removed — the
-fingerprint changes and the cache is bypassed automatically. A 24h TTL is
-only a backstop in case the fingerprint never changes but the cache backend
-still needs an eviction horizon.
+The DB introspection (build_model_graph) is memoized by a content
+fingerprint so it is not re-run on every request. The fingerprint moves when
+a resource graph is republished, when a card or widget is edited in place
+(designer, ``i18n loadmessages``: the widget labels the payload reads), and when resources or concepts are added
+or removed. The cache key prefix carries the code version of the serializer
+(``settings.CACHE_CODE_VERSION``), so a deploy that changes the payload shape
+starts cold. A 24h TTL is only a backstop in case the fingerprint never
+changes but the cache backend still needs an eviction horizon. Only the
+latest entry per language is kept; a miss is built by one worker while other
+callers wait briefly for it.
 """
 
 import hashlib
 import logging
 
+from django.conf import settings
 from django.core.cache import cache
+from django.db import connection
 from django.http import HttpResponseNotModified, JsonResponse
 from django.utils import translation
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.gzip import gzip_page
 
+from manuspectrum.utils.cache import get_or_build
 from manuspectrum.views.model_graph_service import build_model_graph
 
 logger = logging.getLogger(__name__)
 
 CACHE_TTL = 60 * 60 * 24  # 24h backstop; fingerprint busts earlier on republish.
 
-# Bump this whenever build_model_graph() changes the payload's shape or
-# content: the version is part of the cache key, so a deploy immediately
-# stops serving payloads built by the previous code — no manual redis flush,
-# and no window where freshly deployed JS reads fields the cached payload
-# doesn't have.
-# v4: slugs, localized widget labels, RDM collection labels, generated_at.
-# v5: datatype chart labels localized (were English on FR pages).
-PAYLOAD_VERSION = 5
+_CARDS_HASH_SQL = """
+    SELECT md5(string_agg(
+        w.id::text || ':' || coalesce(w.label::text, ''),
+        '' ORDER BY w.id))
+    FROM cards_x_nodes_x_widgets w
+"""
 
-# The fingerprint tracks (graphid, publication) plus the resource and concept
-# table sizes, so it moves on republish AND when records/concepts are added or
-# removed. The one blind spot left: correcting graph data in place without
-# republishing (e.g. renaming a graph directly in the database) — flush by
-# hand in that case, or just bump PAYLOAD_VERSION.
+
+def _cards_hash():
+    """md5 of every widget label, in one query over the whole table.
+
+    The payload reads one card/widget text: the widget label
+    (``build_model_graph`` falls back to it for the node name). The designer
+    and ``i18n loadmessages`` rewrite it in place, without a republication.
+    Cost grows with the total widget count, not per graph.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(_CARDS_HASH_SQL)
+        return cursor.fetchone()[0] or ""
+
+
+def _lists_hash():
+    """Digest of the controlled lists the payload quotes.
+
+    One query: every list's id and name (the collection labels) and the
+    counts of its items and guide items (the concept figures). The payload
+    reads only the lists its reference fields name; hashing all of them keeps
+    the query independent of the graphs.
+    """
+    from arches_controlled_lists.models import List, ListItem
+
+    with connection.cursor() as cursor:
+        cursor.execute(f"""
+            SELECT
+                (SELECT md5(string_agg(l.id::text || ':' || l.name, '' ORDER BY l.id))
+                 FROM {List._meta.db_table} l),
+                (SELECT count(*) FROM {ListItem._meta.db_table}),
+                (SELECT count(*) FROM {ListItem._meta.db_table} WHERE guide)
+            """)
+        return ":".join(str(v or "") for v in cursor.fetchone())
 
 
 def graph_fingerprint():
-    """Cheap fingerprint: graphs' (id, publication) + resource/concept counts.
+    """Content fingerprint: publications, card/widget texts, record and list figures.
 
-    Changes on republish and on any resource or concept add/delete, which keeps
-    the "live figures" (records, concepts, thesauri) honest without a rebuild
-    on every request. Three cheap queries (2 COUNTs + 1 values_list).
+    Moves on republish, on any in-place widget label edit, on any resource
+    add/delete and on any controlled-list rename or item add/delete, which
+    keeps the "live figures" (records, concepts, thesauri, collection labels
+    and sizes) honest without a rebuild on every request. Four cheap queries
+    (1 values_list, 1 md5 aggregate, 1 COUNT, 1 lists aggregate).
     """
-    from arches.app.models.models import Concept, GraphModel, ResourceInstance
+    from arches.app.models.models import GraphModel, ResourceInstance
 
     rows = GraphModel.objects.filter(isresource=True).values_list(
         "graphid", "publication_id"
     )
     payload = ";".join(sorted(f"{g}:{p}" for g, p in rows))
+    payload += f"|labels:{_cards_hash()}"
     payload += f"|ri:{ResourceInstance.objects.count()}"
-    payload += f"|c:{Concept.objects.count()}"
-    return hashlib.md5(
-        payload.encode("utf-8")
-    ).hexdigest()  # noqa: S324 (non-security fingerprint)
+    payload += f"|lists:{_lists_hash()}"
+    return hashlib.md5(payload.encode("utf-8"), usedforsecurity=False).hexdigest()
+
+
+def _retire_previous_entry(language, cache_key):
+    """Keep one live payload per language.
+
+    The fingerprint moves on every record or concept change; a pointer key
+    names the current entry and the one it replaces is deleted.
+    """
+    pointer = f"model-graph:{language}:current"
+    previous = cache.get(pointer)
+    if previous != cache_key:
+        if previous:
+            cache.delete(previous)
+        cache.set(pointer, cache_key, CACHE_TTL)
 
 
 @method_decorator(gzip_page, name="dispatch")
@@ -68,21 +116,22 @@ class ModelGraphView(View):
         language = translation.get_language() or "en"
         try:
             fingerprint = graph_fingerprint()
-            # Language and version belong in the ETag: the payload differs per
-            # language, and a deploy that bumps PAYLOAD_VERSION must not 304
-            # a client that cached the previous shape.
-            etag = f'"{fingerprint}:{language}:v{PAYLOAD_VERSION}"'
+            # Language and code version belong in the ETag: the payload differs
+            # per language, and a deploy that changes its shape must not 304 a
+            # client that cached the previous one.
+            etag = f'"{fingerprint}:{language}:{settings.CACHE_CODE_VERSION}"'
             if_none_match = request.headers.get("If-None-Match", "")
             if etag in if_none_match or f"W/{etag}" in if_none_match:
                 resp = HttpResponseNotModified()
                 resp["ETag"] = etag
                 return resp
 
-            cache_key = f"ms:model-graph:v{PAYLOAD_VERSION}:{language}:{fingerprint}"
-            payload = cache.get(cache_key)
-            if payload is None:
-                payload = build_model_graph(language)
-                cache.set(cache_key, payload, CACHE_TTL)
+            cache_key = f"model-graph:{language}:{fingerprint}"
+            payload = get_or_build(
+                cache_key, lambda: build_model_graph(language), CACHE_TTL
+            )
+            if payload is not None:
+                _retire_previous_entry(language, cache_key)
             resp = JsonResponse(payload)
             resp["Cache-Control"] = "public, max-age=3600"
             resp["ETag"] = etag

@@ -14,6 +14,7 @@ import {
     seriesRoles,
 } from 'utils/xy-transforms';
 import { BASE_VIEW, findView, viewsFor } from 'utils/xy-views';
+import { canUseLogScale } from 'utils/xy-scale';
 import dispose from 'utils/dispose';
 import { getRendererConfig, parseOverrides } from 'utils/renderer-cache';
 
@@ -79,6 +80,7 @@ const getOrCreateRegistry = (nodeId) => {
             // The reader's lens. Always opens on the base quantity: a
             // remembered default would read as "the official view".
             selectedView: ko.observable(BASE_VIEW),
+            yLog: ko.observable(false),
             // Kept apart from chartYAxisLabel, which already carries the view's
             // annotation — this is the quantity the configuration produced.
             baseYAxisLabel: ko.observable(''),
@@ -151,6 +153,8 @@ const FileWidgetXYViewModel = function (params) {
     this.selectedView = registry
         ? registry.selectedView
         : ko.observable(BASE_VIEW);
+    // Display only: a logarithmic Y axis, off until the reader asks.
+    this.yLog = registry ? registry.yLog : ko.observable(false);
     this.storedConfig = registry ? registry.storedConfig : ko.observable(null);
     this.mixedConfigurations = registry ? registry.mixed : ko.observable(false);
 
@@ -288,6 +292,11 @@ const FileWidgetXYViewModel = function (params) {
         return allTraces;
     });
 
+    this.canLogScale = ko.pureComputed(() =>
+        canUseLogScale(self.unifiedChartData())
+    );
+    this.toggleLogScale = () => self.yLog(!self.yLog());
+
     // Track computed observables for disposal
     this.disposables.push(
         this.reportXYFiles,
@@ -297,7 +306,8 @@ const FileWidgetXYViewModel = function (params) {
         this.hasChartData,
         this.noFilesSelected,
         this.anyError,
-        this.unifiedChartData
+        this.unifiedChartData,
+        this.canLogScale
     );
 
     // Dropdown actions

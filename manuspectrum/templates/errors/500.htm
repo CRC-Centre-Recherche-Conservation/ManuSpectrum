@@ -22,17 +22,76 @@
         h1 { font-size: 1.5rem; font-weight: 400; margin: 0 0 6px; }
         p { color: #55556b; line-height: 1.6; margin: 8px 0; }
         a { color: #1a1a2e; }
+        #ms-notice { margin: 18px 0 4px; padding: 14px 18px; border-top: 3px solid #e67e22; background: #fff;
+                     box-shadow: 0 1px 3px rgba(26, 26, 46, 0.08); }
+        #ms-notice[hidden] { display: none; }
+        /* nginx fills the real status through SSI; Django's own 500 leaves only a comment. */
+        .code:empty::before { content: "500"; }
+        #ms-notice h2 { font-size: 1.1rem; font-weight: 600; margin: 0 0 6px; }
     </style>
 </head>
 <body>
     <div class="box">
         <div class="brand">ManuSpectrum</div>
         <div class="bar"></div>
-        <div class="code" aria-hidden="true">500</div>
-        <h1>Instrument malfunction / Une erreur est survenue</h1>
-        <p>Our instruments hit an unexpected error and are recalibrating. The team has been notified — please try again in a few minutes.</p>
-        <p>Le serveur a rencontré une erreur inattendue et se recalibre. Réessayez dans quelques minutes.</p>
+        <div class="code" id="ms-code" aria-hidden="true"><!--# echo var="status" default="500" --></div>
+        <div id="ms-notice" hidden role="status"></div>
+        <div id="ms-error">
+            <h1>Instrument malfunction / Une erreur est survenue</h1>
+            <p>Our instruments hit an unexpected error and are recalibrating. The team has been notified — please try again in a few minutes.</p>
+            <p>Le serveur a rencontré une erreur inattendue et se recalibre. Réessayez dans quelques minutes.</p>
+        </div>
         <p><a href="/">Back to the homepage / Retour à l'accueil</a></p>
     </div>
+    <script>
+    (function () {
+        var box = document.getElementById('ms-notice');
+        if (!box || !window.fetch) return;
+        function line(tag, text) {
+            var element = document.createElement(tag);
+            element.textContent = text;
+            box.appendChild(element);
+        }
+        var headings = {
+            maintenance: 'Maintenance',
+            important: 'Important',
+            info: 'Information'
+        };
+        function day(date, zone) {
+            return new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(date);
+        }
+        function until(date, now, locale, zone) {
+            var options = { hour: '2-digit', minute: '2-digit', timeZone: zone };
+            if (day(date, zone) !== day(now, zone)) {
+                options.weekday = 'long';
+                options.day = 'numeric';
+                options.month = 'long';
+            }
+            return new Intl.DateTimeFormat(locale, options).format(date);
+        }
+        fetch('/api/site-notice', { cache: 'no-store' })
+            .then(function (response) {
+                if (!response.ok) throw new Error('no announcement');
+                var stamp = Date.parse(response.headers.get('Date'));
+                return response.json().then(function (data) { return [data, isNaN(stamp) ? Date.now() : stamp]; });
+            })
+            .then(function (result) {
+                var data = result[0], now = result[1], zone = data.timeZone || 'Europe/Paris';
+                var current = (data.notices || []).filter(function (item) {
+                    return Date.parse(item.start) <= now && now <= Date.parse(item.end);
+                })[0];
+                if (!current || !current.text) return;
+                var end = new Date(current.end);
+                line('h2', headings[current.kind] || headings.info);
+                line('p', current.text.en || '');
+                line('p', current.text.fr || '');
+                if (current.display !== 'once') {
+                    line('p', 'until ' + until(end, now, 'en-GB', zone) + ' / jusqu\u2019à ' + until(end, now, 'fr-FR', zone));
+                }
+                box.hidden = false;
+            })
+            .catch(function () {});
+    })();
+    </script>
 </body>
 </html>

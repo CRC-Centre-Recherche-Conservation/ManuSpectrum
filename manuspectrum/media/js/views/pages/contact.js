@@ -1,5 +1,5 @@
 import initMsNav from "utils/ms-nav";
-import { t, tv } from "utils/i18n";
+import { isSingular, t, tv } from "utils/i18n";
 import revealOnScroll from "utils/reveal-on-scroll";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
@@ -13,15 +13,16 @@ function composeBody(data) {
     );
 }
 
-function composeSubject(data) {
+export function composeSubject(data) {
     const subjectMap = {
         project: t("msContactSubjProject", "Project submission"),
         access: t("msContactSubjAccess", "Access request"),
+        reactivation: t("msContactSubjReactivation", "Account reactivation"),
         question: t("msContactSubjQuestion", "Question"),
         other: t("msContactSubjOther", "Message"),
     };
     const label = subjectMap[data.type] || subjectMap.other;
-    return `[ManuSpectrum] ${label} — ${data.name}`;
+    return `[ManuSpectrum][Contact] ${label} — ${data.name}`;
 }
 
 function buildMailto(email, data) {
@@ -135,13 +136,24 @@ function wireCounter(message) {
     if (!counter || !max) return;
     const update = () => {
         const left = max - message.value.length;
-        counter.textContent = tv("msContactCharsLeft", "{n} characters left", {
-            n: left,
-        });
+        counter.textContent =
+            isSingular(left)
+                ? tv("msContactCharsLeftOne", "{n} character left", { n: left })
+                : tv("msContactCharsLeft", "{n} characters left", { n: left });
         counter.classList.toggle("is-low", left <= 100);
     };
     message.addEventListener("input", update);
     update();
+}
+
+// `?reason=access` opens the form on "Request an account" (`reactivation`:
+// "Reactivate my account", linked from the deactivation mail); an unknown value
+// leaves the default.
+export function preselectReason(select, search = window.location.search) {
+    const reason = new URLSearchParams(search).get("reason");
+    if (!reason) return;
+    const known = Array.from(select.options).some((o) => o.value === reason);
+    if (known) select.value = reason;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -167,6 +179,7 @@ document.addEventListener("DOMContentLoaded", () => {
         message: form.elements.namedItem("message"),
     };
 
+    preselectReason(fields.type);
     wireCounter(fields.message);
     wireCopyButtons();
 

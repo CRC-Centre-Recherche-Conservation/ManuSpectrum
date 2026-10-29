@@ -1,0 +1,14 @@
+# Fires the scheduled update at its slot: `manuspectrum-update --fire` starts
+# manuspectrum-update@<tag>.service without waiting, removes the slot drop-in
+# and stops the timer. Root, because it runs systemctl and writes the state;
+# the engine itself runs as the service account. No hardening: --fire also
+# calls runuser, make and the setgid sendmail. Started only by the timer next
+# to it; no [Install] section.
+[Unit]
+Description=ManuSpectrum scheduled update (fire)
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/manuspectrum-update --fire
+TimeoutStartSec=5min

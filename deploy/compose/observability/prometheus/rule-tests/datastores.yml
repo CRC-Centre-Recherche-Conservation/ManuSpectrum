@@ -1,0 +1,57 @@
+rule_files:
+  - ../rules/datastores.yml
+evaluation_interval: 1m
+
+
+tests:
+- name: PostgreSQL connections above 80 percent warn
+  interval: 1m
+  input_series:
+  - series: pg_stat_activity_count{datname="manuspectrum", state="active"}
+    values: 50x40
+  - series: pg_stat_activity_count{datname="manuspectrum", state="idle"}
+    values: 40x40
+  - series: pg_settings_max_connections
+    values: 100x40
+  promql_expr_test:
+  - expr: ALERTS{alertname="PostgresConnectionsHigh", alertstate="firing"}
+    eval_time: 10m
+    exp_samples: []
+  - expr: ALERTS{alertname="PostgresConnectionsHigh", alertstate="firing"}
+    eval_time: 30m
+    exp_samples:
+    - labels: ALERTS{alertname="PostgresConnectionsHigh", alertstate="firing", service="postgres", severity="warning"}
+      value: 1
+- name: the broker warns at 80 percent, is critical at 95 percent, the cache is not watched
+  interval: 1m
+  input_series:
+  - series: redis_memory_max_bytes{instance="redis-broker:6379"}
+    values: 100x60
+  - series: redis_memory_used_bytes{instance="redis-broker:6379"}
+    values: 85x30 97x30
+  - series: redis_memory_max_bytes{instance="redis-cache:6379"}
+    values: 100x60
+  - series: redis_memory_used_bytes{instance="redis-cache:6379"}
+    values: 99x60
+  promql_expr_test:
+  - expr: ALERTS{alertname=~"RedisBrokerMemory.*", alertstate="firing"}
+    eval_time: 25m
+    exp_samples:
+    - labels: ALERTS{alertname="RedisBrokerMemoryHigh", alertstate="firing", instance="redis-broker:6379", service="redis", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname=~"RedisBrokerMemory.*", alertstate="firing", severity="critical"}
+    eval_time: 50m
+    exp_samples:
+    - labels: ALERTS{alertname="RedisBrokerMemoryCritical", alertstate="firing", instance="redis-broker:6379", service="redis", severity="critical"}
+      value: 1
+- name: a broker without maxmemory never divides by zero
+  interval: 1m
+  input_series:
+  - series: redis_memory_max_bytes{instance="redis-broker:6379"}
+    values: 0x60
+  - series: redis_memory_used_bytes{instance="redis-broker:6379"}
+    values: 85x60
+  promql_expr_test:
+  - expr: ALERTS{alertname=~"RedisBrokerMemory.*", alertstate="firing"}
+    eval_time: 50m
+    exp_samples: []

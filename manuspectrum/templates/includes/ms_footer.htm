@@ -18,6 +18,7 @@
                         <li><a href="{% url 'search_home' %}">{% trans "Search" %}</a></li>
                         {% if user.username == 'anonymous' %}
                             <li><a href="{% url 'auth' %}?next={% url 'root' %}">{% trans "Sign In" %}</a></li>
+                            <li><a href="{% url 'about-contact' %}?reason=access">{% trans "Request access" %}</a></li>
                         {% else %}
                             <li><a href="{% url 'user_profile_manager' %}">{% trans "My Profile" %}</a></li>
                         {% endif %}
@@ -28,8 +29,17 @@
                     <ul>
                         <li><a href="{% url 'about-model' %}">{% trans "Conceptual Model" %}</a></li>
                         <li><a href="{% url 'about-explorer' %}">{% trans "Graph Explorer" %}</a></li>
+                        <li><a href="{% url 'about-data' %}">{% trans "Reuse the data" %}</a></li>
                         <li><a href="{% url 'about-team' %}">{% trans "About & Team" %}</a></li>
                         <li><a href="{% url 'about-contact' %}">{% trans "Contact" %}</a></li>
+                    </ul>
+                </div>
+                <div class="ms-footer-col">
+                    <h4>{% trans "Legal" %}</h4>
+                    <ul>
+                        <li><a href="{% url 'about-legal' %}">{% trans "Legal notice" %}</a></li>
+                        <li><a href="{% url 'about-privacy' %}">{% trans "Privacy policy" %}</a></li>
+                        <li><a href="{% url 'about-terms' %}">{% trans "Terms of use" %}</a></li>
                     </ul>
                 </div>
                 <div class="ms-footer-col">
@@ -56,14 +66,14 @@
         </p>
 
         <div class="ms-footer-bottom">
-            <p>&copy; {% now "Y" %} ManuSpectrum — {% trans "All rights reserved" %}</p>
+            <p>&copy; {% now "Y" %} ManuSpectrum</p>
             <div class="ms-footer-opensource">
                 <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" target="_blank" rel="noopener">
                     <i class="fa-brands fa-github"></i> {% trans "Source code" %}
                 </a>
                 <span class="ms-footer-separator">·</span>
                 <a href="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/LICENSE" target="_blank" rel="noopener">
-                    {% trans "GPL-3.0 License" %}
+                    {% trans "AGPL-3.0 License" %}
                 </a>
                 <span class="ms-footer-separator">·</span>
                 <span class="ms-footer-arches">{% blocktrans %}Powered by <a href="https://www.archesproject.org" target="_blank" rel="noopener">Arches</a>{% endblocktrans %}</span>

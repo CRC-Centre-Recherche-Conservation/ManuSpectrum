@@ -1,0 +1,182 @@
+name: deploy-lint
+
+# Checks the deployment kit on every pull request: the rehearsal VM kit, the
+# image and Compose files offline, then the image itself (stack-proof.yml:
+# build, probe, the whole stack on the runner, a Trivy report). No `paths:` filter: the `changes`
+# job decides which jobs have work to do, the others are skipped, and the
+# `conclusion` job always concludes so it can be a required check.
+# The image build reads the buildkit cache of the pull request and of its base
+# branch (written on every push there by staging.yml) and writes its own
+# under refs/pull/<n>/merge, deleted by cache-cleanup.yml when the pull
+# request closes.
+on:
+  pull_request:
+  workflow_dispatch:
+
+# actions: read lets buildkit's cache exporter list the existing cache
+# entries instead of logging an error and probing each blob one by one.
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: deploy-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      rehearsal: ${{ steps.filter.outputs.rehearsal }}
+      stack: ${{ steps.filter.outputs.stack }}
+      image: ${{ steps.filter.outputs.image }}
+      ansible: ${{ steps.filter.outputs.ansible }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect changes
+        id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            { echo "rehearsal=true"; echo "stack=true"; echo "image=true"; echo "ansible=true"; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"
+          matches() { if grep -Eq "$1" <<<"$files"; then echo true; else echo false; fi; }
+          workflow='\.github/workflows/(deploy-lint|stack-proof)\.yml$'
+          # check-stack.sh lints every project workflow but main.yml (actionlint).
+          workflows='\.github/workflows/'
+          stack='deploy/(docker|compose|certs|logrotate|systemd|runbooks|sbin)/|deploy/(check-stack\.sh|Makefile|OBSERVABILITY\.md)$|deploy/scripts/|\.gitleaks\.toml$|\.pre-commit-config\.yaml$|\.gitignore$|\.dockerignore$|\.trivyignore$|manuspectrum/templates/errors/500\.htm$|pyproject\.toml$|uv\.lock$'
+          build='pkg$|\.gitmodules$|package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/utils/client_ip\.py$|manuspectrum/management/commands/(rewrite_dev_origin|export_pkg|check_pkg_inventory)\.py$|manuspectrum/(migrations|system_settings)/|manuspectrum/basemaps\.py$|manuspectrum/constants/openfreemap_bright_layers\.json$|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
+          {
+            echo "rehearsal=$(matches "^(deploy/rehearsal/|$workflow)")"
+            echo "stack=$(matches "^($stack|$workflows)")"
+            echo "image=$(matches "^($stack|$build|$workflow)")"
+            echo "ansible=$(matches "^(deploy/ansible/|deploy/systemd/|deploy/logrotate/|deploy/sbin/|deploy/scripts/release-|deploy/scripts/lib-(release|metrics)\\.sh$|deploy/scripts/image-(digest|retag)\\.sh$|deploy/Makefile$|deploy/compose/\\.env\\.example$|deploy/rehearsal/(host|verify)-baseline\\.sh$|$workflow)")"
+          } >> "$GITHUB_OUTPUT"
+
+  rehearsal-kit:
+    needs: changes
+    if: needs.changes.outputs.rehearsal == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install system tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxml2-utils
+
+      # check.sh looks for jsonschema in ../venv relative to the repository root.
+      - name: Install the schema validator
+        run: |
+          python3 -m venv "$GITHUB_WORKSPACE/../venv"
+          "$GITHUB_WORKSPACE/../venv/bin/python" -m pip install jsonschema==4.26.0 PyYAML==6.0.3
+
+      - name: Check the rehearsal kit
+        run: bash deploy/rehearsal/check.sh
+
+  stack:
+    needs: changes
+    if: needs.changes.outputs.stack == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the image and Compose files
+        run: bash deploy/check-stack.sh
+
+      - name: ACME flow against Pebble
+        run: bash deploy/certs/tests/test_acme_pebble.sh
+
+  image:
+    needs: changes
+    if: needs.changes.outputs.image == 'true'
+    uses: ./.github/workflows/stack-proof.yml
+    with:
+      git-sha: ${{ github.sha }}
+
+  ansible:
+    needs: changes
+    if: needs.changes.outputs.ansible == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+        working-directory: deploy/ansible
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The runner's python3 is 3.14 (Ubuntu 26.04): the controller range
+      # (>= 3.12) and the ansible-core pin are explained in requirements-dev.txt.
+      # The pins are versions, not hashes: a hashed lock file would need a
+      # regeneration step at each bump.
+      - name: Install Ansible and its collections
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ansible-venv"
+          "$RUNNER_TEMP/ansible-venv/bin/pip" install -r requirements-dev.txt
+          "$RUNNER_TEMP/ansible-venv/bin/ansible-galaxy" collection install -r requirements.yml
+
+      - name: Lint
+        run: |
+          export PATH="$RUNNER_TEMP/ansible-venv/bin:$PATH"
+          ansible-lint --profile production
+
+      - name: Syntax check
+        run: |
+          export PATH="$RUNNER_TEMP/ansible-venv/bin:$PATH"
+          ansible-playbook --syntax-check -i inventories/example site.yml audit.yml
+
+      - name: Contract tests
+        run: |
+          export PATH="$RUNNER_TEMP/ansible-venv/bin:$PATH"
+          python3 -m unittest discover -s tests
+
+      - name: Check the rendered systemd units
+        run: |
+          export PATH="$RUNNER_TEMP/ansible-venv/bin:$PATH"
+          ansible-playbook -i inventories/example render.yml -e render_dir="$RUNNER_TEMP/rendered"
+          RENDERED_UNITS_DIR="$RUNNER_TEMP/rendered/units" bash ../systemd/tests/test_units.sh
+
+  conclusion:
+    needs: [changes, rehearsal-kit, stack, image, ansible]
+    if: always()
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Every job that ran passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in $RESULTS; do
+            case "$result" in
+              success | skipped) ;;
+              *) echo "::error::a deploy-lint job ended with: $result"; exit 1 ;;
+            esac
+          done

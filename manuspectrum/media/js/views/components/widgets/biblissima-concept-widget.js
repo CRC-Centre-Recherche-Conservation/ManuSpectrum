@@ -3,11 +3,15 @@ import ko from 'knockout';
 import arches from 'arches';
 import WidgetViewModel from 'viewmodels/widget';
 import 'bindings/select2-query';
+import { generateArchesURL } from '@/arches/utils/generate-arches-url.ts';
 import {
     mapSuggestItemToValue,
     renderSuggestItem,
     isReferentialUrl,
     isPortalArk,
+    suggestAjaxOptions,
+    suggestInputTooLong,
+    SUGGEST_MAX_INPUT_LENGTH,
 } from 'views/components/widgets/biblissima-concept-utils';
 import biblissimaConceptWidgetTemplate from 'templates/views/components/widgets/biblissima-concept-widget.htm';
 
@@ -36,7 +40,7 @@ const viewModel = function(params) {
             this.url(this.value().url);
             this.url_label(this.value().url_label);
         }
-        this.value.subscribe(function(newValue) {
+        this.disposables.push(this.value.subscribe(function(newValue) {
             if (newValue) {
                 self.url(newValue.url || null);
                 if (newValue.url_label) {
@@ -49,25 +53,25 @@ const viewModel = function(params) {
                 self.url(null);
                 self.url_label(null);
             }
-        });
+        }));
     } else if (this.value) {
-        this.value.url.subscribe(function(newUrl) {
+        this.disposables.push(this.value.url.subscribe(function(newUrl) {
             self.url(newUrl || null);
-        });
-        this.value.url_label.subscribe(function(newUrlLabel) {
+        }));
+        this.disposables.push(this.value.url_label.subscribe(function(newUrlLabel) {
             self.url_label(newUrlLabel || null);
-        });
+        }));
     }
 
     // Trim every write path (manual typing included): the core URL regex
     // does not reject trailing whitespace, which is how stray values like
     // "…Q292273 " reached the database.
     ['url', 'url_label'].forEach(function(property) {
-        self[property].subscribe(function(newValue) {
+        self.disposables.push(self[property].subscribe(function(newValue) {
             if (typeof newValue === 'string' && newValue !== newValue.trim()) {
                 self[property](newValue.trim());
             }
-        });
+        }));
     });
 
     this.urlPreviewText = ko.pureComputed(function() {
@@ -122,13 +126,11 @@ const viewModel = function(params) {
         closeOnSelect: true,
         allowClear: false,
         minimumInputLength: 2,
+        maximumInputLength: SUGGEST_MAX_INPUT_LENGTH,
         placeholder: ko.unwrap(self.placeholder) || arches.translations.biblissimaConceptPlaceholder,
         ajax: {
-            url: '/api/biblissima/suggest',
-            dataType: 'json',
-            delay: 300, // selectWoo option — NOT the ignored v3 quietMillis
-            data: (requestParams) => ({
-                q: requestParams.term || '',
+            ...suggestAjaxOptions({
+                url: generateArchesURL('manuspectrum:biblissima-suggest'),
                 type: entityType,
                 lang: arches.activeLanguage,
             }),
@@ -152,6 +154,7 @@ const viewModel = function(params) {
             searching: () => arches.translations.biblissimaConceptSearching,
             errorLoading: () => arches.translations.biblissimaConceptUnavailable,
             inputTooShort: () => arches.translations.biblissimaConceptInputTooShort,
+            inputTooLong: suggestInputTooLong(arches.translations.biblissimaConceptInputTooLong),
             noResults: () => (self.searchDegraded()
                 ? arches.translations.biblissimaConceptUnavailable
                 : arches.translations.biblissimaConceptNoResults),

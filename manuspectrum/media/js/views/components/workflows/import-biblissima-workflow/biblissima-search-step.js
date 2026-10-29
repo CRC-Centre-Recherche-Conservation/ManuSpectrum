@@ -32,6 +32,12 @@ import arches from 'arches';
 import 'bindings/select2-query';
 import 'bindings/thumb-fallback';
 import noUiSlider from 'nouislider';
+import { generateArchesURL } from '@/arches/utils/generate-arches-url.ts';
+import {
+    suggestAjaxOptions,
+    suggestInputTooLong,
+    SUGGEST_MAX_INPUT_LENGTH,
+} from 'views/components/widgets/biblissima-concept-utils';
 import biblissimaSearchStepTemplate from 'templates/views/components/workflows/import-biblissima-workflow/biblissima-search-step.htm';
 
 const DATE_MIN = -2000;
@@ -43,13 +49,17 @@ ko.bindingHandlers.sliderInit = {
         const initFn = valueAccessor();
         if (typeof initFn === 'function') {
             // Small delay to ensure element is in DOM with dimensions
-            setTimeout(() => initFn(element), 50);
+            setTimeout(() => {
+                if (element.isConnected) initFn(element);
+            }, 50);
         }
     }
 };
 
 const viewModel = function(params) {
     const self = this;
+
+    this.disposables = [];
 
     // Django-settings-sourced ARK NAAN (javascript.htm →
     // arches.translations.biblissimaArkNaan). See biblissima-concept-widget.js
@@ -124,13 +134,13 @@ const viewModel = function(params) {
     // Wire loading timer to the searching observable so all 3 search modes
     // (Document, Component by descriptor, Component by manuscript) get the
     // same loading state without each having to call _startLoadingTimers().
-    this.searching.subscribe((isSearching) => {
+    this.disposables.push(this.searching.subscribe((isSearching) => {
         if (isSearching) {
             self._startLoadingTimers();
         } else {
             self._stopLoadingTimers();
         }
-    });
+    }));
 
     // Reset search state when switching between Component sub-modes
     // (descriptor / manuscript). Otherwise the meta bar keeps showing the
@@ -374,9 +384,13 @@ const viewModel = function(params) {
         try {
             const resp = await fetch(`/api/biblissima/illumination/${hash}`);
             if (!resp.ok) {
+                const data = await resp.json().catch(() => ({}));
+                const notFound =
+                    data.error === 'upstream_error' && data.status === 404;
                 self.searchError(
-                    arches.translations.biblissimaIdentifierNotFound ||
-                        'No Biblissima entity matches this identifier'
+                    (!notFound && data.message) ||
+                        arches.translations.biblissimaIdentifierNotFound ||
+                        'No Biblissima entity matches this identifier',
                 );
                 return;
             }
@@ -547,11 +561,17 @@ const viewModel = function(params) {
         allowClear: true,
         placeholder: arches.translations.biblissimaSearchManuscriptForComponent || 'Search a manuscript to see its illuminations...',
         minimumInputLength: 3,
+        maximumInputLength: SUGGEST_MAX_INPUT_LENGTH,
+        language: {
+            inputTooLong: suggestInputTooLong(arches.translations.biblissimaConceptInputTooLong),
+        },
         ajax: {
-            url: '/api/biblissima/suggest',
-            dataType: 'json',
-            delay: 300,
-            data: (requestParams) => ({ q: requestParams.term || '', type: 'manuscript', limit: 15 }),
+            ...suggestAjaxOptions({
+                url: generateArchesURL('manuspectrum:biblissima-suggest'),
+                type: 'manuscript',
+                lang: 'fr',
+                limit: 15,
+            }),
             processResults: (data) => ({
                 results: (data.results || []).map((item) => ({
                     id: item.id,
@@ -775,11 +795,16 @@ const viewModel = function(params) {
         allowClear: true,
         placeholder: arches.translations.biblissimaSearchDescriptors || 'Search iconographic descriptors...',
         minimumInputLength: 2,
+        maximumInputLength: SUGGEST_MAX_INPUT_LENGTH,
+        language: {
+            inputTooLong: suggestInputTooLong(arches.translations.biblissimaConceptInputTooLong),
+        },
         ajax: {
-            url: '/api/biblissima/suggest',
-            dataType: 'json',
-            delay: 300,
-            data: (requestParams) => ({ q: requestParams.term || '', type: 'descriptor' }),
+            ...suggestAjaxOptions({
+                url: generateArchesURL('manuspectrum:biblissima-suggest'),
+                type: 'descriptor',
+                lang: 'fr',
+            }),
             processResults: (data) => ({
                 results: (data.results || []).map((item) => ({
                     id: item.id,
@@ -1038,7 +1063,7 @@ const viewModel = function(params) {
 
     // The workflow's "Next Step" button is disabled when required && !complete.
     // Cart must hold ≥ 1 item to advance to step 3.
-    ko.computed(() => self.complete(self.cart().length > 0));
+    this.disposables.push(ko.computed(() => self.complete(self.cart().length > 0)));
 
     this.dirty = ko.computed(() => self.cart().length > 0);
 
@@ -1065,12 +1090,12 @@ const viewModel = function(params) {
             sliding = false;
         });
 
-        self.dateFrom.subscribe((val) => {
+        self.disposables.push(self.dateFrom.subscribe((val) => {
             if (!sliding) slider.set([val, null]);
-        });
-        self.dateTo.subscribe((val) => {
+        }));
+        self.disposables.push(self.dateTo.subscribe((val) => {
             if (!sliding) slider.set([null, val]);
-        });
+        }));
 
         self._slider = slider;
     };
@@ -1080,6 +1105,31 @@ const viewModel = function(params) {
             const cached = ko.unwrap(params.value);
             if (cached.selectedItems) self.cart(cached.selectedItems);
         }
+    };
+
+    /**
+     * Stops everything the step started. Knockout calls it on teardown.
+     *
+     * A pending debounced persist is flushed, not dropped: the cart state
+     * always reaches `params.value`. Safe to call more than once.
+     */
+    this.dispose = () => {
+        self._stopLoadingTimers();
+        if (self._pageLoadAbort) {
+            self._pageLoadAbort.abort();
+            self._pageLoadAbort = null;
+        }
+        if (_persistTimer) {
+            clearTimeout(_persistTimer);
+            _persistTimer = null;
+            _persist();
+        }
+        if (self._slider) {
+            self._slider.destroy();
+            self._slider = null;
+        }
+        self.disposables.forEach((disposable) => disposable.dispose());
+        self.disposables = [];
     };
 
     this.initialize();

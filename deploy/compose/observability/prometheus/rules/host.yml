@@ -1,0 +1,58 @@
+# Alert rules of the monitoring stack: host.
+# Severity: critical = mailed at once, warning = grouped weekday e-mail, info = never mailed.
+groups:
+  - name: host
+    rules:
+      - alert: SwapInUse
+        expr: |
+          (node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes) > 256 * 1024 * 1024
+        for: 30m
+        labels:
+          severity: warning
+          service: host
+        annotations:
+          summary: "The host is swapping"
+          description: "{{ $value | humanize1024 }}B of swap are in use."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/host.md#swapinuse
+      - alert: MemoryPressure
+        expr: |
+          rate(node_pressure_memory_waiting_seconds_total[5m]) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+          service: host
+        annotations:
+          summary: "Processes wait for memory"
+          description: "Processes were stalled on memory {{ $value | humanizePercentage }} of the time over 5 minutes."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/host.md#memorypressure
+      - alert: ClockNotSynchronised
+        expr: |
+          node_timex_sync_status == 0
+        for: 30m
+        labels:
+          severity: warning
+          service: host
+        annotations:
+          summary: "The host clock is not synchronised"
+          description: "The kernel reports the clock as unsynchronised for 30 minutes."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/host.md#clocknotsynchronised
+      - alert: HostRebooted
+        expr: |
+          max_over_time(node_boot_time_seconds[1h]) - min_over_time(node_boot_time_seconds[1h]) > 60
+        labels:
+          severity: info
+          service: host
+        annotations:
+          summary: "The host rebooted"
+          description: "The boot time moved by more than a minute within the last hour. The nightly 04:50 reboot is expected; a clock step of a minute or less is not counted."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/host.md#hostrebooted
+      - alert: RecentlyRebooted
+        expr: |
+          time() - node_boot_time_seconds < 900
+        labels:
+          severity: none
+          service: host
+        annotations:
+          summary: "The host booted less than 15 minutes ago"
+          description: "This alert is never mailed; it holds back the other alerts for 15 minutes after a boot so the 04:50 reboot is silent. If the stack is not back after 15 minutes, the pending alerts fire."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/host.md#recentlyrebooted
