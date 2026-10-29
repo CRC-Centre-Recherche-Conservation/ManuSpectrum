@@ -1,4 +1,6 @@
 version: 2
+# Dependabot needs a literal branch: the four target-branch values must name the
+# current integration branch (dev/<line>, see deploy/RELEASES.md).
 updates:
   - package-ecosystem: "npm"
     directory: "/"

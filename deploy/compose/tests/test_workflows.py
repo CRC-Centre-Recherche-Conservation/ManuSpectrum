@@ -123,9 +123,28 @@ class StagingTests(unittest.TestCase):
 
     def test_triggers(self):
         on = triggers(self.workflow)
-        self.assertEqual(sorted(on["push"]["branches"]), ["dev", "main"])
+        self.assertEqual(sorted(on["push"]["branches"]), ["dev/**", "main"])
         self.assertIn("workflow_dispatch", on)
         self.assertNotIn("tags", on["push"])
+
+    def test_integration_branch_conditions_match_the_dev_family(self):
+        self.assertNotIn("refs/heads/dev'", self.text)
+        for name in ("warm-cache", "build"):
+            self.assertIn(
+                "startsWith(github.ref, 'refs/heads/dev/')",
+                self.workflow["jobs"][name]["if"],
+                name,
+            )
+        build = steps(self.workflow["jobs"]["build"])
+        conditions = {s["name"]: s.get("if") for s in build if "name" in s}
+        self.assertEqual(
+            conditions["Build the image (integration cache, read only)"],
+            "startsWith(github.ref, 'refs/heads/dev/')",
+        )
+        self.assertEqual(
+            conditions["Build the image (from scratch)"],
+            "!startsWith(github.ref, 'refs/heads/dev/')",
+        )
 
     def test_only_the_publish_job_writes(self):
         for scope in ("packages", "id-token", "attestations"):
@@ -317,11 +336,30 @@ class ReleaseTests(unittest.TestCase):
             "workflows/staging.yml",
             "--source-ref",
             '--source-digest "$COMMIT"',
-            "refs/heads/main",
-            "refs/heads/dev",
             "oci://$IMAGE_NAME@$digest",
         ):
             self.assertIn(part, run)
+        self.assertIn('source_ref="refs/heads/$BRANCH"', run)
+        self.assertNotIn("refs/heads/dev", run)
+
+    def test_promote_takes_the_source_branch_from_the_guard(self):
+        promote = [
+            s
+            for s in steps(self.jobs["promote"])
+            if "image-retag.sh" in s.get("run", "")
+        ][0]
+        self.assertEqual(promote["env"]["BRANCH"], "${{ needs.guard.outputs.branch }}")
+        self.assertEqual(
+            self.jobs["guard"]["outputs"]["branch"],
+            "${{ steps.guard.outputs.branch }}",
+        )
+        guard = [
+            s
+            for s in steps(self.jobs["guard"])
+            if "release-ref-guard.sh" in s.get("run", "")
+        ][0]["run"]
+        self.assertIn('echo "branch=$branch"', guard)
+        self.assertIn('>> "$GITHUB_OUTPUT"', guard)
 
     def test_the_guard_checks_the_tag_ruleset_before_the_branch_rules(self):
         guard = steps(self.jobs["guard"])

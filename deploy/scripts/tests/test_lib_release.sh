@@ -57,7 +57,7 @@ git init -q "$GREPO"
   export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@manuspectrum.test GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@manuspectrum.test
   git commit -q --allow-empty -m a
   git update-ref refs/remotes/origin/main HEAD
-  git update-ref refs/remotes/origin/dev HEAD
+  git update-ref refs/remotes/origin/dev/1.x.x HEAD
   for t in v1.2.3 v1.2.3-rc.1 v1.2 v1.2.3-beta V1.0.0 v01.0.0 v1.2.3-rc v1.2.3-rc.01; do git tag "$t" 2>/dev/null; done
   mismatch=""
   for t in v1.2.3 v1.2.3-rc.1 v1.2 v1.2.3-beta V1.0.0 v01.0.0 v1.2.3-rc v1.2.3-rc.01; do
