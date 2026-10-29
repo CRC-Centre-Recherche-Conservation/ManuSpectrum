@@ -30,10 +30,10 @@
 <section class="ms-ge-reuse" id="reuse">
     <p class="ms-ge-reuse-lead">{% trans "The Analysis Explorer is built on public products meant to be downloaded, cited and opened in other tools. Use these; they are stable and documented." %}</p>
     <ul class="ms-ge-reuse-list">
-        <li><strong>{% trans "Data package" %}</strong> — {% trans "an RO-Crate with the series, the metadata and the citations of a project, a document or a selection." %} <code>{% url 'explorer-export' %}?project=…</code> <code>?document=…</code> <code>?ids=…</code></li>
-        <li><strong>{% trans "IIIF manifest" %}</strong> — {% trans "the Explorer manifest of a scope, to open in Mirador or any IIIF viewer." %} <code>{% url 'iiif-v3-explorer-manifest' %}?document=…</code></li>
-        <li><strong>{% trans "Annotations and content states" %}</strong> — {% trans "annotation collections, characterizations and the content state of a zone, for Mirador and mirador-xyviewer." %} <code>/iiif/v3/annotation-collection/…</code> <code>/iiif/v3/content-state/…</code></li>
-        <li><strong>{% trans "Spectra" %}</strong> — {% trans "the spectra of a selection as one CSV, never decimated; the clean series of a single file is at /iiif/data/{file}/series.csv." %} <code>{% url 'explorer-series-csv' %}?ids=…</code></li>
+        <li><strong>{% trans "Data package" %}</strong> — {% trans "an RO-Crate with the series, the metadata and the citations of a project, a document or a selection." %} <code>{% url 'explorer-export' %}?project=&lt;uuid&gt;</code> <code>?document=&lt;uuid&gt;</code> <code>?ids=&lt;key&gt;,&lt;key&gt;</code></li>
+        <li><strong>{% trans "IIIF manifest" %}</strong> — {% trans "the Explorer manifest of a scope, to open in Mirador or any IIIF viewer." %} <code>{% url 'iiif-v3-explorer-manifest' %}?document=&lt;uuid&gt;</code></li>
+        <li><strong>{% trans "Annotations and content states" %}</strong> — {% trans "annotation collections, characterizations and the content state of a zone, for Mirador and mirador-xyviewer." %} <code>/iiif/v3/annotation-collection/&lt;uuid&gt;</code> <code>/iiif/v3/content-state/&lt;uuid&gt;/&lt;feature&gt;</code></li>
+        <li><strong>{% trans "Spectra" %}</strong> — {% trans "the spectra of a selection as one CSV, never decimated; the clean series of a single file is at /iiif/data/{file}/series.csv." %} <code>{% url 'explorer-series-csv' %}?ids=&lt;key&gt;,&lt;key&gt;</code></li>
         <li><strong>{% trans "Events" %}</strong> — {% trans "the dated and located events of the corpus as CSV or GeoJSON." %} <code>{% url 'explorer-events-csv' %}</code> <code>{% url 'explorer-events-geojson' %}</code></li>
         <li><strong>{% trans "XY reading" %}</strong> — {% trans "the JSON-LD context and the documentation of the reading of an XY series." %} <a href="{% url 'iiif-xy-reading-doc' %}">{% url 'iiif-xy-reading-doc' %}</a></li>
     </ul>
