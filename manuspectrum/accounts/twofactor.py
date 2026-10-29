@@ -383,7 +383,7 @@ class TwoFactorResetView(View):
         self.account.backend = LOGIN_BACKEND
         login(request, self.account)
         logger.info("Two-factor authenticator re-enrolled for user %s", self.account.pk)
-        return redirect("account-two-factor")
+        return redirect("root")
 
     def render(self, request, error=None, status=200):
         pending = (
