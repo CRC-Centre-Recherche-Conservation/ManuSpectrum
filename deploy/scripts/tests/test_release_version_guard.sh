@@ -57,4 +57,9 @@ refuses v2.0.0-rc.1 "an rc tag on a prerelease APP_VERSION" "2\.0\.0-alpha"
 refuses v3.0.0 "a settings file without APP_VERSION" "no APP_VERSION"
 refuses v1.2 "a name that is not a release tag" "not a release tag"
 
+# release.yml passes the commit the tag resolves to as the second argument.
+OUT="$(bash "$GUARD" v1.0.0 "$(git rev-parse 'v1.0.0^{commit}')" 2>&1)"; RC=$?
+[ "$RC" -eq 0 ] && ok "a final tag checked at its commit, as release.yml calls it" \
+  || not_ok "a final tag checked at its commit (exit $RC)" "$OUT"
+
 exit "$FAILED"
