@@ -33,6 +33,7 @@ class CorsCase(IIIFCase):
         self.assertEqual(response["Access-Control-Allow-Origin"], "*")
         self.assertIn("WWW-Authenticate", response["Access-Control-Expose-Headers"])
         self.assertIn("ETag", response["Access-Control-Expose-Headers"])
+        self.assertIn("Content-Disposition", response["Access-Control-Expose-Headers"])
         self.assertNotIn("Access-Control-Allow-Credentials", response)
 
 

@@ -1,7 +1,7 @@
 """CORS of the IIIF routes: any origin, no credentials, on every status.
 
-Every response carries ``Access-Control-Allow-Origin: *``, exposes ``ETag``
-and ``WWW-Authenticate`` and varies on ``Authorization`` and ``Cookie``. An
+Every response carries ``Access-Control-Allow-Origin: *``, exposes ``ETag``,
+``WWW-Authenticate`` and ``Content-Disposition`` (the name of a raw file) and varies on ``Authorization`` and ``Cookie``. An
 ``OPTIONS`` request is answered here, allowing ``GET, HEAD, OPTIONS`` with
 ``Authorization`` and ``Accept`` for ten minutes. ``django-cors-headers``,
 when it covers the path, answers a preflight itself and keeps ``*``: never
@@ -27,7 +27,9 @@ def iiif_cors(view):
         else:
             response = view(request, *args, **kwargs)
         response["Access-Control-Allow-Origin"] = "*"
-        response["Access-Control-Expose-Headers"] = "ETag, WWW-Authenticate"
+        response["Access-Control-Expose-Headers"] = (
+            "ETag, WWW-Authenticate, Content-Disposition"
+        )
         patch_vary_headers(response, ("Authorization", "Cookie"))
         return response
 
