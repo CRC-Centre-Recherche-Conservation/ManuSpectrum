@@ -107,4 +107,36 @@ describe('resource-summary shell', () => {
 
         expect(reload).toHaveBeenCalledTimes(1);
     });
+
+    describe('synced', () => {
+        const stored = { attached: true, config: { config_version: 1, fields: [{ alias: 'a' }] } };
+
+        it('copies the stored configuration into the applied-function model', () => {
+            const applied = { id: 'row-1', graphid: 'g-1', parse: vi.fn() };
+            new ViewModel(applied);
+
+            mounted.props.onSynced(stored);
+
+            expect(applied.parse).toHaveBeenCalledWith({ id: 'row-1', config: stored.config });
+        });
+
+        it('leaves the model alone while the function is not attached', () => {
+            const applied = { id: null, graphid: 'g-1', parse: vi.fn() };
+            new ViewModel(applied);
+
+            mounted.props.onSynced({ attached: false, config: stored.config });
+
+            expect(applied.parse).not.toHaveBeenCalled();
+        });
+
+        it('ignores an empty answer and a context without a model to parse', () => {
+            const applied = { id: 'row-1', graphid: 'g-1', parse: vi.fn() };
+            new ViewModel(applied);
+            mounted.props.onSynced(undefined);
+            new ViewModel({ id: 'row-1', graphid: 'g-1' });
+
+            expect(() => mounted.props.onSynced(stored)).not.toThrow();
+            expect(applied.parse).not.toHaveBeenCalled();
+        });
+    });
 });

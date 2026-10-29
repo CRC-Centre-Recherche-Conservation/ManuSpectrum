@@ -37,6 +37,7 @@ import type {
 } from "@/manuspectrum/functions/types.ts";
 
 const DETACHED_EVENT = "detached" as const;
+const SYNCED_EVENT = "synced" as const;
 // PrimeVue's confirmation bus is shared by every Vue application of the page:
 // the group keeps this dialog and another application's from answering each other.
 const REMOVAL_GROUP = "summary-config-removal";
@@ -45,6 +46,7 @@ const { graphid } = defineProps<{ graphid: string }>();
 
 const emit = defineEmits<{
     (event: typeof DETACHED_EVENT): void;
+    (event: typeof SYNCED_EVENT, stored: VersionedConfig): void;
 }>();
 
 const { $gettext } = useGettext();
@@ -87,6 +89,7 @@ async function load(id: string): Promise<void> {
             fetchRelations(id),
         ]);
         adopt(stored);
+        emit(SYNCED_EVENT, stored);
         relations.value = relatable;
     } catch (caught) {
         config.value = withRowUids(emptyConfig());
@@ -101,13 +104,17 @@ async function load(id: string): Promise<void> {
  * Write the configuration and adopt what the endpoint stored.
  *
  * The answer is the cleaned configuration, so the form shows what was kept
- * rather than what was typed, and the warnings say what was dropped.
+ * rather than what was typed, and the warnings say what was dropped. The
+ * stored state is reported to the shell (`synced`) so the function manager's
+ * own copy follows it.
  */
 async function save(): Promise<void> {
     saving.value = true;
     clearFeedback();
     try {
-        adopt(await saveConfig(graphid, config.value, etag.value));
+        const stored = await saveConfig(graphid, config.value, etag.value);
+        adopt(stored);
+        emit(SYNCED_EVENT, stored);
         saved.value = true;
         void revealFeedback();
     } catch (caught) {
