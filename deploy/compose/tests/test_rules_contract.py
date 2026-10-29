@@ -524,8 +524,13 @@ class RuleContractTests(unittest.TestCase):
         recipe = makefile.split("\nsilence-fresh-install:")[1].split("\n\n")[0]
         matcher = re.search(r"alertname=~\"([^\"]+)\"", recipe)[1]
         silenced = set(matcher.split("|"))
-        absent_based = {r["alert"] for _, r in self.alerts if "absent(" in r["expr"]}
-        self.assertLessEqual(absent_based - {"NfsUnavailable"}, silenced)
+        absent_based = {
+            r["alert"]
+            for _, r in self.alerts
+            if "absent(" in r["expr"] or "absent_over_time(" in r["expr"]
+        }
+        runs_at_startup = {"NfsUnavailable", "ActivityStale", "ActiveAccountsStale"}
+        self.assertLessEqual(absent_based - runs_at_startup, silenced)
         self.assertIn("--duration=48h", recipe)
         self.assertIn("--comment=", recipe)
 

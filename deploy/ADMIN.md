@@ -501,8 +501,8 @@ file `/run/manuspectrum/ansible-running` exists (root, removed at the end of the
 run, failed or not; `/run` is emptied by a reboot). `--now`, `--at` and a
 scheduled slot refuse while it exists (`Ansible is running on this host`; a
 slot records `OUTCOME=refused REASON=busy`), and the playbook refuses to start
-while an update unit is active. Right after a crash of the Ansible controller
-the file may be left behind: when no run is active, remove it as root.
+while an update unit is active. Right after a crash or a Ctrl-C of the Ansible controller
+the file may be left behind (the next run replaces it, and it goes stale after 2 hours): when no run is active, remove it as root.
 
 ### Look before acting
 

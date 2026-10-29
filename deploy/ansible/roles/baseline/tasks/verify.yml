@@ -46,7 +46,7 @@
     that:
       - baseline_ufw.rc == 0
       - "'Status: active' in baseline_ufw.stdout_lines"
-      - baseline_ufw.stdout_lines | select('match', '^Default: deny \(incoming\), allow \(outgoing\)') | list | length == 1
+      - "baseline_ufw.stdout_lines | select('match', '^Default: deny [(]incoming[)], allow [(]outgoing[)]') | list | length == 1"
     quiet: true
     fail_msg: >-
       UFW is not active with the default policy deny in / allow out. Run ufw default deny incoming,

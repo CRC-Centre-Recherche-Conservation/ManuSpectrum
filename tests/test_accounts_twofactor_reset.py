@@ -264,9 +264,7 @@ class ResetPageTests(TestCase):
             self.assertEqual(bad.status_code, 400)
         self.assertIsNone(stored(self.alice))
         done = post(self.client, self.page, action="confirm", code=current_code(secret))
-        self.assertRedirects(
-            done, "/en/account/two-factor", fetch_redirect_response=False
-        )
+        self.assertRedirects(done, reverse("root"), fetch_redirect_response=False)
         self.assertEqual(decrypt_secret(stored(self.alice)), secret)
         self.assertEqual(self.client.session["_auth_user_id"], str(self.alice.pk))
         self.assertEqual(Client().get(self.path).status_code, 410)
@@ -285,9 +283,7 @@ class ResetPageTests(TestCase):
         self.assertTrue(bob.password.startswith("argon2$"), bob.password[:12])
         secret = decrypt_secret(self.client.session["ms_reset_pending_mfa_secret"])
         done = post(self.client, self.page, action="confirm", code=current_code(secret))
-        self.assertRedirects(
-            done, "/en/account/two-factor", fetch_redirect_response=False
-        )
+        self.assertRedirects(done, reverse("root"), fetch_redirect_response=False)
         self.assertEqual(decrypt_secret(stored(bob)), secret)
         self.assertEqual(self.client.session["_auth_user_id"], str(bob.pk))
 

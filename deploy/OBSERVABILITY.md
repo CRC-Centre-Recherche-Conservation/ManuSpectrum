@@ -38,7 +38,7 @@ Make targets (`make -C deploy <target>`):
 | `alert-test` | Raise a critical `AlertTest` for five minutes: a mail must arrive |
 | `alerts` | List the alerts Alertmanager holds |
 | `silence` | Silence an alert for maintenance |
-| `silence-fresh-install` | Silence for 48 h the alerts a new install raises before its first backup, restore test and timers |
+| `silence-fresh-install` | Silence for 48 h the alerts a new install raises before its first backup, restore test, timers and nightly passes |
 | `report-test`, `monthly-report` | Send the monthly report now |
 | `container-metrics`, `disk-usage` | Write the host metrics (the timers call them) |
 
@@ -196,7 +196,8 @@ does not verify. The Prometheus entrypoint marks a target `rehearsal="true"` whe
 
 **Fresh install.** Until the first backup, the first Sunday restore test and the
 first run of the systemd timers, `BackupMissing` (critical), `RestoreTestMissing`, `ReleaseWatchStale`,
-`HostMetricsStale`, `DiskUsageStale` and `ContainerMissing` fire. Install the
+`HostMetricsStale`, `DiskUsageStale` and `ContainerMissing` fire, and so do `LoginRecordsPruneStale`, `EmbargoPassStale`,
+`WorkflowCleanupStale` and `AccountRetentionStale` until the first night's passes have run (hour-long `for`, 26 h window). Install the
 timers and take a first backup before `observability-on`, or run
 `make -C deploy silence-fresh-install` (48 h, with a comment) and let the first
 backup, restore test and timers land within it.

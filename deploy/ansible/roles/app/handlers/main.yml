@@ -9,5 +9,5 @@
     msg: >-
       First installation: run "make -C deploy silence-fresh-install" now. The alerts a new host raises
       before its first backup, restore test, release watch run and timers (BackupMissing, RestoreTestMissing,
-      ReleaseWatchStale...) are expected for 48 hours.
+      ReleaseWatchStale, the nightly passes...) are expected for 48 hours.
   listen: remind to silence a fresh installation

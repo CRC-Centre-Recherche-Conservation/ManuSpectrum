@@ -422,6 +422,17 @@ contains "--status armed" "armed:    v1.2.0" "$OUT"
 contains "--status armed flags" "security=1 needs_ansible=0" "$OUT"
 contains "--status nothing scheduled" "scheduled: none" "$OUT"
 contains "--status nothing in flight" "inflight: none" "$OUT"
+rm -f "$STATE/current"
+git -C "$APP" init -q
+git -C "$APP" -c user.name=t -c user.email=t@manuspectrum.test -c commit.gpgsign=false commit -q --allow-empty -m probe
+run --status
+contains "--status without a recorded update and an untagged checkout" "current:   unknown" "$OUT"
+git -C "$APP" -c tag.gpgsign=false tag v1.0.0-rc.1
+HEAD_SHA="$(git -C "$APP" rev-parse HEAD)"
+run --status
+contains "--status without a recorded update reads the checkout" "current:   v1.0.0-rc.1 ($HEAD_SHA) (from the checkout)" "$OUT"
+rm -rf "$APP/.git"
+release_state_write "$STATE/current" TAG=v1.1.0 IMAGE="${IMG%@*}@sha256:$(printf 'c%.0s' {1..64})" COMMIT="$(printf 'd%.0s' {1..40})" APPLIED_AT=1
 release_state_write "$STATE/pending" SINCE="$NOW_SPRING" SECURITY=1
 release_state_write "$STATE/rollbacks" COUNT=2 ROLLBACK_FAILED=1
 release_state_write "$STATE/inflight" FROM_TAG=v1.1.0 TO_TAG=v1.2.0 STARTED_AT="$NOW_SPRING"

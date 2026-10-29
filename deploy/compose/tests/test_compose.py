@@ -309,6 +309,10 @@ class ComposeStackTests(unittest.TestCase):
             "127.0.0.1:8081/nginx-health", " ".join(nginx["healthcheck"]["test"])
         )
 
+    def test_cantaloupe_runs_in_a_utf8_locale_for_non_ascii_file_names(self):
+        environment = self.base["services"]["cantaloupe"]["environment"]
+        self.assertEqual(environment["LANG"], "C.UTF-8")
+
     def test_cantaloupe_writes_no_access_log(self):
         environment = self.base["services"]["cantaloupe"]["environment"]
         self.assertEqual(
