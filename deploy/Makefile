@@ -225,10 +225,10 @@ silence: ## Silence for maintenance: make silence ARGS='alertname=DiskUsageHigh 
 	$(AMTOOL) silence add $(ARGS)
 
 # A new install raises, until the first backup, the first restore test and the
-# first run of the systemd timers, alerts that say nothing about a fault.
-silence-fresh-install: ## Silence for 48 h the alerts a new install raises before its first backup, restore test and timers
-	$(AMTOOL) silence add 'alertname=~"BackupMissing|RestoreTestMissing|ReleaseWatchStale|HostMetricsStale|DiskUsageStale|ContainerMissing"' \
-		--duration=48h --comment="fresh install: first backup, restore test and timers pending"
+# first run of the systemd timers and of the nightly passes, alerts that say nothing about a fault.
+silence-fresh-install: ## Silence for 48 h the alerts a new install raises before its first backup, restore test, timers and nightly passes
+	$(AMTOOL) silence add 'alertname=~"BackupMissing|RestoreTestMissing|ReleaseWatchStale|HostMetricsStale|DiskUsageStale|ContainerMissing|LoginRecordsPruneStale|EmbargoPassStale|WorkflowCleanupStale|AccountRetentionStale"' \
+		--duration=48h --comment="fresh install: first backup, restore test, timers and nightly passes pending"
 
 # The monthly report (scripts/monthly-report.py, Python standard library only)
 # runs in a throwaway container of the application image on the Compose
