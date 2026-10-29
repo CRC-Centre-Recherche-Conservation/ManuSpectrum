@@ -45,7 +45,7 @@
         "uuid": "^11"
     },
     "devDependencies": {
-        "@maplibre/maplibre-gl-style-spec": "20.4.0",
+        "@maplibre/maplibre-gl-style-spec": "26.4.4",
         "@types/geojson": "^7946.0.16",
         "@types/leaflet": "^1.9.22",
         "@types/leaflet.markercluster": "^1.5.6",
