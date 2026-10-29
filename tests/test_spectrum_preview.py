@@ -206,6 +206,11 @@ class ApplyConfigTests(SimpleTestCase):
 
         self.assertEqual(self.points(rows, FORS_CONFIG), [(350.0, 0.1), (351.0, 0.1)])
 
+    def test_a_row_without_its_measurement_column_is_left_out(self):
+        rows = [[350.0, 8.0], [351.0], [352.0, 9.0]]
+
+        self.assertEqual(self.points(rows, {}), [(350.0, 8.0), (352.0, 9.0)])
+
     def test_a_row_whose_reference_is_zero_is_left_out(self):
         rows = [[350.0, 8.0, 80.0], [352.0, 5.0, 0.0], [353.0, 6.0, 120.0]]
 

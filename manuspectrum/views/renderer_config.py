@@ -28,6 +28,12 @@ logger = logging.getLogger(__name__)
 
 
 class RendererView(APIBase):
+    """The configurations stored for a renderer.
+
+    A renderer without configurations (every renderer but the XY one) answers
+    200 with an empty ``configs`` list.
+    """
+
     def get(self, request, renderer_id=None):
         renderer = {}
         if renderer_id is None:
@@ -37,17 +43,14 @@ class RendererView(APIBase):
         else:
             renderer_config = RendererConfig.objects.filter(rendererid=renderer_id)
 
-            if renderer_config:
-                # `protected` drives the lock in the configuration list. The
-                # real barrier is server-side, below; this only spares a curator
-                # a click that was always going to be refused.
-                renderer["configs"] = [
-                    {**config, "protected": is_seeded_preset(config["configid"])}
-                    for config in renderer_config.values()
-                ]
-                return JSONResponse(renderer)
-            else:
-                return HttpResponseNotFound(_("<h1>Renderers do not exist</h1>"))
+            # `protected` drives the lock in the configuration list. The
+            # real barrier is server-side, below; this only spares a curator
+            # a click that was always going to be refused.
+            renderer["configs"] = [
+                {**config, "protected": is_seeded_preset(config["configid"])}
+                for config in renderer_config.values()
+            ]
+            return JSONResponse(renderer)
 
 
 def in_use_query(config_id, file_nodes):

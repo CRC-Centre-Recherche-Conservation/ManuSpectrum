@@ -41,6 +41,8 @@ function generateConfig(): Promise<UserConfig> {
             'arches': path.join(parsedData['ROOT_DIR'], 'app', 'media', 'js', 'arches.js'),
             // Mirrors the project's `nodeModulesPaths` entry (package.json).
             'uuid-esm': path.join(filePath, 'node_modules', 'uuid', 'dist', 'esm-browser', 'index.js'),
+            // Webpack's media/js alias for a root-level core module; specs mock it.
+            'file-renderers': path.join(parsedData['ROOT_DIR'], 'app', 'media', 'js', 'file-renderers.js'),
             // Mirrors Arches' `nodeModulesPaths` entry; specs mock the module.
             'leaflet-side-by-side': path.join(parsedData['ROOT_DIR'], 'app', 'media', 'plugins', 'leaflet-side-by-side', 'index.js'),
             // Mirrors Arches' `nodeModulesPaths` entry; specs mock the module.
