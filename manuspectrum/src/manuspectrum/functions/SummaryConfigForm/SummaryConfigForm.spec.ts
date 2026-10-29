@@ -30,6 +30,7 @@ import type {
     SummaryConfig,
     SummaryConfigResponse,
     SummaryHop,
+    VersionedConfig,
 } from "@/manuspectrum/functions/types.ts";
 
 vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
@@ -230,9 +231,9 @@ function putCalls(): FetchCall[] {
     return calls.filter((call) => call.method === "PUT");
 }
 
-async function mountForm() {
+async function mountForm(onSynced?: (stored: VersionedConfig) => void) {
     const wrapper = mount(SummaryConfigForm, {
-        props: { graphid: GRAPH_ID },
+        props: { graphid: GRAPH_ID, onSynced },
         global: { plugins: FORM_PLUGINS },
     });
     await flushPromises();
@@ -451,6 +452,36 @@ describe("SummaryConfigForm", () => {
             1,
         );
         expect(wrapper.findAllComponents(FieldRow)).toHaveLength(2);
+    });
+
+    it("reports the stored state to the shell once read and once saved", async () => {
+        const onSynced = vi.fn();
+        const wrapper = await mountForm(onSynced);
+        expect(onSynced).toHaveBeenCalledTimes(1);
+
+        saveResponse = {
+            graphid: GRAPH_ID,
+            config: storedConfig(),
+            warnings: [],
+            attached: true,
+        };
+        await wrapper.find('[data-testid="save-config"]').trigger("click");
+        await flushPromises();
+
+        expect(onSynced).toHaveBeenCalledTimes(2);
+        expect(onSynced.mock.calls[1][0]).toMatchObject({
+            config: storedConfig(),
+            attached: true,
+        });
+    });
+
+    it("reports nothing when a save fails", async () => {
+        saveFails = true;
+        const onSynced = vi.fn();
+        const wrapper = await mountForm(onSynced);
+        await wrapper.find('[data-testid="save-config"]').trigger("click");
+        await flushPromises();
+        expect(onSynced).toHaveBeenCalledTimes(1);
     });
 
     it("shows an error when the configuration cannot be saved", async () => {

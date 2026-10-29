@@ -8,9 +8,16 @@ import resourceSummaryTemplate from 'templates/views/components/functions/resour
  * Knockout shell around the Vue configuration form of the summary function.
  *
  * Nothing crosses from Knockout into Vue but the graph id and the `detached`
- * callback, passed as bootstrap props: the form reads, writes and removes its
- * configuration through its own endpoint, and the Save button of the function
- * manager plays no part.
+ * and `synced` callbacks, passed as bootstrap props: the form reads, writes and
+ * removes its configuration through its own endpoint.
+ *
+ * The Save button of the function manager re-sends every applied function
+ * with the configuration its Knockout model holds, and the endpoint does not
+ * see that write. `synced` therefore copies each state the form reads or
+ * stores into the applied-function model (`parse` also resets its dirty
+ * baseline), so a later Save of the manager posts the same configuration.
+ * Another browser tab saving after this one read the configuration is not
+ * seen: the model catches up the next time the function is selected.
  *
  * After a removal the entry leaves the function manager's list at once, as the
  * core delete handler does, and the page is then reloaded through its own
@@ -39,6 +46,15 @@ export default ko.components.register('views/components/functions/resource-summa
             component: SummaryConfigForm,
             initialProps: {
                 graphid: self.graphid,
+                /**
+                 * An unattached function keeps the model's default
+                 * configuration: its first Save creates the row.
+                 */
+                onSynced: function(stored) {
+                    if (stored && stored.attached && typeof applied.parse === 'function') {
+                        applied.parse({ id: applied.id, config: stored.config });
+                    }
+                },
                 /**
                  * The row is gone on the server: the Function Manager's list
                  * must forget it before anything else, as the core delete
