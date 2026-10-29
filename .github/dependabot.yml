@@ -8,6 +8,7 @@ updates:
       - dependencies
       - javascript
     versioning-strategy: "increase"
+    target-branch: "dev"
   # Base image digests of deploy/docker/Dockerfile: a rebuilt python or node
   # image carries the Debian security updates.
   - package-ecosystem: "docker"
