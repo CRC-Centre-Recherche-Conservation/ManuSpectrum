@@ -122,7 +122,7 @@ class LockfileTests(unittest.TestCase):
         changes = load("deploy-lint.yml")["jobs"]["changes"]
         return next(s["run"] for s in steps(changes) if s.get("id") == "filter")
 
-    def triggers(self, changed):
+    def triggers(self, changed, base="dev"):
         """Run the filter's patterns on a changed-file list; return the outputs."""
         script = self.filter_script().replace(
             'files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"',
@@ -134,6 +134,7 @@ class LockfileTests(unittest.TestCase):
             env={
                 "PATH": os.environ["PATH"],
                 "EVENT_NAME": "pull_request",
+                "BASE_REF": base,
                 "CHANGED": changed,
                 "GITHUB_OUTPUT": str(out),
             },
@@ -218,6 +219,68 @@ class LockfileTests(unittest.TestCase):
         for path in ("foo/bar.txt", "manuspectrum/views/x.py", "README.md"):
             with self.subTest(path=path):
                 self.assertEqual(self.triggers(path)["image"], "false")
+
+    def test_a_pull_request_into_main_runs_every_job(self):
+        self.assertIn('"$BASE_REF" = main', self.filter_script())
+        for changed in ("README.md", ""):
+            with self.subTest(changed=changed):
+                got = self.triggers(changed, base="main")
+                self.assertEqual(
+                    sorted(got),
+                    ["ansible", "frontend", "image", "lockfile", "rehearsal", "stack"],
+                )
+                self.assertEqual(set(got.values()), {"true"})
+        self.assertEqual(set(self.triggers("README.md").values()), {"false"})
+
+    def test_frontend_paths_run_the_frontend_build_only_when_they_change(self):
+        for path in (
+            "manuspectrum/src/manuspectrum/a.vue",
+            "manuspectrum/media/js/a.js",
+            "package-lock.json",
+            "webpack/webpack.common.js",
+            "vitest.config.mts",
+            ".github/workflows/deploy-lint.yml",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["frontend"], "true")
+        self.assertEqual(self.triggers("deploy/BACKUP.md")["frontend"], "false")
+
+    def test_the_frontend_job_builds_the_dockerfile_stage_that_checks_the_bundle(self):
+        jobs = load("deploy-lint.yml")["jobs"]
+        job = jobs["frontend-build"]
+        self.assertEqual(job["if"], "needs.changes.outputs.frontend == 'true'")
+        self.assertIn("timeout-minutes", job)
+        run = "\n".join(s.get("run", "") for s in steps(job))
+        self.assertIn("--target collect", run)
+        dockerfile = (ROOT / "deploy/docker/Dockerfile").read_text()
+        self.assertRegex(dockerfile, r"(?m)^FROM \S+ AS collect$")
+        self.assertIn("check-explorer-bundle.sh", dockerfile)
+        self.assertIn("frontend-build", jobs["conclusion"]["needs"])
+
+    def test_kit_paths_the_proof_executes_build_the_image(self):
+        for path in (
+            "manage.py",
+            "manuspectrum/accounts/lockout.py",
+            "manuspectrum/models.py",
+            "manuspectrum/sql/triggers/a.sql",
+            "manuspectrum/sql_config.py",
+            "manuspectrum/management/commands/set_admin_password.py",
+            "manuspectrum/management/commands/site_notice.py",
+            "manuspectrum/management/commands/site_notice_snapshot.py",
+            "manuspectrum/management/commands/activity_summary.py",
+            "deploy/runbooks/release.md",
+            "deploy/OBSERVABILITY.md",
+            "deploy/compose/tests/test_x.py",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["image"], "true")
+
+    def test_check_stack_and_dockerfile_pin_the_same_uv_version(self):
+        pattern = r"uv:(\d+\.\d+\.\d+)"
+        stack = re.search(pattern, (ROOT / "deploy/check-stack.sh").read_text())
+        image = re.search(pattern, (ROOT / "deploy/docker/Dockerfile").read_text())
+        self.assertTrue(stack and image)
+        self.assertEqual(stack[1], image[1])
 
     def test_the_lockfile_job_uses_the_dockerfiles_uv_image(self):
         jobs = load("deploy-lint.yml")["jobs"]
@@ -510,6 +573,15 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn(f"cosign:{version}@sha256:", script)
 
 
+MAIN_CHECKS = [
+    "build_feature_branch (3.11)",
+    "build_feature_branch (3.12)",
+    "build_feature_branch (3.13)",
+    "check_python_coverage",
+    "check_frontend_coverage",
+]
+
+
 class RequiredChecksTests(unittest.TestCase):
     """The checks RELEASES.md tells to require are jobs that run on every pull request."""
 
@@ -522,7 +594,8 @@ class RequiredChecksTests(unittest.TestCase):
             re.S | re.M,
         )
         assert match, "RELEASES.md no longer names the required checks"
-        return re.findall(r"`([\w-]+)`", match[1].split("The jobs of")[0])
+        names = re.findall(r"`([\w. ()-]+)`", match[1].split("The jobs of")[0])
+        return list(dict.fromkeys(n for n in names if not n.endswith(".yml")))
 
     def test_the_documented_checks_are_jobs_of_workflows_without_a_paths_filter(self):
         runs_everywhere = set()
@@ -536,8 +609,16 @@ class RequiredChecksTests(unittest.TestCase):
                 continue
             runs_everywhere |= set(workflow["jobs"])
         named = self.documented()
-        self.assertEqual(sorted(named), ["conclusion", "gitleaks"])
-        self.assertEqual([c for c in named if c not in runs_everywhere], [])
+        self.assertEqual(
+            sorted(named), sorted(["conclusion", "gitleaks", *MAIN_CHECKS])
+        )
+        # The CI checks come from main.yml (Arches template, not a project workflow).
+        ours = [c for c in named if c not in MAIN_CHECKS]
+        self.assertEqual([c for c in ours if c not in runs_everywhere], [])
+        main = yaml.safe_load((WORKFLOWS / "main.yml").read_text())
+        for check in MAIN_CHECKS:
+            job = re.sub(r" \(.*\)$", "", check)
+            self.assertIn(job, main["jobs"], check)
 
     def test_the_tag_checklist_repeats_the_required_checks(self):
         text = (ROOT / "deploy" / "RELEASES.md").read_text()
