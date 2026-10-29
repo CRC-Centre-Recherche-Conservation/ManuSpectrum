@@ -359,7 +359,7 @@ const bordersLabel = computed(() =>
           ),
 );
 /** The privacy page's section naming the third-party services the map calls. */
-const privacyHref = `${generateArchesURL("django:about-privacy")}#third-party-services`;
+const privacyHref = `${generateArchesURL("manuspectrum:about-privacy")}#third-party-services`;
 /** The licence credits under the map; OpenHistoricalMap's only while its borders are drawn. */
 const credits = computed<{ href: string; text: string }[]>(() => [
     {

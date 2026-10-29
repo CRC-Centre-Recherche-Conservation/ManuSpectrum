@@ -1190,7 +1190,7 @@ describe("MapView", () => {
             ["https://www.openmaptiles.org/", "noopener", "_blank"],
             ["https://openfreemap.org/", "noopener", "_blank"],
             [
-                "/en/django:about-privacy#third-party-services",
+                "/en/manuspectrum:about-privacy#third-party-services",
                 "noopener",
                 "_blank",
             ],
