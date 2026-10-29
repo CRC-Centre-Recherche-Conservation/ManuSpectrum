@@ -1,0 +1,66 @@
+name: 🐞 Bug report
+description: Something does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a problem. Please do not paste personal data, passwords or tokens here.
+        A security problem goes to the « Report a vulnerability » link instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. See …
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Analysis Explorer (public)
+        - Public pages
+        - Resource editor, cards, reports
+        - Workflows (New project, Import Biblissima)
+        - XY spectra and file viewers
+        - IIIF output or viewers
+        - Search and maps
+        - Accounts and sign-in
+        - Deployment, backups, monitoring
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: Page or route
+      description: The address where it happens, without any token or personal identifier.
+      placeholder: https://manuspectrum.huma-num.fr/en/discover?…
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown in the back-office menu, or the release tag you installed.
+      placeholder: v1.0.0
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and system
+      placeholder: Firefox 133, Ubuntu 24.04
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output or logs
+      description: Browser console errors, or server log lines (with any secret removed).
+      render: text

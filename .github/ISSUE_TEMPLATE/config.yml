@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔐 Report a vulnerability
+    url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/security/advisories/new
+    about: Security problems are reported privately, never in a public issue.
+  - name: 📚 Models and vocabularies
+    url: https://github.com/CRC-Centre-Recherche-Conservation/manuspectrum-pkg/issues
+    about: Resource models, branches and controlled lists live in the data package.
+  - name: ✉️ Data, access or partnership
+    url: https://manuspectrum.huma-num.fr/en/about/contact
+    about: Questions about a record, an account or contributing data go to the project team.
