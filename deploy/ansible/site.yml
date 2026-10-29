@@ -1,4 +1,26 @@
 ---
+# Ubuntu 26.04 ships sudo-rs as `sudo`; Ansible cannot answer its password
+# prompt. Where the classic sudo is installed beside it (`/usr/bin/sudo.ws`) the
+# first play makes Ansible use it. An inventory that sets `ansible_become_exe`
+# keeps its value. Hosts without `sudo.ws` (Ubuntu 24.04, Debian) use `sudo`.
+- name: Pick the sudo program of the host
+  hosts: all
+  gather_facts: false
+  become: false
+  tasks:
+    - name: Look for the classic sudo
+      ansible.builtin.stat:
+        path: /usr/bin/sudo.ws
+      register: sudo_ws
+      when: ansible_become_exe is not defined
+      tags: [always]
+
+    - name: Use the classic sudo where sudo-rs is the default
+      ansible.builtin.set_fact:
+        ansible_become_exe: sudo.ws
+      when: ansible_become_exe is not defined and sudo_ws.stat.exists
+      tags: [always]
+
 # Every role runs under the Ansible run marker, taken first and removed whatever
 # the outcome: baseline and host can restart Docker and change the host, which an
 # update must not overlap. The marker and the update guard are the `app` role's
