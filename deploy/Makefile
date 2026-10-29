@@ -11,12 +11,12 @@ COMPOSE := docker compose --project-directory $(COMPOSE_DIR) --env-file $(ENV_FI
 # The last SECRETS_DIR line of the env file must be a plain SECRETS_DIR=/path
 # (no export, spaces, quotes or comment), which is what this file reads and
 # Compose reads alike; the check also runs when the command line overrides it,
-# since Compose reads the env file anyway.
+# since Compose reads the env file anyway. PKG_DIR (read by init and by the
+# Compose bind mount) follows the same rule.
+ENV_STRICT_KEYS := SECRETS_DIR PKG_DIR
 ENV_SECRETS_PATTERN := ^[[:space:]]*(export[[:space:]]+)?SECRETS_DIR[[:space:]]*=
 ENV_SECRETS_LINE := $(shell grep -E '$(ENV_SECRETS_PATTERN)' '$(ENV_FILE)' 2>/dev/null | tail -n 1)
-ifneq ($(shell grep -E '$(ENV_SECRETS_PATTERN)' '$(ENV_FILE)' 2>/dev/null | tail -n 1 | grep -cvE '^SECRETS_DIR=[^[:space:]"'\''\#]+$$'),0)
-$(error SECRETS_DIR in $(ENV_FILE) must be a plain SECRETS_DIR=/path line (no export, quotes, spaces or comment))
-endif
+$(foreach key,$(ENV_STRICT_KEYS),$(if $(filter-out 0,$(shell grep -E '^[[:space:]]*(export[[:space:]]+)?$(key)[[:space:]]*=' '$(ENV_FILE)' 2>/dev/null | tail -n 1 | grep -cvE '^$(key)=[^[:space:]"'\''\#]+$$')),$(error $(key) in $(ENV_FILE) must be a plain $(key)=/path line (no export, quotes, spaces or comment))))
 ENV_SECRETS_DIR := $(patsubst SECRETS_DIR=%,%,$(ENV_SECRETS_LINE))
 SECRETS_DIR ?= $(if $(ENV_SECRETS_DIR),$(if $(filter /%,$(ENV_SECRETS_DIR)),$(ENV_SECRETS_DIR),$(abspath $(COMPOSE_DIR)/$(ENV_SECRETS_DIR))),$(COMPOSE_DIR)/secrets)
 SCRIPTS_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))/scripts
@@ -225,10 +225,10 @@ silence: ## Silence for maintenance: make silence ARGS='alertname=DiskUsageHigh 
 	$(AMTOOL) silence add $(ARGS)
 
 # A new install raises, until the first backup, the first restore test and the
-# first run of the systemd timers, alerts that say nothing about a fault.
-silence-fresh-install: ## Silence for 48 h the alerts a new install raises before its first backup, restore test and timers
-	$(AMTOOL) silence add 'alertname=~"BackupMissing|RestoreTestMissing|ReleaseWatchStale|HostMetricsStale|DiskUsageStale|ContainerMissing"' \
-		--duration=48h --comment="fresh install: first backup, restore test and timers pending"
+# first run of the systemd timers and of the nightly passes, alerts that say nothing about a fault.
+silence-fresh-install: ## Silence for 48 h the alerts a new install raises before its first backup, restore test, timers and nightly passes
+	$(AMTOOL) silence add 'alertname=~"BackupMissing|RestoreTestMissing|ReleaseWatchStale|HostMetricsStale|DiskUsageStale|ContainerMissing|LoginRecordsPruneStale|EmbargoPassStale|WorkflowCleanupStale|AccountRetentionStale"' \
+		--duration=48h --comment="fresh install: first backup, restore test, timers and nightly passes pending"
 
 # The monthly report (scripts/monthly-report.py, Python standard library only)
 # runs in a throwaway container of the application image on the Compose

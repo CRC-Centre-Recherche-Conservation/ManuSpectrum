@@ -57,7 +57,7 @@ git init -q "$GREPO"
   export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@manuspectrum.test GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@manuspectrum.test
   git commit -q --allow-empty -m a
   git update-ref refs/remotes/origin/main HEAD
-  git update-ref refs/remotes/origin/feat/production-platform HEAD
+  git update-ref refs/remotes/origin/dev HEAD
   for t in v1.2.3 v1.2.3-rc.1 v1.2 v1.2.3-beta V1.0.0 v01.0.0 v1.2.3-rc v1.2.3-rc.01; do git tag "$t" 2>/dev/null; done
   mismatch=""
   for t in v1.2.3 v1.2.3-rc.1 v1.2 v1.2.3-beta V1.0.0 v01.0.0 v1.2.3-rc v1.2.3-rc.01; do
@@ -253,6 +253,10 @@ printf 'ALERT_EMAILS=ops@manuspectrum.test,\nALERT_EMAIL_FROM=noreply@manuspectr
 refused "mail refuses an empty recipient" release_mail ok body
 printf 'ALERT_EMAILS=ops@manuspectrum.test\rBcc: x@y.test\nALERT_EMAIL_FROM=noreply@manuspectrum.test\n' >"$ENV_FILE"
 refused "mail refuses CR in recipients" release_mail ok body
+printf 'ALERT_EMAILS=ops@localhost,team@manuspectrum.test\nALERT_EMAIL_FROM=noreply@localhost\n' >"$ENV_FILE"
+check "mail accepts a single-label domain" release_mail ok body
+printf 'ALERT_EMAILS=ops@manuspectrum..test\nALERT_EMAIL_FROM=noreply@manuspectrum.test\n' >"$ENV_FILE"
+refused "mail refuses an empty domain label" release_mail ok body
 printf 'ALERT_EMAILS=ops@manuspectrum.test\nALERT_EMAIL_FROM=a@b.test, c@d.test\n' >"$ENV_FILE"
 refused "mail refuses a list as sender" release_mail ok body
 printf 'ALERT_EMAILS=\nALERT_EMAIL_FROM=noreply@manuspectrum.test\n' >"$ENV_FILE"

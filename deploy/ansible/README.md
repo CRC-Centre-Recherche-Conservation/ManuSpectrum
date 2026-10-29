@@ -25,10 +25,20 @@ absent) and never writes a secret.
   in a virtual environment, never system-wide:
 
   ```bash
-  python3 -m venv ~/.venvs/ansible
+  python3.12 -m venv ~/.venvs/ansible
   ~/.venvs/ansible/bin/pip install -r deploy/ansible/requirements-dev.txt
   ~/.venvs/ansible/bin/ansible-galaxy collection install -r deploy/ansible/requirements.yml
   ```
+
+- A checkout on a world-writable filesystem (NTFS, mounted with mode 777) makes
+  Ansible ignore `ansible.cfg`: run `export ANSIBLE_CONFIG=$PWD/ansible.cfg` from
+  `deploy/ansible/` first.
+
+- Ubuntu 26.04 ships sudo-rs as `sudo`, whose prompt Ansible cannot answer
+  (`--ask-become-pass` times out). The first play of `site.yml` and `audit.yml`
+  makes Ansible use the classic sudo (`/usr/bin/sudo.ws`) on a host that has it
+  and leaves `sudo` elsewhere (Ubuntu 24.04, Debian); an inventory that sets
+  `ansible_become_exe` keeps its value. Not exercised on a real 26.04 host by CI.
 
 - A personal SSH account on the host with a key and `sudo`. The account is one
   of `admin_users` (with its `pubkey`) and the port is 22: apply mode refuses
@@ -94,7 +104,9 @@ Docker (`baseline_docker_key_fingerprint`) before it is installed.
 `vm.max_map_count` is only verified, never written. sshd is checked with
 `sshd -t` and reloaded, never restarted.
 
-A second run on an installed host reports `changed=0`.
+A second run on an installed host reports only the run marker tasks as changed:
+the marker is touched and removed on every run (`changed=2`; three when `/run/manuspectrum`
+does not exist yet). Nothing else changes.
 
 ## How the `app` role decides
 
@@ -166,7 +178,8 @@ is active; the marker is removed whatever the outcome, a failed run too). The
 `app` role takes it itself only when it runs without that play. The marker file
 is touched again at each run, and the release watch raises the `state` failure
 (`ReleaseWatchFailing`) when its modification time is older than 2 hours: a run
-was interrupted, remove the file if no playbook is running. While it exists, `manuspectrum-update`,
+was interrupted (a Ctrl-C of the controller leaves the file: Ansible runs no cleanup then), remove the file if no playbook is running
+(`pgrep -a ansible` empty on both sides, then `sudo rm /run/manuspectrum/ansible-running`); the next run replaces it. While it exists, `manuspectrum-update`,
 a scheduled slot and the release engine refuse to start an update, and the role
 refuses to run while an update unit is active or activating: an Ansible run and
 an update never overlap. Before `make up` the role also checks that the image in

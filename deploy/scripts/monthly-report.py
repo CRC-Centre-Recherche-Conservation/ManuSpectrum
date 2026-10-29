@@ -55,7 +55,7 @@ from email.utils import format_datetime, make_msgid
 
 UNAVAILABLE = "données indisponibles"
 NO_DATA = "n/d"
-ADDRESS = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
+ADDRESS = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$")
 STEP = 300
 RETENTION_DAYS = 34  # Prometheus keeps 35; one day of margin for block deletion
 MONTHS_FR = (

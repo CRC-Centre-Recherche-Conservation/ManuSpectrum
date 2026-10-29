@@ -380,6 +380,28 @@ if settings.ROOT_URLCONF == __name__:
         # │   location ~ ^/(en|fr)/admin/  { … }                               │
         # │ (regex, or duplicate the location blocks). Tracked as GH issue.    │
         # └───────────────────────────────────────────────────────────────────┘
+        # The xyReading documents are JSON-LD ids and live unprefixed below the
+        # boundary; a language-prefixed request is sent there for good. Added
+        # only when the wrap exists: unwrapped, these paths would be the
+        # documents' own.
+        for _suffix, _target, _name in [
+            ("1.jsonld", "iiif-xy-reading-context", "iiif-xy-reading-context-prefixed"),
+            ("1", "iiif-xy-reading-doc", "iiif-xy-reading-doc-prefixed"),
+            (
+                "1/schema.json",
+                "iiif-xy-reading-schema",
+                "iiif-xy-reading-schema-prefixed",
+            ),
+        ]:
+            urlpatterns.append(
+                path(
+                    f"iiif/context/xy-reading/{_suffix}",
+                    RedirectView.as_view(
+                        pattern_name=_target, permanent=True, query_string=True
+                    ),
+                    name=_name,
+                )
+            )
         urlpatterns = i18n_patterns(*urlpatterns, prefix_default_language=True)
 
 # ============================================================================

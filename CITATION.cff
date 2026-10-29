@@ -17,7 +17,7 @@ authors:
     given-names: Maxime
     affiliation: "Centre de Recherche sur la Conservation (CRC), MNHN"
 repository-code: "https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum"
-license: GPL-3.0
+license: AGPL-3.0-only
 keywords:
   - heritage science
   - conservation science

@@ -441,8 +441,9 @@ folder = os.path.join(settings.MEDIA_ROOT, "uploadedfiles")
 rel = "uploadedfiles/smoke file \u00e9.csv"
 with open(os.path.join(settings.MEDIA_ROOT, rel), "wb") as handle:
     handle.write(b"edge,smoke\n1,2\n")
-Image.new("RGB", (64, 48), "white").save(os.path.join(folder, "smoke-iiif.png"))
-for name in (rel, "uploadedfiles/smoke-iiif.png"):
+for image in ("smoke-iiif.png", "smoke-iiif \u00e9.png"):
+    Image.new("RGB", (64, 48), "white").save(os.path.join(folder, image))
+for name in (rel, "uploadedfiles/smoke-iiif.png", "uploadedfiles/smoke-iiif \u00e9.png"):
     os.chmod(os.path.join(settings.MEDIA_ROOT, name), 0o640)
 File.objects.filter(path=rel).delete()
 print(File.objects.bulk_create([File(path=rel)])[0].pk)
@@ -457,7 +458,7 @@ from django.conf import settings
 from arches.app.models.models import File
 rel = "uploadedfiles/smoke file \u00e9.csv"
 File.objects.filter(path=rel).delete()
-for name in (rel, "uploadedfiles/smoke-iiif.png"):
+for name in (rel, "uploadedfiles/smoke-iiif.png", "uploadedfiles/smoke-iiif \u00e9.png"):
     try:
         os.remove(os.path.join(settings.MEDIA_ROOT, name))
     except FileNotFoundError:
@@ -525,6 +526,7 @@ print(",".join(sorted(found)))
   expect "/iiifserver/ info.json" "HTTP/2 200" "$(status_line "$headers")"
   expect "one Access-Control-Allow-Origin on /iiifserver/" 1 "$(header_count access-control-allow-origin "$headers")"
   expect "Access-Control-Allow-Origin value" "*" "$(header_value access-control-allow-origin "$headers")"
+  expect "/iiifserver/ info.json of a non-ASCII file name" 200 "$(edge_code '/iiifserver/iiif/2/smoke-iiif%20%C3%A9.png/info.json')"
   expect "/iiifserver/admin" 404 "$(edge_code /iiifserver/admin)"
   body="$(edge_get "/iiifserver/iiif/2/$EDGE_IMAGE_NAME/info.json")"
   expect "info.json carries https ids" "https://$PUBLIC/iiifserver/iiif/2/$EDGE_IMAGE_NAME" "$(json_field 'r["@id"]' <<<"$body")"

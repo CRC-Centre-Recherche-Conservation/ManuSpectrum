@@ -13,7 +13,15 @@ from pathlib import Path
 
 import yaml
 
-from roles import ROLES_DIR, all_tasks, flatten, load_tasks, module_of, role_tasks
+from roles import (
+    ANSIBLE_DIR,
+    ROLES_DIR,
+    all_tasks,
+    flatten,
+    load_tasks,
+    module_of,
+    role_tasks,
+)
 
 READ_ONLY_MODULES = {
     "assert",
@@ -718,10 +726,26 @@ class RunMarkerTests(unittest.TestCase):
 
     def site_block(self):
         play = yaml.safe_load((ANSIBLE / "site.yml").read_text(encoding="utf-8"))
-        self.assertEqual(len(play), 1)
-        self.assertNotIn("roles", play[0])
-        self.assertEqual(len(play[0]["tasks"]), 1)
-        return play[0]["tasks"][0]
+        self.assertEqual(len(play), 2)
+        self.assertNotIn("roles", play[1])
+        self.assertEqual(len(play[1]["tasks"]), 1)
+        return play[1]["tasks"][0]
+
+    def test_sudo_rs_hosts_use_the_classic_sudo(self):
+        for name in ("site.yml", "audit.yml"):
+            plays = yaml.safe_load((ANSIBLE / name).read_text(encoding="utf-8"))
+            first, main = plays[0], plays[1] if len(plays) > 1 else None
+            self.assertIs(first["become"], False, name)
+            self.assertIs(first["gather_facts"], False, name)
+            stat, fact = first["tasks"]
+            self.assertEqual(stat["ansible.builtin.stat"]["path"], "/usr/bin/sudo.ws")
+            self.assertEqual(
+                fact["ansible.builtin.set_fact"], {"ansible_become_exe": "sudo.ws"}
+            )
+            for task in (stat, fact):
+                self.assertIn("ansible_become_exe is not defined", task["when"])
+                self.assertEqual(task["tags"], ["always"])
+            self.assertIs(main["become"], True, name)
 
     def test_every_role_of_the_site_play_runs_under_the_marker(self):
         block = self.site_block()
@@ -872,6 +896,56 @@ class ReadyWaitCapTests(unittest.TestCase):
         self.assertNotEqual(self.assert_with("00"), 0)
         self.assertNotEqual(self.assert_with("1801"), 0)
         self.assertNotEqual(self.assert_with("abc"), 0)
+
+
+class ConditionalTests(unittest.TestCase):
+    """A conditional that YAML parses as a mapping or a number is refused by Ansible."""
+
+    CONDITIONAL_KEYS = ("when", "changed_when", "failed_when", "until", "that")
+
+    def documents(self):
+        files = [*ROLES_DIR.rglob("*.yml"), *ANSIBLE_DIR.glob("*.yml")]
+        for path in sorted(files):
+            yield path, yaml.safe_load(path.read_text(encoding="utf-8"))
+
+    def conditionals(self, node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key in self.CONDITIONAL_KEYS:
+                    yield key, value
+                yield from self.conditionals(value)
+        elif isinstance(node, list):
+            for item in node:
+                yield from self.conditionals(item)
+
+    def test_every_conditional_is_a_string_a_bool_or_a_list_of_strings(self):
+        seen = 0
+        for path, document in self.documents():
+            for key, value in self.conditionals(document):
+                items = value if isinstance(value, list) else [value]
+                for item in items:
+                    seen += 1
+                    self.assertIsInstance(
+                        item, (str, bool), f"{path.name}: {key}: {item!r}"
+                    )
+        self.assertGreater(seen, 100)
+
+    def test_the_ufw_default_policy_regex_matches_what_ufw_prints(self):
+        task = next(
+            t
+            for t in load_tasks(ROLES_DIR / "baseline" / "tasks" / "verify.yml")
+            if t.get("name") == "Assert UFW is active with deny in and allow out"
+        )
+        condition = next(
+            c for c in task["ansible.builtin.assert"]["that"] if "Default:" in c
+        )
+        pattern = re.search(r"'(\^Default:[^']*)'", condition).group(1)
+        self.assertTrue(
+            re.match(
+                pattern,
+                "Default: deny (incoming), allow (outgoing), deny (routed)",
+            )
+        )
 
 
 if __name__ == "__main__":

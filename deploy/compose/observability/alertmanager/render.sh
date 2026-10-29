@@ -38,7 +38,7 @@ ALERT_EMAILS="${ALERT_EMAILS:-}"
 ALERT_EMAIL_FROM="${ALERT_EMAIL_FROM:-}"
 PUBLIC_HOST="${PUBLIC_HOST:-}"
 
-ADDRESS='^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$'
+ADDRESS='^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$'
 
 [ -n "$EMAIL_HOST" ] || fail "EMAIL_HOST is empty: set the SMTP relay in .env"
 valid "$EMAIL_HOST" '^[A-Za-z0-9.-]+$' || fail "EMAIL_HOST is not a host name"

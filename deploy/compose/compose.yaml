@@ -167,6 +167,9 @@ services:
     group_add: ["${APP_GID:?set APP_GID in .env}"]
     image: uclalibrary/cantaloupe:5.0.7-2@sha256:76140291a6320626e4ba58ecae0937f39f6e21318ff62adc78215ae44fd094df
     environment:
+      # The image sets no locale: the JVM then decodes file names as ASCII and
+      # answers 500 for an image whose name holds a non-ASCII character.
+      LANG: C.UTF-8
       CANTALOUPE_BASE_URI: ${PUBLIC_SERVER_ADDRESS:?set PUBLIC_SERVER_ADDRESS in .env (https://host/, trailing slash)}iiifserver
       CANTALOUPE_ENDPOINT_ADMIN_ENABLED: "false"
       CANTALOUPE_FILESYSTEMSOURCE_BASICLOOKUPSTRATEGY_PATH_PREFIX: /imageroot/

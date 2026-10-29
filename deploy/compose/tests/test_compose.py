@@ -309,6 +309,10 @@ class ComposeStackTests(unittest.TestCase):
             "127.0.0.1:8081/nginx-health", " ".join(nginx["healthcheck"]["test"])
         )
 
+    def test_cantaloupe_runs_in_a_utf8_locale_for_non_ascii_file_names(self):
+        environment = self.base["services"]["cantaloupe"]["environment"]
+        self.assertEqual(environment["LANG"], "C.UTF-8")
+
     def test_cantaloupe_writes_no_access_log(self):
         environment = self.base["services"]["cantaloupe"]["environment"]
         self.assertEqual(
@@ -1396,6 +1400,24 @@ class MakeInitSubmoduleTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertIn("git is missing", result.stderr)
+
+    def test_a_malformed_package_line_in_the_env_file_is_refused(self):
+        clone = self.base / "clone"
+        self.git(self.base, "clone", "-q", str(self.app), str(clone))
+        for line in (
+            "export PKG_DIR=/srv/elsewhere",
+            'PKG_DIR="/srv/elsewhere"',
+            "PKG_DIR='/srv/elsewhere'",
+            "PKG_DIR = /srv/elsewhere",
+            "PKG_DIR=/srv/elsewhere # note",
+            "PKG_DIR=/srv/ok\nexport PKG_DIR=../../pkg",
+        ):
+            with self.subTest(malformed=line):
+                (clone / "deploy" / "compose" / ".env").write_text(line + "\n")
+                result = self.init(clone)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("must be a plain PKG_DIR=/path line", result.stderr)
+        self.assertEqual(self.docker_calls(), "")
 
     def test_the_default_path_in_the_env_file_is_still_checked(self):
         clone = self.base / "clone"

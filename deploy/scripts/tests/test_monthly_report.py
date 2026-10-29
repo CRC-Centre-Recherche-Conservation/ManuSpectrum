@@ -807,6 +807,20 @@ class MonthlyReport(unittest.TestCase):
                 self.assertEqual(result.returncode, 2)
         self.assertEqual(self.servers.smtp.messages, [])
 
+    def test_a_single_label_domain_is_a_valid_address(self):
+        result = run(
+            self.servers,
+            extra=["--dry-run"],
+            ALERT_EMAILS="admin@localhost, two@manuspectrum.test",
+            ALERT_EMAIL_FROM="noreply@localhost",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("To: admin@localhost, two@manuspectrum.test", result.stdout)
+
+    def test_an_empty_domain_label_is_refused(self):
+        result = run(self.servers, extra=["--dry-run"], ALERT_EMAILS="a@b..test")
+        self.assertEqual(result.returncode, 2)
+
     def test_dry_run_prints_and_does_not_send(self):
         result = run(self.servers, extra=["--dry-run"])
         self.assertEqual(result.returncode, 0, result.stderr)

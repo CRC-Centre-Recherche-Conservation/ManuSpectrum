@@ -202,8 +202,19 @@ describe_release() { # describe_release TAG
 # --- --status
 
 cmd_status() {
-  local t at next notice
-  echo "current:   $(state current TAG) ($(state current COMMIT))"
+  local t at next notice cur_tag cur_commit
+  cur_tag="$(state current TAG)"
+  if [ -n "$cur_tag" ]; then
+    echo "current:   $cur_tag ($(state current COMMIT))"
+  else
+    # No engine run yet: the checkout tells what is installed, read as the
+    # service account like release-watch.sh does.
+    cur_tag="$(as_service git -C "$APP_DIR" describe --exact-match --tags HEAD 2>/dev/null || true)"
+    cur_commit="$(as_service git -C "$APP_DIR" rev-parse HEAD 2>/dev/null || true)"
+    if release_tag_valid "$cur_tag" && [[ "$cur_commit" =~ ^[0-9a-f]{40}$ ]]; then
+      echo "current:   $cur_tag ($cur_commit) (from the checkout)"
+    else echo "current:   unknown (no update recorded and the checkout is not at a release tag)"; fi
+  fi
   echo "previous: $(state previous TAG)"
   if state_has armed; then
     echo "armed:    $(state armed TAG) image $(state armed IMAGE)"

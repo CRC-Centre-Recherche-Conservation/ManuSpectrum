@@ -15,7 +15,7 @@
 <p>Centre national de la recherche scientifique (CNRS), 3 rue Michel-Ange, 75794 Paris cedex 16, {% trans "for the UAR 3224 Centre de recherche sur la conservation (CRC)." %}</p>
 
 <h2>{% trans "Data protection officer" %}</h2>
-<p>{% trans "Data protection officer of the CNRS" %} (CNRS, Service protection des données, 2 rue Jean Zay, 54519 Vandœuvre-lès-Nancy): <a href="mailto:dpd.demandes@cnrs.fr">dpd.demandes@cnrs.fr</a></p>
+<p>{% trans "Data protection officer of the CNRS" %} (CNRS, Service protection des données, 2 rue Jean Zay, 54519 Vandœuvre-lès-Nancy): <a href="mailto:dpd.demandes@dpd-cnrs.fr">dpd.demandes@dpd-cnrs.fr</a></p>
 
 <h2>{% trans "Purposes" %}</h2>
 <ul>
@@ -112,11 +112,11 @@
 <p>{% trans "None by the platform, which is hosted in France. The exceptions are the services above that are stated to process data outside the European Union or whose location is not stated: Google Fonts, WebSpellChecker, Let's Encrypt and OpenFreeMap (served through Cloudflare, United States)." %}</p>
 
 <h2>{% trans "Your rights" %}</h2>
-<p>{% trans "You can ask for access to your data, its correction, its erasure where the law allows it, a restriction of the processing, and you can object to it. You can also lodge a complaint with the CNIL." %}</p>
-<p><a href="https://www.cnil.fr/" rel="noopener">CNIL (www.cnil.fr)</a></p>
-<p>{% trans "To exercise your rights, write to:" %}
-    {% if ms_legal_email %}<a href="mailto:{{ ms_legal_email }}">{{ ms_legal_email }}</a>{% else %}<a href="{% url 'about-contact' %}">{% trans "the contact page" %}</a>{% endif %}
-    {% trans "or to the data protection officer above." %}</p>
+<p>{% trans "You can access and obtain a copy of the data concerning you, object to the processing of this data or have it rectified. You also have the right to restriction of the processing of your data. You can exercise these rights by contacting:" %}</p>
+<p>{% trans "Scientific lead of the project" %}, UAR 3224 Centre de recherche sur la conservation (CRC), 36 rue Geoffroy-Saint-Hilaire, 75005 Paris,
+    {% if ms_legal_email %}<a href="mailto:{{ ms_legal_email }}">{{ ms_legal_email }}</a>{% else %}<a href="{% url 'about-contact' %}">{% trans "the contact page" %}</a>{% endif %}</p>
+<p>{% trans "You can also contact the Data Protection Officer (DPO) of the CNRS at:" %} CNRS - Service protection des données, 2 rue Jean Zay, 54519 Vandœuvre-lès-Nancy - <a href="mailto:dpd.demandes@dpd-cnrs.fr">dpd.demandes@dpd-cnrs.fr</a>.</p>
+<p>{% trans "If you consider that your rights under the French Data Protection Act (Informatique et Libertés) are not respected, you can lodge a complaint online with the CNIL," %} 3 Place de Fontenoy, TSA 80715 – 75334 Paris Cedex 07 (<a href="https://www.cnil.fr/" rel="noopener">https://www.cnil.fr/</a>).</p>
 
 <h2>{% trans "Cookies and browser storage" %}</h2>
 <table>

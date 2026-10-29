@@ -122,9 +122,9 @@ Detailed build procedure: `deploy/rehearsal/README.md`. Here, the checks.
 - [ ] Verify it with Ansible, from the laptop (`deploy/ansible/README.md`): an inventory copied from
   `inventories/example/` with `baseline_mode: verify` and `rehearsal_host: true`, then
   `cd deploy/ansible && ansible-playbook -i inventories/<rehearsal> site.yml --ask-become-pass --tags preflight,baseline`.
-  - Expected: no failed task, `changed=0`.
+  - Expected: no failed task, and `changed=2` for the two marker tasks of `site.yml` (the marker is touched, then removed; `changed=3` when `/run/manuspectrum` does not exist yet, as its creation also counts), nothing else.
   - If an assertion fails: its message says what to do; note it and the output of the matching command.
-- [ ] Re-run `sudo ./host-baseline.sh` → everything "already done", then the Ansible verification again → `changed=0`.
+- [ ] Re-run `sudo ./host-baseline.sh` → everything "already done", then the Ansible verification again → the same two marker tasks only (`changed=2`).
 - [ ] After a full `ansible-playbook site.yml` (not only the baseline tags): `cat /etc/docker/daemon.json` (written by the Ansible `host` role) → `json-file` logs 10m x 5, `live-restore`,
   `no-new-privileges`; `docker info --format '{{.LiveRestoreEnabled}}'` → `true`.
   When containers already run and the file would change, the play stops and asks for
@@ -1321,7 +1321,7 @@ reboot.
   → four lines; both senders are the same address on the VM's own domain).
   - On failure: without `DEFAULT_FROM_EMAIL`, `web` refuses to start (`Set the DEFAULT_FROM_EMAIL environment variable`).
 - [ ] *(fresh install)* The alerts of a new host are expected until the first backup, restore test, release watch run and
-  timer runs (`BackupMissing`, `RestoreTestMissing`, `ReleaseWatchStale`...): `make -C deploy silence-fresh-install` (48 h),
+  timer runs (`BackupMissing`, `RestoreTestMissing`, `ReleaseWatchStale`, and `LoginRecordsPruneStale`, `EmbargoPassStale`, `WorkflowCleanupStale`, `AccountRetentionStale` until the first night): `make -C deploy silence-fresh-install` (48 h),
   or install the timers and take a backup before `observability-on`.
 - [ ] `make -C deploy volumes secrets monitoring-init up observability-on` → `grafana_admin_password: created`,
   `pg_monitor_password: created`, the others `kept`; `monitoring-init` ends without error; then
@@ -1341,8 +1341,8 @@ reboot.
 - [ ] The five dashboards (Overview, Application, Infrastructure, Storage and backups, Activity) open without a "No data" panel,
   except those that wait for an event (a restart, an OOM kill, a restore test not yet run). Editing a panel and
   saving is refused (read-only provisioning).
-- [ ] `deploy/compose/smoke.sh monitoring` (after `make -C deploy container-metrics disk-usage` and a backup,
-  `SMOKE_EXPECT_BACKUP=1`) → every line `ok`, exit 0.
+- [ ] `deploy/compose/smoke.sh monitoring` (after `make -C deploy container-metrics disk-usage`, a backup and
+  `make -C deploy restore-test`, which creates the restore-test gauges; `SMOKE_EXPECT_BACKUP=1`) → every line `ok`, exit 0.
 
 ### 7.3 Disk truth
 
@@ -1607,7 +1607,7 @@ signatures, the real systemd timers and the real mail relay.
 - [ ] *(admin)* `sudo -k; sudo manuspectrum-update --status` → asks for **your** password (no `NOPASSWD`), then prints
   `current:` with the installed tag and `armed:    none`.
 - [ ] *(admin)* `systemd-analyze verify /etc/systemd/system/manuspectrum-watch.service /etc/systemd/system/manuspectrum-watch.timer /etc/systemd/system/manuspectrum-update@.service /etc/systemd/system/manuspectrum-update-at.service /etc/systemd/system/manuspectrum-update-at.timer`
-  → no output.
+  → no output, except that `manuspectrum-update-at.timer` is refused until `--at` writes its slot (its drop-in): leave it out before 9.11.
   - On failure: a `@…@` left in a unit; the Ansible tests catch it in CI.
 
 ### 9.2 Outbound access and the first watch
@@ -1767,7 +1767,7 @@ read and record »). Paris time everywhere.
   --tags app` shortly before it and keep it paused (a `pause` or a slow gate); `ls -l /run/manuspectrum/ansible-running` → a
   root-owned file. At the slot the unit is not started or exits 1 with `Ansible is running on this host`: `--status` →
   `OUTCOME=refused REASON=busy`, mail `scheduled update of … refused: busy`. Meanwhile `--now vA` and `--at …` answer `Ansible is
-  running on this host`. When the playbook ends (also when it fails or is interrupted with Ctrl-C) the file is gone. The reverse: with
+  running on this host`. When the playbook ends (also when it fails) the file is gone. After a Ctrl-C the file stays (Ansible runs no `always` on a controller interrupt): with `pgrep -a ansible` empty on the laptop and on the host, remove it with `sudo rm /run/manuspectrum/ansible-running`; left alone it raises the `state` failure after 2 hours, and the next Ansible run takes it again and refreshes it. The reverse: with
   an update unit running, the playbook stops at once with `An update is running`, and the marker is removed.
 - [ ] *(host time zone)* `timedatectl show -p Timezone --value` → `Europe/Paris` after the baseline role ran (`baseline_mode: apply`;
   `verify` reports `The host time zone is …` otherwise). `sudo timedatectl set-timezone UTC`, then `--at "<slot>" vA` → `the host time
