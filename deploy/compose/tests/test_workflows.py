@@ -1,6 +1,9 @@
 """Contracts of the release workflows: what each one may do, parsed from the YAML."""
 
+import os
 import re
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -111,6 +114,120 @@ def write_jobs(workflow, scope):
         if scope in (job.get("permissions") or {})
         and job["permissions"][scope] == "write"
     )
+
+
+class LockfileTests(unittest.TestCase):
+    @staticmethod
+    def filter_script():
+        changes = load("deploy-lint.yml")["jobs"]["changes"]
+        return next(s["run"] for s in steps(changes) if s.get("id") == "filter")
+
+    def triggers(self, changed):
+        """Run the filter's patterns on a changed-file list; return the outputs."""
+        script = self.filter_script().replace(
+            'files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"',
+            'files="$CHANGED"',
+        )
+        out = Path(tempfile.mkdtemp()) / "output"
+        result = subprocess.run(
+            ["bash", "-c", script],
+            env={
+                "PATH": os.environ["PATH"],
+                "EVENT_NAME": "pull_request",
+                "CHANGED": changed,
+                "GITHUB_OUTPUT": str(out),
+            },
+            check=True,
+        )
+        self.assertEqual(result.returncode, 0)
+        try:
+            return dict(line.split("=") for line in out.read_text().split())
+        finally:
+            out.unlink()
+            out.parent.rmdir()
+
+    def test_pyproject_alone_only_runs_the_lock_check(self):
+        got = self.triggers("pyproject.toml")
+        self.assertEqual(got["image"], "false")
+        self.assertEqual(got["lockfile"], "true")
+        self.assertEqual(got["stack"], "false")
+
+    def test_the_lock_file_does_not_run_the_stack_job(self):
+        self.assertEqual(self.triggers("uv.lock")["stack"], "false")
+
+    def test_files_read_by_the_compose_tests_run_the_stack_job_only(self):
+        for path in (
+            "manuspectrum/urls.py",
+            "manuspectrum/settings.py",
+            "manuspectrum/observability/metrics.py",
+            "deploy/BACKUP.md",
+            "deploy/RELEASES.md",
+            "deploy/SECRETS.md",
+            "deploy/ACCEPTANCE.md",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["stack"], "true")
+        for path in ("deploy/BACKUP.md", "deploy/RELEASES.md"):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["image"], "false")
+
+    def test_build_context_config_files_build_the_image(self):
+        for path in (
+            "tsconfig.json",
+            ".babelrc",
+            ".browserslistrc",
+            "eslint.config.mjs",
+            ".prettierrc",
+            ".stylelintrc.json",
+            "gettext.config.js",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["image"], "true")
+
+    def test_an_unrelated_file_triggers_no_lock_check(self):
+        self.assertEqual(self.triggers("README.md")["lockfile"], "false")
+
+    def test_the_lockfile_job_uses_the_dockerfiles_uv_image(self):
+        jobs = load("deploy-lint.yml")["jobs"]
+        job = jobs["lockfile"]
+        self.assertEqual(job["needs"], "changes")
+        self.assertEqual(job["if"], "needs.changes.outputs.lockfile == 'true'")
+        self.assertIn("timeout-minutes", job)
+        run = "\n".join(s.get("run", "") for s in steps(job))
+        self.assertIn("lock --check", run)
+        self.assertIn("deploy/docker/Dockerfile", run)
+        self.assertIn("ARG UV_IMAGE=", (ROOT / "deploy/docker/Dockerfile").read_text())
+        checkout = next(s for s in steps(job) if "checkout" in s.get("uses", ""))
+        self.assertIs(checkout["with"]["persist-credentials"], False)
+        self.assertIn("lockfile", jobs["conclusion"]["needs"])
+
+
+class ReleaseScanTests(unittest.TestCase):
+    def test_the_trivy_action_keeps_no_cache(self):
+        scan = steps(load("release.yml")["jobs"]["scan"])
+        trivy = next(s for s in scan if "trivy-action" in s.get("uses", ""))
+        self.assertEqual(str(trivy["with"]["cache"]).lower(), "false")
+
+
+class DependabotTests(unittest.TestCase):
+    @staticmethod
+    def updates():
+        path = ROOT / ".github" / "dependabot.yml"
+        return yaml.safe_load(path.read_text())["updates"]
+
+    def test_python_updates_go_through_uv_and_every_entry_targets_dev(self):
+        updates = self.updates()
+        ecosystems = [u["package-ecosystem"] for u in updates]
+        self.assertIn("uv", ecosystems)
+        self.assertNotIn("pip", ecosystems)
+        self.assertIn("docker-compose", ecosystems)
+        for update in updates:
+            self.assertEqual(update["target-branch"], "dev", update["directory"])
+
+    def test_npm_groups_minor_and_patch(self):
+        npm = next(u for u in self.updates() if u["package-ecosystem"] == "npm")
+        group = next(iter(npm["groups"].values()))
+        self.assertEqual(sorted(group["update-types"]), ["minor", "patch"])
 
 
 class StagingTests(unittest.TestCase):
