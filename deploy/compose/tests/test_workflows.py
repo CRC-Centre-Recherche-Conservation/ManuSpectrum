@@ -123,9 +123,7 @@ class StagingTests(unittest.TestCase):
 
     def test_triggers(self):
         on = triggers(self.workflow)
-        self.assertEqual(
-            sorted(on["push"]["branches"]), ["feat/production-platform", "main"]
-        )
+        self.assertEqual(sorted(on["push"]["branches"]), ["dev", "main"])
         self.assertIn("workflow_dispatch", on)
         self.assertNotIn("tags", on["push"])
 
@@ -278,15 +276,33 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("actions/attest@", uses)
         self.assertIn("anchore/sbom-action", uses)
 
-    def test_an_attested_digest_must_not_pass_for_a_signed_one(self):
+    def test_provenance_is_not_a_signature_is_proved_before_any_attestation_of_this_workflow(
+        self,
+    ):
         sign = steps(self.jobs["sign"])
         names = [s.get("name", "") for s in sign]
-        negative = sign[names.index("Attestations are not a signature")]
-        self.assertIn("cosign verify", negative["run"])
-        self.assertIn("exit 1", negative["run"])
+        proof = names.index("Provenance is not a signature")
+        self.assertIn("cosign verify", sign[proof]["run"])
+        self.assertIn("exit 1", sign[proof]["run"])
+        self.assertLess(proof, names.index("Sign the digest (keyless)"))
         self.assertLess(
-            names.index("Attestations are not a signature"),
             names.index("Sign the digest (keyless)"),
+            names.index("Software bill of materials"),
+        )
+        self.assertLess(
+            names.index("Software bill of materials"),
+            names.index("Attach the bill of materials"),
+        )
+        installer = next(
+            i for i, s in enumerate(sign) if "cosign-installer" in s.get("uses", "")
+        )
+        self.assertLess(installer, proof)
+
+    def test_the_guard_checks_the_tag_version_against_app_version(self):
+        run = "\n".join(s.get("run", "") for s in steps(self.jobs["guard"]))
+        self.assertIn('release-version-guard.sh "$TAG" "$commit"', run)
+        self.assertLess(
+            run.index("release-ref-guard.sh"), run.index("release-version-guard.sh")
         )
 
     def test_promote_verifies_the_staging_attestation_before_tagging(self):
@@ -302,7 +318,7 @@ class ReleaseTests(unittest.TestCase):
             "--source-ref",
             '--source-digest "$COMMIT"',
             "refs/heads/main",
-            "refs/heads/feat/production-platform",
+            "refs/heads/dev",
             "oci://$IMAGE_NAME@$digest",
         ):
             self.assertIn(part, run)

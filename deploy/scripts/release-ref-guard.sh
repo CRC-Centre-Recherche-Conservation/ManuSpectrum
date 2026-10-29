@@ -16,7 +16,7 @@ source "$HERE/lib-release.sh"
 
 TAG="${1:?usage: release-ref-guard.sh TAG}"
 MAIN_REF="${MAIN_REF:-origin/main}"
-INTEGRATION_REF="${INTEGRATION_REF:-origin/feat/production-platform}"
+INTEGRATION_REF="${INTEGRATION_REF:-origin/dev}"
 
 refuse() { echo "release-ref-guard: $*" >&2; exit 1; }
 
@@ -29,7 +29,7 @@ if [[ "$TAG" =~ $final ]]; then
   kind="final"
 elif [[ "$TAG" =~ $candidate ]]; then
   branch="$INTEGRATION_REF"
-  branch_name="feat/production-platform"
+  branch_name="dev"
   kind="release-candidate"
 else
   refuse "'$TAG' is not a release tag (vX.Y.Z or vX.Y.Z-rc.N)"
