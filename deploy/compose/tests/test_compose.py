@@ -1401,6 +1401,24 @@ class MakeInitSubmoduleTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertIn("git is missing", result.stderr)
 
+    def test_a_malformed_package_line_in_the_env_file_is_refused(self):
+        clone = self.base / "clone"
+        self.git(self.base, "clone", "-q", str(self.app), str(clone))
+        for line in (
+            "export PKG_DIR=/srv/elsewhere",
+            'PKG_DIR="/srv/elsewhere"',
+            "PKG_DIR='/srv/elsewhere'",
+            "PKG_DIR = /srv/elsewhere",
+            "PKG_DIR=/srv/elsewhere # note",
+            "PKG_DIR=/srv/ok\nexport PKG_DIR=../../pkg",
+        ):
+            with self.subTest(malformed=line):
+                (clone / "deploy" / "compose" / ".env").write_text(line + "\n")
+                result = self.init(clone)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("must be a plain PKG_DIR=/path line", result.stderr)
+        self.assertEqual(self.docker_calls(), "")
+
     def test_the_default_path_in_the_env_file_is_still_checked(self):
         clone = self.base / "clone"
         self.git(self.base, "clone", "-q", str(self.app), str(clone))
