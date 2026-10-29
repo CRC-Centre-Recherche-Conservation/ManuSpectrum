@@ -98,7 +98,9 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
 - The data package (graphs, controlled lists, System Settings) is the `pkg`
   git submodule. Clone with `git clone --recurse-submodules …`, or run
   `git submodule update --init` in an existing clone. `PKG_DIR` in the env file
-  (default `../../pkg`, relative to `deploy/compose`) names the directory; the
+  (default `../../pkg`, relative to `deploy/compose`) names the directory, as a
+  plain `PKG_DIR=path` line (no `export`, quotes, spaces or comment: the Makefile
+  refuses it, like `SECRETS_DIR`); the
   image never contains it.
 - The first installation goes through `make init` only. It runs the `init`
   service (profile `init`, not started by `up`): `setup_db`, the admin password,
