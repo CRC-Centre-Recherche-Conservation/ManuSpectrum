@@ -3,7 +3,7 @@
 The reader is ``iiif.tokens.iiif_reader`` (session, else Bearer IIIF token);
 the guard is ``iiif.data.readable_file``. An unknown file is a bodyless 404;
 a file the reader may not read is a 401 to the visitor (the requested URL
-described as a ``Dataset`` with the Auth 1.0 and 2.0 services) and a bodyless
+described as an ``Image`` (micro-imaging file) or a ``Dataset`` with the Auth 1.0 and 2.0 services; a bad Bearer credential, which looks nothing up, always as a ``Dataset``) and a bodyless
 403 to a signed-in or token reader; a Bearer credential that is not a valid
 IIIF token is a 401. A reader whose view is the visitor's (never a token
 reader) gets ``public,
@@ -94,8 +94,8 @@ class DataView(View):
         version = data_version()
         try:
             record = data.readable_file(file_id, reader_of(request), version)
-        except data.Refused:
-            return refused(request, "Dataset", file_id)
+        except data.Refused as refusal:
+            return refused(request, refusal.type, file_id)
         if record is None:
             return not_found()
         try:

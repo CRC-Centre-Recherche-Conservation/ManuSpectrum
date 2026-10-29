@@ -172,9 +172,12 @@ class LanguageTests(ShapeCase):
 
         self.assertEqual(
             metadata["Technique"],
-            {"en": ["X-ray fluorescence, Raman"], "fr": ["Fluorescence X, Raman (fr)"]},
+            {
+                "en": ["X-ray fluorescence", "Raman"],
+                "fr": ["Fluorescence X", "Raman (fr)"],
+            },
         )
-        self.assertEqual(metadata["Operators"], {"none": ["Robinet, L., Heu, S."]})
+        self.assertEqual(metadata["Operators"], {"none": ["Robinet, L.", "Heu, S."]})
         self.assertEqual(metadata["Dates"], {"none": ["2024-03-12 – 2024-03-14"]})
         self.assertEqual(metadata["Project"], {"none": ["EMMA"]})
         self.assertEqual(metadata["Component"], {"en": ["f. 1v — initial"]})
@@ -197,9 +200,9 @@ class LanguageTests(ShapeCase):
 
 
 class LinkTests(ShapeCase):
-    def test_the_doi_see_also_has_a_string_id(self):
-        see_also = self.annotation_of("open")["seeAlso"]
-        doi = next(link for link in see_also if "doi.org" in link["id"])
+    def test_the_doi_homepage_has_a_string_id(self):
+        homepage = self.annotation_of("open")["homepage"]
+        doi = next(link for link in homepage if "doi.org" in link["id"])
 
         self.assertEqual(
             doi,
@@ -211,8 +214,8 @@ class LinkTests(ShapeCase):
             },
         )
 
-    def test_the_report_is_the_first_see_also(self):
-        report = self.annotation_of("open")["seeAlso"][0]
+    def test_the_report_is_the_first_homepage(self):
+        report = self.annotation_of("open")["homepage"][0]
 
         self.assertEqual(report["id"], ids.report(self.analyses["open"].pk))
         self.assertEqual(report["format"], "text/html")
@@ -229,11 +232,21 @@ class LinkTests(ShapeCase):
             ["X01_f1v.csv, series"],
         )
 
-    def test_the_raw_files_are_in_see_also(self):
-        see_also = [link["id"] for link in self.annotation_of("open")["seeAlso"]]
+    def test_the_raw_files_are_renderings_with_their_services(self):
+        annotation = self.annotation_of("open")
+        renderings = {link["id"]: link for link in annotation["rendering"]}
 
-        self.assertIn(ids.data_raw(self.file_id), see_also)
-        self.assertIn(ids.data_raw(self.raw_id), see_also)
+        self.assertIn(ids.data_raw(self.file_id), renderings)
+        self.assertIn(ids.data_raw(self.raw_id), renderings)
+        for link in renderings.values():
+            with self.subTest(link=link["id"]):
+                self.assertEqual(
+                    set(link), {"id", "type", "format", "label", "service"}
+                )
+                self.assertEqual(link["service"][0]["@type"], "AuthCookieService1")
+
+    def test_no_human_page_or_raw_file_is_a_see_also(self):
+        self.assertNotIn("seeAlso", self.annotation_of("open"))
 
     def test_no_format_is_text_txt_or_empty(self):
         for fmt in all_values(self.page(), "format"):

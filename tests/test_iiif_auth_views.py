@@ -188,6 +188,22 @@ class TokenTests(AuthCase):
         self.assertEqual(policy, f"frame-ancestors 'self' {own_origin()} {DEMO}")
         self.assertEqual(response["Cache-Control"], "private, no-store")
 
+    def test_a_distrusted_origin_page_can_be_framed_by_any_viewer(self):
+        response = self.token_page(signed_in(self.user), origin="https://evil.example")
+
+        self.assertEqual(
+            script_data(response, "iiif-auth-message")["error"], "invalidOrigin"
+        )
+        self.assertEqual(response["Content-Security-Policy"], "frame-ancestors *")
+
+    def test_an_error_page_without_a_token_is_not_limited_to_the_allowlist(self):
+        response = self.token_page(Client(), origin=DEMO)
+
+        self.assertEqual(
+            script_data(response, "iiif-auth-message")["error"], "missingCredentials"
+        )
+        self.assertEqual(response["Content-Security-Policy"], "frame-ancestors *")
+
     def test_token_json_without_message_id(self):
         response = signed_in(self.user).get("/iiif/auth/1/token", {"origin": DEMO})
 

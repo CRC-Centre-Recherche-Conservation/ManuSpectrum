@@ -159,26 +159,48 @@ def qualified(name, qualifier=None):
     return rendered
 
 
-def joined(maps, sep=", "):
-    """One string per language joining *maps* in order (multi-valued metadata).
+def _own(value, code):
+    """The texts *value* gives under *code*: its own, else its ``none`` texts; never another language's."""
+    return value.get(code) or value.get(NONE) or []
 
-    The languages are those any map carries, configured ones first. In each
-    language a map gives its own texts, else its ``none`` texts, else those of
-    its first language. Maps carrying ``none`` only give ``{"none": [...]}``.
-    """
-    maps = [m for m in maps if m]
-    if not maps:
-        return {}
+
+def _languages_of(maps):
+    """The language codes any of *maps* carries (``none`` apart), configured ones first."""
     order = [*languages()]
     tagged = []
     for value in maps:
-        for lang in value:
-            if lang != NONE and lang not in tagged:
-                tagged.append(lang)
-    tagged.sort(key=lambda lang: order.index(lang) if lang in order else len(order))
+        for code in value:
+            if code != NONE and code not in tagged:
+                tagged.append(code)
+    tagged.sort(key=lambda code: order.index(code) if code in order else len(order))
+    return tagged
+
+
+def listed(maps):
+    """One language map holding one string per value of *maps*, in order (multi-valued metadata).
+
+    The languages are those any map carries, configured ones first. In each
+    language a map gives its own texts, else its ``none`` texts, else nothing:
+    a text is never filed under another language. Maps carrying ``none`` only
+    give ``{"none": [...]}``.
+    """
+    maps = [m for m in maps if m]
+    tagged = _languages_of(maps)
     if not tagged:
-        return {NONE: [sep.join(sep.join(m[NONE]) for m in maps)]}
-    return {lang: [sep.join(text_in(m, lang, sep) for m in maps)] for lang in tagged}
+        texts = [t for m in maps for t in m.get(NONE, ())]
+        return {NONE: texts} if texts else {}
+    return {code: [t for m in maps for t in _own(m, code)] for code in tagged}
+
+
+def joined(maps, sep=", "):
+    """One string per language joining *maps* in order (a composite text such as a name and its qualifier).
+
+    The languages are those any map carries, configured ones first. In each
+    language a map gives its own texts, else its ``none`` texts, else
+    nothing (``listed`` rules). Maps carrying ``none`` only give
+    ``{"none": [...]}``.
+    """
+    return {code: [sep.join(texts)] for code, texts in listed(maps).items() if texts}
 
 
 def descriptor_names(descriptors):
@@ -214,8 +236,8 @@ def reference_items(value):
 
 
 def reference_labels(value):
-    """Labels of every item of a reference value, one string per language."""
-    return joined(reference_item_labels(item) for item in reference_items(value))
+    """Labels of every item of a reference value, one string per item in each language."""
+    return listed(reference_item_labels(item) for item in reference_items(value))
 
 
 def to_v2(value):

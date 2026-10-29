@@ -1822,6 +1822,10 @@ msgstr "Keys"
 msgid "The type of the object. Required."
 msgstr "The type of the object. Required."
 
+#: templates/iiif/xy_reading_1.htm:27
+msgid "The documentation of the version of xyReading the object follows (this page)."
+msgstr "The documentation of the version of xyReading the object follows (this page)."
+
 #: templates/iiif/xy_reading_1.htm:28
 msgid ""
 "CSV dialect of the file (CSV on the Web terms): <code>delimiter</code>, "

@@ -120,8 +120,12 @@ class ProjectCascadeTests(IIIFPermissionCase):
                 self.assertEqual(refused.status_code, 401)
                 self.assertEqual(refused["Cache-Control"], PRIVATE)
                 body = refused.json()
-                self.assertEqual(body["type"], "Annotation")
-                self.assertTrue(body["id"].endswith(url))
+                if "/iiif/v2/" in url:
+                    self.assertEqual(body["@type"], "oa:Annotation")
+                    self.assertTrue(body["@id"].endswith(url))
+                else:
+                    self.assertEqual(body["type"], "Annotation")
+                    self.assertTrue(body["id"].endswith(url))
                 self.assertNotIn("X01", refused.content.decode())
         collection = self.visitor.get(self.document_urls()[0])
         self.assertEqual(collection.status_code, 200)
@@ -374,7 +378,8 @@ class RestrictedCase(IIIFPermissionCase):
         self.assert_private(response, 401)
         self.assertIn("Bearer", response["WWW-Authenticate"])
         body = response.json()
-        login = body["service"][0]
+        services = body["service"]
+        login = services if isinstance(services, dict) else services[0]
         self.assertEqual(login["profile"], "http://iiif.io/api/auth/1/login")
         self.assertEqual(
             login["service"][0]["profile"], "http://iiif.io/api/auth/1/token"
@@ -394,6 +399,9 @@ class RestrictedCase(IIIFPermissionCase):
                             f"/iiif/auth/2/probe/{self.file_id}"
                         )
                     )
+                elif "/iiif/v2/" in url:
+                    self.assertEqual(body["@type"], "oa:Annotation")
+                    self.assertIsInstance(body["service"], dict)
                 else:
                     self.assertEqual(body["type"], "Annotation")
                     self.assertEqual(len(body["service"]), 1)
