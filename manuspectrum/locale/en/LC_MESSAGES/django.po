@@ -2196,8 +2196,8 @@ msgid "Source code"
 msgstr "Source code"
 
 #: templates/includes/ms_footer.htm:66 templates/includes/ms_footer.htm:75
-msgid "GPL-3.0 License"
-msgstr "GPL-3.0 License"
+msgid "AGPL-3.0 License"
+msgstr "AGPL-3.0 License"
 
 #: templates/includes/ms_footer.htm:69 templates/includes/ms_footer.htm:78
 msgid ""
@@ -5958,12 +5958,12 @@ msgstr "Software and content"
 
 #: templates/views/pages/legal.htm:55
 msgid ""
-"The platform's source code is published under the GNU General Public License"
-" v3. Each resource states the licence that applies to its data and files; "
+"The platform's source code is published under the GNU Affero General Public "
+"License v3. Each resource states the licence that applies to its data and files; "
 "read it before reusing them."
 msgstr ""
-"The platform's source code is published under the GNU General Public License"
-" v3. Each resource states the licence that applies to its data and files; "
+"The platform's source code is published under the GNU Affero General Public "
+"License v3. Each resource states the licence that applies to its data and files; "
 "read it before reusing them."
 
 #: templates/views/pages/legal.htm:62
@@ -6389,27 +6389,9 @@ msgstr ""
 msgid "Your rights"
 msgstr "Your rights"
 
-#: templates/views/pages/privacy.htm:115
-msgid ""
-"You can ask for access to your data, its correction, its erasure where the "
-"law allows it, a restriction of the processing, and you can object to it. "
-"You can also lodge a complaint with the CNIL."
-msgstr ""
-"You can ask for access to your data, its correction, its erasure where the "
-"law allows it, a restriction of the processing, and you can object to it. "
-"You can also lodge a complaint with the CNIL."
-
-#: templates/views/pages/privacy.htm:117
-msgid "To exercise your rights, write to:"
-msgstr "To exercise your rights, write to:"
-
 #: templates/views/pages/privacy.htm:118
 msgid "the contact page"
 msgstr "the contact page"
-
-#: templates/views/pages/privacy.htm:119
-msgid "or to the data protection officer above."
-msgstr "or to the data protection officer above."
 
 #: templates/views/pages/privacy.htm:121
 msgid "Cookies and browser storage"
@@ -6654,11 +6636,11 @@ msgstr ""
 
 #: templates/views/pages/team.htm:177
 msgid ""
-"The platform's source code is published under the GNU General Public License"
-" v3. Reading and downloading published data needs no account."
+"The platform's source code is published under the GNU Affero General Public "
+"License v3. Reading and downloading published data needs no account."
 msgstr ""
-"The platform's source code is published under the GNU General Public License"
-" v3. Reading and downloading published data needs no account."
+"The platform's source code is published under the GNU Affero General Public "
+"License v3. Reading and downloading published data needs no account."
 
 #: templates/views/pages/terms.htm:5 templates/views/pages/terms.htm:6
 msgid ""
@@ -7622,3 +7604,33 @@ msgstr "A machine API with personal read-only access tokens (OAuth, MCP) is plan
 #: templates/views/pages/data.htm
 msgid "The public products of the Analysis Explorer, meant to be downloaded, cited and opened in other tools."
 msgstr "The public products of the Analysis Explorer, meant to be downloaded, cited and opened in other tools."
+
+#: templates/views/pages/privacy.htm
+msgid ""
+"You can access and obtain a copy of the data concerning you, object to "
+"the processing of this data or have it rectified. You also have the "
+"right to restriction of the processing of your data. You can exercise "
+"these rights by contacting:"
+msgstr ""
+"You can access and obtain a copy of the data concerning you, object to "
+"the processing of this data or have it rectified. You also have the "
+"right to restriction of the processing of your data. You can exercise "
+"these rights by contacting:"
+
+#: templates/views/pages/privacy.htm
+msgid "Scientific lead of the project"
+msgstr "Scientific lead of the project"
+
+#: templates/views/pages/privacy.htm
+msgid "You can also contact the Data Protection Officer (DPO) of the CNRS at:"
+msgstr "You can also contact the Data Protection Officer (DPO) of the CNRS at:"
+
+#: templates/views/pages/privacy.htm
+msgid ""
+"If you consider that your rights under the French Data Protection Act "
+"(Informatique et Libertés) are not respected, you can lodge a complaint "
+"online with the CNIL,"
+msgstr ""
+"If you consider that your rights under the French Data Protection Act "
+"(Informatique et Libertés) are not respected, you can lodge a complaint "
+"online with the CNIL,"

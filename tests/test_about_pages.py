@@ -631,7 +631,7 @@ class LegalPagesTests(TestCase):
     def test_privacy_names_the_cnrs_dpo_and_the_cnil(self):
         for lang in ("en", "fr"):
             html = self.get("about-privacy", lang)
-            self.assertIn("dpd.demandes@cnrs.fr", html)
+            self.assertIn("dpd.demandes@dpd-cnrs.fr", html)
             self.assertIn("2 rue Jean Zay, 54519 Vandœuvre-lès-Nancy", html)
             self.assertIn("https://www.cnil.fr/", html)
 
