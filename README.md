@@ -12,7 +12,7 @@ structured with CIDOC-CRM and published through IIIF.*
 [![Release](https://img.shields.io/github/v/release/CRC-Centre-Recherche-Conservation/ManuSpectrum?include_prereleases&sort=semver&label=release&color=2b6cb0)](https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/releases)
 [![Licence: AGPL-3.0](https://img.shields.io/badge/licence-AGPL--3.0-blue)](LICENSE)
 
-[![Arches 8.1](https://img.shields.io/badge/Arches-8.1-8a3b12)](https://www.archesproject.org/)
+[![Built on Arches](https://img.shields.io/badge/built%20on-Arches-8a3b12)](https://www.archesproject.org/)
 [![Django 5.2](https://img.shields.io/badge/Django-5.2-0c4b33?logo=django&logoColor=white)](https://www.djangoproject.com/)
 [![Python 3.11–3.13](https://img.shields.io/badge/Python-3.11%E2%80%933.13-3776ab?logo=python&logoColor=white)](pyproject.toml)
 [![Vue 3](https://img.shields.io/badge/Vue-3-42b883?logo=vuedotjs&logoColor=white)](https://vuejs.org/)
@@ -73,28 +73,73 @@ The interface is fully bilingual (English and French).
 
 ```mermaid
 flowchart LR
-    subgraph Lab["Laboratories"]
-        I[Instruments<br/>XRF · Raman · FTIR · FORS · imaging]
+    %% Sources
+    subgraph SRC["📥 Sources"]
+        direction TB
+        LAB["🔬 <b>Laboratories</b><br/>XRF · Raman · FTIR · FORS<br/>multispectral & hyperspectral imaging"]
+        BIB["📚 <b>Biblissima</b><br/>manuscripts, holdings,<br/>IIIF manifests"]
+        LIB["🏛️ <b>Libraries' IIIF servers</b><br/>digitised folios"]
     end
-    subgraph MS["ManuSpectrum (Arches 8)"]
-        DB[(PostgreSQL / PostGIS<br/>CIDOC-CRM graphs)]
-        ES[(Elasticsearch)]
-        IMG[Cantaloupe<br/>IIIF Image API]
-        API[IIIF + Explorer APIs]
+
+    %% Entry
+    subgraph IN["✍️ Data entry"]
+        direction TB
+        WF["Workflows<br/><i>New project · Import Biblissima</i>"]
+        CARD["Resource editor<br/><i>cards, XY renderer,<br/>imaging layers</i>"]
+        BULK["Bulk Data Manager<br/><i>Excel / CSV imports</i>"]
     end
-    subgraph Out["Readers"]
-        EX[Analysis Explorer]
-        MIR[Mirador + mirador-xyviewer]
-        ANY[Any IIIF viewer,<br/>harvesters, notebooks]
+
+    %% Core
+    subgraph CORE["🧠 ManuSpectrum on Arches"]
+        direction TB
+        MODEL["<b>CIDOC-CRM / CRMsci graphs</b><br/>Project · Document · Component<br/>Analysis · Characterization · Sample …"]
+        VOC["<b>SKOS vocabularies</b><br/>techniques, materials,<br/>colours, places"]
+        RULES["<b>Rules on the server</b><br/>permissions · embargoes<br/>XY configuration triggers"]
+        DB[("PostgreSQL / PostGIS")]
+        ES[("Elasticsearch")]
+        IMG["Cantaloupe<br/><i>IIIF Image API</i>"]
+        MODEL --- DB
+        VOC --- DB
+        RULES --- DB
+        DB --> ES
     end
-    BIB[Biblissima] --> MS
-    I -->|curated entry, ETL, CSV| DB
-    DB --> API
-    ES --> API
-    IMG --> API
-    API --> EX
-    API --> MIR
-    API --> ANY
+
+    %% Publication
+    subgraph OUT["🌐 Open products"]
+        direction TB
+        IIIF["<b>IIIF</b> Presentation 3 & 2.1<br/>annotations · Content State<br/>xyReading · Auth"]
+        EXP["<b>Exports</b><br/>clean CSV spectra<br/>RO-Crate packages · citations"]
+        APIX["<b>Explorer API</b><br/>corpus, facets, synthesis"]
+    end
+
+    %% Readers
+    subgraph READ["👀 Readers"]
+        direction TB
+        EXPL["🔎 <b>Analysis Explorer</b><br/>Corpus · Compare · Light table<br/>Map & timeline"]
+        MIR["🧩 <b>Mirador + mirador-xyviewer</b><br/>spectra on the folio"]
+        ANY["🤖 Any IIIF viewer,<br/>harvesters, notebooks"]
+    end
+
+    LAB --> WF & CARD & BULK
+    BIB --> WF
+    LIB -. images .-> IMG
+    WF & CARD & BULK --> MODEL
+    CORE --> IIIF & EXP & APIX
+    IMG --> IIIF
+    APIX --> EXPL
+    IIIF --> EXPL & MIR & ANY
+    EXP --> ANY
+
+    classDef src fill:#fff7e6,stroke:#b7791f,color:#3d2a00
+    classDef entry fill:#eef6ff,stroke:#2b6cb0,color:#0b2545
+    classDef core fill:#f3ecff,stroke:#6b46c1,color:#22104a
+    classDef out fill:#e9f8ef,stroke:#2f855a,color:#0f3a22
+    classDef read fill:#fdeeee,stroke:#c53030,color:#4a0d0d
+    class LAB,BIB,LIB src
+    class WF,CARD,BULK entry
+    class MODEL,VOC,RULES,DB,ES,IMG core
+    class IIIF,EXP,APIX out
+    class EXPL,MIR,ANY read
 ```
 
 Spectra are drawn straight from IIIF annotations by
@@ -103,7 +148,7 @@ plugin: the data is never locked inside the platform.
 
 ## 🛠️ Built with
 
-- **[Arches 8.1](https://www.archesproject.org/)**: the open-source heritage data platform it extends, with project
+- **[Arches](https://www.archesproject.org/)**: the open-source heritage data platform it extends, with project
   datatypes, functions, widgets, search components and workflows.
 - **Django 5.2**, **PostgreSQL / PostGIS**, **Elasticsearch 8**, **Celery** and **Redis**.
 - **Vue 3 + TypeScript** for the public applications, **Knockout** where Arches requires it, **Plotly**, **Leaflet**
@@ -151,9 +196,9 @@ Start with [`deploy/README.md`](deploy/README.md), then:
 
 ## 🤝 Contributing
 
-Issues and pull requests are welcome. Branches start from `dev` (the integration branch); `main` holds what is
-released. CI runs the Python and frontend test suites on Python 3.11 to 3.13, linters, a coverage gate, secret scanning
-and, for deployment changes, the whole stack in containers.
+Issues and pull requests are welcome: read [`CONTRIBUTING.md`](CONTRIBUTING.md) first. Branches start from `dev` (the
+integration branch); `main` holds what is released. Please report vulnerabilities privately, as described in
+[`SECURITY.md`](SECURITY.md), and follow the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## 📚 Cite ManuSpectrum
 
