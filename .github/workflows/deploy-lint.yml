@@ -56,19 +56,23 @@ jobs:
           files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"
           matches() { if grep -Eq "$1" <<<"$files"; then echo true; else echo false; fi; }
           workflow='\.github/workflows/(deploy-lint|stack-proof)\.yml$'
-          # check-stack.sh lints every project workflow but main.yml (actionlint).
-          workflows='\.github/workflows/'
-          stack='deploy/(docker|compose|certs|logrotate|systemd|runbooks|sbin)/|deploy/(check-stack\.sh|Makefile|OBSERVABILITY\.md)$|deploy/scripts/|\.gitleaks\.toml$|\.pre-commit-config\.yaml$|\.gitignore$|\.dockerignore$|\.trivyignore$|manuspectrum/templates/errors/500\.htm$'
-          # The lockfile job owns pyproject.toml; the image installs from uv.lock alone.
-          # Read by the Compose-rule tests of check-stack.sh; they do not touch the image.
-          tests='manuspectrum/(urls|settings)\.py$|manuspectrum/observability/metrics\.py$|deploy/(ACCEPTANCE|BACKUP|OBSERVABILITY|README|RELEASES|SECRETS)\.md$'
+          # `stack` runs unless every changed file is known not to be read by
+          # check-stack.sh or its tests (Compose rules, nginx edge, scripts, rendered
+          # systemd units). A new or unknown path therefore runs it. Keep a path out of
+          # this list as soon as a test reads it. The Django tests (`tests/`) and the
+          # frontend never reach the kit; `errors/500.htm` is mounted by the nginx tests.
+          deny='^(manuspectrum/(src|media|locale)/|manuspectrum/templates/(?!errors/500\.htm$)|tests/|releases/|(README|CONTRIBUTING|SECURITY|CODE_OF_CONDUCT)\.md$|CITATION\.cff$|NOTICE$|LICENSE$|\.github/(ISSUE_TEMPLATE/|PULL_REQUEST_TEMPLATE\.md$)|vitest\.[^/]*$|.*\.spec\.(ts|js)$)'
+          # The image proof stays an allow-list (15-30 min): what it builds or installs from.
+          kit='deploy/(docker|compose|certs|logrotate|systemd|runbooks|sbin)/|deploy/(check-stack\.sh|Makefile|OBSERVABILITY\.md)$|deploy/scripts/|\.gitleaks\.toml$|\.pre-commit-config\.yaml$|\.gitignore$|\.dockerignore$|\.trivyignore$|manuspectrum/templates/errors/500\.htm$'
           lock='uv\.lock$'
           project='pyproject\.toml$'
           build='\.babelrc$|\.browserslistrc$|tsconfig\.json$|eslint\.config\.mjs$|\.prettierrc$|\.stylelintrc\.json$|gettext\.config\.js$|pkg$|\.gitmodules$|package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/utils/client_ip\.py$|manuspectrum/management/commands/(rewrite_dev_origin|export_pkg|check_pkg_inventory)\.py$|manuspectrum/(migrations|system_settings)/|manuspectrum/basemaps\.py$|manuspectrum/constants/openfreemap_bright_layers\.json$|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
+          stack=false
+          if [ -n "$files" ] && grep -Pvq "$deny" <<<"$files"; then stack=true; fi
           {
             echo "rehearsal=$(matches "^(deploy/rehearsal/|$workflow)")"
-            echo "stack=$(matches "^($stack|$tests|$workflows)")"
-            echo "image=$(matches "^($stack|$lock|$build|$workflow)")"
+            echo "stack=$stack"
+            echo "image=$(matches "^($kit|$lock|$build|$workflow)")"
             echo "lockfile=$(matches "^($lock|$project|$workflow)")"
             echo "ansible=$(matches "^(deploy/ansible/|deploy/systemd/|deploy/logrotate/|deploy/sbin/|deploy/scripts/release-|deploy/scripts/lib-(release|metrics)\\.sh$|deploy/scripts/image-(digest|retag)\\.sh$|deploy/Makefile$|deploy/compose/\\.env\\.example$|deploy/rehearsal/(host|verify)-baseline\\.sh$|$workflow)")"
           } >> "$GITHUB_OUTPUT"

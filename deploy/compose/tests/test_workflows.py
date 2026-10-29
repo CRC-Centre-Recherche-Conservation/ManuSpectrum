@@ -150,10 +150,6 @@ class LockfileTests(unittest.TestCase):
         got = self.triggers("pyproject.toml")
         self.assertEqual(got["image"], "false")
         self.assertEqual(got["lockfile"], "true")
-        self.assertEqual(got["stack"], "false")
-
-    def test_the_lock_file_does_not_run_the_stack_job(self):
-        self.assertEqual(self.triggers("uv.lock")["stack"], "false")
 
     def test_files_read_by_the_compose_tests_run_the_stack_job_only(self):
         for path in (
@@ -186,6 +182,42 @@ class LockfileTests(unittest.TestCase):
 
     def test_an_unrelated_file_triggers_no_lock_check(self):
         self.assertEqual(self.triggers("README.md")["lockfile"], "false")
+
+    def test_the_stack_job_runs_unless_every_file_is_known_to_stay_out(self):
+        for changed in (
+            "manuspectrum/src/manuspectrum/pages/X.vue\nmanuspectrum/media/js/a.js",
+            "manuspectrum/media/js/utils/a.spec.js\nvitest.config.mts",
+            "README.md\nreleases/1.0.0.md\nCITATION.cff\nNOTICE",
+            "tests/test_x.py\nmanuspectrum/locale/fr/LC_MESSAGES/django.po",
+            "manuspectrum/templates/views/pages/about.htm",
+            ".github/ISSUE_TEMPLATE/bug_report.yml\n.github/PULL_REQUEST_TEMPLATE.md",
+            "",
+        ):
+            with self.subTest(changed=changed):
+                self.assertEqual(self.triggers(changed)["stack"], "false")
+        for changed in (
+            "foo/bar.txt",
+            "manuspectrum/views/x.py",
+            "manuspectrum/templates/errors/500.htm",
+            "README.md\ndeploy/scripts/backup.sh",
+            "docs-only.md\nREADME.md",
+            "pyproject.toml",
+            "uv.lock",
+            ".github/workflows/pip-audit.yml",
+        ):
+            with self.subTest(changed=changed):
+                self.assertEqual(self.triggers(changed)["stack"], "true")
+
+    def test_the_image_proof_stays_an_allow_list(self):
+        for path in (
+            "manuspectrum/settings_docker.py",
+            "deploy/docker/entrypoint.sh",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["image"], "true")
+        for path in ("foo/bar.txt", "manuspectrum/views/x.py", "README.md"):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["image"], "false")
 
     def test_the_lockfile_job_uses_the_dockerfiles_uv_image(self):
         jobs = load("deploy-lint.yml")["jobs"]
