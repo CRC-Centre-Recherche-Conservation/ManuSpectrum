@@ -116,13 +116,30 @@ class RenderedTests(unittest.TestCase):
                 PLACEHOLDER.search(path.read_text(encoding="utf-8")), path.name
             )
 
+    def test_no_dotdot_component_in_an_environment_or_exec_line(self):
+        for unit in sorted((self.out / "units").iterdir()):
+            for line in unit.read_text(encoding="utf-8").splitlines():
+                if re.match(r"(Environment|Exec\w*)=", line):
+                    self.assertNotIn("..", line.split("/"), f"{unit.name}: {line}")
+                    self.assertIsNone(
+                        re.search(r"(^|[=/\s\"])\.\.(/|\s|$|\")", line),
+                        f"{unit.name}: {line}",
+                    )
+
+    def test_release_units_carry_the_checkout_as_app_dir(self):
+        for name in ("manuspectrum-watch.service", "manuspectrum-update@.service"):
+            lines = (self.out / "units" / name).read_text(encoding="utf-8").splitlines()
+            self.assertIn("Environment=APP_DIR=/home/manuspectrum/manuspectrum", lines)
+
     def test_rendered_files_equal_the_plain_substitution_the_shell_tests_use(self):
         for unit in sorted((self.out / "units").iterdir()):
             source = (DEPLOY / "systemd" / f"{unit.name}.in").read_text(
                 encoding="utf-8"
             )
-            expected = source.replace("@APP_USER@", "manuspectrum").replace(
-                "@DEPLOY_DIR@", "/home/manuspectrum/manuspectrum/deploy"
+            expected = (
+                source.replace("@APP_USER@", "manuspectrum")
+                .replace("@DEPLOY_DIR@", "/home/manuspectrum/manuspectrum/deploy")
+                .replace("@APP_DIR@", "/home/manuspectrum/manuspectrum")
             )
             self.assertEqual(unit.read_text(encoding="utf-8"), expected, unit.name)
         source = (DEPLOY / "logrotate" / "manuspectrum-nginx.in").read_text(

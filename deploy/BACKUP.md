@@ -76,12 +76,12 @@ the window is seconds.
 3. `make -C deploy backup-init` creates the repository, or checks that an
    existing one opens with this password. Run it again at any time.
 4. Install the timers. The configuration management does it in production; by
-   hand, substitute the two placeholders and enable them:
+   hand, substitute the placeholders and enable them:
 
    ```bash
    for unit in backup restore-test; do
      for kind in service timer; do
-       sed -e "s|@APP_USER@|$(id -un)|" -e "s|@DEPLOY_DIR@|$PWD/deploy|" \
+       sed -e "s|@APP_USER@|$(id -un)|" -e "s|@DEPLOY_DIR@|$PWD/deploy|" -e "s|@APP_DIR@|$PWD|" \
          deploy/systemd/manuspectrum-$unit.$kind.in |
          sudo tee /etc/systemd/system/manuspectrum-$unit.$kind >/dev/null
      done

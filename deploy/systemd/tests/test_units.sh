@@ -35,6 +35,7 @@ for file in $FILES; do
     cp "$RENDERED_UNITS_DIR/$file" "$TMP/$file"
   else
     sed -e "s|@APP_USER@|$(id -un)|g" -e "s|@DEPLOY_DIR@|$DEPLOY_DIR|g" \
+      -e "s|@APP_DIR@|$(dirname "$DEPLOY_DIR")|g" \
       "$UNITS/$file.in" >"$TMP/$file"
   fi
   ! grep -q '@[A-Z_]*@' "$TMP/$file"
@@ -46,6 +47,7 @@ done
 # Ansible's.
 APP_USER_RENDERED="$(sed -n 's/^User=//p' "$TMP/manuspectrum-backup.service")"
 DEPLOY_DIR_RENDERED="$(sed -n 's|^ExecStart=/usr/bin/make -C \([^ ]*\) backup.*|\1|p' "$TMP/manuspectrum-backup.service")"
+APP_DIR_RENDERED="${DEPLOY_DIR_RENDERED%/deploy}"
 
 # The slot of the -at timer comes from a root drop-in written by the front.
 mkdir "$TMP/manuspectrum-update-at.timer.d"
@@ -98,8 +100,12 @@ grep -q '^Type=oneshot' "$WS" && grep -q "^User=$APP_USER_RENDERED$" "$WS" \
 assert "watch: a oneshot of the service account running the root-owned script" $?
 grep -q '^Environment=STATE_DIR=/var/lib/manuspectrum/release$' "$WS" \
   && grep -q '^Environment=RELEASE_LIB_DIR=/usr/local/lib/manuspectrum/release$' "$WS" \
-  && grep -q "^Environment=APP_DIR=$DEPLOY_DIR_RENDERED/\.\.$" "$WS"
+  && grep -q "^Environment=APP_DIR=$APP_DIR_RENDERED$" "$WS"
 assert "watch: APP_DIR, STATE_DIR and RELEASE_LIB_DIR are set" $?
+grep -q "^Environment=APP_DIR=$APP_DIR_RENDERED$" "$US"
+assert "update@: APP_DIR is the checkout itself" $?
+! grep -E '^(Environment|Exec[A-Za-z]*)=' "$TMP"/*.service | grep -qE '(^|[=/ "])\.\.(/|$| |")'
+assert "no rendered Environment= or Exec*= line has a .. path component" $?
 ! grep -q '^\[Install\]' "$US"
 assert "update@: no [Install] section" $?
 grep -q '^Type=oneshot' "$US" && grep -q "^User=$APP_USER_RENDERED$" "$US" \

@@ -40,7 +40,8 @@
     content: >-
       {{ lookup('ansible.builtin.file', playbook_dir ~ '/../systemd/' ~ item ~ '.in', rstrip=false)
       | replace('@APP_USER@', service_user)
-      | replace('@DEPLOY_DIR@', app_dir ~ '/deploy') }}
+      | replace('@DEPLOY_DIR@', app_dir ~ '/deploy')
+      | replace('@APP_DIR@', app_dir) }}
     dest: "{{ app_render_units_dir }}/{{ item }}"
     owner: "{{ app_render_owner | default(omit) }}"
     group: "{{ app_render_owner | default(omit) }}"

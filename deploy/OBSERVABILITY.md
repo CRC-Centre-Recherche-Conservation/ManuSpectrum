@@ -430,7 +430,7 @@ requires its series), or its name in `UNPRIMED_METRICS` and a reason
 ## Installing and upgrading
 
 The units are installed by the configuration management (PP-8). Until then, on a
-host, render the `deploy/systemd/*.in` files (`@APP_USER@`, `@DEPLOY_DIR@`), copy
+host, render the `deploy/systemd/*.in` files (`@APP_USER@`, `@DEPLOY_DIR@`, `@APP_DIR@`), copy
 them to `/etc/systemd/system/` and `systemctl enable --now` the timers.
 
 A host that already has a `.env` must add `COMPOSE_PROFILES`, `ALERT_EMAILS`,
