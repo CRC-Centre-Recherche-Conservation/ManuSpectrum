@@ -11,6 +11,11 @@ updates:
       - javascript
     versioning-strategy: "increase"
     target-branch: "dev"
+    # Declared at the exact versions Arches pins, so the back office and the
+    # Analysis Explorer share one copy; they move with an Arches upgrade.
+    ignore:
+      - dependency-name: "leaflet"
+      - dependency-name: "leaflet-iiif"
     groups:
       npm:
         patterns: ["*"]
