@@ -26,6 +26,10 @@ structured with CIDOC-CRM and published through IIIF.*
 [**Data package**](https://github.com/CRC-Centre-Recherche-Conservation/manuspectrum-pkg) ·
 [**Cite**](CITATION.cff)
 
+<br>
+
+<a href="https://www.archesproject.org/"><img src="manuspectrum/media/img/landing/powered-by-arches.png" alt="Powered by Arches" height="34"></a>
+
 </div>
 
 ---
@@ -226,6 +230,5 @@ funded by the French National Research Agency (ANR-21-ESRE-0005). It is hosted b
   <img src="manuspectrum/media/img/landing/logo-cnrs.svg" alt="CNRS" height="56">&nbsp;&nbsp;&nbsp;
   <img src="manuspectrum/media/img/landing/logo-biblissima.svg" alt="Biblissima+" height="56">&nbsp;&nbsp;&nbsp;
   <img src="manuspectrum/media/img/landing/logo-ANR.png" alt="ANR" height="56">&nbsp;&nbsp;&nbsp;
-  <img src="manuspectrum/media/img/landing/logo-humanum.png" alt="Huma-Num" height="56">&nbsp;&nbsp;&nbsp;
-  <img src="manuspectrum/media/img/landing/logo-arches.svg" alt="Arches" height="56">
+  <img src="manuspectrum/media/img/landing/logo-humanum.png" alt="Huma-Num" height="56">
 </p>
