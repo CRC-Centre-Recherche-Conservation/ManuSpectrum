@@ -31,7 +31,7 @@
         "dompurify": "^3.4.17",
         "es-toolkit": "^1.44.0",
         "gridstack": "14.0.0",
-        "leaflet": "1.6.0",
+        "leaflet": "1.9.4",
         "leaflet-iiif": "3.0.0",
         "leaflet.markercluster": "^1.5.3",
         "maplibre-gl": "4.7.1",
