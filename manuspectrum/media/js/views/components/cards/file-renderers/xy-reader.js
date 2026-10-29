@@ -56,6 +56,10 @@ const windowWord = () => arches.translations.xyStepWindow;
 
 const CONFIG_SOURCE_MANUAL = 'manual';
 
+// The XY renderer's id, as in RENDERERS (settings.py). Only its configurations
+// exist on the server; asking for any other renderer's finds none.
+const XY_RENDERER_UUID = 'e93b7b27-40d8-4141-996e-e59ff08742f3';
+
 export default ko.components.register('xy-reader', {
     viewModel: function (params) {
         const self = this;
@@ -130,6 +134,7 @@ export default ko.components.register('xy-reader', {
 
         // on init, get available renderer configs for display to user.
         const rendererConfigRefresh = async () => {
+            if (self.renderer !== XY_RENDERER_UUID) return;
             try {
                 const renderers = await getRendererConfig(self.renderer);
                 const configs = renderers?.configs;

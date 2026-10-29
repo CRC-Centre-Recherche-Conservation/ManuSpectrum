@@ -18,8 +18,10 @@
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import ko from 'knockout';
+import { getRendererConfig } from 'utils/renderer-cache';
 
-const RENDERER_ID = 'e1e0e1a7-2a1c-4b3f-9c4e-9f0d3c2b1a00';
+const RENDERER_ID = 'e93b7b27-40d8-4141-996e-e59ff08742f3';
+const PDF_RENDERER_ID = '09dec059-1ee8-4fbd-85dd-c0ab0428aa94';
 const MALDI_ID = 'a0000000-0000-4000-8000-000000000001';
 const FTIR_ID = 'a0000000-0000-4000-8000-000000000002';
 const FILE_NODE_ID = 'b0000000-0000-4000-8000-000000000003';
@@ -390,5 +392,41 @@ describe('xy-reader parsing overrides', () => {
 
         expect(vm.showOverridePanel()).toBe(true);
         expect(vm.statusSelectedFiles()).toHaveLength(1);
+    });
+});
+
+describe('xy-reader configuration fetch', () => {
+    const mount = async (rendererId) => {
+        const fixture = buildFileViewer(MALDI_ID);
+        fixture.fileViewer.displayContent().renderer = { id: rendererId };
+        const vm = new XyReaderViewModel({
+            fileViewer: fixture.fileViewer,
+            card: fixture.fileViewer.card,
+            selected: ko.observable(true),
+            state: {},
+            displayContent: fixture.fileViewer.displayContent,
+            context: 'render',
+        });
+        await flush();
+        return vm;
+    };
+
+    beforeEach(() => {
+        getRendererConfig.mockClear();
+        stored.configs = structuredClone(BASE_CONFIGS);
+    });
+
+    it('asks for the configurations of the XY renderer', async () => {
+        const vm = await mount(RENDERER_ID);
+
+        expect(getRendererConfig).toHaveBeenCalledWith(RENDERER_ID);
+        expect(vm.rendererConfigs()).toHaveLength(2);
+    });
+
+    it('asks for nothing when the displayed file belongs to another renderer', async () => {
+        const vm = await mount(PDF_RENDERER_ID);
+
+        expect(getRendererConfig).not.toHaveBeenCalled();
+        expect(vm.rendererConfigs()).toEqual([]);
     });
 });
