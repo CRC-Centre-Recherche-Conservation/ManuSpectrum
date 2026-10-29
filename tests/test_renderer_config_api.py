@@ -64,13 +64,15 @@ class RendererViewTests(EnglishResponseTestCase):
         self.assertEqual(body_of(response), [])
         self.model.objects.filter.assert_not_called()
 
-    def test_an_unknown_renderer_is_a_404(self):
-        self.model.objects.filter.return_value.__bool__.return_value = False
+    def test_a_renderer_without_configurations_has_an_empty_list(self):
+        queryset = self.model.objects.filter.return_value
+        queryset.__bool__.return_value = False
+        queryset.values.return_value = []
 
         response = RendererView().get(self.request, renderer_id=RENDERER_ID)
 
-        self.assertEqual(response.status_code, 404)
-        self.assertIn(b"Renderers do not exist", response.content)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(body_of(response), {"configs": []})
 
     def test_each_configuration_carries_whether_it_is_protected(self):
         queryset = self.model.objects.filter.return_value
