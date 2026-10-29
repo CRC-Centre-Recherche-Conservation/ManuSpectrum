@@ -12,8 +12,8 @@
  *     instead of keeping the last file's answer; a staged tile with an empty
  *     file list is skipped instead of raising a TypeError.
  *   - applyRendererToStaged: a staged tile with an empty file list is skipped.
+ *   - The unused jQuery import and catch binding are dropped (project lint).
  */
-import $ from 'jquery';
 import ko from 'knockout';
 import uuid from 'uuid';
 import arches from 'arches';
@@ -173,7 +173,7 @@ const viewModel = function(params) {
             var rawFileType = type;
             try {
                 rawExtension = ko.unwrap(file).split('.').pop();
-            } catch (error) {
+            } catch {
                 var rawExtension = file.name ? ko.unwrap(file.name).split('.').pop() : undefined;
             }
             if (renderer.type === rawFileType && renderer.ext === rawExtension)  {
