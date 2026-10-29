@@ -4,6 +4,7 @@
 # firewalld is running. Must run as root. `--remove` drops the export only.
 # The export options come from NFS_EXPORT_OPTIONS in rehearsal.env (next to
 # the script, or --env FILE); the export is restricted to the VM address.
+# It also sets `manage-gids=n` for mountd (NFS_CONF, NFS_DEFAULTS_FILE override the paths).
 set -euo pipefail
 export LC_ALL=C
 
@@ -51,6 +52,10 @@ done
 EXPORT_DIR="${NFS_EXPORT_DIR:-/srv/ms-rehearsal-data}"
 # shellcheck disable=SC1091
 . "$HERE/lib-storage.sh"
+# shellcheck disable=SC1091
+. "$HERE/lib-nfs.sh"
+NFS_CONF="${NFS_CONF:-/etc/nfs.conf}"
+NFS_DEFAULTS_FILE="${NFS_DEFAULTS_FILE:-/etc/default/nfs-kernel-server}"
 valid_storage_path NFS_EXPORT_DIR "$EXPORT_DIR" || exit 1
 NFS_EXPORT_OPTIONS="${NFS_EXPORT_OPTIONS:-rw,sync,root_squash,no_subtree_check}"
 if ! [[ "$NFS_EXPORT_OPTIONS" =~ ^[a-z_,=0-9]+$ ]]; then
@@ -102,6 +107,18 @@ if [ ! -f "$EXPORT_FILE" ] || [ "$(cat "$EXPORT_FILE")" != "$EXPORT_LINE" ]; the
 fi
 exportfs -ra
 
+# The server must honour the client's supplementary groups, as production does.
+groups_changed=0
+if [ "$(nfs_conf_manage_gids_off "$NFS_CONF")" = changed ]; then
+  echo "manage-gids=n set in the [mountd] section of ${NFS_CONF}."
+  groups_changed=1
+fi
+if [ "$(nfs_defaults_manage_gids_off "$NFS_DEFAULTS_FILE")" = changed ]; then
+  echo "--manage-gids removed from RPCMOUNTDOPTS in ${NFS_DEFAULTS_FILE}."
+  groups_changed=1
+fi
+[ "$groups_changed" -eq 0 ] || changed=1
+
 service=""
 for candidate in nfs-server nfs-kernel-server; do
   if systemctl cat "${candidate}.service" >/dev/null 2>&1; then
@@ -117,6 +134,10 @@ if ! systemctl is-active --quiet "$service" || ! systemctl is-enabled --quiet "$
   systemctl enable --now "$service"
   echo "Service ${service} enabled and started."
   changed=1
+  [ "$groups_changed" -eq 0 ] || systemctl restart "$service"
+elif [ "$groups_changed" -eq 1 ]; then
+  systemctl restart "$service"
+  echo "Service ${service} restarted (group handling changed)."
 fi
 
 if command -v firewall-cmd >/dev/null 2>&1 && [ "$(firewall-cmd --state 2>/dev/null || true)" = "running" ]; then

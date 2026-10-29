@@ -1,0 +1,8 @@
+// Site notice banner in the Arches core bundle (back office, login). The
+// banner itself is the shared partial; the Arches layout fills the viewport,
+// so it gives back the height the banner takes.
+@import "../ms-site-notice";
+
+body.ms-has-notice .base-manager-grid {
+    height: calc(100vh - var(--ms-notice-h, 0px));
+}

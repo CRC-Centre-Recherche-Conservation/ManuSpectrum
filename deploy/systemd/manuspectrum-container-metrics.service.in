@@ -1,0 +1,15 @@
+# Writes the container metrics (up, health, restarts, OOM kills, memory) for
+# the node_exporter textfile collector. Run by the timer next to it; PP-8
+# substitutes the two placeholders and installs both files. The service
+# account is in the docker group.
+[Unit]
+Description=ManuSpectrum container metrics
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=@APP_USER@
+ExecStart=/usr/bin/make -C @DEPLOY_DIR@ container-metrics
+TimeoutStartSec=90s
+Nice=10

@@ -17,7 +17,7 @@
 
 body.ms-page--app {
     // Application tokens, read by the Explorer components.
-    --explorer-top: calc(#{$ms-header-stuck} + 0.5rem);
+    --explorer-top: calc(#{$ms-header-stuck} + 0.5rem + var(--ms-notice-h, 0px));
     --explorer-rail: 18rem;
     --explorer-rail-wide: 26rem;
     --explorer-side: 21rem;

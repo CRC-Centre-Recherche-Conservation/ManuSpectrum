@@ -1,0 +1,14 @@
+# Restores the latest backup into a scratch database and compares every table
+# with the manifest (make restore-test). The lock of backup.sh makes it wait
+# for a running backup. PP-8 substitutes the two placeholders and installs
+# this file with the timer next to it.
+[Unit]
+Description=ManuSpectrum weekly restore test
+Wants=network-online.target
+After=docker.service network-online.target remote-fs.target
+
+[Service]
+Type=oneshot
+User=@APP_USER@
+ExecStart=/usr/bin/make -C @DEPLOY_DIR@ restore-test
+TimeoutStartSec=2h

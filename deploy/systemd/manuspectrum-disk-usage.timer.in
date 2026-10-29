@@ -1,0 +1,12 @@
+# Hourly, at minute 17. If a measurement proves too slow on the NFS volume,
+# measure four times a day: OnCalendar=*-*-* 00,06,12,18:17 (DiskUsageStale
+# fires after 3 hours, so raise its threshold with it). Enabled by PP-8.
+[Unit]
+Description=Measure ManuSpectrum disk usage every hour
+
+[Timer]
+OnCalendar=*-*-* *:17
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,104 @@
+# Alert rules of the monitoring stack: application.
+# Severity: critical = mailed at once, warning = grouped weekday e-mail, info = never mailed.
+groups:
+  - name: application
+    rules:
+      - alert: ErrorLogRateHigh
+        expr: |
+          sum(rate(manuspectrum_log_records_total{level=~"error|critical"}[10m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: application
+        annotations:
+          summary: "The application logs errors steadily"
+          description: "{{ $value | humanize }} error records per second over 10 minutes."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/application.md#errorlogratehigh
+      - alert: WebSaturated
+        expr: |
+          max(manuspectrum_inflight_requests{job="web"}) >= 18
+        for: 5m
+        labels:
+          severity: warning
+          service: application
+        annotations:
+          summary: "The web server has almost no free thread"
+          description: "{{ $value }} requests are in flight; gunicorn serves at most 20 at the same time (5 workers of 4 threads)."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/application.md#websaturated
+      - alert: MetricsDirFilling
+        expr: |
+          max by (job) (manuspectrum_metrics_dir_bytes) > 45e6
+        for: 10m
+        labels:
+          severity: warning
+          service: application
+        annotations:
+          summary: "The multiprocess metrics directory is filling"
+          description: "The metrics directory of {{ $labels.job }} holds {{ $value | humanize1024 }}B; its volume is 64 MiB."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/application.md#metricsdirfilling
+      - alert: LoginLockouts
+        expr: |
+          increase(manuspectrum_auth_lockouts_total[1h]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: application
+        annotations:
+          summary: "Accounts are being locked out"
+          description: "{{ $value | humanize }} accounts were locked after repeated sign-in failures in the last hour."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/application.md#loginlockouts
+      - alert: AccountMailFailures
+        expr: |
+          sum by (kind) (increase(manuspectrum_account_mails_total{outcome="failed"}[64h])) > 0
+        for: 15m
+        labels:
+          severity: warning
+          service: application
+        annotations:
+          summary: "An account mail was not sent"
+          description: "{{ $value | humanize }} account mails ({{ $labels.kind }}) failed in the last 64 hours."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/application.md#accountmailfailures
+      - alert: EmbargoLiftFailures
+        expr: |
+          sum by (outcome) (increase(manuspectrum_embargo_lifts_total{outcome=~"failed|incomplete"}[64h])) > 0
+        for: 15m
+        labels:
+          severity: warning
+          service: application
+        annotations:
+          summary: "An embargo could not be lifted"
+          description: "{{ $value | humanize }} embargo lifts ended {{ $labels.outcome }} in the last 64 hours; the data stay hidden past their end date."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/application.md#embargoliftfailures
+      - alert: EmbargoOverdue
+        expr: |
+          max(manuspectrum_embargoes{state="overdue"}) > 0
+        for: 2h
+        labels:
+          severity: warning
+          service: application
+        annotations:
+          summary: "Embargoed data are hidden past their end date"
+          description: "{{ $value | humanize }} restrictions are past their end date and still in force."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/application.md#embargooverdue
+      - alert: WorkflowCleanupFailures
+        expr: |
+          sum by (kind) (increase(manuspectrum_workflow_cleanups_total{outcome="failed"}[64h])) > 0
+        for: 15m
+        labels:
+          severity: warning
+          service: application
+        annotations:
+          summary: "An abandoned workflow could not be cleaned"
+          description: "{{ $value | humanize }} cleanups of {{ $labels.kind }} runs failed in the last 64 hours; their drafts stay in place and the next pass retries."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/application.md#workflowcleanupfailures
+      - alert: AccountRetentionFailures
+        expr: |
+          sum(increase(manuspectrum_account_anonymisations_total{outcome="failed"}[64h])) > 0
+        for: 15m
+        labels:
+          severity: warning
+          service: application
+        annotations:
+          summary: "An inactive account could not be anonymised"
+          description: "{{ $value | humanize }} account anonymisations failed in the last 64 hours; the accounts are unchanged and the next daily pass retries."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/application.md#accountretentionfailures

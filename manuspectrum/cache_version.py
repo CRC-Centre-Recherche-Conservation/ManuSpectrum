@@ -23,6 +23,8 @@ CACHE_SHAPE_MODULES = (
     "views/knockout_templates.py",
     # The spectrum preview memo: its join and its series.
     "views/spectrum_preview.py",
+    # The site announcement memo: its payload and its encoding.
+    "views/site_notice.py",
     "utils/spectrum_preview.py",
     "utils/xy_transforms.py",
     # The per-reader visibility memos: hidden resources, readable nodegroups.

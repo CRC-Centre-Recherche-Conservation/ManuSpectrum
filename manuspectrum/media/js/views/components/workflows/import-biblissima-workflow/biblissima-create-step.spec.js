@@ -156,8 +156,9 @@ import viewModel from './biblissima-create-step.js';
 // ---- Helpers ---------------------------------------------------------------
 
 /** Minimal params to instantiate the viewModel without real workflow context. */
-const makeParams = (items = [], resourceType = 'Document') => ({
-    form: null, // triggers ko.observable(false) fallback for `complete`
+const makeParams = (items = [], resourceType = 'Document', workflowId = null) => ({
+    // null triggers the ko.observable(false) fallback for `complete`
+    form: workflowId ? { workflowId } : null,
     configStepData: { resourceType, projectId: 'proj-123' },
     searchStepData: { selectedItems: items },
     value: vi.fn(),
@@ -187,7 +188,12 @@ const makeRawItem = (overrides = {}) => ({
  * background async init (resolveDependencies + checkDuplicates) so that
  * subsequent test fetch stubs intercept only what the test cares about.
  */
-const makeViewModel = async (items = [], resourceType = 'Document', initFetch = null) => {
+const makeViewModel = async (
+    items = [],
+    resourceType = 'Document',
+    initFetch = null,
+    workflowId = null,
+) => {
     // Generic stub for the background init calls (check-duplicates etc.)
     vi.stubGlobal('fetch', initFetch || vi.fn().mockImplementation(() =>
         Promise.resolve({
@@ -195,7 +201,7 @@ const makeViewModel = async (items = [], resourceType = 'Document', initFetch = 
             json: () => Promise.resolve({ results: [], resourceId: null }),
         })
     ));
-    const vm = new viewModel(makeParams(items, resourceType));
+    const vm = new viewModel(makeParams(items, resourceType, workflowId));
     // Drain the async init queue (resolveDependencies awaits a fetch promise).
     await new Promise((resolve) => setTimeout(resolve, 0));
     return vm;
@@ -340,6 +346,20 @@ describe('biblissima-create-step', () => {
             const vm = await makeViewModel([makeRawItem()]);
             const item = vm.items()[0];
             const { transactionId } = vm._buildCreatePayload(item, { transactionId: 'tx-abc' });
+            expect(transactionId).toBe('tx-abc');
+        });
+
+        it('carries the workflow id as the transaction id', async () => {
+            const vm = await makeViewModel([makeRawItem()], 'Document', null, 'wf-1');
+            const { transactionId } = vm._buildCreatePayload(vm.items()[0]);
+            expect(transactionId).toBe('wf-1');
+        });
+
+        it('lets options.transactionId win over the workflow id', async () => {
+            const vm = await makeViewModel([makeRawItem()], 'Document', null, 'wf-1');
+            const { transactionId } = vm._buildCreatePayload(vm.items()[0], {
+                transactionId: 'tx-abc',
+            });
             expect(transactionId).toBe('tx-abc');
         });
 
@@ -500,6 +520,69 @@ describe('biblissima-create-step', () => {
 
             await vm.createAll();
             expect(vm.creatingAll()).toBe(false);
+        });
+    });
+
+    describe('workflow transaction', () => {
+        it('sends the workflow id with every create-all chunk', async () => {
+            const vm = await makeViewModel(
+                Array.from({ length: 7 }, (_, n) => makeRawItem({ label: `MS ${n}` })),
+                'Document',
+                null,
+                'wf-1',
+            );
+            const fetchMock = vi.fn().mockImplementation(async (url, init) => ({
+                ok: true,
+                json: () =>
+                    Promise.resolve(
+                        url === '/api/biblissima/create-all'
+                            ? {
+                                  results: JSON.parse(init.body).items.map((i) => ({
+                                      clientId: i.clientId,
+                                      status: 'created',
+                                      resourceId: `r-${i.clientId}`,
+                                  })),
+                              }
+                            : { resourceId: 'dep', results: [] },
+                    ),
+            }));
+            vi.stubGlobal('fetch', fetchMock);
+
+            await vm.createAll();
+
+            const bodies = fetchMock.mock.calls
+                .filter(([url]) => url === '/api/biblissima/create-all')
+                .map(([, init]) => JSON.parse(init.body));
+            expect(bodies).toHaveLength(2);
+            bodies.forEach((body) => expect(body.transactionId).toBe('wf-1'));
+        });
+
+        it('sends the workflow id when a dependency is created', async () => {
+            const vm = await makeViewModel(
+                [makeRawItem({ locationQid: 'Q27392' })],
+                'Document',
+                null,
+                'wf-1',
+            );
+            const dep = vm.dependencies().find((d) => d.type === 'Place');
+            dep.action('create');
+            const fetchMock = vi.fn().mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({ resourceId: 'place-1', displayname: 'Paris' }),
+            });
+            vi.stubGlobal('fetch', fetchMock);
+
+            await vm.createDependency(dep);
+
+            const [, init] = fetchMock.mock.calls.find(
+                ([url]) => url === '/api/biblissima/create-resource',
+            );
+            expect(JSON.parse(init.body).transactionId).toBe('wf-1');
+        });
+
+        it('sends none outside a workflow', async () => {
+            const vm = await makeViewModel([makeRawItem()]);
+            expect(vm._buildCreatePayload(vm.items()[0]).transactionId).toBeNull();
         });
     });
 

@@ -1,0 +1,12 @@
+# Every 30 seconds, 1 minute after boot. The HostMetricsStale alert fires
+# when no run succeeded for 5 minutes. Enabled by PP-8.
+[Unit]
+Description=Collect ManuSpectrum container metrics every 30 seconds
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=30s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

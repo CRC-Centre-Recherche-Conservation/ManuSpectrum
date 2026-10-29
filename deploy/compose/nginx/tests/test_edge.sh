@@ -1,0 +1,801 @@
+#!/usr/bin/env bash
+# deploy/compose/nginx/tests/test_edge.sh
+# Offline tests of the edge nginx: the pinned image, mounted as Compose mounts
+# it, in front of two Python stubs (aliases `web` and `cantaloupe`) on a
+# throwaway Docker network. Needs docker, curl, openssl >= 3 and python3 on the
+# host; builds nothing, publishes ports on 127.0.0.1 only.
+#
+#   test_edge.sh            run every group
+#   test_edge.sh tls static run the named groups
+#
+# Prints `ok N - ...` / `not ok N - ...`; exits non-zero on a failure.
+# One function per case group, named group_<name>, listed in GROUPS: a new
+# group is a new function plus its name in GROUPS.
+# shellcheck disable=SC2317,SC2016  # group_* run by name; bash -c bodies are single-quoted on purpose
+set -uo pipefail
+exec </dev/null
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(cd "$HERE/../../../.." && pwd)"
+NGINX_DIR="${NGINX_DIR:-$(cd "$HERE/.." && pwd)}" # a mutated copy of the configuration, to see a case fail
+
+NGINX_IMAGE="nginxinc/nginx-unprivileged:1.30.5-alpine@sha256:15c994d10d6d78658721c3bcafff14cb281fba2a4bdf9d5ba92c416a472516e3"
+PYTHON_IMAGE="python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb"
+HOST="manuspectrum.test"
+FILE_A="00000000-0000-4000-8000-00000000000a"
+FILE_B="00000000-0000-4000-8000-00000000000b"
+FILE_C="00000000-0000-4000-8000-00000000000c"
+FILE_D="00000000-0000-4000-8000-00000000000d"
+FILE_E="00000000-0000-4000-8000-00000000000e"
+FILE_F="00000000-0000-4000-8000-00000000000f"
+STATIC_SWAP_WAIT="${STATIC_SWAP_WAIT:-32}"
+
+GROUPS_ALL=(config privileges tls default_servers redirect forwarded headers static log gzip loopback media iiifserver acl search_export timeout_config stream rate csp_report site_notice upstream_down)
+
+RUN="msedge-$$"
+NET="$RUN-net"
+NGINX="$RUN-nginx"
+TMP="$(mktemp -d)"
+CERTS="$TMP/certs"
+MEDIA="$TMP/media"
+STATIC="$TMP/static"
+SITE_NOTICE="$TMP/site-notice"
+LOGS="$TMP/logs"
+WEBROOT="$TMP/acme"
+USER_SPEC="$(id -u):$(id -g)"
+
+n=0
+failed=0
+
+cleanup() {
+  docker rm -f "$NGINX" "$RUN-web" "$RUN-cantaloupe" >/dev/null 2>&1
+  docker network rm "$NET" >/dev/null 2>&1
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
+
+assert() { # assert DESCRIPTION EXIT-CODE
+  n=$((n + 1))
+  if [ "$2" -eq 0 ]; then echo "ok $n - $1"; else echo "not ok $n - $1"; failed=1; fi
+}
+check() { # check DESCRIPTION CMD... : true when CMD succeeds
+  local description="$1"
+  shift
+  "$@" >/dev/null 2>&1
+  assert "$description" $?
+}
+equals() { # equals DESCRIPTION EXPECTED ACTUAL
+  if [ "$2" = "$3" ]; then
+    assert "$1" 0
+  else
+    assert "$1 (expected [$2], got [$3])" 1
+  fi
+}
+
+# ---- helpers -----------------------------------------------------------
+
+get() { # get PATH [curl args]
+  curl -sS --max-time 20 --resolve "$HOST:$HTTPS_PORT:127.0.0.1" --cacert "$CERTS/ca/ca.crt" \
+    "https://$HOST:$HTTPS_PORT$1" "${@:2}"
+}
+code() { get "$1" -o /dev/null -w '%{http_code}' "${@:2}"; }
+headers() { get "$1" -D - -o /dev/null "${@:2}" | tr -d '\r'; }
+header_count() { # header_count NAME < headers
+  grep -ic "^$1:" || true
+}
+header_value() { # header_value NAME < headers
+  grep -i "^$1:" | head -1 | cut -d' ' -f2-
+}
+# jget KEY... : walk the JSON on stdin; `<absent>` when a key is missing.
+jget() {
+  python3 -I -c '
+import json, sys
+d = json.load(sys.stdin)
+for key in sys.argv[1:]:
+    if not isinstance(d, dict) or key not in d:
+        d = "<absent>"
+        break
+    d = d[key]
+print(d)' "$@"
+}
+
+start_stub() { # start_stub NAME PORT
+  docker run -d --name "$RUN-$1" --network "$NET" --network-alias "$1" \
+    --user "$USER_SPEC" --read-only --cap-drop ALL --security-opt no-new-privileges \
+    -e PYTHONDONTWRITEBYTECODE=1 \
+    -v "$HERE/stub_upstream.py:/stub_upstream.py:ro" \
+    "$PYTHON_IMAGE" python /stub_upstream.py "$2" "$1" >/dev/null
+}
+
+# The mounts of the nginx service in compose.yaml.
+nginx_run_args() {
+  printf '%s\n' \
+    --user "$USER_SPEC" --read-only --cap-drop ALL --security-opt no-new-privileges \
+    --tmpfs /tmp:rw,size=16m,mode=1777 \
+    --tmpfs /var/cache/nginx:rw,size=256m,mode=1777 \
+    -v "$NGINX_DIR/nginx.conf:/etc/nginx/nginx.conf:ro" \
+    -v "$NGINX_DIR/snippets:/etc/nginx/snippets:ro" \
+    -v "$NGINX_DIR/templates:/etc/nginx/templates:ro" \
+    -v "$NGINX_DIR/errors:/etc/nginx/errors:ro" \
+    -v "$REPO/manuspectrum/templates/errors/500.htm:/etc/nginx/site-errors/500.htm:ro" \
+    -v "$NGINX_DIR/ffdhe2048.pem:/etc/nginx/ffdhe2048.pem:ro" \
+    -v "$CERTS/live:/etc/nginx/certs:ro" \
+    -v "$WEBROOT:/var/www/acme:ro" \
+    -v "$MEDIA:/srv/media:ro" \
+    -v "$STATIC:/srv/static:ro" \
+    -v "$SITE_NOTICE:/srv/site-notice:ro" \
+    -v "$LOGS:/var/log/manuspectrum" \
+    -e NGINX_ENVSUBST_OUTPUT_DIR=/tmp \
+    -e 'NGINX_ENVSUBST_FILTER=^(DOMAIN_NAMES|HSTS_MAX_AGE)$' \
+    -e "DOMAIN_NAMES=$HOST" \
+    -e HSTS_MAX_AGE=3600
+}
+
+start_nginx() {
+  local args=()
+  mapfile -t args < <(nginx_run_args)
+  docker run -d --name "$NGINX" --network "$NET" \
+    -p 127.0.0.1::80 -p 127.0.0.1::443 "${args[@]}" "$NGINX_IMAGE" >/dev/null
+}
+
+wait_for() { # wait_for SECONDS CMD... : true as soon as CMD succeeds
+  local deadline=$((SECONDS + $1))
+  shift
+  until "$@" >/dev/null 2>&1; do
+    [ "$SECONDS" -lt "$deadline" ] || return 1
+    sleep 1
+  done
+}
+
+# The snapshot web writes at each save of an announcement (a maintenance event
+# in progress).
+write_notice_snapshot() {
+  printf '%s' '{"timeZone":"Europe/Paris","notices":[{"id":1,"version":1,"kind":"maintenance","start":"2026-01-01T00:00:00Z","end":"2099-01-01T00:00:00Z","reminders":[600],"text":{"en":"Down for maintenance.","fr":"En maintenance."},"link":null}],"labels":{}}' \
+    >"$SITE_NOTICE/notice.json"
+  chmod 0644 "$SITE_NOTICE/notice.json"
+}
+
+stub_answers() { [ "$(code /ping)" = 200 ]; }
+
+setup() {
+  mkdir -p "$CERTS/ca" "$CERTS/live" "$LOGS" "$WEBROOT/.well-known/acme-challenge" \
+    "$MEDIA/uploadedfiles" "$MEDIA/export_deliverables" "$MEDIA/archestemp" \
+    "$STATIC/releases/aaaaaaaaaaaaaaaa" "$STATIC/releases/bbbbbbbbbbbbbbbb" "$SITE_NOTICE"
+  chmod 0777 "$LOGS"
+  CA_DIR="$CERTS/ca" bash "$REPO/deploy/certs/make-local-ca.sh" "$CERTS/live" "$HOST" >/dev/null || return 1
+  chmod 0755 "$CERTS/live"
+  chmod 0644 "$CERTS"/live/*.pem "$CERTS/ca/ca.crt"
+
+  echo "acme token" >"$WEBROOT/.well-known/acme-challenge/t"
+  printf 'smoke,é\n' >"$MEDIA/uploadedfiles/smoke file é.csv"
+  printf 'zip bytes\n' >"$MEDIA/export_deliverables/e.zip"
+  printf 'staged\n' >"$MEDIA/archestemp/x.zip"
+  printf 'image bytes\n' >"$MEDIA/uploadedfiles/pic.png"
+
+  local release
+  for release in aaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbb; do
+    printf 'body{color:red}/* %s */\n' "$release" >"$STATIC/releases/$release/app.0123456789abcdef0123.css"
+    printf 'unhashed %s\n' "$release" >"$STATIC/releases/$release/plain.txt"
+    mkdir -p "$STATIC/releases/$release/favicons"
+    printf 'icon %s\n' "$release" >"$STATIC/releases/$release/favicons/favicon.ico"
+    printf 'id\n' >"$STATIC/releases/$release/.build-id"
+    printf 'done\n' >"$STATIC/releases/$release/.complete"
+  done
+  ln -s releases/aaaaaaaaaaaaaaaa "$STATIC/current"
+  write_notice_snapshot
+
+  docker network create "$NET" >/dev/null || return 1
+  # nginx first, with no upstream yet: it must start and follow them when they appear.
+  start_nginx || return 1
+  wait_for 20 docker exec "$NGINX" wget -q -O /dev/null http://127.0.0.1:8081/nginx-health || return 1
+  HTTP_PORT="$(docker port "$NGINX" 80/tcp | head -1 | sed 's/.*://')"
+  HTTPS_PORT="$(docker port "$NGINX" 443/tcp | head -1 | sed 's/.*://')"
+  check "nginx starts with web and cantaloupe unresolvable (upstream resolve)" \
+    docker exec "$NGINX" wget -q -O /dev/null http://127.0.0.1:8081/nginx-health
+  start_stub web 8000 && start_stub cantaloupe 8182 || return 1
+  if ! wait_for 40 stub_answers; then
+    echo "setup: nginx never reached the stub" >&2
+    docker logs "$NGINX" >&2
+    return 1
+  fi
+  assert "nginx follows an upstream that appears after it started" 0
+}
+
+# ---- groups -------------------------------------------------------------
+
+group_config() {
+  local args=() out
+  mapfile -t args < <(nginx_run_args)
+  out="$(docker run --rm --network none "${args[@]}" "$NGINX_IMAGE" nginx -t 2>&1)"
+  assert "nginx -t passes" "$(grep -q 'test is successful' <<<"$out" && echo 0 || echo 1)"
+  check "nginx -t prints no [warn], [emerg] or ERROR" bash -c '! grep -E "\[(warn|emerg|alert)\]|ERROR" <<<"$1"' _ "$out"
+  out="$(docker exec "$NGINX" nginx -T 2>&1)"
+  check "the template is rendered with DOMAIN_NAMES and HSTS_MAX_AGE" \
+    bash -c 'grep -q "server_name manuspectrum.test;" <<<"$1" && grep -q "max-age=3600" <<<"$1" && ! grep -q "\${" <<<"$1"' _ "$out"
+}
+
+group_privileges() {
+  local uid caps listening
+  uid="$(docker exec "$NGINX" id -u)"
+  check "nginx runs as a non-root uid" test "$uid" -ne 0
+  caps="$(docker inspect -f '{{.HostConfig.CapDrop}}' "$NGINX")"
+  equals "every capability is dropped" "[ALL]" "$caps"
+  listening="$(docker exec "$NGINX" cat /proc/net/tcp /proc/net/tcp6 | awk '$4 == "0A" {print $2}')"
+  check "nginx listens on 80 inside the container" grep -q ':0050$' <<<"$listening"
+  check "nginx listens on 443 inside the container" grep -q ':01BB$' <<<"$listening"
+  check "a container on the network reaches nginx on 443 by its default port" \
+    docker run --rm --network "$NET" --cap-drop ALL "$PYTHON_IMAGE" python -c \
+    "import socket,sys; socket.create_connection(('$NGINX', 443), 5)"
+}
+
+group_tls() {
+  local out
+  out="$(openssl s_client -tls1_1 -cipher 'ALL:@SECLEVEL=0' -connect "127.0.0.1:$HTTPS_PORT" -servername "$HOST" </dev/null 2>&1)"
+  check "TLS 1.1 is refused by the server (protocol version alert)" \
+    bash -c 'grep -qi "alert protocol version\|no protocols available\|wrong version number\|unsupported protocol" <<<"$1" && ! grep -q "Cipher is [A-Z]" <<<"$1"' _ "$out"
+  equals "the certificate directory nginx sees holds only the served pair" \
+    "fullchain.pem privkey.pem" "$(docker exec "$NGINX" ls /etc/nginx/certs | tr '\n' ' ' | sed 's/ $//')"
+  out="$(openssl s_client -tls1_2 -CAfile "$CERTS/ca/ca.crt" -verify_hostname "$HOST" -connect "127.0.0.1:$HTTPS_PORT" -servername "$HOST" </dev/null 2>&1)"
+  check "TLS 1.2 is accepted and the certificate verifies" bash -c 'grep -q "New, TLSv1.2," <<<"$1" && grep -q "Verification: OK" <<<"$1"' _ "$out"
+  out="$(openssl s_client -tls1_3 -CAfile "$CERTS/ca/ca.crt" -verify_hostname "$HOST" -connect "127.0.0.1:$HTTPS_PORT" -servername "$HOST" </dev/null 2>&1)"
+  check "TLS 1.3 is accepted" bash -c 'grep -q "New, TLSv1.3," <<<"$1"' _ "$out"
+  out="$(docker exec "$NGINX" nginx -T 2>&1)"
+  check "no ssl_stapling directive" bash -c '! grep -q "^[[:space:]]*ssl_stapling" <<<"$1"' _ "$out"
+}
+
+group_default_servers() {
+  local status
+  curl -sS --max-time 10 -o /dev/null -H 'Host: other.example' "http://127.0.0.1:$HTTP_PORT/" 2>/dev/null
+  status=$?
+  equals "unknown Host on port 80 gets an empty reply (curl exit 52)" 52 "$status"
+  curl -sS --max-time 10 -o /dev/null --resolve "other.example:$HTTPS_PORT:127.0.0.1" -k "https://other.example:$HTTPS_PORT/" 2>/dev/null
+  status=$?
+  check "unknown SNI fails the handshake (no certificate)" test "$status" -ne 0
+  check "unknown SNI is not answered with the site certificate" \
+    bash -c '! openssl s_client -connect "127.0.0.1:$1" -servername other.example </dev/null 2>&1 | grep -q "BEGIN CERTIFICATE"' _ "$HTTPS_PORT"
+}
+
+group_redirect() {
+  local out
+  out="$(curl -sS --max-time 10 -D - -o /dev/null --resolve "$HOST:$HTTP_PORT:127.0.0.1" "http://$HOST:$HTTP_PORT/x?y=1" | tr -d '\r')"
+  equals "port 80 answers 301" 301 "$(head -1 <<<"$out" | cut -d' ' -f2)"
+  equals "the redirect keeps path and query on https" "https://$HOST/x?y=1" "$(header_value location <<<"$out")"
+  out="$(curl -sS --max-time 10 -D - --resolve "$HOST:$HTTP_PORT:127.0.0.1" "http://$HOST:$HTTP_PORT/.well-known/acme-challenge/t" | tr -d '\r')"
+  equals "acme challenge on port 80 is served, not redirected" 200 "$(head -1 <<<"$out" | cut -d' ' -f2)"
+  check "acme challenge body comes from the webroot" grep -q '^acme token' <<<"$out"
+  equals "an absent challenge on port 80 is 404, not a redirect" 404 \
+    "$(curl -sS --max-time 10 -o /dev/null -w '%{http_code}' --resolve "$HOST:$HTTP_PORT:127.0.0.1" "http://$HOST:$HTTP_PORT/.well-known/acme-challenge/none")"
+}
+
+group_forwarded() {
+  local out
+  out="$(get /fwd \
+    -H 'X-Forwarded-For: 6.6.6.6' -H 'X-Forwarded-Proto: http' -H 'X-Forwarded-Ssl: on' \
+    -H 'X-Forwarded-Protocol: ssl' -H 'Forwarded: for=6.6.6.6;proto=http' \
+    -H 'X-Forwarded-Host: evil.example' -H 'X-Forwarded-Port: 80' \
+    -H 'X-Real-IP: 6.6.6.6' -H 'X-Request-ID: forged-id')"
+  equals "the stub is web" web "$(jget name <<<"$out")"
+  local real xff
+  real="$(jget headers x-real-ip <<<"$out")"
+  xff="$(jget headers x-forwarded-for <<<"$out")"
+  check "X-Real-IP is a client address, not the forged value" bash -c '[[ "$1" =~ ^[0-9.]+$ && "$1" != 6.6.6.6 ]]' _ "$real"
+  equals "X-Forwarded-For is the client address, not a chain" "$real" "$xff"
+  equals "X-Forwarded-Proto is https" https "$(jget headers x-forwarded-proto <<<"$out")"
+  local header
+  for header in x-forwarded-ssl x-forwarded-protocol forwarded x-forwarded-host x-forwarded-port; do
+    equals "forged $header is dropped" "<absent>" "$(jget headers "$header" <<<"$out")"
+  done
+  check "X-Request-ID is nginx's own 32 hex characters" \
+    bash -c '[[ "$1" =~ ^[0-9a-f]{32}$ ]]' _ "$(jget headers x-request-id <<<"$out")"
+  equals "Host is the public name" "$HOST" "$(jget headers host <<<"$out")"
+}
+
+# Each header nginx or Django owns appears exactly once, on every class of response.
+assert_one_of_each() { # assert_one_of_each LABEL RESPONSE-HEADERS
+  local label="$1" out="$2" header
+  for header in Strict-Transport-Security Permissions-Policy Content-Security-Policy-Report-Only \
+    X-Content-Type-Options X-Frame-Options Referrer-Policy Reporting-Endpoints; do
+    equals "$label: exactly one $header" 1 "$(header_count "$header" <<<"$out")"
+  done
+  equals "$label: HSTS value" "max-age=3600" "$(header_value strict-transport-security <<<"$out")"
+  equals "$label: no Server version" "nginx" "$(header_value server <<<"$out")"
+}
+
+group_headers() {
+  assert_one_of_each "proxied page" "$(headers /page)"
+  assert_one_of_each "static file" "$(headers /static/app.0123456789abcdef0123.css)"
+  assert_one_of_each "the edge 404 (internal page asked directly)" "$(headers /_errors/404.html)"
+}
+
+group_static() {
+  local out
+  out="$(headers /static/app.0123456789abcdef0123.css)"
+  equals "hashed file is immutable" "public, max-age=31536000, immutable" "$(header_value cache-control <<<"$out")"
+  equals "hashed file is served" 200 "$(head -1 <<<"$out" | cut -d' ' -f2)"
+  equals "unhashed file gets max-age=3600" "public, max-age=3600" "$(header_value cache-control <<<"$(headers /static/plain.txt)")"
+  equals "/static/.build-id is 404" 404 "$(code /static/.build-id)"
+  equals "/static/.complete is 404" 404 "$(code /static/.complete)"
+  equals "an absent static file is 404" 404 "$(code /static/none.js)"
+  check "static serves the first release" grep -q 'unhashed aaaa' <<<"$(get /static/plain.txt)"
+  out="$(headers /favicon.ico)"
+  equals "/favicon.ico is the site icon of the current release" "200 public, max-age=86400" \
+    "$(head -1 <<<"$out" | cut -d' ' -f2) $(header_value cache-control <<<"$out")"
+  check "/favicon.ico: the bytes of favicons/favicon.ico" grep -q 'icon aaaa' <<<"$(get /favicon.ico)"
+  assert_one_of_each "/favicon.ico" "$out"
+  ln -sfn releases/bbbbbbbbbbbbbbbb "$STATIC/current.new" && mv -Tf "$STATIC/current.new" "$STATIC/current"
+  sleep "$STATIC_SWAP_WAIT"
+  check "after the symlink swap and open_file_cache_valid the new release is served" \
+    grep -q 'unhashed bbbb' <<<"$(get /static/plain.txt)"
+  ln -sfn releases/aaaaaaaaaaaaaaaa "$STATIC/current.new" && mv -Tf "$STATIC/current.new" "$STATIC/current"
+}
+
+group_log() {
+  get '/en/reset/abc/def-123/?secret=1' -e 'https://elsewhere.example/page?token=zzz' >/dev/null
+  get '/query?name=value' >/dev/null
+  get '/en/api/resource/x?q=1' >/dev/null
+  get '/en/%72eset/tok-enc-1/' >/dev/null
+  get '/en/reset%2Ftok-enc-2/' >/dev/null
+  get '/fr/account/two-factor/reset/tok-uri-1' >/dev/null
+  get '/query?r=1' -e 'https://elsewhere.example/en/account/activate/Mg/tok-ref-1' >/dev/null
+  get '/query?r=2' -e 'https://elsewhere.example/en/reset/Mg/tok-ref-2/?x=1' >/dev/null
+  get '/query?r=3' -e 'https://elsewhere.example/en/%72eset/Mg/tok-ref-3/' >/dev/null
+  get '/query?r=4' -e 'https://elsewhere.example/fr/account/two-factor/reset/tok-ref-4' >/dev/null
+  get '/query?r=5' -e 'https://elsewhere.example/en/%61ccount%2Factivate/Mg/tok-ref-5' >/dev/null
+  get '/query?r=6' -e 'https://elsewhere.example/en/account/two-factor?q=1' >/dev/null
+  sleep 1
+  local request_id seen
+  seen="$(get '/rid?x=1')"
+  request_id="$(jget headers x-request-id <<<"$seen")"
+  sleep 1
+  check "access.log is valid JSON per line" python3 -I -c '
+import json, sys
+lines = open(sys.argv[1]).read().splitlines()
+assert lines
+[json.loads(line) for line in lines]' "$LOGS/access.log"
+  check "the logged request_id equals the id the stub saw" python3 -I -c '
+import json, sys
+rows = [json.loads(l) for l in open(sys.argv[1]).read().splitlines()]
+assert any(r["request_id"] == sys.argv[2] for r in rows)' "$LOGS/access.log" "$request_id"
+  check "uri is logged without its query string" python3 -I -c '
+import json, sys
+rows = [json.loads(l) for l in open(sys.argv[1]).read().splitlines()]
+row = next(r for r in rows if r["uri"] == "/query")
+assert "?" not in row["uri"] and row["status"] == 200 and row["remote_addr"]' "$LOGS/access.log"
+  check "a password-reset link is logged as /en/reset/[redacted]" python3 -I -c '
+import json, sys
+rows = [json.loads(l) for l in open(sys.argv[1]).read().splitlines()]
+assert any(r["uri"] == "/en/reset/[redacted]" for r in rows)
+assert not any("def-123" in json.dumps(r) or "secret" in json.dumps(r) for r in rows)' "$LOGS/access.log"
+  check "the referer keeps its path and drops its query" python3 -I -c '
+import json, sys
+rows = [json.loads(l) for l in open(sys.argv[1]).read().splitlines()]
+assert any(r["referer"] == "https://elsewhere.example/page" for r in rows)
+assert not any("zzz" in json.dumps(r) for r in rows)' "$LOGS/access.log"
+  check "a denied route is logged under its own path, not the error page" python3 -I -c '
+import json, sys
+rows = [json.loads(l) for l in open(sys.argv[1]).read().splitlines()]
+row = next(r for r in rows if r["uri"] == "/en/api/resource/x")
+assert row["status"] == 404
+assert not any(r["uri"] in ("/_errors/429.html", "/_errors/50x.html") for r in rows)' "$LOGS/access.log"
+  check "percent-encoded spellings of a reset link are redacted" python3 -I -c '
+import json, sys
+text = open(sys.argv[1]).read()
+assert "tok-enc" not in text' "$LOGS/access.log"
+  check "a two-factor re-enrolment link is logged without its token" python3 -I -c '
+import json, sys
+rows = [json.loads(l) for l in open(sys.argv[1]).read().splitlines()]
+assert any(r["uri"] == "/fr/account/two-factor/reset/[redacted]" for r in rows)
+assert "tok-uri" not in open(sys.argv[1]).read()' "$LOGS/access.log"
+  check "a referer naming an activation, reset or re-enrolment link is redacted" python3 -I -c '
+import json, sys
+text = open(sys.argv[1]).read()
+assert "tok-ref" not in text
+rows = [json.loads(l) for l in text.splitlines()]
+assert sum(r["referer"] == "[redacted]" for r in rows) == 5
+assert any(r["referer"] == "https://elsewhere.example/en/account/two-factor" for r in rows)' "$LOGS/access.log"
+  check "error.log exists in the same directory" test -f "$LOGS/error.log"
+}
+
+group_gzip() {
+  local out
+  out="$(headers /page -H 'Accept-Encoding: gzip' -H "X-Pad: $(printf 'x%.0s' {1..1500})")"
+  equals "JSON is gzipped" gzip "$(header_value content-encoding <<<"$out")"
+  out="$(headers /big.csv -H 'Accept-Encoding: gzip')"
+  equals "text/csv is not gzipped" "" "$(header_value content-encoding <<<"$out")"
+}
+
+group_loopback() {
+  local out
+  out="$(docker exec "$NGINX" wget -S -q -O /dev/null 'http://127.0.0.1:8081/files/uploadedfiles/smoke%20file%20%C3%A9.csv' 2>&1)"
+  check "the loopback server decodes the raw name and serves the file" grep -q 'HTTP/1.1 200' <<<"$out"
+  check "uploaded bytes carry nosniff and a sandbox CSP" \
+    bash -c 'grep -qi "X-Content-Type-Options: nosniff" <<<"$1" && grep -qi "sandbox" <<<"$1"' _ "$out"
+  check "a CSV is an attachment" grep -qi 'Content-Disposition: attachment' <<<"$out"
+  out="$(docker exec "$NGINX" wget -S -q -O /dev/null 'http://127.0.0.1:8081/files/uploadedfiles/pic.png' 2>&1)"
+  check "a PNG is not an attachment" bash -c '! grep -qi "Content-Disposition" <<<"$1"' _ "$out"
+  check "export deliverables are served" \
+    docker exec "$NGINX" wget -q -O /dev/null http://127.0.0.1:8081/files/export_deliverables/e.zip
+  check "archestemp is not served" bash -c '! docker exec "$1" wget -q -O /dev/null http://127.0.0.1:8081/files/archestemp/x.zip' _ "$NGINX"
+  check "the loopback port is not published" bash -c '! docker port "$1" | grep -q 8081' _ "$NGINX"
+}
+
+# What a request reaches: the stub's name, or "-" when nginx answered itself
+# (the stub echoes X-Request-ID, nginx's own answers carry none).
+reaches() { # reaches PATH [curl args] : web, cantaloupe or -
+  local out
+  out="$(headers "$@")"
+  if [ -n "$(header_value x-request-id <<<"$out")" ]; then echo web; else echo -; fi
+}
+codes() { # codes COUNT PATH [curl args] : the status of COUNT requests in a row
+  local count="$1" i out=""
+  shift
+  for ((i = 0; i < count; i++)); do out+="$(code "$@") "; done
+  echo "$out"
+}
+get_many() { # get_many COUNT PATH [PARALLEL=40] [MAX-TIME=30] : the statuses of COUNT requests, PARALLEL at a time
+  local urls=() i
+  for ((i = 0; i < $1; i++)); do urls+=(-o /dev/null "https://$HOST:$HTTPS_PORT$2"); done
+  curl -sS -Z --parallel-max "${3:-40}" --max-time "${4:-30}" --resolve "$HOST:$HTTPS_PORT:127.0.0.1" --cacert "$CERTS/ca/ca.crt" \
+    -w '%{http_code}\n' "${urls[@]}"
+}
+get_post_many() { # get_post_many COUNT PATH : the statuses of COUNT small POSTs sent in parallel
+  local urls=() i
+  for ((i = 0; i < $1; i++)); do urls+=(-o /dev/null "https://$HOST:$HTTPS_PORT$2"); done
+  curl -sS -Z --parallel-max 25 --max-time 30 --resolve "$HOST:$HTTPS_PORT:127.0.0.1" --cacert "$CERTS/ca/ca.crt" \
+    -X POST -d '{}' -w '%{http_code}\n' "${urls[@]}"
+}
+# location_block FILE-SECTION PATTERN < nginx -T : the text of one location
+location_block() {
+  python3 -I -c '
+import sys
+lines = sys.stdin.read().splitlines()
+start = next(i for i, l in enumerate(lines) if l.startswith("location") and sys.argv[1] in l)
+end = next(i for i in range(start, len(lines)) if lines[i] == "}")
+print("\n".join(lines[start:end + 1]))' "$1"
+}
+
+group_media() {
+  local out
+  out="$(headers "/en/files/$FILE_A")"
+  equals "files/<A>: 200" 200 "$(head -1 <<<"$out" | cut -d' ' -f2)"
+  equals "files/<A>: the bytes of the stored file" "$(printf 'smoke,é\n')" "$(get "/en/files/$FILE_A")"
+  check "files/<A>: attachment" grep -qi '^Content-Disposition: attachment' <<<"$out"
+  check "files/<A>: sandbox CSP" grep -qi "^Content-Security-Policy: default-src 'none'; sandbox" <<<"$out"
+  assert_one_of_each "files/<A>" "$out"
+  equals "files/<A>: exactly one nosniff" 1 "$(header_count X-Content-Type-Options <<<"$out")"
+  equals "files/<E> (export deliverable): 200" 200 "$(code "/fr/files/$FILE_E")"
+  equals "files/<E>: the bytes of the export" "zip bytes" "$(get "/fr/files/$FILE_E")"
+  out="$(headers "/en/files/$FILE_F")"
+  equals "files/<F> (file missing on disk): 404" 404 "$(head -1 <<<"$out" | cut -d' ' -f2)"
+  check "files/<F>: the site page, no attachment header" bash -c '! grep -qi "^Content-Disposition" <<<"$1"' _ "$out"
+  check "files/<F>: the site 404 body" grep -q 'Page not found' <<<"$(get "/en/files/$FILE_F")"
+  equals "files/<B>: the 403 of Django passes through" 403 "$(code "/en/files/$FILE_B")"
+  equals "files/<C> (archestemp): 404" 404 "$(code "/en/files/$FILE_C")"
+  equals "files/<D> (encoded slashes): 404" 404 "$(code "/en/files/$FILE_D")"
+  out="$(get '/files/uploadedfiles/smoke%20file%20%C3%A9.csv')"
+  equals "a direct /files/uploadedfiles/<name> reaches Django, not the disk" web "$(jget name <<<"$out")"
+  equals "an unprefixed /files/<uuid> reaches Django (its language redirect)" web "$(jget name <<<"$(get "/files/$FILE_A")")"
+  equals "a non-uuid under files/ reaches Django" web "$(jget name <<<"$(get /en/files/not-a-uuid)")"
+  check "127.0.0.1:8081 is not published" bash -c '! docker port "$1" | grep -q 8081' _ "$NGINX"
+}
+
+group_iiifserver() {
+  local out
+  out="$(get '/iiifserver/iiif/3/a%2Fb%20c%C3%A9.tif/info.json')"
+  equals "iiifserver: the image server is reached" cantaloupe "$(jget name <<<"$out")"
+  equals "iiifserver: %2F, %20 and %C3%A9 arrive byte for byte" \
+    '/iiif/3/a%2Fb%20c%C3%A9.tif/info.json' "$(jget path <<<"$out")"
+  out="$(get '/fr/iiifserver/iiif/2/x/info.json?a=b%20c')"
+  equals "iiifserver: the language prefix is dropped, the query kept" \
+    '/iiif/2/x/info.json?a=b%20c' "$(jget path <<<"$out")"
+  equals "iiifserver: // after the mount point is 404" 404 "$(code '/iiifserver//iiif/3/x' --path-as-is)"
+  equals "iiifserver: /admin is 404" 404 "$(code /iiifserver/admin)"
+  equals "iiifserver: a path outside /iiif/2|3/ is 404" 404 "$(code /iiifserver/iiif/4/x)"
+  equals "iiifserver: the bare mount point is 404" 404 "$(code /iiifserver/)"
+  out="$(headers /iiifserver/iiif/3/x/info.json -H 'Origin: https://viewer.example')"
+  equals "iiifserver: one Access-Control-Allow-Origin" 1 "$(header_count Access-Control-Allow-Origin <<<"$out")"
+  equals "iiifserver: it is *" "*" "$(header_value access-control-allow-origin <<<"$out")"
+  equals "iiifserver: one Access-Control-Allow-Methods" 1 "$(header_count Access-Control-Allow-Methods <<<"$out")"
+  assert_one_of_each "iiifserver" "$out"
+  out="$(headers /iiifserver/iiif/3/x/info.json -X OPTIONS -H 'Origin: https://viewer.example' -H 'Access-Control-Request-Method: GET')"
+  equals "iiifserver: OPTIONS is 204" 204 "$(head -1 <<<"$out" | cut -d' ' -f2)"
+  equals "iiifserver: OPTIONS lists the methods" "GET, HEAD, OPTIONS" "$(header_value access-control-allow-methods <<<"$out")"
+  equals "iiifserver: OPTIONS carries one Access-Control-Allow-Origin" 1 "$(header_count Access-Control-Allow-Origin <<<"$out")"
+  out="$(get /iiifserver/iiif/3/x/info.json -H 'X-Forwarded-For: 6.6.6.6' -H 'X-Real-IP: 6.6.6.6' \
+    -H 'X-Forwarded-Proto: http' -H 'X-Forwarded-Host: evil.example' -H 'X-Forwarded-Port: 80' -H 'Forwarded: for=6.6.6.6')"
+  local header
+  for header in x-forwarded-for x-real-ip x-forwarded-proto x-forwarded-host x-forwarded-port forwarded; do
+    equals "iiifserver: $header never reaches the image server" "<absent>" "$(jget headers "$header" <<<"$out")"
+  done
+  equals "no other route carries CORS (a proxied page)" 0 "$(header_count Access-Control-Allow-Origin <<<"$(headers /page -H 'Origin: https://viewer.example')")"
+  equals "no other route carries CORS (the Explorer API)" 0 \
+    "$(header_count Access-Control-Allow-Origin <<<"$(headers /fr/api/explorer/search -H 'Origin: https://viewer.example')")"
+  equals "/iiif/ keeps the CORS header of Django (one)" 1 \
+    "$(header_count Access-Control-Allow-Origin <<<"$(headers /iiif/v3/annotation/x -H 'Origin: https://viewer.example')")"
+}
+
+group_acl() {
+  local lang path out
+  for lang in en fr; do
+    for path in api/resource/x api/tile/g/n "api/tile-list-create/g/n/$FILE_A" api/tile-new-resource/g/n; do
+      equals "/$lang/$path: 404 from nginx" "404 -" "$(code "/$lang/$path") $(reaches "/$lang/$path")"
+    done
+  done
+  equals "/en//api/resource/x: 404 from nginx" "404 -" "$(code /en//api/resource/x --path-as-is) $(reaches /en//api/resource/x --path-as-is)"
+  equals "/en/api/%72esource/x: 404 from nginx" "404 -" "$(code /en/api/%72esource/x) $(reaches /en/api/%72esource/x)"
+  equals "/fr/api/tiles/x (core, plural) reaches Django" web "$(jget name <<<"$(get /fr/api/tiles/x)")"
+  equals "/en/api/relatable-resources/g/n reaches Django" web "$(jget name <<<"$(get /en/api/relatable-resources/g/n)")"
+  for lang in en fr; do
+    for path in auth/signup auth/confirm_signup "auth/confirm_signup?link=x" two-factor-authentication-settings; do
+      equals "/$lang/$path: 404 from nginx" "404 -" "$(code "/$lang/$path") $(reaches "/$lang/$path")"
+    done
+    equals "POST /$lang/auth/signup: 404 from nginx" "404 -" "$(code "/$lang/auth/signup" -X POST) $(reaches "/$lang/auth/signup" -X POST)"
+    equals "POST /$lang/two-factor-authentication-settings: 404 from nginx" "404 -" \
+      "$(code "/$lang/two-factor-authentication-settings" -X POST) $(reaches "/$lang/two-factor-authentication-settings" -X POST)"
+    out="$(headers "/$lang/two-factor-authentication-reset")"
+    equals "/$lang/two-factor-authentication-reset: the static page from nginx" "200 -" \
+      "$(head -1 <<<"$out" | cut -d' ' -f2) $(reaches "/$lang/two-factor-authentication-reset")"
+    equals "/$lang/two-factor-authentication-reset: served as HTML" "text/html" "$(header_value content-type <<<"$out")"
+    check "/$lang/two-factor-authentication-reset: the page sends the person to an administrator" \
+      grep -q 'Lost your authenticator app?' <<<"$(get "/$lang/two-factor-authentication-reset")"
+    assert_one_of_each "/$lang/two-factor-authentication-reset" "$out"
+    out="$(headers "/$lang/two-factor-authentication-reset?x=1" -X POST -d 'code=1')"
+    equals "POST /$lang/two-factor-authentication-reset: 303 from nginx" "303 -" \
+      "$(head -1 <<<"$out" | cut -d' ' -f2) $(reaches "/$lang/two-factor-authentication-reset" -X POST)"
+    check "POST /$lang/two-factor-authentication-reset: sent to the page, without its query" \
+      grep -Eq "^https://$HOST(:[0-9]+)?/$lang/two-factor-authentication-reset\$" <<<"$(header_value location <<<"$out")"
+    out="$(headers "/$lang/two-factor-authentication-reset%0D%0ASet-Cookie:%20pwn=1" -X POST)"
+    equals "POST /$lang/two-factor-authentication-reset with CRLF in the path: one Location, no Set-Cookie" "1 0" \
+      "$(header_count location <<<"$out") $(header_count set-cookie <<<"$out")"
+  done
+  equals "/en/auth/ (sign-in) reaches Django" web "$(jget name <<<"$(get /en/auth/)")"
+  equals "/fr/two-factor-authentication-login reaches Django" web "$(jget name <<<"$(get /fr/two-factor-authentication-login)")"
+  equals "/fr/silk/ is 404 from nginx" "404 -" "$(code /fr/silk/) $(reaches /fr/silk/)"
+  equals "/en/silk/requests/ is 404 from nginx" "404 -" "$(code /en/silk/requests/) $(reaches /en/silk/requests/)"
+  equals "/metrics is 404 from nginx" "404 -" "$(code /metrics) $(reaches /metrics)"
+  equals "/readyz is 404 from nginx" "404 -" "$(code /readyz) $(reaches /readyz)"
+  equals "/metrics and /readyz have an empty body" "0 0" "$(get /metrics -o /dev/null -w '%{size_download}') $(get /readyz -o /dev/null -w '%{size_download}')"
+  equals "/healthz reaches Django" web "$(jget name <<<"$(get /healthz)")"
+  assert_one_of_each "the edge 404 of a denied route" "$(headers /en/api/resource/x)"
+}
+
+group_search_export() {
+  local base=/fr/api/search/export_results
+  equals "api export format=tilecsv: 404" 404 "$(code "$base?format=tilecsv")"
+  equals "api export without a format: 404" 404 "$(code "$base")"
+  equals "api export format=geojson&format=tilecsv: 404" 404 "$(code "$base?format=geojson&format=tilecsv")"
+  equals "api export format=geojson&form%61t=shp: 404" 404 "$(code "$base?format=geojson&form%61t=shp")"
+  equals "api export format=tilecsv&format=geojson: 404" 404 "$(code "$base?format=tilecsv&format=geojson")"
+  equals "api export format=geojson without a session cookie: 403" 403 "$(code "$base?format=geojson")"
+  equals "api export format=geojson with a session cookie: reaches Django" web "$(jget name <<<"$(get "$base?format=geojson" -H 'Cookie: manuspectrum=x')")"
+  equals "search export format=geojson without a session cookie: 403" 403 "$(code "/fr/search/export_results?format=geojson")"
+  equals "search export format=geojson with a session cookie: reaches Django" web "$(jget name <<<"$(get "/fr/search/export_results?format=geojson" -H 'Cookie: manuspectrum=x')")"
+  local page
+  for page in "/fr/api/search/export_results?format=geojson" "/en/api/search/export_results?format=geojson" "/fr/search/export_results?format=geojson" "/en/search/export_results?format=geojson"; do
+    check "geojson barrier $page: the site's 403 page, both languages, sign-in links" \
+      bash -c 'grep -q "<title>Access restricted / " <<<"$1" && grep -q "<html lang=\"en\"" <<<"$1" && grep -q "<section class=\"ms-error\" lang=\"fr\"" <<<"$1" && grep -q "href=\"/en/auth/?next=/en/\"" <<<"$1" && grep -q "href=\"/fr/auth/?next=/fr/\"" <<<"$1" && ! grep -qi "<center>nginx" <<<"$1"' _ "$(get "$page")"
+  done
+  local refusal
+  refusal="$(headers "/en/api/search/export_results?format=geojson")"
+  equals "geojson barrier page: status 403" "403" "$(head -1 <<<"$refusal" | cut -d" " -f2)"
+  check "geojson barrier page: never publicly cached, nginx headers kept" \
+    bash -c '! grep -qi "public" <<<"$1" && grep -qi "^strict-transport-security:" <<<"$1" && grep -qi "^x-content-type-options:" <<<"$1"' _ "$refusal"
+  equals "the internal 403 page is not reachable directly: 404" 404 "$(code /_errors/403.html)"
+  local bypass
+  for bypass in 'format=tilecsv&format=geojson' 'format=geojs%6Fn' 'format=GEOJSON' 'f%6Frmat=geojson' 'format=%67eojson' 'total=1&format=tilecsv&format=geo%6Ason'; do
+    equals "search export ?$bypass without a cookie: 403" 403 "$(code "/fr/search/export_results?$bypass")"
+  done
+  equals "search export format=tilecsv without a cookie is unchanged" web "$(jget name <<<"$(get "/fr/search/export_results?format=tilecsv")")"
+  equals "a cookie of another name does not count" 403 "$(code "$base?format=geojson" -H 'Cookie: other=x')"
+  equals "POST /fr/temp_file: 404" 404 "$(code /fr/temp_file -X POST)"
+  equals "GET /fr/temp_file/<uuid> reaches Django" web "$(jget name <<<"$(get "/fr/temp_file/$FILE_A")")"
+  equals "GET /fr/temp_file (no id): 404 from nginx" "404 -" "$(code /fr/temp_file) $(reaches /fr/temp_file)"
+  equals "DELETE /fr/temp_file: 404" 404 "$(code /fr/temp_file -X DELETE)"
+  equals "GET /fr/temp_file/<uuid-shaped, wrong lengths>: 404 from nginx" "404 -" "$(code /fr/temp_file/1-2-3-4-5) $(reaches /fr/temp_file/1-2-3-4-5)"
+  equals "GET /fr/temp_file/<not a uuid>: 404 from nginx" "404 -" "$(code /fr/temp_file/abc) $(reaches /fr/temp_file/abc)"
+  local out
+  out="$(codes 12 '/fr/search/export_results?format=tilecsv&total=1')"
+  check "12 rapid search exports: some answer 429" grep -q 429 <<<"$out"
+  check "12 rapid search exports: the first ones pass" grep -q '^200' <<<"$out"
+}
+
+group_rate() {
+  local out i
+  out="$(codes 7 /en/auth/ -X POST)"
+  equals "7 POSTs to /en/auth/: the first 6 pass, the 7th is 429" "200 200 200 200 200 200 429 " "$out"
+  out="$(headers /en/auth/ -X POST)"
+  equals "the 429 page carries Retry-After" 60 "$(header_value retry-after <<<"$out")"
+  check "the 429 body is the nginx page" grep -q 'Too many requests' <<<"$(get /en/auth/ -X POST)"
+  assert_one_of_each "the 429 page" "$out"
+  sleep 1
+  check "a limited request is logged under its own path with status 429" python3 -I -c '
+import json, sys
+rows = [json.loads(l) for l in open(sys.argv[1]).read().splitlines()]
+assert any(r["uri"] == "/en/auth/" and r["status"] == 429 for r in rows)
+assert not any(r["uri"] in ("/_errors/429.html", "/_errors/50x.html") for r in rows)' "$LOGS/access.log"
+  check "rate-limit refusals do not reach error.log (they carry the raw request line)" \
+    bash -c '! grep -Eq "limiting (requests|connections)" "$1"' _ "$LOGS/error.log"
+  out="$(codes 7 /en/auth/)"
+  check "7 GETs to /en/auth/ are never limited" bash -c '! grep -q 429 <<<"$1"' _ "$out"
+  out="$(codes 45 "/api/spectrum-preview/$FILE_A?n=full")"
+  check "45 requests for ?n=full: the first 31 (a Compare view) pass, some are 429" \
+    bash -c '[ "$(tr " " "\n" <<<"$1" | head -31 | sort -u)" = 200 ] && grep -q 429 <<<"$1"' _ "$out"
+  sleep 4
+  out="$(codes 15 "/api/spectrum-preview/$FILE_A")"
+  check "15 requests without n: none is 429" bash -c '! grep -q 429 <<<"$1"' _ "$out"
+  sleep 4
+  out="$(codes 12 "/api/spectrum-preview/$FILE_A?n=200")"
+  check "12 requests with n=200 are not counted as full" bash -c '! grep -q 429 <<<"$1"' _ "$out"
+  sleep 4
+  out="$(get_many 30 "/api/spectrum-preview/$FILE_A?n=4096&slow=1" 30)"
+  check "30 previews in flight at once (above perip 20): none is 429 (preview_conn zone)" bash -c '! grep -q 429 <<<"$1"' _ "$out"
+  sleep 4
+  out="$(codes 14 /en/api/explorer/share)"
+  check "the share route is limited (share zone)" grep -q 429 <<<"$out"
+  equals "the share zone does not spend the heavy budget of the manifest" 200 "$(code /iiif/v3/explorer-manifest)"
+  sleep 3
+  out="$(get_many 80 /en/api/explorer/search)"
+  check "the Explorer calls are limited at 10 r/s, burst 40 (80 at once: some 429, the first ones pass)" \
+    bash -c 'grep -q 429 <<<"$1" && grep -q "^200" <<<"$1"' _ "$out"
+  equals "an Explorer burst does not spend the generic api zone" 200 "$(code /api/site-notice)"
+  block="$(location_block 'api/explorer/ {' < <(docker exec "$NGINX" nginx -T 2>&1))"
+  check "the Explorer location applies the pace zone and the hourly budget bucket (6000 at 100 r/m)" \
+    bash -c 'grep -q "limit_req zone=explorer burst=40 nodelay;" <<<"$1" && grep -q "limit_req zone=explorer_budget burst=6000 nodelay;" <<<"$1"' _ "$block"
+  sleep 3
+  out="$(get_many 80 /healthz)"
+  check "/healthz is limited too (burst 10, 80 requests at once)" grep -q 429 <<<"$out"
+  sleep 3
+  equals "/healthz answers again once the burst has drained" 200 "$(code /healthz)"
+  sleep 3
+  # The viewer fires its annotation fetches far above the pace the pool can
+  # carry: they are queued by nginx (10 r/s per address), never refused, and
+  # reach the upstream a few at a time while ordinary calls keep passing.
+  local side="$TMP/side-codes" began elapsed peak block
+  docker exec "$RUN-web" python -c 'import urllib.request as u; u.urlopen("http://127.0.0.1:8000/__peak_annotations").read()'
+  (for _ in $(seq 25); do get /fr/ -o /dev/null -w '%{http_code} %{time_total}\n'; sleep 0.2; done >"$side") &
+  began="$(date +%s.%N)"
+  out="$(get_many 60 '/fr/iiifannotations?canvas=https://iiif.example/c' 40)"
+  elapsed="$(python3 -I -c 'import sys; print(float(sys.argv[1]) - float(sys.argv[2]))' "$(date +%s.%N)" "$began")"
+  wait
+  peak="$(docker exec "$RUN-web" python -c 'import urllib.request as u; print(u.urlopen("http://127.0.0.1:8000/__peak_annotations").read().decode())')"
+  equals "60 annotation requests, 40 at a time (above the old bound of 20): all answer 200" "60" "$(grep -c '^200$' <<<"$out")"
+  check "the annotation requests are paced (60 at 10 r/s take at least 4 s)" \
+    python3 -I -c 'import sys; sys.exit(0 if float(sys.argv[1]) >= 4 else 1)' "$elapsed"
+  check "no more than 8 annotation requests reach the upstream at once (peak $peak)" \
+    python3 -I -c 'import sys; sys.exit(0 if 1 <= int(sys.argv[1]) <= 8 else 1)' "$peak"
+  check "ordinary calls made during the queue are 200 and under 1.5 s" \
+    bash -c '[ "$(wc -l <"$1")" -ge 20 ] && ! awk "\$1 != 200 || \$2 > 1.5 {bad=1} END {exit !bad}" "$1"' _ "$side"
+  # limit_req runs before limit_conn: 160 at once (above the bound of 150) are queued, not refused.
+  sleep 8
+  docker exec "$RUN-web" python -c 'import urllib.request as u; u.urlopen("http://127.0.0.1:8000/__peak_annotations").read()'
+  out="$(get_many 160 '/fr/iiifannotations?canvas=https://iiif.example/c' 160 60)"
+  peak="$(docker exec "$RUN-web" python -c 'import urllib.request as u; print(u.urlopen("http://127.0.0.1:8000/__peak_annotations").read().decode())')"
+  equals "160 concurrent annotation requests (above the connection bound of 150): all answer 200" "160" "$(grep -c '^200$' <<<"$out")"
+  check "160 concurrent annotation requests: at most 8 reach the upstream at once (peak $peak)" \
+    python3 -I -c 'import sys; sys.exit(0 if 1 <= int(sys.argv[1]) <= 8 else 1)' "$peak"
+  # annotations_site is checked as configuration only: one test address never exceeds it.
+  block="$(location_block 'iiifannotations' < <(docker exec "$NGINX" nginx -T 2>&1))"
+  check "annotations: both rate zones are delayed (no nodelay)" \
+    bash -c 'grep -q "limit_req zone=annotations burst=600;" <<<"$1" && grep -q "limit_req zone=annotations_site burst=1200;" <<<"$1" && ! grep -q nodelay <<<"$1"' _ "$block"
+  check "annotations: the safety connection bound stays above the viewer's peak of 120" \
+    bash -c 'n="$(sed -n "s/.*limit_conn annotations_conn \([0-9]*\);.*/\1/p" <<<"$1")"; [ "${n:-0}" -ge 150 ]' _ "$block"
+  sleep 8
+  out="$(get_many 110 "/fr/mvt/$FILE_A/5/16/11.pbf" 110)"
+  check "110 concurrent map tiles (a zoom of a many-layer map): none is 429 (tiles zone)" bash -c '! grep -q 429 <<<"$1"' _ "$out"
+  sleep 3
+}
+
+group_timeout_config() {
+  local dump block
+  dump="$(docker exec "$NGINX" nginx -T 2>&1)"
+  block="$(location_block 'create-(all|resource)' <<<"$dump")"
+  check "create-all and create-resource: proxy_read_timeout 340s" grep -q 'proxy_read_timeout 340s;' <<<"$block"
+  check "create-all and create-resource: proxy_next_upstream off" grep -q 'proxy_next_upstream off;' <<<"$block"
+  block="$(location_block 'explorer/(export|series' <<<"$dump")"
+  check "export and series.csv: proxy_buffering off" grep -q 'proxy_buffering off;' <<<"$block"
+  check "export and series.csv: gzip off" grep -q 'gzip off;' <<<"$block"
+  check "export and series.csv: proxy_read_timeout 300s" grep -q 'proxy_read_timeout 300s;' <<<"$block"
+  block="$(location_block 'api/search/export_results' <<<"$dump")"
+  check "search export: proxy_read_timeout 120s" grep -q 'proxy_read_timeout 120s;' <<<"$block"
+  check "gzip_types holds application/ld+json and no csv or zip" \
+    bash -c 'l="$(grep "gzip_types" -A2 <<<"$1")"; grep -q "application/ld+json" <<<"$l" && ! grep -Eq "text/csv|application/zip" <<<"$l"' _ "$dump"
+}
+
+group_stream() {
+  local start first
+  start="$(date +%s.%N)"
+  first="$(get /api/explorer/series.csv -N 2>/dev/null | { read -r _; date +%s.%N; })"
+  check "series.csv: the first chunk arrives within 1.5 s, not with the last one" \
+    python3 -I -c 'import sys; start, first = map(float, sys.argv[1:]); sys.exit(0 if first - start < 1.5 else 1)' "$start" "$first"
+  equals "series.csv: three chunks, in order" "chunk 0 chunk 1 chunk 2" "$(get /api/explorer/series.csv -N | tr '\n' ' ' | sed 's/ $//')"
+  equals "series.csv: not gzipped" "" "$(header_value content-encoding <<<"$(headers /api/explorer/series.csv -H 'Accept-Encoding: gzip')")"
+}
+
+group_csp_report() {
+  local out
+  out="$(headers /page)"
+  equals "the policy names the report endpoint" 1 \
+    "$(grep -ic '^content-security-policy-report-only:.*report-uri /api/csp-report; report-to csp-endpoint' <<<"$out")"
+  equals "Reporting-Endpoints names the same endpoint" 'csp-endpoint="/api/csp-report"' \
+    "$(header_value reporting-endpoints <<<"$out")"
+  equals "csp-report: exactly one Reporting-Endpoints" 1 "$(header_count Reporting-Endpoints <<<"$out")"
+  equals "csp-report: a POST reaches web with its path unchanged" /api/csp-report \
+    "$(get /api/csp-report -X POST -H 'Content-Type: application/csp-report' -d '{}' | jget path)"
+  equals "csp-report: a GET is refused by the edge (405)" 405 "$(code /api/csp-report)"
+  equals "csp-report: a body over 16 KiB is refused (413)" 413 \
+    "$(code /api/csp-report -X POST -H 'Content-Type: application/reports+json' --data-binary "$(head -c 17000 /dev/zero | tr '\0' 'a')")"
+  out="$(get_post_many 50 /api/csp-report)"
+  check "csp-report: 50 posts at once, some are 429 (csp_report zone)" grep -q 429 <<<"$out"
+  check "csp-report: the burst lets some through" grep -q 200 <<<"$out"
+  sleep 3
+}
+
+group_site_notice() {
+  local out
+  out="$(get /api/site-notice)"
+  equals "site-notice: web answers while it is up" web "$(jget name <<<"$out")"
+  equals "site-notice: the path reaches web unchanged" /api/site-notice "$(jget path <<<"$out")"
+  out="$(headers /api/site-notice -H 'X-Stub-Status: 503')"
+  equals "site-notice: a 503 of web is answered by the snapshot" 200 "$(head -1 <<<"$out" | cut -d' ' -f2)"
+  equals "site-notice: the snapshot is JSON" "application/json" "$(header_value content-type <<<"$out")"
+  equals "site-notice: the snapshot is cacheable for a minute" "public, max-age=60" "$(header_value cache-control <<<"$out")"
+  assert_one_of_each "site-notice snapshot" "$out"
+  equals "site-notice: the snapshot carries the announcement" maintenance \
+    "$(get /api/site-notice -H 'X-Stub-Status: 500' | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["notices"][0]["kind"])')"
+  equals "site-notice: a 403 of web (refused preview) passes through" 403 \
+    "$(code '/api/site-notice?preview=1' -H 'X-Stub-Status: 403')"
+  equals "site-notice: a 304 of web passes through" 304 "$(code /api/site-notice -H 'X-Stub-Status: 304')"
+  rm -f "$SITE_NOTICE/notice.json"
+  equals "site-notice: no snapshot file is a 404" 404 "$(code /api/site-notice -H 'X-Stub-Status: 503')"
+  write_notice_snapshot
+}
+
+# Stops the web stub: keep this group last, it restores the stub when it is done.
+group_upstream_down() {
+  local out
+  docker rm -f "$RUN-web" >/dev/null
+  sleep 12
+  out="$(headers /page)"
+  check "web down: nginx answers 502 (504 while the stale address times out)" \
+    grep -Eq '^HTTP/[0-9.]+ 50[24]' <<<"$out"
+  check "the 50x is the bilingual error page" grep -q 'Instrument malfunction' <<<"$(get /page)"
+  assert_one_of_each "the 50x page" "$out"
+  check "the 50x page holds the announcement block" grep -q 'id="ms-notice"' <<<"$(get /page)"
+  out="$(get /page -D - | tr -d '\r')"
+  equals "the 50x page shows the status it is served for" "$(head -1 <<<"$out" | cut -d' ' -f2)" \
+    "$(grep -o 'id="ms-code"[^>]*>[0-9]*' <<<"$out" | grep -o '[0-9]*$')"
+  check "the 50x page keeps the error text" grep -q 'Instrument malfunction' <<<"$out"
+  check "the SSI directive does not reach the browser" bash -c '! grep -q "<!--#" <<<"$1"' _ "$out"
+  out="$(headers /api/site-notice)"
+  equals "web down: the announcement endpoint answers from the snapshot" 200 "$(head -1 <<<"$out" | cut -d' ' -f2)"
+  equals "web down: the snapshot is JSON" "application/json" "$(header_value content-type <<<"$out")"
+  equals "web down: the snapshot is a maintenance announcement" maintenance \
+    "$(get /api/site-notice | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["notices"][0]["kind"])')"
+  check "web down: the snapshot has a Cache-Control header" bash -c 'grep -qi "^cache-control: public, max-age=60" <<<"$1"' _ "$out"
+  rm -f "$SITE_NOTICE/notice.json"
+  equals "web down, no snapshot file: 404" 404 "$(code /api/site-notice)"
+  write_notice_snapshot
+  start_stub web 8000
+  check "web back: nginx follows the recreated upstream" wait_for 40 stub_answers
+}
+
+# ---- run ----------------------------------------------------------------
+
+if ! setup; then
+  echo "not ok - setup failed" >&2
+  exit 1
+fi
+
+selected=("$@")
+[ "${#selected[@]}" -gt 0 ] || selected=("${GROUPS_ALL[@]}")
+for group in "${selected[@]}"; do
+  if declare -F "group_$group" >/dev/null; then
+    "group_$group"
+  else
+    echo "unknown group: $group" >&2
+    failed=1
+  fi
+done
+
+echo "1..$n"
+exit "$failed"

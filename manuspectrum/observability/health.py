@@ -92,7 +92,10 @@ def probe_redis(url, timeout):
 def probe_cantaloupe(timeout):
     import requests
 
-    url = settings.CANTALOUPE_HTTP_ENDPOINT.rstrip("/") + "/iiif/3"
+    endpoint = getattr(
+        settings, "CANTALOUPE_INTERNAL_ENDPOINT", settings.CANTALOUPE_HTTP_ENDPOINT
+    )
+    url = endpoint.rstrip("/") + "/iiif/3"
     response = requests.get(url, timeout=(timeout, timeout), allow_redirects=False)
     response.close()
     if response.status_code != 200:

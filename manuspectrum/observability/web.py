@@ -22,8 +22,10 @@ def login_succeeded_handler(sender, **kwargs):
     metrics.AUTH_LOGINS.labels(outcome="success").inc()
 
 
-def login_failed_handler(sender, **kwargs):
-    metrics.AUTH_LOGINS.labels(outcome="failure").inc()
+def login_failed_handler(sender, credentials=None, **kwargs):
+    """A wrong second-factor code (flagged by `TwoFactorLoginMiddleware`) is its own outcome."""
+    outcome = "mfa_failure" if (credentials or {}).get("mfa") else "failure"
+    metrics.AUTH_LOGINS.labels(outcome=outcome).inc()
 
 
 def connect():

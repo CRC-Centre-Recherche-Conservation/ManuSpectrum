@@ -6,7 +6,11 @@ from arches.app.utils.search_thumbnail_fetcher_factory import (
 )
 from manuspectrum.iiif.sources import manifest_json
 from manuspectrum.utils.http import safe_fetch
-from manuspectrum.utils.iiif_tools import CanvasIIIF, BBoxCalculator
+from manuspectrum.utils.iiif_tools import (
+    CanvasIIIF,
+    BBoxCalculator,
+    own_cantaloupe_target,
+)
 from manuspectrum.utils.manifest_values import first_manifest_url
 
 logger = logging.getLogger(__name__)
@@ -14,6 +18,13 @@ logger = logging.getLogger(__name__)
 # The shared session asks for JSON-LD (it exists for manifests); an image
 # request has to say what it is actually after.
 _IMAGE_HEADERS = {"Accept": "image/*,*/*;q=0.8"}
+
+
+def _fetch_thumbnail(url):
+    """Guarded GET of a thumbnail; this server's own image service is read internally."""
+    target, extra = own_cantaloupe_target(url)
+    return safe_fetch(target, headers=_IMAGE_HEADERS, purpose="thumbnail", **extra)
+
 
 # Leading bytes of the formats a IIIF Image API server answers with. WebP is
 # not here: its marker sits at offset 8, and _sniff_image_type handles it.
@@ -104,9 +115,7 @@ class DocumentThumbnailFetcher(SearchThumbnailFetcher):
                 )
                 return None
 
-            return _image_payload(
-                safe_fetch(thumbnail_url, headers=_IMAGE_HEADERS, purpose="thumbnail")
-            )
+            return _image_payload(_fetch_thumbnail(thumbnail_url))
 
         except Exception as e:
             logger.error(
@@ -190,9 +199,7 @@ class ComponentThumbnailFetcher(SearchThumbnailFetcher):
             # IIIF Image API request (region -> full size -> rotation 0 -> default.jpg)
             thumb_url = f"{canvas_service_url}/{x},{y},{w},{h}/full/0/default.jpg"
 
-            return _image_payload(
-                safe_fetch(thumb_url, headers=_IMAGE_HEADERS, purpose="thumbnail")
-            )
+            return _image_payload(_fetch_thumbnail(thumb_url))
 
         except Exception as e:
             logger.error(
@@ -272,13 +279,7 @@ class AnalysisThumbnailFetcher(SearchThumbnailFetcher):
                     if manifest_data:
                         thumb_url = CanvasIIIF.get_thumbnail_url(manifest_data)
                         if thumb_url:
-                            payload = _image_payload(
-                                safe_fetch(
-                                    thumb_url,
-                                    headers=_IMAGE_HEADERS,
-                                    purpose="thumbnail",
-                                )
-                            )
+                            payload = _image_payload(_fetch_thumbnail(thumb_url))
                 except Exception as e:
                     logger.warning(
                         f"Manifest thumbnail unavailable for resource {self.resource.resourceinstanceid}: {e}"
@@ -338,9 +339,7 @@ class AnalysisThumbnailFetcher(SearchThumbnailFetcher):
             x, y, w, h = bbox
             thumb_url = f"{canvas_service_url}/{x},{y},{w},{h}/full/0/default.jpg"
 
-            return _image_payload(
-                safe_fetch(thumb_url, headers=_IMAGE_HEADERS, purpose="thumbnail")
-            )
+            return _image_payload(_fetch_thumbnail(thumb_url))
 
         except Exception as e:
             logger.error(

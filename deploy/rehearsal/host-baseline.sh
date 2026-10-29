@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Applies the host baseline on a fresh Ubuntu: SSH, UFW, fail2ban, Docker CE,
-# accounts, /data over NFS, unattended-upgrades, postfix. vm.max_map_count
-# and /etc/docker/daemon.json are left untouched (Ansible's job). Runs as
+# accounts, /data over NFS, time zone Europe/Paris, unattended-upgrades,
+# postfix. vm.max_map_count and /etc/docker/daemon.json are left untouched
+# (Ansible's job). Runs as
 # root inside the VM; reads rehearsal.env (next to the script, or --env FILE).
 # Idempotent: each step reports "already done" when nothing changes.
 set -euo pipefail
@@ -95,6 +96,14 @@ write_file() {
   echo "written: ${target}"
 }
 
+echo "== Time zone"
+if [ "$(timedatectl show -p Timezone --value)" = Europe/Paris ]; then
+  echo "already done: time zone Europe/Paris"
+else
+  timedatectl set-timezone Europe/Paris
+  echo "set: time zone Europe/Paris"
+fi
+
 echo "== Packages"
 apt-get update -qq
 apt-get install -y -qq ufw fail2ban nfs-common ca-certificates curl gnupg unattended-upgrades >/dev/null
@@ -172,7 +181,6 @@ Signed-By: /etc/apt/keyrings/docker.asc
 DOCKER
 apt-get update -qq
 apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin >/dev/null
-usermod -aG docker "$ADMIN_USER"
 
 echo "== Accounts"
 if id "$ADMIN2_USER" >/dev/null 2>&1; then
@@ -203,6 +211,15 @@ else
   usermod -aG docker manuspectrum
   echo "added: manuspectrum to docker"
 fi
+# Membership of docker is root-equivalent without the sudo password: only the service account has it.
+for admin in "$ADMIN_USER" "$ADMIN2_USER"; do
+  if id -nG "$admin" 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
+    gpasswd -d "$admin" docker >/dev/null
+    echo "removed: ${admin} from docker"
+  else
+    echo "already done: ${admin} not in docker"
+  fi
+done
 
 echo "== /data (NFS)"
 mkdir -p /data
@@ -291,5 +308,5 @@ cat <<DONE
 Baseline en place.
 - vm.max_map_count and /etc/docker/daemon.json: left to Ansible, as in production.
 - Password of ${ADMIN2_USER}: set it by hand (sudo passwd ${ADMIN2_USER}).
-- Log out and back in so that ${ADMIN_USER} picks up the docker group.
+- Docker is for the service account only: admins use sudo -iu manuspectrum.
 DONE

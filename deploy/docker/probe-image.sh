@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Checks a built image without starting any service: it runs under an
 # arbitrary uid on a read-only root, ships no build tool and no development
-# file, and passes the Arches cache check of `check --deploy`.
-# Usage: probe-image.sh IMAGE
+# file, and raises no warning in `check --deploy --tag security` (the command
+# the entrypoint runs before web and init).
+# Usage: probe-image.sh IMAGE [REVISION]
+# With REVISION, the image must carry it as org.opencontainers.image.revision.
 set -euo pipefail
 
 IMAGE="${1:?usage: probe-image.sh IMAGE}"
+REVISION="${2:-}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
@@ -19,15 +22,18 @@ run() {
   || fail "default user is not 10001:10001"
 ok "default user 10001:10001"
 
+if [ -n "$REVISION" ]; then
+  label="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$IMAGE")"
+  [ "$label" = "$REVISION" ] || fail "revision label is '$label', expected '$REVISION'"
+  ok "revision label $REVISION"
+fi
+
 run python -c 'import django; django.setup()' || fail "django.setup() under uid 4242 on a read-only root"
 ok "Django starts under an arbitrary uid on a read-only root"
 
-out="$(run python manage.py check --deploy --tag security 2>&1 || true)"
-if grep -Eq 'arches\.(W|E)001' <<<"$out"; then
-  echo "$out" >&2
-  fail "Arches reports a cache without rate limiting"
-fi
-ok "check --deploy: no arches.W001/E001"
+out="$(run python manage.py check --deploy --tag security --fail-level WARNING 2>&1)" \
+  || { echo "$out" >&2; fail "Django deployment checks (any warning)"; }
+ok "check --deploy: no warning"
 
 # Arches' compatibility check reads /app/pyproject.toml; when it raises, every
 # manage.py command of the running stack stops.

@@ -1,0 +1,12 @@
+# Runs the release watch every hour, spread over ten minutes; Persistent=true
+# runs a missed hour at the next boot. Enabled by PP-8.
+[Unit]
+Description=Watch for a new ManuSpectrum release every hour
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=10m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

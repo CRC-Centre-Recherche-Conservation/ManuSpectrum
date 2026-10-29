@@ -39,7 +39,7 @@ class ScriptLoadingTests(TestCase):
         tags = SCRIPT_SRC.findall(head)
         self.assertTrue(tags)
         for tag in tags:
-            self.assertRegex(tag, r"\sdefer[\s>]")
+            self.assertRegex(tag, r"\s(defer[\s>]|type=\"module\")")
 
 
 class AnalysisPopupTests(TestCase):

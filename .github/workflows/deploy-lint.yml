@@ -1,16 +1,23 @@
 name: deploy-lint
 
 # Checks the deployment kit on every pull request: the rehearsal VM kit, the
-# image and Compose files offline, then the image itself (build, probe, the
-# whole stack on the runner, a Trivy report). No `paths:` filter: the `changes`
+# image and Compose files offline, then the image itself (stack-proof.yml:
+# build, probe, the whole stack on the runner, a Trivy report). No `paths:` filter: the `changes`
 # job decides which jobs have work to do, the others are skipped, and the
 # `conclusion` job always concludes so it can be a required check.
+# The image build reads the buildkit cache of the pull request and of its base
+# branch (written on every push there by staging.yml) and writes its own
+# under refs/pull/<n>/merge, deleted by cache-cleanup.yml when the pull
+# request closes.
 on:
   pull_request:
   workflow_dispatch:
 
+# actions: read lets buildkit's cache exporter list the existing cache
+# entries instead of logging an error and probing each blob one by one.
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: deploy-lint-${{ github.ref }}
@@ -27,6 +34,7 @@ jobs:
       rehearsal: ${{ steps.filter.outputs.rehearsal }}
       stack: ${{ steps.filter.outputs.stack }}
       image: ${{ steps.filter.outputs.image }}
+      ansible: ${{ steps.filter.outputs.ansible }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -41,18 +49,21 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           if [ "$EVENT_NAME" != "pull_request" ]; then
-            { echo "rehearsal=true"; echo "stack=true"; echo "image=true"; } >> "$GITHUB_OUTPUT"
+            { echo "rehearsal=true"; echo "stack=true"; echo "image=true"; echo "ansible=true"; } >> "$GITHUB_OUTPUT"
             exit 0
           fi
           files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"
           matches() { if grep -Eq "$1" <<<"$files"; then echo true; else echo false; fi; }
-          workflow='\.github/workflows/deploy-lint\.yml$'
-          stack='deploy/(docker|compose)/|deploy/(check-stack\.sh|Makefile)$|\.dockerignore$|\.trivyignore$|pyproject\.toml$|uv\.lock$'
-          build='package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
+          workflow='\.github/workflows/(deploy-lint|stack-proof)\.yml$'
+          # check-stack.sh lints every project workflow but main.yml (actionlint).
+          workflows='\.github/workflows/'
+          stack='deploy/(docker|compose|certs|logrotate|systemd|runbooks|sbin)/|deploy/(check-stack\.sh|Makefile|OBSERVABILITY\.md)$|deploy/scripts/|\.gitleaks\.toml$|\.pre-commit-config\.yaml$|\.gitignore$|\.dockerignore$|\.trivyignore$|manuspectrum/templates/errors/500\.htm$|pyproject\.toml$|uv\.lock$'
+          build='pkg$|\.gitmodules$|package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/utils/client_ip\.py$|manuspectrum/management/commands/(rewrite_dev_origin|export_pkg|check_pkg_inventory)\.py$|manuspectrum/(migrations|system_settings)/|manuspectrum/basemaps\.py$|manuspectrum/constants/openfreemap_bright_layers\.json$|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
           {
             echo "rehearsal=$(matches "^(deploy/rehearsal/|$workflow)")"
-            echo "stack=$(matches "^($stack|$workflow)")"
+            echo "stack=$(matches "^($stack|$workflows)")"
             echo "image=$(matches "^($stack|$build|$workflow)")"
+            echo "ansible=$(matches "^(deploy/ansible/|deploy/systemd/|deploy/logrotate/|deploy/sbin/|deploy/scripts/release-|deploy/scripts/lib-(release|metrics)\\.sh$|deploy/scripts/image-(digest|retag)\\.sh$|deploy/Makefile$|deploy/compose/\\.env\\.example$|deploy/rehearsal/(host|verify)-baseline\\.sh$|$workflow)")"
           } >> "$GITHUB_OUTPUT"
 
   rehearsal-kit:
@@ -98,170 +109,63 @@ jobs:
       - name: Check the image and Compose files
         run: bash deploy/check-stack.sh
 
+      - name: ACME flow against Pebble
+        run: bash deploy/certs/tests/test_acme_pebble.sh
+
   image:
     needs: changes
     if: needs.changes.outputs.image == 'true'
+    uses: ./.github/workflows/stack-proof.yml
+    with:
+      git-sha: ${{ github.sha }}
+
+  ansible:
+    needs: changes
+    if: needs.changes.outputs.ansible == 'true'
     runs-on: ubuntu-26.04
-    timeout-minutes: 75
+    timeout-minutes: 15
     defaults:
       run:
         shell: bash
-    env:
-      IMAGE: manuspectrum:ci
-      ENV_FILE: ${{ github.workspace }}/deploy/compose/.env
+        working-directory: deploy/ansible
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Free runner disk
+      # The runner's python3 is 3.14 (Ubuntu 26.04): the controller range
+      # (>= 3.12) and the ansible-core pin are explained in requirements-dev.txt.
+      # The pins are versions, not hashes: a hashed lock file would need a
+      # regeneration step at each bump.
+      - name: Install Ansible and its collections
         run: |
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
-          df -h /
+          python3 -m venv "$RUNNER_TEMP/ansible-venv"
+          "$RUNNER_TEMP/ansible-venv/bin/pip" install -r requirements-dev.txt
+          "$RUNNER_TEMP/ansible-venv/bin/ansible-galaxy" collection install -r requirements.yml
 
-      - name: Kernel setting for Elasticsearch
-        run: sudo sysctl -w vm.max_map_count=262144
-
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-
-      - name: Build the image
-        id: build
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          file: deploy/docker/Dockerfile
-          load: true
-          tags: ${{ env.IMAGE }}
-          provenance: false
-          sbom: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Probe the image
-        run: bash deploy/docker/probe-image.sh "$IMAGE"
-
-      - name: Export the frontend build
+      - name: Lint
         run: |
-          out="$RUNNER_TEMP/frontend"
-          mkdir -p "$out/webpack" "$out/manuspectrum/media"
-          id="$(docker create "$IMAGE")"
-          docker cp "$id:/app/webpack/webpack-stats.json" "$out/webpack/"
-          docker cp "$id:/app/manuspectrum/media/build" "$out/manuspectrum/media/"
-          docker rm "$id" >/dev/null
-          du -sh "$out"
+          export PATH="$RUNNER_TEMP/ansible-venv/bin:$PATH"
+          ansible-lint --profile production
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: frontend-build
-          path: ${{ runner.temp }}/frontend
-          retention-days: 5
-
-      - name: Prepare the stack environment
+      - name: Syntax check
         run: |
-          secrets="$RUNNER_TEMP/secrets"
-          media="$RUNNER_TEMP/media"
-          install -d "$media/uploadedfiles"
-          make -C deploy secrets SECRETS_DIR="$secrets"
-          sed -e "s#^MANUSPECTRUM_IMAGE=.*#MANUSPECTRUM_IMAGE=$IMAGE#" \
-              -e "s#^APP_UID=.*#APP_UID=$(id -u)#" \
-              -e "s#^APP_GID=.*#APP_GID=$(id -g)#" \
-              -e "s#^MEDIA_HOST_DIR=.*#MEDIA_HOST_DIR=$media#" \
-              -e "s#^SECRETS_DIR=.*#SECRETS_DIR=$secrets#" \
-              deploy/compose/.env.example > "$ENV_FILE"
+          export PATH="$RUNNER_TEMP/ansible-venv/bin:$PATH"
+          ansible-playbook --syntax-check -i inventories/example site.yml audit.yml
 
-      - name: First installation
-        run: make -C deploy volumes init up
-
-      - name: Check the stack
+      - name: Contract tests
         run: |
-          deploy/compose/smoke.sh check
-          deploy/compose/smoke.sh observability
-          deploy/compose/smoke.sh mark
-          deploy/compose/smoke.sh init-guard
+          export PATH="$RUNNER_TEMP/ansible-venv/bin:$PATH"
+          python3 -m unittest discover -s tests
 
-      - name: Readiness follows Elasticsearch
-        run: deploy/compose/smoke.sh readiness
-
-      - name: Data survives down and up
+      - name: Check the rendered systemd units
         run: |
-          make -C deploy down up
-          deploy/compose/smoke.sh check
-          deploy/compose/smoke.sh survived
-
-      - name: Data survives a Docker restart (the host reboot path)
-        run: |
-          sudo systemctl restart docker
-          deploy/compose/smoke.sh wait
-          deploy/compose/smoke.sh check
-          deploy/compose/smoke.sh survived
-
-      - name: Static files follow the image
-        run: deploy/compose/smoke.sh static-swap
-
-      - name: External volumes survive down -v
-        run: |
-          docker compose --project-directory deploy/compose --env-file "$ENV_FILE" \
-            -f deploy/compose/compose.yaml -f deploy/compose/compose.prod.yaml down -v
-          for volume in ms_pg_data ms_es_data ms_redis_broker ms_cantaloupe_cache; do
-            docker volume inspect "$volume" >/dev/null
-          done
-          make -C deploy up
-          deploy/compose/smoke.sh survived
-
-      - name: Collect the service logs
-        if: failure()
-        run: |
-          [ -f "$ENV_FILE" ] || { echo "The stack was never started: no service log."; exit 0; }
-          mkdir -p "$RUNNER_TEMP/compose-logs"
-          compose() {
-            docker compose --project-directory deploy/compose --env-file "$ENV_FILE" \
-              -f deploy/compose/compose.yaml -f deploy/compose/compose.prod.yaml "$@"
-          }
-          compose ps -a | tee "$RUNNER_TEMP/compose-logs/ps.txt"
-          compose logs --no-color --timestamps > "$RUNNER_TEMP/compose-logs/services.log" || true
-          compose ps -aq | xargs -r docker inspect \
-            -f '{{.Name}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}} exit={{.State.ExitCode}}' \
-            | tee "$RUNNER_TEMP/compose-logs/state.txt" || true
-          # The last lines of each service, not of the interleaved log: the
-          # failing service is rarely the one that logged last.
-          for service in $(compose ps -a --format '{{.Service}}' | sort -u); do
-            echo "::group::$service (last 80 lines)"
-            compose logs --no-color --tail 80 "$service" || true
-            echo "::endgroup::"
-          done
-
-      - name: Upload the service logs
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: compose-logs
-          path: ${{ runner.temp }}/compose-logs
-          retention-days: 5
-
-      # Reported, never fatal: a pull request is judged on what it changes, and
-      # an advisory published overnight is not a change. The blocking scan runs
-      # weekly on the default branch (trivy-weekly.yml).
-      - name: Trivy
-        id: trivy
-        if: always() && steps.build.outcome == 'success'
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: ${{ env.IMAGE }}
-          version: v0.74.0
-          scanners: vuln,secret
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          trivyignores: .trivyignore
-          format: json
-          output: ${{ runner.temp }}/trivy.json
-          exit-code: "0"
-
-      - name: Trivy report
-        if: always() && steps.trivy.outcome == 'success'
-        run: bash deploy/docker/trivy-report.sh "$RUNNER_TEMP/trivy.json"
+          export PATH="$RUNNER_TEMP/ansible-venv/bin:$PATH"
+          ansible-playbook -i inventories/example render.yml -e render_dir="$RUNNER_TEMP/rendered"
+          RENDERED_UNITS_DIR="$RUNNER_TEMP/rendered/units" bash ../systemd/tests/test_units.sh
 
   conclusion:
-    needs: [changes, rehearsal-kit, stack, image]
+    needs: [changes, rehearsal-kit, stack, image, ansible]
     if: always()
     runs-on: ubuntu-26.04
     timeout-minutes: 5

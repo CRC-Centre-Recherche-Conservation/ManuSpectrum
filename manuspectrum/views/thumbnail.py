@@ -15,6 +15,13 @@ re-requested at all for ``settings.SEARCH_THUMBNAIL_MAX_AGE``.
 
 The core view checks no permission. Here a resource the reader may not read
 answers a bodyless 404 before any fetcher, and so any cache, is reached.
+
+The fetchers run under one upstream budget per request
+(``SEARCH_THUMBNAIL_DEADLINE``): no retry, a connect within
+``SEARCH_THUMBNAIL_CONNECT_TIMEOUT``, and a host that did not accept a
+connection is skipped by every request for ``SEARCH_THUMBNAIL_HOST_DOWN_TTL``
+(``THUMBNAIL_HOSTS``). A search page of documents hosted by a server that is
+down then costs each thread at most one short connect, and the next pages none.
 """
 
 import hashlib
@@ -27,6 +34,11 @@ from arches.app.utils.permission_backend import user_can_read_resource
 from arches.app.views.thumbnail import ThumbnailView
 
 from manuspectrum.observability import metrics
+from manuspectrum.utils.budget import HostBreaker, upstream_budget
+
+THUMBNAIL_HOSTS = HostBreaker(
+    "thumbnail-host-down", lambda: settings.SEARCH_THUMBNAIL_HOST_DOWN_TTL
+)
 
 
 class CachedThumbnailView(ThumbnailView):
@@ -46,7 +58,12 @@ class CachedThumbnailView(ThumbnailView):
         if not user_can_read_resource(request.user, resourceid=resource_id):
             metrics.READ_REFUSALS.labels(surface="thumbnail").inc()
             return HttpResponseNotFound()
-        response = super().get(request, resource_id)
+        with upstream_budget(
+            settings.SEARCH_THUMBNAIL_DEADLINE,
+            connect_cap=settings.SEARCH_THUMBNAIL_CONNECT_TIMEOUT,
+            breaker=THUMBNAIL_HOSTS,
+        ):
+            response = super().get(request, resource_id)
         if response.status_code != 200:
             return response
 

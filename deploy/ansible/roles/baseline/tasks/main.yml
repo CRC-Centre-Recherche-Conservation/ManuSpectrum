@@ -1,0 +1,7 @@
+---
+- name: Apply the host baseline
+  ansible.builtin.include_tasks: apply.yml
+  when: baseline_mode == 'apply'
+
+- name: Verify the host baseline
+  ansible.builtin.include_tasks: verify.yml

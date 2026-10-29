@@ -1,0 +1,23 @@
+---
+# The update engine rewrites the checkout, `.env` and the stack, and bash reads
+# its script while it runs: nothing else of this role may run meanwhile.
+- name: Look for a running update
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - list-units
+      - --state=active,activating
+      - --no-legend
+      - "manuspectrum-update@*"
+  register: app_update_units
+  changed_when: false
+  check_mode: false
+
+- name: Refuse to run during an update
+  ansible.builtin.assert:
+    that:
+      - app_update_units.stdout | trim == ''
+    quiet: true
+    fail_msg: >-
+      An update is running ({{ app_update_units.stdout | trim }}). Wait for it to end
+      (journalctl -u 'manuspectrum-update@*' -f), then run the playbook again.

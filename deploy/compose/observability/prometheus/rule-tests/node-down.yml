@@ -1,0 +1,52 @@
+rule_files:
+  - ../rules/backup.yml
+  - ../rules/storage.yml
+  - ../rules/monitoring.yml
+  - ../rules/containers.yml
+evaluation_interval: 1m
+
+
+tests:
+- name: a node_exporter outage reports NodeExporterDown (critical) only, not the series it carries
+  interval: 1m
+  input_series:
+  - series: up{job="node", instance="node-exporter:9100"}
+    values: 1x10 0x80
+  - series: up{job="web", instance="web:8000"}
+    values: 1x90
+  promql_expr_test:
+  - expr: ALERTS{alertname="NodeExporterDown", alertstate="firing"}
+    eval_time: 20m
+    exp_samples: []
+  - expr: ALERTS{alertname="NodeExporterDown", alertstate="firing"}
+    eval_time: 30m
+    exp_samples:
+    - labels: ALERTS{alertname="NodeExporterDown", alertstate="firing", instance="node-exporter:9100", job="node", service="monitoring", severity="critical"}
+      value: 1
+  - expr: ALERTS{alertname="TargetDown", alertstate="firing"}
+    eval_time: 60m
+    exp_samples: []
+  - expr: ALERTS{alertstate="firing", alertname=~"NfsUnavailable|BackupMissing|RestoreTestMissing|HostMetricsStale|DiskUsageStale|ContainerMissing"}
+    eval_time: 60m
+    exp_samples: []
+- name: with node_exporter up the same missing series do alert
+  interval: 1m
+  input_series:
+  - series: up{job="node", instance="node-exporter:9100"}
+    values: 1x90
+  promql_expr_test:
+  - expr: ALERTS{alertstate="firing", alertname=~"NfsUnavailable|BackupMissing|RestoreTestMissing|HostMetricsStale|DiskUsageStale|ContainerMissing"}
+    eval_time: 60m
+    exp_samples:
+    - labels: ALERTS{alertname="NfsUnavailable", alertstate="firing", mountpoint="/data", service="storage", severity="critical"}
+      value: 1
+    - labels: ALERTS{alertname="BackupMissing", alertstate="firing", service="backup", severity="critical"}
+      value: 1
+    - labels: ALERTS{alertname="RestoreTestMissing", alertstate="firing", service="backup", severity="warning"}
+      value: 1
+    - labels: ALERTS{alertname="HostMetricsStale", alertstate="firing", service="monitoring", severity="warning"}
+      value: 1
+    - labels: ALERTS{alertname="DiskUsageStale", alertstate="firing", service="monitoring", severity="warning"}
+      value: 1
+    - labels: ALERTS{alertname="ContainerMissing", alertstate="firing", service="containers", severity="warning"}
+      value: 1

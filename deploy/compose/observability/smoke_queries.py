@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+"""Helpers of `deploy/compose/smoke.sh monitoring`, run on the host.
+
+  smoke_queries.py dashboard-queries DIR
+      One URL-encoded PromQL expression per line, taken from the panels of
+      every dashboard JSON in DIR (duplicates removed), ready for the
+      `query` parameter of `/api/v1/query`.
+  smoke_queries.py missing-metrics RULES_JSON NAMES_JSON
+      The metric names that rules read and Prometheus does not know.
+      RULES_JSON is the answer of `/api/v1/rules`, NAMES_JSON the one of
+      `/api/v1/label/__name__/values`. Series of OPTIONAL_METRICS and the
+      names recorded by the rules themselves are not reported.
+  smoke_queries.py bucket-bounds RULES_JSON
+      One `metric le` line per histogram bucket bound that a rule selects
+      (`metric_bucket{le="13.0"}`), from the answer of `/api/v1/rules`.
+
+Standard library only.
+"""
+
+import json
+import re
+import sys
+import urllib.parse
+from pathlib import Path
+
+# The labelled Counters and Histograms of manuspectrum/observability/metrics.py
+# that are not primed at 0 (`UNPRIMED_METRICS`, with the _total, _bucket, _count
+# and _sum suffixes): under prometheus_client multiprocess such a metric is
+# exposed only after its first `.labels()` call, so on a fresh stack these names
+# do not exist yet. Every other labelled metric is primed in each process
+# (`prime_label_sets`) and, like an unlabelled one, stays strict.
+# tests/test_smoke_queries.py derives this set from metrics.py and compares.
+LABELLED_APP_METRICS = frozenset(
+    {
+        "manuspectrum_celery_task_seconds_bucket",
+        "manuspectrum_celery_task_seconds_count",
+        "manuspectrum_celery_task_seconds_sum",
+    }
+)
+
+# Series that can be legitimately absent from a running stack: the labelled
+# application metrics above (not primed), the backup, restore-test and release gauges (they exist
+# only after the first run of those jobs), the gauges the daily account
+# passes set (their run timestamps and the embargo counts, from the first
+# pass on), ALERTS (only while an alert is
+# pending or firing) and redis_key_size (Redis deletes the empty `celery`
+# list and the exporter then emits nothing for the key).
+OPTIONAL_METRICS = LABELLED_APP_METRICS | frozenset(
+    {
+        "redis_key_size",
+        "ALERTS",
+        "manuspectrum_backup_failed",
+        "manuspectrum_backup_last_attempt_timestamp_seconds",
+        "manuspectrum_backup_last_success_timestamp_seconds",
+        "manuspectrum_backup_dump_bytes",
+        "manuspectrum_backup_duration_seconds",
+        "manuspectrum_restore_test_failed",
+        "manuspectrum_restore_test_last_attempt_timestamp_seconds",
+        "manuspectrum_restore_test_last_success_timestamp_seconds",
+        "manuspectrum_restore_test_duration_seconds",
+        "manuspectrum_account_retention_timestamp_seconds",
+        "manuspectrum_embargo_pass_timestamp_seconds",
+        "manuspectrum_embargoes",
+        "manuspectrum_release_watch_last_run_timestamp_seconds",
+        "manuspectrum_release_watch_failed",
+        "manuspectrum_release_verification_failed",
+        "manuspectrum_release_armed",
+        "manuspectrum_release_pending_since_timestamp_seconds",
+        "manuspectrum_release_pending_security",
+        "manuspectrum_release_rollbacks_total",
+        "manuspectrum_release_rollback_failed",
+        "manuspectrum_release_inflight_since_timestamp_seconds",
+        "manuspectrum_release_update_last_success_timestamp_seconds",
+        "manuspectrum_release_scheduled_timestamp_seconds",
+        "manuspectrum_release_schedule_failed",
+        "manuspectrum_login_records_prune_timestamp_seconds",
+        "manuspectrum_workflow_cleanup_timestamp_seconds",
+    }
+)
+
+PROMQL_WORDS = frozenset(
+    {
+        "by",
+        "without",
+        "on",
+        "ignoring",
+        "group_left",
+        "group_right",
+        "and",
+        "or",
+        "unless",
+        "bool",
+        "offset",
+        "inf",
+        "nan",
+    }
+)
+
+
+def metric_names_in(expr):
+    """Metric names an expression reads (identifiers that are not functions)."""
+    text = re.sub(r'"[^"]*"', '""', expr)
+    text = re.sub(r"\{[^{}]*\}", "", text)
+    text = re.sub(
+        r"\b(?:by|without|on|ignoring|group_left|group_right)\s*\([^()]*\)", " ", text
+    )
+    text = re.sub(r"\[[^\]]*\]", "", text)
+    names = set()
+    for match in re.finditer(
+        r"(?<![A-Za-z0-9_:.])([A-Za-z_:][A-Za-z0-9_:]*)(?![A-Za-z0-9_:])(?!\s*\()", text
+    ):
+        word = match.group(1)
+        if word in PROMQL_WORDS or re.fullmatch(r"\d+(e\d+)?", word):
+            continue
+        names.add(word)
+    return names
+
+
+def dashboard_expressions(directory):
+    """Every distinct `expr` of the panels (rows included) of the dashboards."""
+    found = []
+
+    def walk(panels):
+        for panel in panels:
+            for target in panel.get("targets", []):
+                if target.get("expr") and target["expr"] not in found:
+                    found.append(target["expr"])
+            walk(panel.get("panels", []))
+
+    for path in sorted(Path(directory).glob("*.json")):
+        walk(json.loads(path.read_text(encoding="utf-8")).get("panels", []))
+    return found
+
+
+def missing_metrics(rules_answer, names_answer):
+    """Names read by the rules, unknown to Prometheus, not optional."""
+    rules = [
+        rule for group in rules_answer["data"]["groups"] for rule in group["rules"]
+    ]
+    recorded = {rule["name"] for rule in rules if rule["type"] == "recording"}
+    known = set(names_answer["data"]) | recorded | OPTIONAL_METRICS
+    wanted = set()
+    for rule in rules:
+        wanted |= metric_names_in(rule["query"])
+    return sorted(wanted - known)
+
+
+def bucket_bounds(rules_answer):
+    """(metric, le) pairs selected by the rules on a `_bucket` series."""
+    found = set()
+    for group in rules_answer["data"]["groups"]:
+        for rule in group["rules"]:
+            found.update(
+                re.findall(
+                    r'([A-Za-z_:][A-Za-z0-9_:]*_bucket)\{[^{}]*?\ble="([^"]*)"',
+                    rule["query"],
+                )
+            )
+    return sorted(found)
+
+
+def main(argv):
+    if len(argv) == 3 and argv[1] == "dashboard-queries":
+        for expr in dashboard_expressions(argv[2]):
+            print(urllib.parse.quote(" ".join(expr.split()), safe=""))
+        return 0
+    if len(argv) == 4 and argv[1] == "missing-metrics":
+        answers = [json.loads(Path(p).read_text(encoding="utf-8")) for p in argv[2:]]
+        for name in missing_metrics(*answers):
+            print(name)
+        return 0
+    if len(argv) == 3 and argv[1] == "bucket-bounds":
+        answer = json.loads(Path(argv[2]).read_text(encoding="utf-8"))
+        for metric, le in bucket_bounds(answer):
+            print(metric, le)
+        return 0
+    print(__doc__, file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

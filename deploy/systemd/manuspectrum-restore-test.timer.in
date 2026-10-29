@@ -1,0 +1,11 @@
+# Every Sunday at 05:30, after the 04:50 reboot; Persistent=true runs a missed
+# week at the next boot. Enabled by PP-8.
+[Unit]
+Description=Test the ManuSpectrum backup every Sunday
+
+[Timer]
+OnCalendar=Sun *-*-* 05:30
+Persistent=true
+
+[Install]
+WantedBy=timers.target

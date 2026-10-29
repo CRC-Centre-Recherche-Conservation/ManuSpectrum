@@ -21,6 +21,9 @@
 @import 'ms-fonts';
 @import 'ms-tokens';
 
+// Announcement banner (media/js/utils/site-notice/banner.js).
+@import 'ms-site-notice';
+
 // --- RESET & CUSTOM PROPERTIES ---
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -374,7 +377,7 @@ img { max-width: 100%; height: auto; display: block; }
 // ============================================================
 .ms-header {
     position: fixed;
-    top: 0;
+    top: var(--ms-notice-h, 0px);
     left: 0;
     right: 0;
     z-index: 1000;
@@ -567,6 +570,7 @@ img { max-width: 100%; height: auto; display: block; }
     display: none;
     position: fixed;
     inset: 0;
+    top: var(--ms-notice-h, 0px);
     background: rgba(250, 249, 247, 0.97);
     backdrop-filter: blur(30px);
     -webkit-backdrop-filter: blur(30px);

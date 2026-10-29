@@ -37,6 +37,7 @@ BASE_ENV = {
     "CANTALOUPE_HOST": "cantaloupe",
     "CANTALOUPE_PORT": "8182",
     "CONTACT_EMAIL": "contact@manuspectrum.test",
+    "DEFAULT_FROM_EMAIL": "noreply@manuspectrum.test",
     "EMAIL_HOST": "smtp.manuspectrum.test",
     "EMAIL_PORT": "25",
 }
@@ -49,6 +50,11 @@ NAMES = [
     "MIDDLEWARE",
     "DEBUG",
     "SECRET_KEY",
+    "ENABLE_USER_SIGNUP",
+    "ENABLE_TWO_FACTOR_AUTHENTICATION",
+    "FORCE_TWO_FACTOR_AUTHENTICATION",
+    "RELATED_RESOURCES_EXPORT_LIMIT",
+    "EXPLORER_UI_ONLY",
     "SESSION_COOKIE_SECURE",
     "CSRF_COOKIE_SECURE",
     "SESSION_COOKIE_HTTPONLY",
@@ -72,8 +78,10 @@ NAMES = [
     "CACHES",
     "CACHE_CODE_VERSION",
     "CANTALOUPE_HTTP_ENDPOINT",
+    "CANTALOUPE_INTERNAL_ENDPOINT",
     "CONTACT_EMAIL",
     "DEFAULT_FROM_EMAIL",
+    "SERVER_EMAIL",
     "EMAIL_HOST",
     "EMAIL_PORT",
     "EMAIL_USE_TLS",
@@ -84,6 +92,12 @@ NAMES = [
     "LOGGING",
     "BIBLISSIMA_ASYNC_INDEXING",
     "CELERY_WORKER_HIJACK_ROOT_LOGGER",
+    "SILENCED_SYSTEM_CHECKS",
+    "RATELIMIT_IP_META_KEY",
+    "SECURE_HSTS_SECONDS",
+    "USE_X_FORWARDED_HOST",
+    "X_FRAME_OPTIONS",
+    "JWT_KEY",
 ]
 
 PROBE = textwrap.dedent("""
@@ -97,7 +111,7 @@ PROBE = textwrap.dedent("""
     except Exception as error:
         print(json.dumps({{"error": type(error).__name__, "message": str(error)}}))
     else:
-        values = {{name: getattr(s, name) for name in {names!r}}}
+        values = {{name: getattr(s, name, None) for name in {names!r}}}
         values["SITE_URL"] = s.EXTRA_EMAIL_CONTEXT["site_url"]
         print(json.dumps(values, default=str))
     """)
@@ -147,6 +161,47 @@ class SettingsDockerTests(SimpleTestCase):
             False,
         )
 
+    def test_self_signup_is_closed(self):
+        self.assertIs(load(BASE_ENV)["ENABLE_USER_SIGNUP"], False)
+
+    def test_two_factor_is_enrolled_first_and_enforced_by_the_environment(self):
+        values = load(BASE_ENV)
+        self.assertIs(values["ENABLE_TWO_FACTOR_AUTHENTICATION"], True)
+        self.assertIs(values["FORCE_TWO_FACTOR_AUTHENTICATION"], False)
+        forced = load(dict(BASE_ENV, FORCE_TWO_FACTOR_AUTHENTICATION="true"))
+        self.assertIs(forced["FORCE_TWO_FACTOR_AUTHENTICATION"], True)
+
+    def test_a_mistyped_two_factor_enforcement_refuses_to_start(self):
+        for text in ("ture", "enforce"):
+            with self.subTest(value=text):
+                values = load(dict(BASE_ENV, FORCE_TWO_FACTOR_AUTHENTICATION=text))
+                self.assertEqual(values.get("error"), "ImproperlyConfigured", values)
+
+    def test_the_related_resources_cap_comes_from_the_environment(self):
+        self.assertEqual(load(BASE_ENV)["RELATED_RESOURCES_EXPORT_LIMIT"], 500)
+        values = load(dict(BASE_ENV, RELATED_RESOURCES_EXPORT_LIMIT="300"))
+        self.assertEqual(values["RELATED_RESOURCES_EXPORT_LIMIT"], 300)
+
+    def test_a_cap_that_is_not_a_positive_number_refuses_to_start(self):
+        for text in ("0", "-5", "mille", "1e3"):
+            with self.subTest(value=text):
+                values = load(dict(BASE_ENV, RELATED_RESOURCES_EXPORT_LIMIT=text))
+                self.assertEqual(values.get("error"), "ImproperlyConfigured", values)
+
+    def test_the_explorer_api_guard_enforces_by_default(self):
+        self.assertEqual(load(BASE_ENV)["EXPLORER_UI_ONLY"], "enforce")
+        for text in ("observe", "off", " Enforce "):
+            with self.subTest(value=text):
+                values = load(dict(BASE_ENV, EXPLORER_UI_ONLY=text))
+                self.assertEqual(values["EXPLORER_UI_ONLY"], text.strip().lower())
+
+    def test_an_unknown_explorer_guard_mode_refuses_to_start(self):
+        for text in ("on", "true", "enforced"):
+            with self.subTest(value=text):
+                self.assertRefused(
+                    dict(BASE_ENV, EXPLORER_UI_ONLY=text), "EXPLORER_UI_ONLY"
+                )
+
     def test_metrics_are_on_with_prometheus_middleware_around_the_stack(self):
         values = load(BASE_ENV)
         self.assertIs(values["METRICS_ENABLED"], True)
@@ -160,6 +215,16 @@ class SettingsDockerTests(SimpleTestCase):
         self.assertEqual(
             middleware[-1], "django_prometheus.middleware.PrometheusAfterMiddleware"
         )
+
+    def test_client_address_comes_from_nginx_and_edge_owned_checks_are_silenced(self):
+        values = load(BASE_ENV)
+        self.assertEqual(
+            values["RATELIMIT_IP_META_KEY"], "manuspectrum.utils.client_ip.client_ip"
+        )
+        for check in ("security.W004", "security.W008", "staticfiles.W004"):
+            self.assertIn(check, values["SILENCED_SYSTEM_CHECKS"])
+        self.assertFalse(values["SECURE_HSTS_SECONDS"] or 0)
+        self.assertFalse(values["USE_X_FORWARDED_HOST"])
 
     def test_missing_required_variable_is_refused(self):
         for name in (
@@ -183,6 +248,25 @@ class SettingsDockerTests(SimpleTestCase):
                     "MANUSPECTRUM_SECRET_KEY",
                 )
 
+    def test_development_key_of_settings_py_is_refused(self):
+        source = (ROOT / "manuspectrum" / "settings.py").read_text(encoding="utf-8")
+        match = re.search(
+            r'os\.environ\.get\(\s*"MANUSPECTRUM_SECRET_KEY",\s*"([^"]+)"', source
+        )
+        self.assertIsNotNone(match, "development key fallback not found")
+        values = load(dict(BASE_ENV, MANUSPECTRUM_SECRET_KEY=match.group(1)))
+        self.assertEqual(values.get("error"), "ImproperlyConfigured")
+        self.assertNotIn(match.group(1), values["message"])
+
+    def test_jwt_key_follows_the_secret_key(self):
+        values = load(BASE_ENV)
+        self.assertEqual(values["JWT_KEY"], BASE_ENV["MANUSPECTRUM_SECRET_KEY"])
+
+    def test_frame_options_warning_is_silenced_with_sameorigin_kept(self):
+        values = load(BASE_ENV)
+        self.assertEqual(values["X_FRAME_OPTIONS"], "SAMEORIGIN")
+        self.assertIn("security.W019", values["SILENCED_SYSTEM_CHECKS"])
+
     def test_secret_file_wins_over_the_variable(self):
         with tempfile.NamedTemporaryFile("w", delete=False) as handle:
             handle.write("from-file\n")
@@ -194,6 +278,19 @@ class SettingsDockerTests(SimpleTestCase):
         self.assertRefused(
             dict(BASE_ENV, PGPASSWORD_FILE="/nonexistent/pg_password"),
             "PGPASSWORD_FILE",
+        )
+
+    def test_public_host_must_be_the_host_of_the_public_address(self):
+        self.assertRefused(
+            dict(BASE_ENV, PUBLIC_HOST="www.manuspectrum.test"), "PUBLIC_HOST"
+        )
+        values = load(dict(BASE_ENV, PUBLIC_HOST="manuspectrum.test"))
+        self.assertNotIn("error", values)
+
+    def test_public_address_host_must_be_a_domain_name(self):
+        self.assertRefused(
+            dict(BASE_ENV, PUBLIC_SERVER_ADDRESS="https://other.test/"),
+            "DOMAIN_NAMES",
         )
 
     def test_plain_http_public_address_is_refused(self):
@@ -228,6 +325,10 @@ class SettingsDockerTests(SimpleTestCase):
         self.assertEqual(values["CORS_ALLOWED_ORIGINS"], [])
         self.assertFalse([app for app in values["INSTALLED_APPS"] if "silk" in app])
         self.assertFalse([m for m in values["MIDDLEWARE"] if "silk" in m])
+
+    def test_missing_node_modules_directory_check_is_silenced(self):
+        values = load(BASE_ENV)
+        self.assertIn("staticfiles.W004", values["SILENCED_SYSTEM_CHECKS"])
 
     def test_hosts_origins_and_public_address_come_from_the_environment(self):
         values = load(BASE_ENV)
@@ -284,7 +385,16 @@ class SettingsDockerTests(SimpleTestCase):
         )
         self.assertEqual(values["ELASTICSEARCH_HTTP_PORT"], "9200")
         self.assertEqual(values["ELASTICSEARCH_PREFIX"], "manuspectrum")
-        self.assertEqual(values["CANTALOUPE_HTTP_ENDPOINT"], "http://cantaloupe:8182/")
+        self.assertEqual(
+            values["CANTALOUPE_INTERNAL_ENDPOINT"], "http://cantaloupe:8182/"
+        )
+
+    def test_cantaloupe_endpoint_mints_public_canvas_ids(self):
+        values = load(BASE_ENV)
+        self.assertEqual(
+            values["CANTALOUPE_HTTP_ENDPOINT"],
+            "https://manuspectrum.test/iiifserver/",
+        )
 
     def test_mail_defaults_suit_a_relay_without_tls_or_authentication(self):
         values = load(BASE_ENV)
@@ -295,7 +405,18 @@ class SettingsDockerTests(SimpleTestCase):
         self.assertEqual(
             (values["EMAIL_HOST_USER"], values["EMAIL_HOST_PASSWORD"]), ("", "")
         )
-        self.assertEqual(values["DEFAULT_FROM_EMAIL"], "contact@manuspectrum.test")
+        self.assertEqual(values["DEFAULT_FROM_EMAIL"], "noreply@manuspectrum.test")
+        self.assertEqual(values["SERVER_EMAIL"], "noreply@manuspectrum.test")
+
+    def test_sender_never_falls_back_to_the_contact_address(self):
+        for value in (None, "", "   "):
+            with self.subTest(value=value):
+                env = dict(BASE_ENV)
+                if value is None:
+                    del env["DEFAULT_FROM_EMAIL"]
+                else:
+                    env["DEFAULT_FROM_EMAIL"] = value
+                self.assertRefused(env, "DEFAULT_FROM_EMAIL")
 
     def test_booleans_are_parsed_strictly(self):
         self.assertIs(load(dict(BASE_ENV, EMAIL_USE_TLS="true"))["EMAIL_USE_TLS"], True)
@@ -435,6 +556,38 @@ class LoggingTests(SimpleTestCase):
             with self.subTest(logger=name):
                 self.assertTrue(handlers)
                 self.assertNotIn("AdminEmailHandler", handlers)
+
+
+CHECK_PROBE = textwrap.dedent("""
+    import sys
+    sys.modules["manuspectrum.settings_local"] = None
+    sys.modules["settings_local"] = None
+    import django
+    django.setup()
+    from django.core.management import call_command
+    call_command("check", "--deploy", "--tag", "security", "--fail-level", "WARNING")
+    """)
+
+
+class DeploymentChecksTests(SimpleTestCase):
+    def test_deploy_checks_pass_at_warning_level(self):
+        with tempfile.TemporaryDirectory() as home:
+            result = subprocess.run(
+                [sys.executable, "-c", CHECK_PROBE],
+                env={
+                    "PATH": os.environ["PATH"],
+                    "HOME": home,
+                    "PYTHONPATH": str(ROOT),
+                    "DJANGO_SETTINGS_MODULE": "manuspectrum.settings_docker",
+                    **BASE_ENV,
+                },
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+        raised = sorted(set(re.findall(r"\b[\w.]+\.[WE]\d{3}\b", result.stderr)))
+        self.assertEqual(result.returncode, 0, f"checks raised {raised}")
 
 
 JSON_PROBE = textwrap.dedent("""

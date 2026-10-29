@@ -1,0 +1,55 @@
+---
+# Every role runs under the Ansible run marker, taken first and removed whatever
+# the outcome: baseline and host can restart Docker and change the host, which an
+# update must not overlap. The marker and the update guard are the `app` role's
+# own tasks (marker.yml, update_guard.yml; the role takes them itself when it is
+# the only one to run, unless this play holds the marker). They carry the tag
+# `always`: a run limited to one role by --tags is guarded the same way.
+- name: Install and verify a ManuSpectrum host
+  hosts: all
+  become: true
+  tasks:
+    - name: Run the roles under the Ansible run marker
+      block:
+        - name: Tell the app role that this play holds the marker
+          ansible.builtin.set_fact:
+            app_marker_outer: true
+          tags: [always]
+
+        - name: Take the Ansible run marker
+          ansible.builtin.import_role:
+            name: app
+            tasks_from: marker
+          tags: [always]
+
+        - name: Stop while an update runs
+          ansible.builtin.import_role:
+            name: app
+            tasks_from: update_guard
+          tags: [always]
+
+        - name: Check the host and the inventory
+          ansible.builtin.import_role:
+            name: preflight
+          tags: [preflight]
+
+        - name: Apply and verify the baseline
+          ansible.builtin.import_role:
+            name: baseline
+          tags: [baseline]
+
+        - name: Set up the Docker host
+          ansible.builtin.import_role:
+            name: host
+          tags: [host]
+
+        - name: Install and start the application
+          ansible.builtin.import_role:
+            name: app
+          tags: [app]
+      always:
+        - name: Remove the Ansible run marker
+          ansible.builtin.import_role:
+            name: app
+            tasks_from: marker_release
+          tags: [always]

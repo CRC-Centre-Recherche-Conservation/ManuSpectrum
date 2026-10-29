@@ -94,6 +94,15 @@ const notes = computed(() =>
     (results.data.value ?? []).flatMap((result, index) => {
         const file = files.value[index];
         if (!file) return [];
+        if (result.missing) {
+            return [
+                interpolate(
+                    $gettext("%{name}: file not found on the server."),
+                    { name: file.name },
+                    true,
+                ),
+            ];
+        }
         if (result.failed) {
             return [
                 interpolate(

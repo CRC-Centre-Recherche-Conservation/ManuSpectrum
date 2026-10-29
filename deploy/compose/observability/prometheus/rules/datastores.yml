@@ -1,0 +1,38 @@
+# Alert rules of the monitoring stack: datastores.
+# Severity: critical = mailed at once, warning = grouped weekday e-mail, info = never mailed.
+groups:
+  - name: datastores
+    rules:
+      - alert: PostgresConnectionsHigh
+        expr: |
+          sum(pg_stat_activity_count) / max(pg_settings_max_connections) > 0.8
+        for: 15m
+        labels:
+          severity: warning
+          service: postgres
+        annotations:
+          summary: "PostgreSQL connections are close to the limit"
+          description: "{{ $value | humanizePercentage }} of max_connections are in use."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/datastores.md#postgresconnectionshigh
+      - alert: RedisBrokerMemoryHigh
+        expr: |
+          redis_memory_used_bytes{instance="redis-broker:6379"} / (redis_memory_max_bytes{instance="redis-broker:6379"} > 0) > 0.8
+        for: 15m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "The Celery broker memory is above 80 %"
+          description: "The broker uses {{ $value | humanizePercentage }} of its maxmemory; its policy is noeviction."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/datastores.md#redisbrokermemoryhigh
+      - alert: RedisBrokerMemoryCritical
+        expr: |
+          redis_memory_used_bytes{instance="redis-broker:6379"} / (redis_memory_max_bytes{instance="redis-broker:6379"} > 0) > 0.95
+        for: 5m
+        labels:
+          severity: critical
+          service: redis
+        annotations:
+          summary: "The Celery broker memory is above 95 %"
+          description: "The broker uses {{ $value | humanizePercentage }} of its maxmemory; its policy is noeviction."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/datastores.md#redisbrokermemorycritical

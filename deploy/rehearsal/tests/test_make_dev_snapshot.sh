@@ -19,7 +19,7 @@ cat >"$TMP/bin/python" <<STUB
 if [ "\$1" = - ] && [ -n "\$ENVDUMP" ]; then env >"\$ENVDUMP"; fi
 if [ "\$1" = manage.py ]; then
   echo "noise from django"
-  echo 'MSSNAP {"host": "localhost", "port": "5432", "name": "ms", "user": "u", "password": "$SECRET", "media_root": "$TMP/media", "uploads": "uploadedfiles", "arches": "8.1.4", "resources": 5, "tiles": 12, "migrations": {"arches": "0001", "manuspectrum": "0005"}}'
+  echo 'MSSNAP {"host": "localhost", "port": "5432", "name": "ms", "user": "u", "password": "$SECRET", "media_root": "$TMP/media", "uploads": "uploadedfiles", "arches": "8.1.4", "resources": 5, "tiles": 12, "migrations": {"arches": "0001", "manuspectrum": "0005"}, "migrations_ahead_of_code": '"\${AHEAD:-[]}"', "files_cited": '"\${CITED:-3}"', "files_missing": '"\${MISSING:-0}"'}'
   exit 0
 fi
 exec python3 "\$@"
@@ -90,6 +90,47 @@ assert "manifest keys and checksums are right" $?
 
 grep -q 'scp -r' "$TMP/out" && grep -qi 'user accounts and research data' "$TMP/out" && grep -q 'Never put it' "$TMP/out"
 assert "final message gives the copy command and the data warning" $?
+
+! grep -q "ahead of the checked-out code" "$TMP/out" && python3 -c 'import json,sys; sys.exit(json.load(open(sys.argv[1]))["migrations_ahead_of_code"] != [])' "$TMP/snap/manifest.json"
+assert "a database in step with the code gives no warning and an empty list in the manifest" $?
+
+AHEAD='["manuspectrum.0007_x", "arches.0099_y"]' run_snap --out "$TMP/snap-ahead" && status=0 || status=$?
+[ "$status" -eq 0 ] && grep -q 'WARNING: the database is ahead of the checked-out code: manuspectrum.0007_x, arches.0099_y' "$TMP/out" \
+  && grep -q 'refused by an image built from this commit' "$TMP/out" \
+  && python3 -c 'import json,sys; sys.exit(json.load(open(sys.argv[1]))["migrations_ahead_of_code"] != ["manuspectrum.0007_x", "arches.0099_y"])' "$TMP/snap-ahead/manifest.json"
+assert "migrations ahead of the code are warned about and recorded, the snapshot is still written" $?
+
+python3 -c 'import json,sys; sys.exit(json.load(open(sys.argv[1]))["uploaded_files"] != {"cited": 3, "missing": 0})' "$TMP/snap/manifest.json" \
+  && grep -q 'uploaded files: 3 cited by the database, 0 missing on disk' "$TMP/out"
+assert "the cited and missing uploaded files are counted in the manifest and printed" $?
+
+: >"$TMP/calls"
+CITED=10374 MISSING=9282 run_snap --out "$TMP/snap-missing" && status=0 || status=$?
+[ "$status" -ne 0 ] && grep -q '9282 of the 10374 files cited by the database are missing' "$TMP/out" \
+  && grep -q 'MEDIA_ROOT' "$TMP/out" && grep -q 'ALLOW_MISSING_FILES=yes' "$TMP/out" \
+  && ! grep -q '^pg_dump' "$TMP/calls" && [ ! -e "$TMP/snap-missing/db.dump" ] && [ ! -e "$TMP/snap-missing/media.tar" ]
+assert "more missing files than the threshold refuses before dumping, naming MEDIA_ROOT and the override" $?
+
+CITED=10374 MISSING=9282 ALLOW_MISSING_FILES=yes run_snap --out "$TMP/snap-forced" && status=0 || status=$?
+[ "$status" -eq 0 ] && grep -q 'WARNING: 9282 of the 10374 files' "$TMP/out" \
+  && python3 -c 'import json,sys; sys.exit(json.load(open(sys.argv[1]))["uploaded_files"] != {"cited": 10374, "missing": 9282})' "$TMP/snap-forced/manifest.json"
+assert "ALLOW_MISSING_FILES=yes writes the snapshot with a warning and the counts" $?
+
+CITED=1000 MISSING=100 run_snap --out "$TMP/snap-at-limit" && status=0 || status=$?
+[ "$status" -eq 0 ] && grep -q 'WARNING: 100 of the 1000 files' "$TMP/out"
+assert "missing files at the threshold (10 %) are warned about, the snapshot is written" $?
+
+CITED=1000 MISSING=1 SNAPSHOT_MAX_MISSING_PERCENT=0 run_snap --out "$TMP/snap-strict" && status=0 || status=$?
+[ "$status" -ne 0 ] && grep -q '1 of the 1000 files' "$TMP/out"
+assert "SNAPSHOT_MAX_MISSING_PERCENT=0 refuses a single missing file" $?
+
+SNAPSHOT_MAX_MISSING_PERCENT=ten run_snap --out "$TMP/snap-bad-percent" && status=0 || status=$?
+[ "$status" -ne 0 ] && grep -q 'SNAPSHOT_MAX_MISSING_PERCENT' "$TMP/out"
+assert "a SNAPSHOT_MAX_MISSING_PERCENT that is not a whole number is refused" $?
+
+CITED=0 MISSING=0 run_snap --out "$TMP/snap-nofiles" && status=0 || status=$?
+[ "$status" -eq 0 ]
+assert "a database citing no file is accepted" $?
 
 bash "$SNAP" -h | grep -q -- '--out DIR'
 assert "-h prints the usage" $?

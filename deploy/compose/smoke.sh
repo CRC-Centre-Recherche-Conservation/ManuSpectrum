@@ -10,10 +10,23 @@
 #                are refused on a live database
 #   observability /readyz, /metrics, JSON logs and the request id, the worker's
 #                metrics after one prune task (CI and rehearsal)
+#   monitoring   Prometheus targets and rules, the series the rules and dashboards
+#                read, Grafana and its five dashboards (CI and rehearsal; run
+#                `make container-metrics disk-usage` and a backup first)
+#   mail alert|report
+#                the e-mail of `make alert-test` / `make report-test` reached
+#                Mailpit with its subject and category header (CI and rehearsal)
+#   edge         nginx over HTTPS: the only published ports, redirect, headers,
+#                denied routes, uploaded files, IIIF image server, rate limit,
+#                access log, and web reaching the public name (CI and
+#                rehearsal: it writes one File row and one image, then removes them)
 #   readiness    /readyz answers 503 while Elasticsearch is stopped, 200 after
 #                (CI and rehearsal only)
+#   lose         delete the PostgreSQL marker row and the uploads marker, as a
+#                disaster would; `survived` must then fail until a restore
+#                (CI and rehearsal only)
 #   clean        remove the markers
-# mark, static-swap, init-guard, readiness and clean are for CI and rehearsal only.
+# mark, lose, static-swap, init-guard, monitoring, mail, edge, readiness and clean are for CI and rehearsal only.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -107,11 +120,11 @@ cmd_check() {
     || fail "Cantaloupe admin endpoint answers"
   ok "Cantaloupe admin endpoint closed"
   compose exec -T cantaloupe sh -c 'test -x /imageroot && ls -A /imageroot >/dev/null' \
-    || fail "Cantaloupe cannot list /imageroot"
+    || fail "Cantaloupe cannot list /imageroot (on NFS the server must honour supplementary groups: no manage-gids in the mountd settings)"
   ok "Cantaloupe lists /imageroot"
 
   # The script is read from stdin and prints a verdict, never a hash or a password.
-  expect "admin keeps Arches' default password" no \
+  expect "admin does not use Arches' default password" no \
     "$(in_web env -u PROMETHEUS_MULTIPROC_DIR python manage.py shell -c "
 from django.contrib.auth import get_user_model
 user = get_user_model().objects.filter(username='admin').first()
@@ -151,22 +164,51 @@ cmd_survived() {
     "$(compose exec -T cantaloupe cat /imageroot/.ms-smoke-marker)"
 }
 
+# Deletes what a restore must bring back: the PostgreSQL marker row of the
+# remembered token and the copy of the marker in uploadedfiles/.
+# TOKEN comes from the sourced state file.
+# shellcheck disable=SC2153
+cmd_lose() {
+  [ -f "$SMOKE_STATE" ] || fail "no $SMOKE_STATE: run mark first"
+  # shellcheck source=/dev/null
+  . "$SMOKE_STATE"
+  psql_app "DELETE FROM ms_smoke_marker WHERE token = '$TOKEN'" >/dev/null
+  in_web rm -f /srv/media/uploadedfiles/.ms-smoke-marker
+  ok "markers lost"
+}
+
+# A stylesheet of the current release, fetched through nginx (HTTPS).
+static_through_nginx() {
+  local css
+  css="$(in_web sh -c "cd /srv/static/current && find . -name '*.css' -print -quit")"
+  [ -n "$css" ] || fail "the current static release holds no stylesheet"
+  edge_init
+  expect "static file through nginx" 200 "$(edge_code "/static/${css#./}")"
+}
+
 cmd_static_swap() {
   in_web sh -c 'mkdir -p /srv/static/releases/smoke-stale && ln -sfn releases/smoke-stale /srv/static/current'
   compose restart web >/dev/null
   cmd_wait
   expect "static current after restart" "releases/$(build_id)" "$(in_web readlink /srv/static/current)"
+  static_through_nginx
   in_web test -d /srv/static/releases/smoke-stale || fail "previous release removed too early"
   ok "previous release kept"
   compose restart web >/dev/null
   cmd_wait
   if in_web test -e /srv/static/releases/smoke-stale; then fail "stale release not pruned"; fi
   ok "stale release pruned"
+  static_through_nginx
 }
 
 cmd_init_guard() {
   local out
-  if out="$(compose run --rm --no-deps -T web init 2>&1)"; then fail "init ran on a live database"; fi
+  if out="$(compose run --rm --no-deps -T init 2>&1)"; then fail "init ran on a live database"; fi
+  # Compose fails on the package bind mount (create_host_path: false) before the
+  # entrypoint can refuse: say what is missing instead of a misleading failure.
+  if grep -q "bind source path does not exist" <<<"$out"; then
+    fail "init-guard needs the data package: PKG_DIR must name the pkg submodule (git submodule update --init), $out"
+  fi
   grep -q "refusing" <<<"$out" || fail "init failed without refusing: $out"
   ok "init refused on a live database"
   if out="$(compose run --rm --no-deps -T web manage setup_db --force 2>&1)"; then fail "manage setup_db ran"; fi
@@ -236,6 +278,295 @@ print(result.get(timeout=120))
   ok "request id followed the task into the worker"
 }
 
+# --- monitoring ---------------------------------------------------------------
+
+# The Prometheus API from inside the network: it publishes no port.
+prom_get() { compose exec -T prometheus wget -qO- "http://127.0.0.1:9090$1"; } # prom_get PATH-WITH-ENCODED-QUERY
+url_encode() { python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"; }
+prom_scalar() { # prom_scalar EXPR: the first value of an instant query, "none" without a sample
+  prom_get "/api/v1/query?query=$(url_encode "$1")" \
+    | json_field 'r["data"]["result"][0]["value"][1] if r["data"]["result"] else "none"'
+}
+has_series() { # has_series METRIC: Prometheus holds at least one series of METRIC
+  [ "$(prom_scalar "count($1)")" != none ]
+}
+# retry DESCRIPTION SECONDS COMMAND...: the command until it succeeds
+retry() {
+  local what="$1" deadline=$((SECONDS + $2))
+  shift 2
+  until "$@" >/dev/null 2>&1; do
+    [ "$SECONDS" -lt "$deadline" ] || fail "$what"
+    sleep 5
+  done
+  ok "$what"
+}
+targets_all_up() {
+  [ "$(prom_get '/api/v1/targets?state=active' | json_field \
+    'len(r["data"]["activeTargets"]) > 0 and all(t["health"] == "up" for t in r["data"]["activeTargets"])')" = True ]
+}
+rules_all_ok() {
+  [ "$(prom_get /api/v1/rules | json_field \
+    'len(r["data"]["groups"]) > 0 and all(x["health"] == "ok" for g in r["data"]["groups"] for x in g["rules"])')" = True ]
+}
+series_is() { [ "$(prom_scalar "$1")" = "$2" ]; } # series_is EXPR VALUE
+
+gf_password() { cat "$(env_value SECRETS_DIR)/grafana_admin_password"; }
+# The credential travels in a curl config on stdin, never in an argument.
+gf_get() { printf 'user = "admin:%s"\n' "$(gf_password)" | curl -fsS --max-time 20 -K - "http://127.0.0.1:3000$1"; }
+grafana_has_dashboards() {
+  [ "$(gf_get '/api/search?type=dash-db' | json_field '",".join(sorted(d["uid"] for d in r))')" \
+    = "ms-activity,ms-application,ms-infrastructure,ms-overview,ms-storage" ]
+}
+# Read from `web` (default network, glibc resolver): busybox wget in `prometheus` cannot resolve
+# service names when the host resolv.conf carries `search .`.
+mail_get() { compose exec -T web curl -fsS --max-time 20 "http://mailpit:8025$1"; }
+
+cmd_monitoring() {
+  local queries query tmp missing line bucket_bounds metric le checked skipped
+  retry "every Prometheus target is up" 240 targets_all_up
+  retry "every rule evaluates without error" 120 rules_all_ok
+  retry "Watchdog is firing" 120 series_is 'count(ALERTS{alertname="Watchdog",alertstate="firing"})' 1
+  retry "pg_up is 1 (the ms_monitor role connects)" 120 series_is 'min(pg_up)' 1
+  retry "redis_up is 1" 120 series_is 'min(redis_up)' 1
+  retry "container metrics reach Prometheus through the textfile collector" 120 \
+    series_is 'count(manuspectrum_container_up == 1) > bool 5' 1
+  retry "disk usage reaches Prometheus for the four areas" 120 series_is 'count(manuspectrum_disk_usage_bytes)' 4
+  expect "no textfile scrape error" 0 "$(prom_scalar 'sum(node_textfile_scrape_error)')"
+  # The backup gauges exist from the first backup on: required when SMOKE_EXPECT_BACKUP is set.
+  if [ -n "${SMOKE_EXPECT_BACKUP:-}" ]; then
+    retry "Prometheus reads the backup and restore-test gauges (both 0)" 120 \
+      series_is 'max(manuspectrum_backup_failed) + max(manuspectrum_restore_test_failed)' 0
+  fi
+
+  queries="$(python3 "$HERE/observability/smoke_queries.py" dashboard-queries "$HERE/observability/grafana/dashboards")"
+  [ -n "$queries" ] || fail "no dashboard expression found"
+  while IFS= read -r query; do
+    [ "$(prom_get "/api/v1/query?query=$query" | json_field 'r["status"]')" = success ] \
+      || fail "Prometheus rejects the dashboard expression $query (URL-encoded)"
+  done <<<"$queries"
+  ok "$(wc -l <<<"$queries") dashboard expressions evaluate"
+
+  # The task series exist once a worker pool process has primed them.
+  retry "the worker exposes its primed task series" 120 has_series manuspectrum_celery_tasks_total
+  tmp="$(mktemp -d)"
+  prom_get /api/v1/rules >"$tmp/rules.json"
+  prom_get /api/v1/label/__name__/values >"$tmp/names.json"
+  missing="$(python3 "$HERE/observability/smoke_queries.py" missing-metrics "$tmp/rules.json" "$tmp/names.json")"
+  bucket_bounds="$(python3 "$HERE/observability/smoke_queries.py" bucket-bounds "$tmp/rules.json")"
+  rm -rf "$tmp"
+  [ -z "$missing" ] || fail "rules read series that Prometheus does not have: $(tr '\n' ' ' <<<"$missing")"
+  ok "every series the rules read exists"
+
+  # A `le` value a rule selects must be spelled as the exporter writes it; a
+  # histogram without a sample yet is skipped.
+  checked=0 skipped=0
+  while read -r metric le; do
+    [ -n "$metric" ] || continue
+    if [ "$(prom_scalar "count($metric)")" = none ]; then
+      skipped=$((skipped + 1))
+      echo "info: $metric has no sample yet, its le=\"$le\" is not checked"
+    else
+      [ "$(prom_scalar "count($metric{le=\"$le\"})")" != none ] \
+        || fail "no $metric series carries le=\"$le\", a rule reads it"
+      checked=$((checked + 1))
+    fi
+  done <<<"$bucket_bounds"
+  ok "histogram bounds a rule reads: $checked found, $skipped skipped (no sample yet)"
+
+  retry "Grafana is healthy" 120 gf_get /api/health
+  retry "Grafana lists the five dashboards" 120 grafana_has_dashboards
+  line="$(curl -fsS --max-time 20 http://127.0.0.1:3000/metrics | grep '^grafana_stat_totals_dashboard ' || true)"
+  echo "info: Grafana ${line:-reports no dashboard total yet}"
+}
+
+# The e-mail of `make alert-test` (alert) or `make report-test` (report) in Mailpit.
+cmd_mail() {
+  local kind="$1" prefix match deadline id headers
+  case "$kind" in
+    alert) prefix="[ManuSpectrum][Alert] "; match="AlertTest" ;;
+    report) prefix="[ManuSpectrum][Report] Rapport mensuel"; match="" ;;
+    *) fail "usage: smoke.sh mail alert|report" ;;
+  esac
+  deadline=$((SECONDS + 150))
+  while :; do
+    id="$(mail_get '/api/v1/messages?limit=100' | PREFIX="$prefix" MATCH="$match" python3 -c '
+import json, os, sys
+for m in json.load(sys.stdin)["messages"]:
+    if m["Subject"].startswith(os.environ["PREFIX"]) and os.environ["MATCH"] in m["Subject"]:
+        print(m["ID"])
+        break
+')"
+    [ -z "$id" ] || break
+    [ "$SECONDS" -lt "$deadline" ] || fail "no Mailpit message with subject '$prefix$match...' within 150 s"
+    sleep 5
+  done
+  ok "Mailpit holds a message with subject '$prefix$match...'"
+  headers="$(mail_get "/api/v1/message/$id/headers")"
+  expect "X-ManuSpectrum-Category" "${kind^}" \
+    "$(json_field 'next((v[0] for k, v in r.items() if k.lower() == "x-manuspectrum-category"), "none")' <<<"$headers")"
+}
+
+# nginx over HTTPS, from the host: the published port, the CA of CERTS_DIR/ca when
+# it holds one (CERT_MODE=local) and the public name pinned to 127.0.0.1.
+edge_init() {
+  PUBLIC="$(env_value DOMAIN_NAMES | cut -d' ' -f1)"
+  HTTPS_PORT="$(env_value HTTPS_PORT)"; HTTPS_PORT="${HTTPS_PORT:-443}"
+  HTTP_PORT="$(env_value HTTP_PORT)"; HTTP_PORT="${HTTP_PORT:-80}"
+  [ -n "$PUBLIC" ] || fail "DOMAIN_NAMES is empty in $ENV_FILE"
+  EDGE_CURL_OPTS=(--max-time 60 --resolve "$PUBLIC:$HTTPS_PORT:127.0.0.1" --resolve "$PUBLIC:$HTTP_PORT:127.0.0.1")
+  local ca
+  ca="$(env_value CERTS_DIR)/ca/ca.crt"
+  if [ -f "$ca" ]; then EDGE_CURL_OPTS+=(--cacert "$ca"); fi
+}
+edge_url() { printf 'https://%s:%s%s' "$PUBLIC" "$HTTPS_PORT" "$1"; }
+edge_get() { curl -sS "${EDGE_CURL_OPTS[@]}" "${@:2}" "$(edge_url "$1")"; } # edge_get PATH [curl args]
+edge_code() { edge_get "$1" -o /dev/null -w '%{http_code}' "${@:2}"; }
+edge_headers() { edge_get "$1" -o /dev/null -D - "${@:2}" | tr -d '\r'; }
+header_count() { grep -ci "^$1:" <<<"$2" || true; } # header_count NAME HEADERS
+header_value() { sed -n "s/^$1: *//Ip" <<<"$2" | head -n 1 | tr -d '\r' | sed 's/[[:space:]]*$//'; } # header_value NAME HEADERS
+# The status line without CR or trailing blanks (HTTP/2 has an empty reason: "HTTP/2 200 ").
+status_line() { head -n 1 <<<"$1" | tr -d '\r' | sed 's/[[:space:]]*$//'; }
+
+# Writes one uploaded file, one image and the File row of the file; EDGE_FILE_ID
+# is the row's id. cleanup_edge removes all three, also when a check fails.
+EDGE_FILE_ID=
+EDGE_IMAGE_NAME=smoke-iiif.png
+edge_fixtures() {
+  EDGE_FILE_ID="$(in_web env -u PROMETHEUS_MULTIPROC_DIR python manage.py shell -c '
+import os
+from django.conf import settings
+from arches.app.models.models import File
+from PIL import Image
+folder = os.path.join(settings.MEDIA_ROOT, "uploadedfiles")
+rel = "uploadedfiles/smoke file \u00e9.csv"
+with open(os.path.join(settings.MEDIA_ROOT, rel), "wb") as handle:
+    handle.write(b"edge,smoke\n1,2\n")
+Image.new("RGB", (64, 48), "white").save(os.path.join(folder, "smoke-iiif.png"))
+for name in (rel, "uploadedfiles/smoke-iiif.png"):
+    os.chmod(os.path.join(settings.MEDIA_ROOT, name), 0o640)
+File.objects.filter(path=rel).delete()
+print(File.objects.bulk_create([File(path=rel)])[0].pk)
+' | tail -n 1)"
+  [ -n "$EDGE_FILE_ID" ] || fail "could not create the File row"
+}
+cleanup_edge() {
+  trap - EXIT
+  in_web env -u PROMETHEUS_MULTIPROC_DIR python manage.py shell -c '
+import os
+from django.conf import settings
+from arches.app.models.models import File
+rel = "uploadedfiles/smoke file \u00e9.csv"
+File.objects.filter(path=rel).delete()
+for name in (rel, "uploadedfiles/smoke-iiif.png"):
+    try:
+        os.remove(os.path.join(settings.MEDIA_ROOT, name))
+    except FileNotFoundError:
+        pass
+' >/dev/null 2>&1 || true
+}
+
+cmd_edge() {
+  local headers body name rid line uuid codes
+  edge_init
+  trap cleanup_edge EXIT
+
+  # Grafana is published on the loopback of the host only (SSH tunnel), never elsewhere.
+  published="nginx:443,nginx:80"
+  [ -z "$(compose ps -q grafana)" ] || published="grafana:3000@127.0.0.1,nginx:443,nginx:80"
+  expect "published ports" "$published" "$(compose ps --format json | python3 -c '
+import json, sys
+text = sys.stdin.read().strip()
+rows = json.loads(text) if text.startswith("[") else [json.loads(l) for l in text.splitlines() if l]
+found = {r["Service"] + ":" + str(p["TargetPort"]) + ("@" + p["URL"] if r["Service"] == "grafana" else "") for r in rows for p in r.get("Publishers") or [] if p.get("PublishedPort")}
+print(",".join(sorted(found)))
+')"
+  expect "http redirects to https" "301 https://$PUBLIC/en/" \
+    "$(curl -s "${EDGE_CURL_OPTS[@]}" -o /dev/null -w '%{http_code} %{redirect_url}' "http://$PUBLIC:$HTTP_PORT/en/")"
+  expect "unknown Host on port 80 is closed" 000 \
+    "$(curl -s "${EDGE_CURL_OPTS[@]}" -H 'Host: unknown.invalid' -o /dev/null -w '%{http_code}' "http://127.0.0.1:$HTTP_PORT/")"
+
+  expect "/healthz through nginx" ok "$(edge_get /healthz)"
+  expect "/metrics through nginx" 404 "$(edge_code /metrics)"
+  expect "/readyz through nginx" 404 "$(edge_code /readyz)"
+
+  headers="$(edge_headers /en/)"
+  expect "/en/ through nginx" "HTTP/2 200" "$(status_line "$headers")"
+  for name in strict-transport-security permissions-policy content-security-policy-report-only \
+    x-content-type-options x-frame-options referrer-policy; do
+    expect "header $name sent once" 1 "$(header_count "$name" "$headers")"
+  done
+  expect "HSTS max-age" "max-age=$(env_value HSTS_MAX_AGE)" "$(header_value strict-transport-security "$headers")"
+
+  for name in /en/api/resource/x /en/api/tile/x/y /en/api/tile-list-create/x/y/z /en/api/tile-new-resource/x/y /en/silk/requests/; do
+    headers="$(edge_headers "$name")"
+    expect "$name denied by nginx" "404 0" \
+      "$(status_line "$headers" | cut -d' ' -f2) $(header_count x-request-id "$headers")"
+  done
+  uuid="$(python3 -c 'import uuid; print(uuid.uuid4())')"
+  headers="$(edge_headers "/en/api/tiles/$uuid")"
+  expect "/en/api/tiles/<uuid> reaches Django" 1 "$(header_count x-request-id "$headers")"
+
+  name=/fr/api/search/export_results
+  for body in "?format=tilecsv" "" "?format=geojson&format=tilecsv" "?format=geojson&form%61t=shp" "?format=tilecsv&format=geojson"; do
+    expect "search export $name$body denied" 404 "$(edge_code "$name$body")"
+  done
+  expect "POST /fr/temp_file denied" 404 "$(edge_code /fr/temp_file -X POST)"
+  expect "/files/archestemp/x.zip" 404 "$(edge_code /files/archestemp/x.zip)"
+
+  edge_fixtures
+  body="$(edge_get "/en/files/$EDGE_FILE_ID"; echo x)"
+  expect "uploaded file through FileView and nginx" $'edge,smoke\n1,2\nx' "$body"
+  headers="$(edge_headers "/en/files/$EDGE_FILE_ID")"
+  expect "uploaded file status" "HTTP/2 200" "$(status_line "$headers")"
+  expect "the internal redirect is not exposed" 0 "$(header_count location "$headers")"
+  expect "uploaded file direct path" 404 "$(edge_code '/files/uploadedfiles/smoke%20file%20%C3%A9.csv')"
+
+  headers="$(edge_headers "/iiifserver/iiif/3/$EDGE_IMAGE_NAME/info.json" -H 'Origin: https://viewer.example')"
+  expect "/iiifserver/ info.json" "HTTP/2 200" "$(status_line "$headers")"
+  expect "one Access-Control-Allow-Origin on /iiifserver/" 1 "$(header_count access-control-allow-origin "$headers")"
+  expect "Access-Control-Allow-Origin value" "*" "$(header_value access-control-allow-origin "$headers")"
+  expect "/iiifserver/admin" 404 "$(edge_code /iiifserver/admin)"
+  body="$(edge_get "/iiifserver/iiif/2/$EDGE_IMAGE_NAME/info.json")"
+  expect "info.json carries https ids" "https://$PUBLIC/iiifserver/iiif/2/$EDGE_IMAGE_NAME" "$(json_field 'r["@id"]' <<<"$body")"
+  expect "web reaches the public name through nginx" "200 https://$PUBLIC/iiifserver/iiif/2/$EDGE_IMAGE_NAME" \
+    "$(web_public_info "$PUBLIC" | tail -n 1)"
+
+  headers="$(edge_headers /en/auth/ -H 'X-Forwarded-Ssl: on' -H 'X-Forwarded-Protocol: ssl')"
+  expect "forged scheme headers" "HTTP/2 200" "$(status_line "$headers")"
+
+  rid="/en/smoke-edge-$RANDOM$RANDOM/"
+  headers="$(edge_headers "$rid")"
+  sleep 1
+  line="$(grep -F "\"uri\":\"$rid\"" "$(env_value NGINX_LOG_HOST_DIR)/access.log" | tail -n 1)" \
+    || fail "no access log line for $rid in $(env_value NGINX_LOG_HOST_DIR)/access.log"
+  expect "access log request_id is the one Django echoed" "$(header_value x-request-id "$headers")" \
+    "$(json_field 'r["request_id"]' <<<"$line")"
+  expect "access log fields" "404|HTTP/2.0|$PUBLIC" \
+    "$(json_field '"|".join([str(r["status"]), r["protocol"], r["host"]])' <<<"$line")"
+
+  body="$(compose exec -T nginx nginx -T 2>&1)"
+  grep -q 'proxy_read_timeout 340s' <<<"$body" || fail "nginx has no proxy_read_timeout 340s for create-all"
+  ok "create-all read timeout"
+
+  codes=""
+  for _ in 1 2 3 4 5 6 7; do codes="$codes $(edge_code /en/auth/ -X POST -d username=smoke-edge)"; done
+  case "$codes" in *429*) ok "7 POSTs to /en/auth/: one is 429 ($codes )" ;; *) fail "no 429 after 7 POSTs to /en/auth/:$codes" ;; esac
+  cleanup_edge
+}
+
+# web fetches the public image-service URL, as Arches' manifest manager does:
+# the name resolves to nginx on the internal network, and the local CA (when
+# mounted) is in the bundle the entrypoint builds.
+web_public_info() { # web_public_info HOST
+  local ca=()
+  if [ -n "$(env_value LOCAL_CA_CERT)" ]; then ca=(REQUESTS_CA_BUNDLE=/tmp/ca-bundle.pem); fi
+  in_web env ${ca[@]+"${ca[@]}"} PUBLIC="$1" EDGE_IMAGE="$EDGE_IMAGE_NAME" python -c '
+import os, requests
+r = requests.get("https://%s/iiifserver/iiif/2/%s/info.json" % (os.environ["PUBLIC"], os.environ["EDGE_IMAGE"]), timeout=20)
+print(r.status_code, r.json()["@id"])
+'
+}
+
 cmd_readiness() {
   compose stop elasticsearch >/dev/null
   expect "/readyz with Elasticsearch stopped" 503 "$(http_code /readyz)"
@@ -261,10 +592,14 @@ case "${1:-}" in
   check) cmd_check ;;
   mark) cmd_mark ;;
   survived) cmd_survived ;;
+  lose) cmd_lose ;;
   static-swap) cmd_static_swap ;;
   init-guard) cmd_init_guard ;;
   observability) cmd_observability ;;
+  monitoring) cmd_monitoring ;;
+  mail) cmd_mail "${2:-}" ;;
+  edge) cmd_edge ;;
   readiness) cmd_readiness ;;
   clean) cmd_clean ;;
-  *) sed -n '2,16p' "$0" >&2; exit 2 ;;
+  *) sed -n '2,28p' "$0" >&2; exit 2 ;;
 esac

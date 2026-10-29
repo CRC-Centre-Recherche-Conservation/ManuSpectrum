@@ -64,13 +64,26 @@ describe("useSeriesSet", () => {
         await flushPromises();
         expect(handle.status.value).toBe("ready");
         expect(handle.data.value).toEqual([
-            { series: null, failed: true, retryable: true, tooLarge: false },
-            { series: null, failed: false, retryable: false, tooLarge: false },
+            {
+                series: null,
+                failed: true,
+                retryable: true,
+                tooLarge: false,
+                missing: false,
+            },
+            {
+                series: null,
+                failed: false,
+                retryable: false,
+                tooLarge: false,
+                missing: false,
+            },
             {
                 series: SERIES,
                 failed: false,
                 retryable: false,
                 tooLarge: false,
+                missing: false,
             },
         ]);
         stop();
@@ -89,8 +102,39 @@ describe("useSeriesSet", () => {
         ]);
         await flushPromises();
         expect(handle.data.value).toEqual([
-            { series: null, failed: true, retryable: false, tooLarge: false },
-            { series: null, failed: true, retryable: true, tooLarge: false },
+            {
+                series: null,
+                failed: true,
+                retryable: false,
+                tooLarge: false,
+                missing: false,
+            },
+            {
+                series: null,
+                failed: true,
+                retryable: true,
+                tooLarge: false,
+                missing: false,
+            },
+        ]);
+        stop();
+    });
+
+    it("marks a file missing from the server's storage, never worth a retry", async () => {
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => jsonResponse({}, 410)),
+        );
+        const { handle, stop } = run(["/api/spectrum-preview/a"]);
+        await flushPromises();
+        expect(handle.data.value).toEqual([
+            {
+                series: null,
+                failed: true,
+                retryable: false,
+                tooLarge: false,
+                missing: true,
+            },
         ]);
         stop();
     });
@@ -113,12 +157,19 @@ describe("useSeriesSet", () => {
             "/api/spectrum-preview/b?n=full",
         ]);
         expect(handle.data.value).toEqual([
-            { series: null, failed: true, retryable: false, tooLarge: true },
+            {
+                series: null,
+                failed: true,
+                retryable: false,
+                tooLarge: true,
+                missing: false,
+            },
             {
                 series: SERIES,
                 failed: false,
                 retryable: false,
                 tooLarge: false,
+                missing: false,
             },
         ]);
         scope.stop();

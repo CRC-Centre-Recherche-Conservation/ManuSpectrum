@@ -1,0 +1,319 @@
+rule_files:
+  - ../rules/site.yml
+  - ../rules/application.yml
+evaluation_interval: 1m
+
+
+tests:
+- name: 2 percent of 5xx with traffic fires
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="explorer-search", method="GET"}
+    values: 0+60x40
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="explorer-search", method="GET"}
+    values: 0+1.5x40
+  promql_expr_test:
+  - expr: ALERTS{alertname="ErrorRateHigh", alertstate="firing"}
+    eval_time: 4m
+    exp_samples: []
+  - expr: ALERTS{alertname="ErrorRateHigh", alertstate="firing"}
+    eval_time: 20m
+    exp_samples:
+    - labels: ALERTS{alertname="ErrorRateHigh", alertstate="firing", service="site", severity="critical"}
+      value: 1
+- name: one failure in three requests is silent below the traffic guard
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="explorer-search", method="GET"}
+    values: 0+0.2x40
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="explorer-search", method="GET"}
+    values: 0+0.1x40
+  promql_expr_test:
+  - expr: ALERTS{alertname="ErrorRateHigh", alertstate="firing"}
+    eval_time: 30m
+    exp_samples: []
+- name: probe views never count as errors
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="explorer-search", method="GET"}
+    values: 0+60x40
+  - series: django_http_responses_total_by_status_view_method_total{status="503", view="readyz", method="GET"}
+    values: 0+30x40
+  promql_expr_test:
+  - expr: ALERTS{alertname="ErrorRateHigh", alertstate="firing"}
+    eval_time: 30m
+    exp_samples: []
+- name: probes that fail for 5 minutes are critical
+  interval: 1m
+  input_series:
+  - series: probe_success{job="blackbox-edge", instance="https://manuspectrum.test/healthz"}
+    values: 1x5 0x30
+  - series: probe_success{job="blackbox-readyz", instance="http://web:8000/readyz"}
+    values: 1x40
+  - series: probe_success{job="blackbox-cantaloupe", instance="http://cantaloupe:8182/iiif/3"}
+    values: 1x5 0x30
+  promql_expr_test:
+  - expr: ALERTS{alertname="SiteDown", alertstate="firing"}
+    eval_time: 8m
+    exp_samples: []
+  - expr: ALERTS{alertname="SiteDown", alertstate="firing"}
+    eval_time: 15m
+    exp_samples:
+    - labels: ALERTS{alertname="SiteDown", alertstate="firing", instance="https://manuspectrum.test/healthz", job="blackbox-edge", service="site", severity="critical"}
+      value: 1
+  - expr: ALERTS{alertname="CantaloupeDown", alertstate="firing"}
+    eval_time: 15m
+    exp_samples:
+    - labels: ALERTS{alertname="CantaloupeDown", alertstate="firing", instance="http://cantaloupe:8182/iiif/3", job="blackbox-cantaloupe", service="site", severity="critical"}
+      value: 1
+  - expr: ALERTS{alertname="NotReady", alertstate="firing"}
+    eval_time: 15m
+    exp_samples: []
+- name: the multiprocess directory alert fires above 45 MB
+  interval: 1m
+  input_series:
+  - series: manuspectrum_metrics_dir_bytes{job="web"}
+    values: 30000000x5 46000000x30
+  - series: manuspectrum_metrics_dir_bytes{job="worker"}
+    values: 1000000x35
+  promql_expr_test:
+  - expr: ALERTS{alertname="MetricsDirFilling", alertstate="firing"}
+    eval_time: 12m
+    exp_samples: []
+  - expr: ALERTS{alertname="MetricsDirFilling", alertstate="firing"}
+    eval_time: 25m
+    exp_samples:
+    - labels: ALERTS{alertname="MetricsDirFilling", alertstate="firing", job="web", service="application", severity="warning"}
+      value: 1
+- name: web saturation needs 18 requests for 5 minutes
+  interval: 1m
+  input_series:
+  - series: manuspectrum_inflight_requests{job="web"}
+    values: 5x5 19x20
+  promql_expr_test:
+  - expr: ALERTS{alertname="WebSaturated", alertstate="firing"}
+    eval_time: 8m
+    exp_samples: []
+  - expr: ALERTS{alertname="WebSaturated", alertstate="firing"}
+    eval_time: 15m
+    exp_samples:
+    - labels: ALERTS{alertname="WebSaturated", alertstate="firing", service="application", severity="warning"}
+      value: 1
+- name: the readiness alert names the failing components
+  interval: 1m
+  input_series:
+  - series: probe_success{job="blackbox-readyz", instance="http://web:8000/readyz"}
+    values: 1 0x20
+  - series: manuspectrum_readyz_component_up{component="postgres"}
+    values: 1x21
+  - series: manuspectrum_readyz_component_up{component="elasticsearch"}
+    values: 0x21
+  - series: manuspectrum_readyz_component_up{component="redis"}
+    values: 0x21
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: NotReady
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        service: site
+        job: blackbox-readyz
+        instance: http://web:8000/readyz
+      exp_annotations:
+        summary: The application reports it is not ready
+        description: "/readyz has failed for 5 minutes. Failing components: elasticsearch redis "
+        runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/site.md#notready
+- name: application warnings need their duration
+  interval: 1m
+  input_series:
+  - series: manuspectrum_log_records_total{level="error", source="app"}
+    values: 0+60x60
+  - series: manuspectrum_inflight_requests{job="web"}
+    values: 5x10 19x50
+  - series: manuspectrum_metrics_dir_bytes{job="worker"}
+    values: 50000000x60
+  promql_expr_test:
+  - expr: ALERTS{alertname=~"ErrorLogRateHigh|WebSaturated|MetricsDirFilling", alertstate="firing"}
+    eval_time: 8m
+    exp_samples: []
+  - expr: ALERTS{alertname=~"ErrorLogRateHigh|WebSaturated|MetricsDirFilling", alertstate="firing"}
+    eval_time: 45m
+    exp_samples:
+    - labels: ALERTS{alertname="ErrorLogRateHigh", alertstate="firing", service="application", severity="warning"}
+      value: 1
+    - labels: ALERTS{alertname="WebSaturated", alertstate="firing", service="application", severity="warning"}
+      value: 1
+    - labels: ALERTS{alertname="MetricsDirFilling", alertstate="firing", job="worker", service="application", severity="warning"}
+      value: 1
+- name: three server errors on writes in half an hour warn, reads and fewer errors do not
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="tile", method="POST", job="web", instance="web:8000"}
+    values: _x35 0 0 0 0 0 1 1 2 2x60
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="explorer-search", method="GET", job="web", instance="web:8000"}
+    values: _x35 0+1x60
+  - series: django_http_responses_total_by_status_view_method_total{status="404", view="tile", method="POST", job="web", instance="web:8000"}
+    values: _x35 0+5x60
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="plugins", method="DELETE", job="web", instance="web:8000"}
+    values: _x35 0 0 0 0 0 0 0 0 0 0 0 1 1x60
+  - series: up{job="web", instance="web:8000"}
+    values: 1x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 43m
+    exp_samples: []
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 49m
+    exp_samples:
+    - labels: ALERTS{alertname="WriteRequestsFailing", alertstate="firing", service="site", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 85m
+    exp_samples: []
+- name: the first error of three new series warns, the exporter creating each series at 1
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="tile", method="POST", job="web", instance="web:8000"}
+    values: _x35 _ _ _ _ _ 1 1x60
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="plugins", method="DELETE", job="web", instance="web:8000"}
+    values: _x35 _ _ _ _ _ _ 1 1x60
+  - series: django_http_responses_total_by_status_view_method_total{status="502", view="biblissima-create-resource", method="POST", job="web", instance="web:8000"}
+    values: _x35 _ _ _ _ _ _ _ 1 1x60
+  - series: up{job="web", instance="web:8000"}
+    values: 1x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 41m
+    exp_samples: []
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 47m
+    exp_samples:
+    - labels: ALERTS{alertname="WriteRequestsFailing", alertstate="firing", service="site", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 90m
+    exp_samples: []
+- name: a mix of old and new series counts both, and one new series alone does not warn
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="tile", method="POST", job="web", instance="web:8000"}
+    values: _x35 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1x60
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="plugins", method="DELETE", job="web", instance="web:8000"}
+    values: _x35 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 1 1x60
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="workflow_history", method="PUT", job="web", instance="web:8000"}
+    values: _x35 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 1 1x60
+  - series: up{job="web", instance="web:8000"}
+    values: 1x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 60m
+    exp_samples:
+    - labels: ALERTS{alertname="WriteRequestsFailing", alertstate="firing", service="site", severity="warning"}
+      value: 1
+- name: one new series with two errors does not warn
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="tile", method="POST", job="web", instance="web:8000"}
+    values: _x35 _ _ _ _ _ 2 2x60
+  - series: up{job="web", instance="web:8000"}
+    values: 1x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 55m
+    exp_samples: []
+- name: a single write error and a flood of read errors do not warn
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="tile", method="POST", job="web", instance="web:8000"}
+    values: _x35 0 0 0 1 1x60
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="explorer-search", method="GET", job="web", instance="web:8000"}
+    values: _x35 0+10x60
+  - series: up{job="web", instance="web:8000"}
+    values: 1x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 55m
+    exp_samples: []
+- name: a scrape gap of the web target does not turn old series into new ones
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="tile", method="POST", job="web", instance="web:8000"}
+    values: 7x19 _x11 7x50
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="plugins", method="DELETE", job="web", instance="web:8000"}
+    values: 3x19 _x11 3x50
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="tile", method="PUT", job="web", instance="web:8000"}
+    values: 4x19 _x11 4x50
+  - series: up{job="web", instance="web:8000"}
+    values: 1x19 0x11 1x50
+  promql_expr_test:
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 40m
+    exp_samples: []
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 55m
+    exp_samples: []
+- name: a gap with no scrape at all (Prometheus down) does not warn either
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="tile", method="POST", job="web", instance="web:8000"}
+    values: 7x19 _x11 7x50
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="plugins", method="DELETE", job="web", instance="web:8000"}
+    values: 3x19 _x11 3x50
+  - series: up{job="web", instance="web:8000"}
+    values: 1x19 _x11 1x50
+  promql_expr_test:
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 55m
+    exp_samples: []
+- name: a restart that resets a long-lived series then three errors warn
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="500", view="tile", method="POST", job="web", instance="web:8000"}
+    values: _x35 5x20 1 2 3 3x40
+  - series: up{job="web", instance="web:8000"}
+    values: 1x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="WriteRequestsFailing", alertstate="firing"}
+    eval_time: 60m
+    exp_samples:
+    - labels: ALERTS{alertname="WriteRequestsFailing", alertstate="firing", service="site", severity="warning"}
+      value: 1
+- name: three exports slower than 60 seconds warn, fewer or faster ones do not
+  interval: 1m
+  input_series:
+  - series: django_http_requests_latency_seconds_by_view_method_count{view="export_results", method="GET", job="web", instance="web:8000"}
+    values: "0x9 1x9 2x9 3x120"
+  - series: django_http_requests_latency_seconds_by_view_method_bucket{view="export_results", method="GET", le="13.0", job="web", instance="web:8000"}
+    values: "0x200"
+  - series: django_http_requests_latency_seconds_by_view_method_bucket{view="export_results", method="GET", le="60.0", job="web", instance="web:8000"}
+    values: "0x200"
+  - series: django_http_requests_latency_seconds_by_view_method_bucket{view="export_results", method="GET", le="+Inf", job="web", instance="web:8000"}
+    values: "0x9 1x9 2x9 3x120"
+  - series: django_http_requests_latency_seconds_by_view_method_count{view="api_export_results", method="GET", job="web", instance="web:8000"}
+    values: "0x200"
+  - series: django_http_requests_latency_seconds_by_view_method_bucket{view="api_export_results", method="GET", le="60.0", job="web", instance="web:8000"}
+    values: "0x200"
+  promql_expr_test:
+  - expr: ALERTS{alertname="SearchExportSlow", alertstate="firing"}
+    eval_time: 25m
+    exp_samples: []
+  - expr: ALERTS{alertname="SearchExportSlow", alertstate="firing"}
+    eval_time: 60m
+    exp_samples:
+    - labels: ALERTS{alertname="SearchExportSlow", alertstate="firing", service="site", severity="warning"}
+      value: 1
+- name: two slow exports and many exports between 13 and 60 seconds do not warn
+  interval: 1m
+  input_series:
+  - series: django_http_requests_latency_seconds_by_view_method_count{view="export_results", method="GET", job="web", instance="web:8000"}
+    values: "0x9 1x9 2x9 12x200"
+  - series: django_http_requests_latency_seconds_by_view_method_bucket{view="export_results", method="GET", le="13.0", job="web", instance="web:8000"}
+    values: "0x200"
+  - series: django_http_requests_latency_seconds_by_view_method_bucket{view="export_results", method="GET", le="60.0", job="web", instance="web:8000"}
+    values: "0x9 0x9 0x9 10x200"
+  - series: django_http_requests_latency_seconds_by_view_method_bucket{view="export_results", method="GET", le="+Inf", job="web", instance="web:8000"}
+    values: "0x9 1x9 2x9 12x200"
+  promql_expr_test:
+  - expr: ALERTS{alertname="SearchExportSlow", alertstate="firing"}
+    eval_time: 120m
+    exp_samples: []

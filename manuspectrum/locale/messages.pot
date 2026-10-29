@@ -2,8 +2,9 @@ msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:423
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:435
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:394
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:439
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:451
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:628
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:699
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/MapView.vue:1681
@@ -116,7 +117,7 @@ msgid_plural "%{from}–%{to}: %{n} events"
 msgstr[0] ""
 msgstr[1] ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:573
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:588
 msgid "%{kV} kV"
 msgstr ""
 
@@ -316,7 +317,7 @@ msgid_plural "%{n} events without a mapped place"
 msgstr[0] ""
 msgstr[1] ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:706
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:721
 msgid "%{n} file with nothing to draw"
 msgid_plural "%{n} files with nothing to draw"
 msgstr[0] ""
@@ -591,8 +592,8 @@ msgstr ""
 msgid "%{name} appears on %{folios}."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:100
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:730
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:109
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:753
 msgid "%{name} could not be drawn."
 msgstr ""
 
@@ -610,27 +611,32 @@ msgstr ""
 msgid "%{name}: %{analyses}, %{materials}"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:141
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:150
 msgid "%{name}: %{n} points from %{from} to %{to}."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:109
-msgid "%{name}: no preview available."
-msgstr ""
-
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:738
-msgid "%{name}: nothing to draw."
-msgstr ""
-
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:749
-msgid "%{name}: out of the shared X range."
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:100
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:745
+msgid "%{name}: file not found on the server."
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:118
+msgid "%{name}: no preview available."
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:761
+msgid "%{name}: nothing to draw."
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:772
+msgid "%{name}: out of the shared X range."
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:127
 msgid "%{name}: quick view drawn from %{shown} of the file's %{total} points; the workshop works on every point."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:720
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:735
 msgid "%{name}: too large to draw in full; download the file to read it."
 msgstr ""
 
@@ -667,7 +673,7 @@ msgstr ""
 msgid "%{title} · %{period}"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:500
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:516
 msgid "%{title} (offset)"
 msgstr ""
 
@@ -710,7 +716,7 @@ msgid "%{width} × %{height} px against %{otherWidth} × %{otherHeight} px"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/CompareView.vue:333
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1700
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1889
 msgid "%{y} against %{x}"
 msgstr ""
 
@@ -730,7 +736,7 @@ msgstr ""
 msgid "© %{name} contributors"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:390
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:406
 msgid "← / → move the energy by one channel; « Show the lines » draws every line of an element."
 msgstr ""
 
@@ -1066,7 +1072,7 @@ msgid_plural "at least %{n} attestations"
 msgstr[0] ""
 msgstr[1] ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:587
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:602
 msgid "At most %{n} anode choices can be kept"
 msgstr ""
 
@@ -1175,13 +1181,13 @@ msgstr ""
 msgid "Certainty"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:766
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:789
 msgid "Chart of %{n} spectrum; the Table layout lists its range."
 msgid_plural "Chart of %{n} spectra; the Table layout lists their ranges."
 msgstr[0] ""
 msgstr[1] ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1840
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2029
 msgid "Chart tools"
 msgstr ""
 
@@ -1189,7 +1195,7 @@ msgstr ""
 msgid "Chips"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:248
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:251
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:573
 msgid "Cite"
 msgstr ""
@@ -1215,7 +1221,7 @@ msgstr ""
 msgid "Click an element, a colour × material pair, a coverage cell or a spectrum to see what is linked to it in every window. Each click adds it to the focus or takes it out."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:377
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:393
 msgid "Click the top of a peak: the elements with a line at that energy show under the chart."
 msgstr ""
 
@@ -1323,7 +1329,7 @@ msgstr ""
 msgid "Components outlined on this folio"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:568
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:584
 msgid "Compton"
 msgstr ""
 
@@ -1335,7 +1341,7 @@ msgstr ""
 msgid "Configuration saved."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:235
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:238
 msgid "Contains drafts (%{n})"
 msgstr ""
 
@@ -1357,7 +1363,7 @@ msgstr ""
 msgid "Copy the citation"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:257
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:260
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:588
 msgid "Copy the data availability statement"
 msgstr ""
@@ -1366,11 +1372,11 @@ msgstr ""
 msgid "Copy the IIIF link"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:412
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:428
 msgid "Copy the manifest URL"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:264
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:267
 msgid "Copy the share link"
 msgstr ""
 
@@ -1457,11 +1463,11 @@ msgstr ""
 msgid "Custom"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:297
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:300
 msgid "Data"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:325
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:328
 msgid "Data package (ZIP, %{size})"
 msgstr ""
 
@@ -1539,7 +1545,7 @@ msgstr ""
 msgid "Different scale"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:476
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:492
 msgid "Dim"
 msgstr ""
 
@@ -1617,11 +1623,11 @@ msgstr ""
 msgid "Download %{name}"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:829
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:852
 msgid "Download CSV"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:821
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:844
 msgid "Download PNG"
 msgstr ""
 
@@ -1673,7 +1679,7 @@ msgstr ""
 msgid "Draw « %{title} »"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:387
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:403
 msgid "Each candidate shows the line that falls there and its confirmation lines, present or absent in the spectrum."
 msgstr ""
 
@@ -1773,7 +1779,7 @@ msgid "Entirely within the period"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:177
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:569
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:585
 msgid "esc"
 msgstr ""
 
@@ -1809,7 +1815,7 @@ msgstr ""
 msgid "Events without a mapped place"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:795
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:818
 msgid "Every curve is hidden; « Show all spectra » brings them back."
 msgstr ""
 
@@ -2106,7 +2112,7 @@ msgstr ""
 msgid "Greyscale"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:989
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1012
 msgid "Grid"
 msgstr ""
 
@@ -2132,7 +2138,7 @@ msgstr ""
 msgid "Hidden windows (%{n})"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:475
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:491
 msgid "Hide"
 msgstr ""
 
@@ -2162,7 +2168,7 @@ msgstr ""
 msgid "Hints only: the analyst decides."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:393
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:409
 msgid "Hints only: the analyst decides. Escape closes the candidates; « Identify a peak » again leaves the mode."
 msgstr ""
 
@@ -2187,7 +2193,7 @@ msgstr ""
 msgid "How reliable the identification is. A group row shows the highest certainty among its materials."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:381
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:397
 msgid "How to identify a peak"
 msgstr ""
 
@@ -2232,7 +2238,7 @@ msgstr ""
 msgid "Identified materials that name the element"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1962
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2151
 msgid "Identify a peak"
 msgstr ""
 
@@ -2240,7 +2246,7 @@ msgstr ""
 msgid "Ignore"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:390
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:406
 msgid "IIIF"
 msgstr ""
 
@@ -2344,11 +2350,11 @@ msgstr ""
 msgid "Instrument peaks: %{peaks}"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2093
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2282
 msgid "Intensities are not comparable in absolute value across instruments."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:504
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:520
 msgid "Intensity (offset)"
 msgstr ""
 
@@ -2451,7 +2457,7 @@ msgid "Layers, in order"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/LightTable.vue:603
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1845
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2034
 msgid "Layout"
 msgstr ""
 
@@ -2463,7 +2469,7 @@ msgstr ""
 msgid "Layout: Curtain"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:473
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:505
 msgid "Lens elements"
 msgstr ""
 
@@ -2490,7 +2496,7 @@ msgid "Linear"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensMenu.vue:93
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1727
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1916
 msgid "Lines: XrayDB %{version} (CC0), Elam, Ravel & Sieber 2002"
 msgstr ""
 
@@ -2526,8 +2532,8 @@ msgstr ""
 msgid "Loading the map…"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:254
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1834
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:263
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2023
 msgid "Loading the spectra…"
 msgstr ""
 
@@ -2725,7 +2731,7 @@ msgstr ""
 msgid "Move up"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:121
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:124
 msgid "My Selection (%{n})"
 msgstr ""
 
@@ -2790,7 +2796,7 @@ msgstr ""
 msgid "No colour recorded"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:792
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:815
 msgid "No curve here is linked to the selection; press a legend entry to add it."
 msgstr ""
 
@@ -2856,7 +2862,7 @@ msgstr ""
 msgid "No layer of the Selection has a declared element or band."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:531
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:563
 msgid "No line in the energy range shown"
 msgstr ""
 
@@ -2932,7 +2938,7 @@ msgstr ""
 msgid "not attested in the kept events"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1897
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2086
 msgid "Not available while only elements are in the focus: the lens draws them on every spectrum"
 msgstr ""
 
@@ -2995,7 +3001,7 @@ msgstr ""
 msgid "observed %{colour}"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:987
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1010
 msgid "Offset"
 msgstr ""
 
@@ -3059,7 +3065,7 @@ msgstr ""
 msgid "Open in Corpus"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:433
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:449
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/AnalysisCard.vue:626
 msgid "Open in Mirador"
 msgstr ""
@@ -3076,7 +3082,7 @@ msgstr ""
 msgid "Open the analysis %{name} in a new tab"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:421
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:437
 msgid "Open the manifest"
 msgstr ""
 
@@ -3121,7 +3127,7 @@ msgstr ""
 msgid "Overlaps the period"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:985
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1008
 msgid "Overlay"
 msgstr ""
 
@@ -3445,9 +3451,9 @@ msgstr ""
 msgid "Reset the position"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:269
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:270
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:813
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:278
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:279
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:836
 msgid "Reset the zoom"
 msgstr ""
 
@@ -3479,10 +3485,10 @@ msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue:53
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/ImagingPreview.vue:265
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:298
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue:307
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FolioTool.vue:822
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/ImagingPane.vue:437
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2132
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2321
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1187
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioMap.vue:1201
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapStage.vue:754
@@ -3491,6 +3497,10 @@ msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/CurtainPane.vue:529
 msgid "Retry side %{letter}"
+msgstr ""
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:392
+msgid "Reuse the data"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/PeriodRuleMenu.vue:60
@@ -3665,8 +3675,8 @@ msgstr ""
 msgid "Several panes side by side need a wider screen"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:158
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:177
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:161
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:180
 msgid "Share and export"
 msgstr ""
 
@@ -3758,7 +3768,7 @@ msgstr ""
 msgid "Show the gallery"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:280
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:283
 msgid "Show the other citation"
 msgid_plural "Show the %{n} other citations"
 msgstr[0] ""
@@ -3813,7 +3823,7 @@ msgstr ""
 msgid "Some entries were dropped:"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:575
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:606
 msgid "Some marks are left out at this zoom: narrow the energy range to see them all."
 msgstr ""
 
@@ -3821,7 +3831,7 @@ msgstr ""
 msgid "Someone else changed this configuration since you opened it. Your changes are not saved: reload it to see their version."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1712
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1901
 msgid "Source: ManuSpectrum, %{url}, %{date}"
 msgstr ""
 
@@ -3833,7 +3843,7 @@ msgstr ""
 msgid "Spectra"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:308
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:311
 msgid "Spectra (CSV)"
 msgstr ""
 
@@ -3924,8 +3934,8 @@ msgstr ""
 msgid "Sync zoom and pan across panes"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:836
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:991
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1014
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:859
 msgid "Table"
 msgstr ""
 
@@ -3979,15 +3989,15 @@ msgstr ""
 msgid "The capture could not be taken: the image server did not answer."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1992
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2181
 msgid "The chart could not be drawn."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:386
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:402
 msgid "The click snaps to the nearest peak top."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:800
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:823
 msgid "The CSV holds the values drawn, treatment included and offset left out: two columns per curve."
 msgstr ""
 
@@ -4015,7 +4025,7 @@ msgstr ""
 msgid "The layouts need a window larger than S"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:582
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:597
 msgid "The lens holds at most %{n} elements"
 msgstr ""
 
@@ -4057,11 +4067,11 @@ msgstr[1] ""
 msgid "The zones are a model that extrapolates between attested places, not observed data."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:214
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:217
 msgid "These data are no longer available."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1976
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2165
 msgid "These spectra come from different configurations: only the treatments they share are offered."
 msgstr ""
 
@@ -4085,7 +4095,7 @@ msgstr ""
 msgid "This configuration could not be saved."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:118
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:121
 msgid "This document"
 msgstr ""
 
@@ -4121,11 +4131,11 @@ msgstr ""
 msgid "This node no longer exists in the model."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:343
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:346
 msgid "This package (%{size}) is over the export limit: export one document at a time."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:354
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:357
 msgid "This package (%{size}) is over the export limit."
 msgstr ""
 
@@ -4133,7 +4143,7 @@ msgstr ""
 msgid "This page has %{n} analyses to add: tick them one by one or make room."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:119
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:122
 msgid "This project"
 msgstr ""
 
@@ -4163,11 +4173,11 @@ msgstr ""
 msgid "To"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:401
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:417
 msgid "Too many folios for one IIIF manifest: open a document, or your Selection, to get one."
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:398
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:414
 msgid "Too many folios for one IIIF manifest."
 msgstr ""
 
@@ -4183,7 +4193,7 @@ msgstr ""
 msgid "trace"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1863
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2052
 msgid "Treatment"
 msgstr ""
 
@@ -4241,8 +4251,8 @@ msgstr ""
 msgid "Unknown place"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1882
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1886
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2071
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:2075
 msgid "Unlinked spectra"
 msgstr ""
 
@@ -4280,7 +4290,7 @@ msgstr ""
 msgid "what relates to any of them"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:184
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ShareExportPanel.vue:187
 msgid "What to share"
 msgstr ""
 
@@ -4371,11 +4381,11 @@ msgstr ""
 msgid "XRF lens settings"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:493
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XrfLensStrip.vue:525
 msgid "XRF lines"
 msgstr ""
 
-#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:777
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:800
 msgid "XRF lines drawn: %{elements}; listed below the chart."
 msgstr ""
 

@@ -6,7 +6,13 @@ from django.views.generic import RedirectView, TemplateView
 
 from arches.app.views.auth import PasswordResetView
 
+from manuspectrum.accounts.notices import AccountPasswordResetForm
+from manuspectrum.accounts.activation import AcceptTermsView, ActivateAccountView
+from manuspectrum.accounts.twofactor import TwoFactorResetView, TwoFactorSetupView
+from manuspectrum.observability.csp import CspReportView
+from manuspectrum.observability.views import MetricsView
 from manuspectrum.sitemaps import DocumentSitemap, StaticSitemap
+from manuspectrum.views.legal_pages import LegalPageView
 from manuspectrum.views.renderer_config import RendererConfigView, RendererView
 from manuspectrum.views.biblissima_proxy import (
     BiblissimaAddAltNameView,
@@ -70,12 +76,13 @@ from manuspectrum.views.explorer.events_export import (
 from manuspectrum.views.explorer.export import ExplorerExportView
 from manuspectrum.views.explorer.series import ExplorerSeriesView
 from manuspectrum.views.graph_nodes import RelatableNodesView
-from manuspectrum.observability.views import MetricsView
 from manuspectrum.views.health import HealthzView, ReadyzView
 from manuspectrum.views.knockout_templates import knockout_template
+from manuspectrum.views.manifest_manager import ManifestManagerView
 from manuspectrum.views.model_graph import ModelGraphView
 from manuspectrum.views.mvt import EmptyTileMVTView
 from manuspectrum.views.plugin import PluginView
+from manuspectrum.views.site_notice import SiteNoticeView
 from manuspectrum.views.spectrum_preview import SpectrumPreviewView
 from manuspectrum.views.summary import SummaryBatchView, SummaryView
 from manuspectrum.views.summary_config import SummaryConfigView
@@ -96,6 +103,7 @@ urlpatterns = [
     path(
         "password_reset/",
         PasswordResetView.as_view(
+            form_class=AccountPasswordResetForm,
             html_email_template_name="registration/password_reset_email_html.html",
         ),
         name="password_reset",
@@ -129,6 +137,11 @@ urlpatterns = [
         r"^templates/(?P<template>[a-zA-Z_\-./]*)",
         knockout_template,
         name="templates",
+    ),
+    re_path(
+        r"^image-service-manager",
+        ManifestManagerView.as_view(),
+        name="manifest_manager",
     ),
 ]
 
@@ -168,12 +181,47 @@ urlpatterns.append(path("", include("arches.urls")))
 for _slug, _name, _tpl in [
     ("about/model", "about-model", "views/pages/conceptual-model.htm"),
     ("about/explorer", "about-explorer", "views/pages/graph-explorer.htm"),
+    ("about/data", "about-data", "views/pages/data.htm"),
     ("about/team", "about-team", "views/pages/team.htm"),
     ("about/contact", "about-contact", "views/pages/contact.htm"),
 ]:
     urlpatterns.append(
         path(_slug, TemplateView.as_view(template_name=_tpl), name=_name)
     )
+
+### Legal pages: same language-prefixed mechanism as the About pages, with the
+### durations read from the settings.
+for _slug, _name, _tpl in [
+    ("about/legal", "about-legal", "views/pages/legal.htm"),
+    ("about/privacy", "about-privacy", "views/pages/privacy.htm"),
+    ("about/terms", "about-terms", "views/pages/terms.htm"),
+]:
+    urlpatterns.append(
+        path(_slug, LegalPageView.as_view(template_name=_tpl), name=_name)
+    )
+
+### Two-factor enrolment of the signed-in user (Arches' own settings page is
+### refused at the edge) and the personal re-enrolment link of a reset;
+### wrapped like every page.
+urlpatterns += [
+    path("account/two-factor", TwoFactorSetupView.as_view(), name="account-two-factor"),
+    path(
+        "account/two-factor/reset/<token>",
+        TwoFactorResetView.as_view(),
+        name="account-two-factor-reset",
+    ),
+]
+
+### Account activation from the invitation link and (re)acceptance of the terms
+### of use; wrapped like every page.
+urlpatterns += [
+    path(
+        "account/activate/<uidb64>/<token>",
+        ActivateAccountView.as_view(),
+        name="account-activate",
+    ),
+    path("account/terms", AcceptTermsView.as_view(), name="account-terms"),
+]
 
 ### Analysis Explorer page: wrapped, so /en/discover and /fr/discover; the
 ### application state lives in the query string, never in the path.
@@ -431,6 +479,14 @@ urlpatterns.append(
     )
 )
 
+### Manuspectrum URL - Site announcement
+###
+### Language-neutral: the payload carries every language, and nginx serves the
+### last snapshot of it while Django cannot answer.
+urlpatterns.append(
+    path("api/site-notice", SiteNoticeView.as_view(), name="site-notice")
+)
+
 ### Manuspectrum URL - Spectrum preview
 ###
 ### Language-neutral: the payload is a pair of number arrays, and the browser
@@ -653,3 +709,4 @@ urlpatterns.append(
 urlpatterns.append(path("healthz", HealthzView.as_view(), name="healthz"))
 urlpatterns.append(path("readyz", ReadyzView.as_view(), name="readyz"))
 urlpatterns.append(path("metrics", MetricsView.as_view(), name="metrics"))
+urlpatterns.append(path("api/csp-report", CspReportView.as_view(), name="csp-report"))

@@ -13,6 +13,14 @@
 # The connection settings are read from the project's Django settings. The
 # database password reaches pg_dump through PGPASSWORD only and is never
 # printed. The snapshot holds user accounts and research data.
+#
+# Uploaded files: the rows of the `files` table whose file is not under
+# MEDIA_ROOT/uploadedfiles are counted, recorded in manifest.json and printed.
+# Above SNAPSHOT_MAX_MISSING_PERCENT (default 10) of the cited files the run
+# stops before dumping: a rehearsal on such a snapshot shows broken images and
+# downloads everywhere, and a high share usually means MEDIA_ROOT is the one of
+# another checkout (it lives inside the Python package of each checkout).
+# ALLOW_MISSING_FILES=yes writes the snapshot anyway.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -54,9 +62,11 @@ log "reading the settings and the counts through manage.py"
 # One line `MSSNAP <json>`; anything else Django prints is ignored.
 info_line="$(cd "$REPO" && "$PY" manage.py shell -c '
 import json
+import os
 from importlib.metadata import version
 from django.conf import settings
 from django.db import connection
+from django.db.migrations.loader import MigrationLoader
 
 db = settings.DATABASES["default"]
 with connection.cursor() as cursor:
@@ -66,12 +76,29 @@ with connection.cursor() as cursor:
     tiles = cursor.fetchone()[0]
     cursor.execute("SELECT DISTINCT ON (app) app, name FROM django_migrations ORDER BY app, id DESC")
     migrations = dict(cursor.fetchall())
+    cursor.execute("SELECT path FROM files")
+    paths = [row[0] or "" for row in cursor.fetchall()]
+missing = sum(
+    1
+    for path in paths
+    if not path.startswith(settings.UPLOADED_FILES_DIR + "/")
+    or not os.path.isfile(os.path.join(str(settings.MEDIA_ROOT), path))
+)
+loader = MigrationLoader(connection)
+on_disk = set(loader.disk_migrations)
+apps_on_disk = {app for app, _ in on_disk}
+ahead = sorted(
+    f"{app}.{name}"
+    for app, name in loader.applied_migrations
+    if app in apps_on_disk and (app, name) not in on_disk
+)
 print("MSSNAP " + json.dumps({
     "host": db.get("HOST") or "", "port": str(db.get("PORT") or ""),
     "name": db["NAME"], "user": db["USER"], "password": db.get("PASSWORD") or "",
     "media_root": str(settings.MEDIA_ROOT), "uploads": settings.UPLOADED_FILES_DIR,
     "arches": version("arches"), "resources": resources, "tiles": tiles,
-    "migrations": migrations,
+    "migrations": migrations, "migrations_ahead_of_code": ahead,
+    "files_cited": len(paths), "files_missing": missing,
 }))
 ' | sed -n 's/^MSSNAP //p' | tail -n 1)"
 [ -n "$info_line" ] || die "manage.py did not return the settings"
@@ -89,7 +116,30 @@ UPLOADS="$(field uploads)"
 # writer) inherit INFO_LINE and must not see it.
 info_line="$(printf '%s' "$info_line" | "$PY" -c 'import json,sys; v=json.load(sys.stdin); v.pop("password", None); print(json.dumps(v))')"
 
+AHEAD="$(field migrations_ahead_of_code)"
+if [ "$AHEAD" != "[]" ]; then
+  log "WARNING: the database is ahead of the checked-out code: $(printf '%s' "$AHEAD" | "$PY" -c 'import json,sys; print(", ".join(json.load(sys.stdin)))'); the snapshot will be refused by an image built from this commit."
+fi
+
 [ -d "$MEDIA_ROOT/$UPLOADS" ] || die "no uploaded files directory: $MEDIA_ROOT/$UPLOADS"
+
+FILES_CITED="$(field files_cited)"
+FILES_MISSING="$(field files_missing)"
+MAX_MISSING="${SNAPSHOT_MAX_MISSING_PERCENT:-10}"
+if ! [[ "$MAX_MISSING" =~ ^[0-9]{1,3}$ ]] || [ "$MAX_MISSING" -gt 100 ]; then
+  die "SNAPSHOT_MAX_MISSING_PERCENT must be a whole number from 0 to 100, not '$MAX_MISSING'"
+fi
+log "uploaded files: $FILES_CITED cited by the database, $FILES_MISSING missing on disk under $MEDIA_ROOT/$UPLOADS"
+if [ "$FILES_MISSING" -gt 0 ]; then
+  missing_msg="$FILES_MISSING of the $FILES_CITED files cited by the database are missing under $MEDIA_ROOT/$UPLOADS"
+  if [ $((FILES_MISSING * 100)) -le $((FILES_CITED * MAX_MISSING)) ]; then
+    log "WARNING: $missing_msg (at most $MAX_MISSING % allowed): the rehearsal shows them as broken"
+  elif [ "${ALLOW_MISSING_FILES:-}" = yes ]; then
+    log "WARNING: $missing_msg, above $MAX_MISSING %; written anyway (ALLOW_MISSING_FILES=yes)"
+  else
+    die "$missing_msg, above $MAX_MISSING %: nothing was written. MEDIA_ROOT may be the one of another checkout (each checkout has its own manuspectrum/uploadedfiles; run this script from the checkout the development server uses, or pass --repo). To write the snapshot anyway: ALLOW_MISSING_FILES=yes; to change the limit: SNAPSHOT_MAX_MISSING_PERCENT=<0-100>."
+  fi
+fi
 
 pg_args=(--username "$DB_USER" --dbname "$DB_NAME")
 [ -z "$DB_HOST" ] || pg_args+=(--host "$DB_HOST")
@@ -124,7 +174,9 @@ manifest = {
     "arches_version": info["arches"],
     "pg_dump_version": os.environ["PG_DUMP_VERSION"],
     "counts": {"resource_instances": info["resources"], "tiles": info["tiles"]},
+    "uploaded_files": {"cited": info["files_cited"], "missing": info["files_missing"]},
     "migrations": info["migrations"],
+    "migrations_ahead_of_code": info["migrations_ahead_of_code"],
     "files": {
         "db.dump": {"sha256": os.environ["DB_SHA"], "bytes": int(os.environ["DB_SIZE"])},
         "media.tar": {"sha256": os.environ["MEDIA_SHA"], "bytes": int(os.environ["MEDIA_SIZE"])},
@@ -140,7 +192,7 @@ cat >&2 <<MSG
 
 Snapshot written to $OUT
   db.dump     $DB_SIZE bytes
-  media.tar   $MEDIA_SIZE bytes
+  media.tar   $MEDIA_SIZE bytes ($FILES_CITED uploaded files cited, $FILES_MISSING missing)
   manifest.json
 
 Copy it to the rehearsal VM:

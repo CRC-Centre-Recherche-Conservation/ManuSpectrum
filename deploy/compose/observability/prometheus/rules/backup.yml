@@ -1,0 +1,57 @@
+# Alert rules of the monitoring stack: backup.
+# Severity: critical = mailed at once, warning = grouped weekday e-mail, info = never mailed.
+groups:
+  - name: backup
+    rules:
+      - alert: BackupFailed
+        expr: |
+          manuspectrum_backup_failed == 1
+        labels:
+          severity: critical
+          service: backup
+        annotations:
+          summary: "The last backup failed"
+          description: "The last backup run ended in failure; the previous good backup remains."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/backup.md#backupfailed
+      - alert: BackupMissing
+        expr: |
+          (
+            time() - manuspectrum_backup_last_success_timestamp_seconds > 26 * 3600
+            or
+            absent(manuspectrum_backup_last_success_timestamp_seconds)
+          )
+          and on() (up{job="node"} == 1)
+        for: 15m
+        labels:
+          severity: critical
+          service: backup
+        annotations:
+          summary: "No successful backup for more than 26 hours"
+          description: "The last successful backup is older than 26 hours, or no backup metric exists."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/backup.md#backupmissing
+      - alert: RestoreTestFailed
+        expr: |
+          manuspectrum_restore_test_failed == 1
+        labels:
+          severity: critical
+          service: backup
+        annotations:
+          summary: "The restore test failed"
+          description: "The weekly restore test ended in failure: the latest backup may not be restorable."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/backup.md#restoretestfailed
+      - alert: RestoreTestMissing
+        expr: |
+          (
+            time() - manuspectrum_restore_test_last_success_timestamp_seconds > 8 * 86400
+            or
+            absent(manuspectrum_restore_test_last_success_timestamp_seconds)
+          )
+          and on() (up{job="node"} == 1)
+        for: 15m
+        labels:
+          severity: warning
+          service: backup
+        annotations:
+          summary: "No successful restore test for more than 8 days"
+          description: "The weekly restore test has not succeeded for 8 days, or no metric exists."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/backup.md#restoretestmissing

@@ -68,6 +68,18 @@
                 <span class="ms-req" aria-hidden="true">*</span> {% trans "Required field" %}
             </p>
 
+            <div class="ms-contact-include" id="ms-contact-include">
+                <h3>{% trans "Requesting an account? Please include" %}</h3>
+                <ul>
+                    <li>{% trans "your name" %}</li>
+                    <li>{% trans "your institutional e-mail address" %}</li>
+                    <li>{% trans "your institution or laboratory" %}</li>
+                    <li>{% trans "your position" %}</li>
+                    <li>{% trans "the project or the data you want to describe" %}</li>
+                    <li>{% trans "optionally, your contact at the CRC" %}</li>
+                </ul>
+            </div>
+
             <div class="ms-contact-field">
                 <label for="cf-name">{% trans "Your name" %} <span class="ms-req" aria-hidden="true">*</span></label>
                 <input type="text" id="cf-name" name="name" class="ms-contact-input" required
@@ -87,6 +99,7 @@
                 <select id="cf-type" name="type" class="ms-contact-input">
                     <option value="project">{% trans "Submit a project" %}</option>
                     <option value="access">{% trans "Request an account / access" %}</option>
+                    <option value="reactivation">{% trans "Reactivate my account" %}</option>
                     <option value="question">{% trans "Question" %}</option>
                     <option value="other">{% trans "Other" %}</option>
                 </select>

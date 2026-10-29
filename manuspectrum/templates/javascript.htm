@@ -134,6 +134,12 @@
 ></div>
 {% endblock arches_translations %}
 
+
+{% comment %}
+This template is found twice (TEMPLATES["DIRS"] and as an app directory) and
+extends itself once: a block that appended to its parent would emit the banner
+module twice. The Arches block is empty, so this one replaces it.
+{% endcomment %}
 {% block project_modules %}
-{{ block.super }}
+{% include 'includes/ms_site_notice.htm' %}
 {% endblock project_modules %}

@@ -1,0 +1,10 @@
+{% extends "two_factor_authentication_login.htm" %}
+{% load static %}
+{% comment %}
+Extends Arches core two_factor_authentication_login.htm (8.1.5; Django skips
+this origin and resolves the core one). Adds the script that makes the code
+form submit once; the core markup is untouched.
+{% endcomment %}
+{% block pre_require_js %}
+<script src="{% static 'js/utils/two-factor-login.js' %}" defer></script>
+{% endblock pre_require_js %}

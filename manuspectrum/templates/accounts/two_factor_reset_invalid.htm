@@ -1,0 +1,9 @@
+{% extends 'views/pages/legal_base.htm' %}
+{% load i18n %}
+{% block legal_title %}{% trans "Link not valid" %}{% endblock %}
+{% block legal_og_title %}{% trans "Link not valid" %}{% endblock %}
+{% block legal_heading %}{% trans "This link is not valid" %}{% endblock %}
+{% block legal_body %}
+<p>{% trans "The link has expired, has already been used or is incorrect." %}</p>
+<p>{% trans "Ask the team for a new link." %} <a href="{% url 'about-contact' %}">{% trans "Contact the team" %}</a></p>
+{% endblock %}

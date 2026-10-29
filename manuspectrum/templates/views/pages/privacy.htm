@@ -1,0 +1,152 @@
+{% extends 'views/pages/legal_base.htm' %}
+{% load i18n manuspectrum_settings %}
+{% block legal_title %}{% trans "Privacy policy" %}{% endblock %}
+{% block legal_og_title %}{% trans "Privacy policy" %}{% endblock %}
+{% block page_description %}{% trans "What personal data ManuSpectrum keeps, why, for how long, and how to exercise your rights." %}{% endblock %}
+{% block og_description %}{% trans "What personal data ManuSpectrum keeps, why, for how long, and how to exercise your rights." %}{% endblock %}
+{% block legal_heading %}{% trans "Privacy policy" %}{% endblock %}
+{% block legal_lead %}
+<p class="ms-page-hero__lead">{% trans "Reading ManuSpectrum needs no account and sets no tracker. This page covers what the platform records about visitors and about the people who have an account." %}</p>
+{% endblock %}
+
+{% block legal_body %}
+{% contact_email as ms_legal_email %}
+<h2>{% trans "Data controller" %}</h2>
+<p>Centre national de la recherche scientifique (CNRS), 3 rue Michel-Ange, 75794 Paris cedex 16, {% trans "for the UAR 3224 Centre de recherche sur la conservation (CRC)." %}</p>
+
+<h2>{% trans "Data protection officer" %}</h2>
+<p>{% trans "Data protection officer of the CNRS" %} (CNRS, Service protection des données, 2 rue Jean Zay, 54519 Vandœuvre-lès-Nancy): <a href="mailto:dpd.demandes@cnrs.fr">dpd.demandes@cnrs.fr</a></p>
+
+<h2>{% trans "Purposes" %}</h2>
+<ul>
+    <li>{% trans "Managing accounts: letting contributors sign in and describe analyses." %}</li>
+    <li>{% trans "Securing the platform: limiting sign-in attempts and investigating abuse." %}</li>
+    <li>{% trans "Keeping the history of the data: who entered or changed a resource, and when." %}</li>
+    <li>{% trans "Service notices: mails about restrictions that end and workflows that will be cleaned." %}</li>
+    <li>{% trans "Answering the messages you send us." %}</li>
+</ul>
+
+<h2>{% trans "Legal bases" %}</h2>
+<p>{% trans "The processing is necessary for a task carried out in the public interest by the CNRS: running a research platform (GDPR, article 6(1)(e)). Sending us a message by e-mail rests on your request." %}</p>
+
+<h2>{% trans "Data we keep" %}</h2>
+<ul>
+    <li>{% trans "Account: name, user name, institutional e-mail address, groups, password (stored only as a hash) and the secret of your second factor." %}</li>
+    <li>{% trans "Sign-in records: date, user name, IP address, browser identification and the outcome (success or failure)." %}</li>
+    <li>{% trans "Access log, for every visitor, with or without an account: date and time, IP address, method, page requested (without the query string; the tokens of password-reset, activation and two-factor links are removed), status, size, duration, host, path of the referring page and browser identification. Purpose: security and operation of the service. It is not shared and not used for statistics about individuals." %}</li>
+    <li>{% trans "The web server's error log, for failed requests only: date, IP address and the request line as sent (a link token included, for links that expire within days), kept for the same purpose and not shared." %}</li>
+    <li>{% trans "History of the data: the account that created or changed each resource, and the date." %}</li>
+    <li>{% trans "Resources can name researchers (authors, contacts) as part of the scientific description." %}</li>
+    <li>{% trans "The contact form opens your own mail application: nothing you type is stored by the platform before you send it." %}</li>
+</ul>
+
+<h2>{% trans "Retention periods" %}</h2>
+<table>
+    <tbody>
+        <tr>
+            <th scope="row">{% trans "Sign-in records" %}</th>
+            <td>{% blocktrans trimmed count n=login_records_months with days=login_records_days %}
+                {{ n }} month ({{ days }} days), then deleted.
+                {% plural %}
+                {{ n }} months ({{ days }} days), then deleted.
+                {% endblocktrans %}</td>
+        </tr>
+        <tr>
+            <th scope="row">{% trans "Access log" %}</th>
+            <td>{% trans "30 days, then deleted." %}</td>
+        </tr>
+        <tr>
+            <th scope="row">{% trans "Error log" %}</th>
+            <td>{% trans "30 days, then deleted." %}</td>
+        </tr>
+        <tr>
+            <th scope="row">{% trans "Accounts" %}</th>
+            <td>{% blocktrans trimmed with months=account_retention_months days=account_notice_days %}
+                Kept while the contributor works on the platform. An account without a sign-in for {{ months }} months
+                is anonymised, {{ days }} days after a notice sent to its e-mail address: the name, the e-mail address and
+                the password are erased and the account is closed. An account is never deleted, so that the history of the
+                data keeps its author. In the edit history, the e-mail address is erased and the name stays as credit for
+                the contribution.
+                {% endblocktrans %}</td>
+        </tr>
+        <tr>
+            <th scope="row">{% trans "History of the data" %}</th>
+            <td>{% trans "Kept with the platform's history. When an account is anonymised, the e-mail address is erased and the name stays as contribution credit." %}</td>
+        </tr>
+        <tr>
+            <th scope="row">{% trans "Backups" %}</th>
+            <td>{% trans "Nightly backups are kept for up to six months." %}</td>
+        </tr>
+    </tbody>
+</table>
+
+<h2>{% trans "Recipients" %}</h2>
+<p>{% trans "The administrators and the team of the Centre de recherche sur la conservation, and the host of the platform, UAR Huma-Num. Nothing is sold, and no data is given to advertisers." %}</p>
+
+<h2 id="third-party-services">{% trans "Third-party services" %}</h2>
+<p>{% trans "Some content is not hosted by ManuSpectrum: your browser loads it directly from the services below. Each of them receives your IP address and your browser identification (user agent), and, when the request is a fetch made by a page script, the address of ManuSpectrum as origin. ManuSpectrum sets no cookie for them and stores nothing on your device for them. They are in the European Union unless stated otherwise." %}</p>
+<p>{% trans "Purpose: to show you the images and maps of the platform. Legal basis: legitimate interest (GDPR, article 6(1)(f)). For the services used only by signed-in editors, the same basis applies to the editing tools." %}</p>
+
+<h3>{% trans "Every visitor" %}</h3>
+<ul>
+    <li>{% trans "Image servers of the institutions that hold the manuscripts (IIIF). When the images of a document are not hosted by ManuSpectrum, your browser loads them from the IIIF server of the holding institution, in the Explorer and on resource pages: for example the Bibliothèque nationale de France (Gallica), the Université de Caen Normandie, e-codices, the Vatican Library or the BVMM of the IRHT. The list depends on the documents described." %}</li>
+    <li>{% trans "Université de Caen Normandie (iiif.unicaen.fr): the homepage shows three images loaded from its IIIF server." %}</li>
+    <li>{% trans "OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of the base map, loaded whenever a map is shown: the Map view of the Explorer, the search map, the maps of the resource reports and the map widgets of the editing tools. OpenFreeMap is served through Cloudflare (United States). Data © OpenMapTiles, © OpenStreetMap contributors." %}</li>
+    <li>{% trans "OpenHistoricalMap (vtiles.openhistoricalmap.org): historical borders and names of political entities, loaded only when you tick « Historical borders ». Data © OpenHistoricalMap contributors." %}</li>
+</ul>
+
+<h3>{% trans "Signed-in editors and administrators only" %}</h3>
+<ul>
+    <li>{% trans "Biblissima import workflow: the thumbnails are loaded from the Biblissima portal or from the IIIF server of the holding library." %}</li>
+    <li>{% trans "Rich-text editor (CKEditor, part of Arches): each time it opens, it asks cke4.ckeditor.com (CKSource) whether its version is up to date. Its spell checker (SCAYT) is off by default; if you switch it on, the text you type is sent to WebSpellChecker (svc.webspellchecker.net), which does not state where it processes it: this is outside our control. We advise using your browser's spell checker instead." %}</li>
+    <li>{% trans "Thesaurus page of Arches (administrators only): the fonts are loaded from Google Fonts (fonts.googleapis.com, fonts.gstatic.com), operated by Google, which may process the request outside the European Union." %}</li>
+</ul>
+
+<h3>{% trans "Services used by the platform itself" %}</h3>
+<p>{% trans "These calls come from the server and carry no visitor data. The platform asks Biblissima and the IIIF servers of the holding institutions for data and images. E-mail goes through the mail relay of Huma-Num, which handles the names and addresses of the account holders in the messages it carries. Certificates are issued by Let's Encrypt (United States), which only learns the address of the operator." %}</p>
+
+<h3>{% trans "Not used" %}</h3>
+<p>{% trans "No analytics or tracking service, no Google reCAPTCHA, no advertising, no social network widget. The Mapbox map service of Arches is not configured." %}</p>
+
+<h2>{% trans "Transfers outside the European Union" %}</h2>
+<p>{% trans "None by the platform, which is hosted in France. The exceptions are the services above that are stated to process data outside the European Union or whose location is not stated: Google Fonts, WebSpellChecker, Let's Encrypt and OpenFreeMap (served through Cloudflare, United States)." %}</p>
+
+<h2>{% trans "Your rights" %}</h2>
+<p>{% trans "You can ask for access to your data, its correction, its erasure where the law allows it, a restriction of the processing, and you can object to it. You can also lodge a complaint with the CNIL." %}</p>
+<p><a href="https://www.cnil.fr/" rel="noopener">CNIL (www.cnil.fr)</a></p>
+<p>{% trans "To exercise your rights, write to:" %}
+    {% if ms_legal_email %}<a href="mailto:{{ ms_legal_email }}">{{ ms_legal_email }}</a>{% else %}<a href="{% url 'about-contact' %}">{% trans "the contact page" %}</a>{% endif %}
+    {% trans "or to the data protection officer above." %}</p>
+
+<h2>{% trans "Cookies and browser storage" %}</h2>
+<table>
+    <thead>
+        <tr><th scope="col">{% trans "Name" %}</th><th scope="col">{% trans "Purpose" %}</th></tr>
+    </thead>
+    <tbody>
+        <tr><td><code>{{ session_cookie_name }}</code></td><td>{% trans "Keeps you signed in." %}</td></tr>
+        <tr><td><code>{{ csrf_cookie_name }}</code></td><td>{% trans "Protects forms against forged requests." %}</td></tr>
+        <tr><td><code>{{ language_cookie_name }}</code></td><td>{% trans "Remembers the language you chose." %}</td></tr>
+    </tbody>
+</table>
+<p>{% trans "There is no tracker, no analytics service and no advertising cookie. The Analysis Explorer keeps your selection and layout in your browser's local storage; they are never sent to the server." %}</p>
+
+<h2>{% trans "Restricted resources" %}</h2>
+<p>{% blocktrans trimmed count n=embargo_max_months with notices=embargo_notice_days_text %}
+    A restriction on a resource is temporary by construction: {{ n }} month at most, unless an administrator records an exception. It is lifted automatically the day
+    after its end date. The person who set it and the creator of the resource are told {{ notices }} days before,
+    and again when the resource becomes public.
+    {% plural %}
+    A restriction on a resource is temporary by construction: {{ n }} months at most, unless an administrator records an exception. It is lifted automatically the day
+    after its end date. The person who set it and the creator of the resource are told {{ notices }} days before,
+    and again when the resource becomes public.
+    {% endblocktrans %}</p>
+
+<h2>{% trans "Abandoned workflows" %}</h2>
+<p>{% blocktrans trimmed with days=workflow_cleanup_days notices=workflow_notice_days_text %}
+    A workflow with no activity for {{ days }} days is cleaned. Its creators are told {{ notices }} days before.
+    Only what the workflow itself created is removed, and only while it is still a draft.
+    {% endblocktrans %}</p>
+
+<p><a href="{% url 'about-legal' %}">{% trans "Legal notice" %}</a> · <a href="{% url 'about-terms' %}">{% trans "Terms of use" %}</a></p>
+{% endblock %}

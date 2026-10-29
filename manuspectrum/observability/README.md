@@ -77,6 +77,17 @@ Both live below the language boundary of `urls.py` (`/en/readyz` is 404).
 - `manuspectrum_metrics_dir_bytes` (mostrecent gauge, updated on each archive) is the space
   the directory occupies. Alert when it exceeds 70 % of the tmpfs (`size=64m` of web and
   worker, so 45 MB) for 10 minutes: live files alone should stay a few MB.
+- Every labelled Counter and Histogram is primed at 0 from its vocabulary in each process
+  (`metrics.prime_label_sets()`): Django's `AppConfig.ready` runs it in every gunicorn worker
+  and in the Celery main process, Celery's `worker_process_init` in each pool process with
+  the registered task names (`task_label`; the only label without a declared vocabulary).
+  A series that appeared with its first event would have no earlier sample, and
+  `increase()`/`rate()` would not count that event (an alert on `increase(...) > 0` would
+  never fire for an isolated failure). Without `PROMETHEUS_MULTIPROC_DIR` (dev, tests) the
+  zeros live in memory. About 290 label sets in a web process (≈ 400 exposed series), 96
+  more for the 32 registered tasks in a worker; about 60 KB of counter file and 24 KB of
+  histogram file per process. `UNPRIMED_METRICS` lists what is left out
+  (`manuspectrum_celery_task_seconds`); `other` is primed only for the log source.
 - A one-off process started with `docker compose exec web python ...` would write its own
   files there and be summed into `/metrics`: run it with `env -u PROMETHEUS_MULTIPROC_DIR`,
   or through `make -C deploy manage`.
@@ -86,12 +97,14 @@ Metrics (`metrics.py`, a counter is exposed with the `_total` suffix):
 - Web: `manuspectrum_inflight_requests`, `manuspectrum_log_records`,
   `manuspectrum_readyz_component_up`
 - Memos, IIIF, access: `manuspectrum_memo_lookups`, `manuspectrum_iiif_answers`,
-  `manuspectrum_iiif_auth_tokens`, `manuspectrum_read_refusals`, `manuspectrum_auth_logins`,
-  `manuspectrum_spectrum_previews`
+  `manuspectrum_iiif_auth_tokens`, `manuspectrum_read_refusals`, `manuspectrum_auth_logins`, `manuspectrum_auth_lockouts`,
+  `manuspectrum_spectrum_previews`, `manuspectrum_csp_violations{directive}` (browser reports posted to
+  `POST /api/csp-report`, `observability/csp.py`; also one INFO line per report on `manuspectrum.csp`)
 - Explorer: `manuspectrum_explorer_bundle_build_seconds`, `manuspectrum_explorer_bundle_bytes`,
   `manuspectrum_explorer_bundle_rows`, `manuspectrum_explorer_bundle_builds`,
   `manuspectrum_explorer_stale_served`, `manuspectrum_explorer_rebuild_failures`,
-  `manuspectrum_explorer_export_bytes`
+  `manuspectrum_explorer_export_bytes`,
+  `manuspectrum_explorer_ui_checks{outcome,reason}` (Fetch Metadata guard of the Explorer APIs, `views/explorer/guard.py`)
 - Biblissima: `manuspectrum_biblissima_upstream_requests`,
   `manuspectrum_biblissima_upstream_latency_seconds`, `manuspectrum_biblissima_slot_timeouts`,
   `manuspectrum_biblissima_inflight`, `manuspectrum_biblissima_cache`,
@@ -102,7 +115,30 @@ Metrics (`metrics.py`, a counter is exposed with the `_total` suffix):
 - Celery: `manuspectrum_celery_tasks`, `manuspectrum_celery_task_seconds`,
   `manuspectrum_index_resources`, `manuspectrum_data_change_rows`,
   `manuspectrum_data_change_pruned_timestamp_seconds` (both also set when the worker starts,
-  the start time standing for the last prune until the daily one records its own)
+  the start time standing for the last prune until the daily one records its own),
+  `manuspectrum_active_accounts` (one number, no label: active accounts with a login in the
+  last 30 days, `anonymous` excluded, refreshed daily by `manuspectrum.record_active_accounts`
+  and at worker start), `manuspectrum_active_accounts_timestamp_seconds` (the time of that count),
+  `manuspectrum_login_records_prune_timestamp_seconds` (last prune of the axes login records,
+  daily by `manuspectrum.prune_login_records`),
+  `manuspectrum_workflow_cleanups{kind,outcome}`, `manuspectrum_workflow_cleanup_resources{outcome}`
+  and `manuspectrum_workflow_cleanup_timestamp_seconds` (abandoned-workflow pass, daily at 03:30
+  Europe/Paris by `manuspectrum.workflow_cleanup_pass`; read by `WorkflowCleanupFailures` and
+  `WorkflowCleanupStale`),
+  `manuspectrum_embargo_lifts{outcome}` (daily embargo pass: lifted, incomplete, skipped_extended,
+  failed), `manuspectrum_embargoes{state}` (active, undated, due_soon, overdue, set by the same
+  pass at 06:00 Europe/Paris, `manuspectrum.embargo_pass`) and
+  `manuspectrum_embargo_pass_timestamp_seconds` (read by `EmbargoLiftFailures`, `EmbargoOverdue`
+  and `EmbargoPassStale`)
+- Account mail: `manuspectrum_account_mails{kind,outcome}` (invitation, embargo and workflow
+  notices, summaries and the password-reset mail; outcome sent, failed or skipped), shown in the
+  « Accounts » row of the Activity dashboard and in the monthly report
+- Activity (`observability/activity.py`, refreshed hourly by `manuspectrum.record_activity` and at
+  worker start): `manuspectrum_resources{model}`, `manuspectrum_resource_changes{model,kind}` (last
+  24 hours), `manuspectrum_workflows{kind,state}`, `manuspectrum_activity_timestamp_seconds`. `model`
+  comes from `RESOURCE_MODELS`, `kind` from `CHANGE_KINDS` (`cleaned` counts the resources deleted by the workflow cleanup, which `deleted` leaves out) or `WORKFLOW_KINDS`, `state` from
+  `WORKFLOW_STATES`; anything else is `other`. The same module feeds `manage.py activity_summary
+  --month YYYY-MM` (aggregates as JSON, read-only) for the monthly report.
 
 django-prometheus adds the HTTP request metrics (`django_http_*`).
 
@@ -115,6 +151,9 @@ django-prometheus adds the HTTP request metrics (`django_http_*`).
 - Labels come from `ALLOWED_LABELS`; values come from a closed vocabulary through `bounded()`
   or a helper (`language_label`, `memo_label`, `task_label`, ...), an unknown value becoming
   `other`. Never an id, a user, a URL, a path or a string a client sent.
+- A labelled Counter or Histogram is primed at 0 in each process: add its label vocabularies
+  to `_vocabularies()` in `metrics.py`, or its name to `UNPRIMED_METRICS` with a reason
+  (`tests/test_observability_metrics.py` checks that every labelled one is in one of them).
 - Test it where the code increments it, with `tests/observability_helpers.delta`;
   `tests/test_observability_metrics.py` enforces the naming and label rules.
 - Say which alert or dashboard panel reads it in the pull request.

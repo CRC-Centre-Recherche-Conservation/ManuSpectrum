@@ -1,0 +1,61 @@
+rule_files:
+  - ../rules/tls.yml
+evaluation_interval: 1m
+
+
+tests:
+- name: a certificate expiring in 10 days warns, in 2 days is critical
+  interval: 1m
+  input_series:
+  - series: probe_ssl_earliest_cert_expiry{job="blackbox-edge", instance="https://manuspectrum.test/healthz"}
+    values: 864000x12000
+  - series: probe_ssl_earliest_cert_expiry{job="blackbox-readyz", instance="http://web:8000/readyz"}
+    values: '0x12000'
+  promql_expr_test:
+  - expr: ALERTS{alertname="CertificateExpiringSoon", alertstate="firing"}
+    eval_time: 30m
+    exp_samples: []
+  - expr: ALERTS{alertname="CertificateExpiringSoon", alertstate="firing"}
+    eval_time: 2h
+    exp_samples:
+    - labels: ALERTS{alertname="CertificateExpiringSoon", alertstate="firing", instance="https://manuspectrum.test/healthz", job="blackbox-edge", service="tls", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname="CertificateExpiryCritical", alertstate="firing"}
+    eval_time: 2h
+    exp_samples: []
+  - expr: ALERTS{alertname="CertificateExpiryCritical", alertstate="firing"}
+    eval_time: 8d
+    exp_samples:
+    - labels: ALERTS{alertname="CertificateExpiryCritical", alertstate="firing", instance="https://manuspectrum.test/healthz", job="blackbox-edge", service="tls", severity="critical"}
+      value: 1
+- name: an untrusted certificate on a real name warns, a rehearsal name does not
+  interval: 1m
+  input_series:
+  - series: probe_success{job="blackbox-edge", instance="https://example.org/healthz", rehearsal="false"}
+    values: 1x120
+  - series: probe_success{job="blackbox-edge-verified", instance="https://example.org/healthz", rehearsal="false"}
+    values: 0x120
+  - series: probe_success{job="blackbox-edge", instance="https://manuspectrum.test/healthz", rehearsal="true"}
+    values: 1x120
+  - series: probe_success{job="blackbox-edge-verified", instance="https://manuspectrum.test/healthz", rehearsal="true"}
+    values: 0x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="CertificateInvalid", alertstate="firing"}
+    eval_time: 30m
+    exp_samples: []
+  - expr: ALERTS{alertname="CertificateInvalid", alertstate="firing"}
+    eval_time: 90m
+    exp_samples:
+    - labels: ALERTS{alertname="CertificateInvalid", alertstate="firing", instance="https://example.org/healthz", job="blackbox-edge-verified", rehearsal="false", service="tls", severity="warning"}
+      value: 1
+- name: a site that is down is SiteDown, not CertificateInvalid
+  interval: 1m
+  input_series:
+  - series: probe_success{job="blackbox-edge", instance="https://example.org/healthz", rehearsal="false"}
+    values: 0x120
+  - series: probe_success{job="blackbox-edge-verified", instance="https://example.org/healthz", rehearsal="false"}
+    values: 0x120
+  promql_expr_test:
+  - expr: ALERTS{alertname="CertificateInvalid", alertstate="firing"}
+    eval_time: 90m
+    exp_samples: []

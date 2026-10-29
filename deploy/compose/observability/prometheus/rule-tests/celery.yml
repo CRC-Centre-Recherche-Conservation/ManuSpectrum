@@ -1,0 +1,384 @@
+rule_files:
+  - ../rules/celery.yml
+evaluation_interval: 1m
+
+
+tests:
+- name: a queue above 100 for half an hour warns, a short burst does not
+  interval: 1m
+  input_series:
+  - series: redis_key_size{key="celery", instance="redis-broker:6379"}
+    values: 5x10 150x60
+  - series: redis_key_size{key="celery", instance="redis-cache:6379"}
+    values: 5x10 20x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="CeleryQueueBacklog", alertstate="firing"}
+    eval_time: 30m
+    exp_samples: []
+  - expr: ALERTS{alertname="CeleryQueueBacklog", alertstate="firing"}
+    eval_time: 50m
+    exp_samples:
+    - labels: ALERTS{alertname="CeleryQueueBacklog", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: a failing task and a failed indexing run warn, and keep firing until the next working window
+  interval: 1m
+  input_series:
+  - series: manuspectrum_celery_tasks_total{task="index_resources", outcome="failure"}
+    values: 0+1x40 40x5000
+  - series: manuspectrum_celery_tasks_total{task="index_resources", outcome="success"}
+    values: 0+5x4000
+  - series: manuspectrum_index_resources_total{mode="batch", outcome="failed"}
+    values: 0+1x40 40x5000
+  promql_expr_test:
+  - expr: ALERTS{alertname=~"CeleryTaskFailures|IndexingFailures", alertstate="firing"}
+    eval_time: 10m
+    exp_samples: []
+  - expr: ALERTS{alertname=~"CeleryTaskFailures|IndexingFailures", alertstate="firing"}
+    eval_time: 30m
+    exp_samples:
+    - labels: ALERTS{alertname="CeleryTaskFailures", alertstate="firing", service="celery", severity="warning", task="index_resources"}
+      value: 1
+    - labels: ALERTS{alertname="IndexingFailures", alertstate="firing", mode="batch", service="celery", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname=~"CeleryTaskFailures|IndexingFailures", alertstate="firing"}
+    eval_time: 62h
+    exp_samples:
+    - labels: ALERTS{alertname="CeleryTaskFailures", alertstate="firing", service="celery", severity="warning", task="index_resources"}
+      value: 1
+    - labels: ALERTS{alertname="IndexingFailures", alertstate="firing", mode="batch", service="celery", severity="warning"}
+      value: 1
+  - expr: ALERTS{alertname=~"CeleryTaskFailures|IndexingFailures", alertstate="firing"}
+    eval_time: 70h
+    exp_samples: []
+- name: a restarted Prometheus still sees a failure of 62 hours ago, from the stored samples
+  interval: 5m
+  input_series:
+  - series: manuspectrum_celery_tasks_total{task="index_resources", outcome="failure"}
+    values: 0+1x8 8x1000
+  promql_expr_test:
+  - expr: sum by (task) (increase(manuspectrum_celery_tasks_total{outcome="failure"}[64h])) > 0
+    eval_time: 62h
+    exp_samples:
+    - labels: '{task="index_resources"}'
+      value: 8
+- name: an active accounts count older than two days warns after an hour, a fresh one does not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_active_accounts_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x1440 86400x5000
+  - series: up{job="node"}
+    values: 1x6440
+  promql_expr_test:
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 24h
+    exp_samples: []
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 72h
+    exp_samples: []
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 80h
+    exp_samples:
+    - labels: ALERTS{alertname="ActiveAccountsStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: login records not pruned for more than three days warn after an hour, fresh ones do not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_login_records_prune_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x1440 86400x5000
+  - series: up{job="node"}
+    values: 1x6440
+  promql_expr_test:
+  - expr: ALERTS{alertname="LoginRecordsPruneStale", alertstate="firing"}
+    eval_time: 24h
+    exp_samples: []
+  - expr: ALERTS{alertname="LoginRecordsPruneStale", alertstate="firing"}
+    eval_time: 90h
+    exp_samples: []
+  - expr: ALERTS{alertname="LoginRecordsPruneStale", alertstate="firing"}
+    eval_time: 100h
+    exp_samples:
+    - labels: ALERTS{alertname="LoginRecordsPruneStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: LoginRecordsPruneStale also warns when the time disappeared for more than a day on a host that is up, and not when the host is down
+  interval: 1m
+  input_series:
+  - series: manuspectrum_login_records_prune_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x60 _x2000
+  - series: up{job="node"}
+    values: 1x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="LoginRecordsPruneStale", alertstate="firing"}
+    eval_time: 20h
+    exp_samples: []
+  - expr: ALERTS{alertname="LoginRecordsPruneStale", alertstate="firing"}
+    eval_time: 29h
+    exp_samples:
+    - labels: ALERTS{alertname="LoginRecordsPruneStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: LoginRecordsPruneStale stays quiet when the host is down
+  interval: 1m
+  input_series:
+  - series: up{job="node"}
+    values: 0x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="LoginRecordsPruneStale", alertstate="firing"}
+    eval_time: 29h
+    exp_samples: []
+- name: embargo pass not completed for more than two days warns after an hour, a fresh one does not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_embargo_pass_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x1440 86400x5000
+  - series: up{job="node"}
+    values: 1x6440
+  promql_expr_test:
+  - expr: ALERTS{alertname="EmbargoPassStale", alertstate="firing"}
+    eval_time: 24h
+    exp_samples: []
+  - expr: ALERTS{alertname="EmbargoPassStale", alertstate="firing"}
+    eval_time: 72h
+    exp_samples: []
+  - expr: ALERTS{alertname="EmbargoPassStale", alertstate="firing"}
+    eval_time: 75h30m
+    exp_samples: []
+  - expr: ALERTS{alertname="EmbargoPassStale", alertstate="firing"}
+    eval_time: 80h
+    exp_samples:
+    - labels: ALERTS{alertname="EmbargoPassStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: EmbargoPassStale also warns when the time disappeared for more than a day on a host that is up, and not when the host is down
+  interval: 1m
+  input_series:
+  - series: manuspectrum_embargo_pass_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x60 _x2000
+  - series: up{job="node"}
+    values: 1x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="EmbargoPassStale", alertstate="firing"}
+    eval_time: 20h
+    exp_samples: []
+  - expr: ALERTS{alertname="EmbargoPassStale", alertstate="firing"}
+    eval_time: 29h
+    exp_samples:
+    - labels: ALERTS{alertname="EmbargoPassStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: EmbargoPassStale stays quiet when the host is down
+  interval: 1m
+  input_series:
+  - series: up{job="node"}
+    values: 0x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="EmbargoPassStale", alertstate="firing"}
+    eval_time: 29h
+    exp_samples: []
+- name: workflow cleanup pass not completed for more than two days warns after an hour, a fresh one does not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_workflow_cleanup_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x1440 86400x5000
+  - series: up{job="node"}
+    values: 1x6440
+  promql_expr_test:
+  - expr: ALERTS{alertname="WorkflowCleanupStale", alertstate="firing"}
+    eval_time: 24h
+    exp_samples: []
+  - expr: ALERTS{alertname="WorkflowCleanupStale", alertstate="firing"}
+    eval_time: 72h
+    exp_samples: []
+  - expr: ALERTS{alertname="WorkflowCleanupStale", alertstate="firing"}
+    eval_time: 75h30m
+    exp_samples: []
+  - expr: ALERTS{alertname="WorkflowCleanupStale", alertstate="firing"}
+    eval_time: 80h
+    exp_samples:
+    - labels: ALERTS{alertname="WorkflowCleanupStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: WorkflowCleanupStale also warns when the time disappeared for more than a day on a host that is up, and not when the host is down
+  interval: 1m
+  input_series:
+  - series: manuspectrum_workflow_cleanup_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x60 _x2000
+  - series: up{job="node"}
+    values: 1x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="WorkflowCleanupStale", alertstate="firing"}
+    eval_time: 20h
+    exp_samples: []
+  - expr: ALERTS{alertname="WorkflowCleanupStale", alertstate="firing"}
+    eval_time: 29h
+    exp_samples:
+    - labels: ALERTS{alertname="WorkflowCleanupStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: WorkflowCleanupStale stays quiet when the host is down
+  interval: 1m
+  input_series:
+  - series: up{job="node"}
+    values: 0x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="WorkflowCleanupStale", alertstate="firing"}
+    eval_time: 29h
+    exp_samples: []
+- name: inactive-account pass not completed for more than two days warns after an hour, a fresh one does not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_account_retention_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x1440 86400x5000
+  - series: up{job="node"}
+    values: 1x6440
+  promql_expr_test:
+  - expr: ALERTS{alertname="AccountRetentionStale", alertstate="firing"}
+    eval_time: 24h
+    exp_samples: []
+  - expr: ALERTS{alertname="AccountRetentionStale", alertstate="firing"}
+    eval_time: 72h
+    exp_samples: []
+  - expr: ALERTS{alertname="AccountRetentionStale", alertstate="firing"}
+    eval_time: 75h30m
+    exp_samples: []
+  - expr: ALERTS{alertname="AccountRetentionStale", alertstate="firing"}
+    eval_time: 80h
+    exp_samples:
+    - labels: ALERTS{alertname="AccountRetentionStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: AccountRetentionStale also warns when the time disappeared for more than a day on a host that is up, and not when the host is down
+  interval: 1m
+  input_series:
+  - series: manuspectrum_account_retention_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x60 _x2000
+  - series: up{job="node"}
+    values: 1x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="AccountRetentionStale", alertstate="firing"}
+    eval_time: 20h
+    exp_samples: []
+  - expr: ALERTS{alertname="AccountRetentionStale", alertstate="firing"}
+    eval_time: 29h
+    exp_samples:
+    - labels: ALERTS{alertname="AccountRetentionStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: AccountRetentionStale stays quiet when the host is down
+  interval: 1m
+  input_series:
+  - series: up{job="node"}
+    values: 0x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="AccountRetentionStale", alertstate="firing"}
+    eval_time: 29h
+    exp_samples: []
+- name: activity gauges older than three hours warn after half an hour, fresh ones do not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_activity_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x180 10800x2000
+  - series: up{job="node"}
+    values: 1x2180
+  promql_expr_test:
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 2h
+    exp_samples: []
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 6h20m
+    exp_samples: []
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 7h
+    exp_samples:
+    - labels: ALERTS{alertname="ActivityStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: EmbargoPassStale warns an hour after a first deployment when no completion time was ever published and the host is up
+  interval: 1m
+  input_series:
+  - series: up{job="node"}
+    values: 1x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="EmbargoPassStale", alertstate="firing"}
+    eval_time: 30m
+    exp_samples: []
+  - expr: ALERTS{alertname="EmbargoPassStale", alertstate="firing"}
+    eval_time: 2h
+    exp_samples:
+    - labels: ALERTS{alertname="EmbargoPassStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: ActiveAccountsStale warns when the time disappeared for more than a day on a host that is up, not before the window and the wait have passed
+  interval: 1m
+  input_series:
+  - series: manuspectrum_active_accounts_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x60 _x2000
+  - series: up{job="node"}
+    values: 1x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 20h
+    exp_samples: []
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 27h30m
+    exp_samples: []
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 29h
+    exp_samples:
+    - labels: ALERTS{alertname="ActiveAccountsStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: ActiveAccountsStale stays quiet when the host is down
+  interval: 1m
+  input_series:
+  - series: up{job="node"}
+    values: 0x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="ActiveAccountsStale", alertstate="firing"}
+    eval_time: 29h
+    exp_samples: []
+- name: ActivityStale warns when the gauges disappeared for more than four hours on a host that is up, not before the window and the wait have passed
+  interval: 1m
+  input_series:
+  - series: manuspectrum_activity_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x60 _x600
+  - series: up{job="node"}
+    values: 1x660
+  promql_expr_test:
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 3h
+    exp_samples: []
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 5h15m
+    exp_samples: []
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 5h45m
+    exp_samples:
+    - labels: ALERTS{alertname="ActivityStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: ActivityStale stays quiet when the host is down
+  interval: 1m
+  input_series:
+  - series: up{job="node"}
+    values: 0x660
+  promql_expr_test:
+  - expr: ALERTS{alertname="ActivityStale", alertstate="firing"}
+    eval_time: 10h
+    exp_samples: []
+
+- name: a task or indexing failure series that appears directly at 1 is not counted, which is why each worker process primes every label set at 0
+  interval: 1m
+  input_series:
+  - series: manuspectrum_celery_tasks_total{task="manuspectrum.embargo_pass", outcome="failure"}
+    values: _x10 1x120
+  - series: manuspectrum_index_resources_total{mode="resource", outcome="failed"}
+    values: _x10 1x120
+  promql_expr_test:
+  - expr: ALERTS{alertstate="firing"}
+    eval_time: 40m
+    exp_samples: []
+
+- name: a primed task failure series fires on its first failure
+  interval: 1m
+  input_series:
+  - series: manuspectrum_celery_tasks_total{task="manuspectrum.embargo_pass", outcome="failure"}
+    values: 0x10 1x120
+  - series: manuspectrum_index_resources_total{mode="resource", outcome="failed"}
+    values: 0x10 1x120
+  promql_expr_test:
+  - expr: ALERTS{alertstate="firing"}
+    eval_time: 40m
+    exp_samples:
+    - labels: ALERTS{alertname="CeleryTaskFailures", alertstate="firing", task="manuspectrum.embargo_pass", service="celery", severity="warning"}
+      value: 1
+    - labels: ALERTS{alertname="IndexingFailures", alertstate="firing", mode="resource", service="celery", severity="warning"}
+      value: 1

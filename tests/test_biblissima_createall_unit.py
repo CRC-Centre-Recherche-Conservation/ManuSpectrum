@@ -183,6 +183,9 @@ class CreateAllBase(TestCase):
         self.mock_write_editlog = self._start(
             patch.object(BiblissimaCreateResourceView, "_write_editlog")
         )
+        self.mock_write_creation = self._start(
+            patch.object(BiblissimaCreateResourceView, "_write_creation_edit")
+        )
         self.mock_link = self._start(
             patch.object(BiblissimaCreateResourceView, "_link_to_project_batch")
         )
