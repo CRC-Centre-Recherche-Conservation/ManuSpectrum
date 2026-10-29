@@ -116,6 +116,47 @@ def write_jobs(workflow, scope):
     )
 
 
+KIT_APPLICATION_FILES = (
+    "manuspectrum/urls.py",
+    "manuspectrum/settings.py",
+    "manuspectrum/observability/metrics.py",
+    "manuspectrum/observability/multiproc.py",
+    "manuspectrum/templates/errors/500.htm",
+)
+# Writes its own settings.py in a temporary repository; reads nothing of the tree.
+NOT_TREE_READS = {"deploy/scripts/tests/test_release_version_guard.sh"}
+LITERAL_PATH = re.compile(r"manuspectrum/[\w./-]+")
+JOINED_PATH = re.compile(r'"manuspectrum"((?:\s*/\s*"[^"]+")+)')
+
+
+def application_files_read_by_the_kit():
+    """Files under `manuspectrum/` named by the kit's tests and scripts.
+
+    Both spellings are read: `manuspectrum/a/b.py` literals and
+    `REPO / "manuspectrum" / "a" / "b.py"` joins. Only paths that are files of
+    the repository count; this module is skipped, its paths are test data.
+    """
+    deploy = ROOT / "deploy"
+    sources = {
+        *deploy.glob("**/tests/*.py"),
+        *deploy.glob("**/tests/*.sh"),
+        deploy / "check-stack.sh",
+        deploy / "compose/observability/smoke_queries.py",
+    }
+    found = set()
+    for source in sorted(sources):
+        relative = source.relative_to(ROOT).as_posix()
+        if relative in NOT_TREE_READS or source.resolve() == Path(__file__).resolve():
+            continue
+        text = source.read_text(encoding="utf-8")
+        candidates = {m.group(0).rstrip(".") for m in LITERAL_PATH.finditer(text)}
+        for m in JOINED_PATH.finditer(text):
+            parts = re.findall(r'"([^"]+)"', m.group(1))
+            candidates.add("/".join(["manuspectrum", *parts]))
+        found |= {c for c in candidates if (ROOT / c).is_file()}
+    return sorted(found)
+
+
 class LockfileTests(unittest.TestCase):
     @staticmethod
     def filter_script():
@@ -154,9 +195,7 @@ class LockfileTests(unittest.TestCase):
 
     def test_files_read_by_the_compose_tests_run_the_stack_job_only(self):
         for path in (
-            "manuspectrum/urls.py",
-            "manuspectrum/settings.py",
-            "manuspectrum/observability/metrics.py",
+            *KIT_APPLICATION_FILES,
             "deploy/BACKUP.md",
             "deploy/RELEASES.md",
             "deploy/SECRETS.md",
@@ -184,6 +223,23 @@ class LockfileTests(unittest.TestCase):
     def test_an_unrelated_file_triggers_no_lock_check(self):
         self.assertEqual(self.triggers("README.md")["lockfile"], "false")
 
+    def test_every_application_file_the_kit_reads_runs_the_stack_job(self):
+        read = application_files_read_by_the_kit()
+        self.assertTrue(set(KIT_APPLICATION_FILES) <= set(read), read)
+        for path in sorted({*read, *KIT_APPLICATION_FILES}):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["stack"], "true")
+
+    def test_application_files_the_kit_does_not_read_stay_out_of_the_stack_job(self):
+        for path in (
+            "manuspectrum/views/x.py",
+            "manuspectrum/accounts/lockout.py",
+            "manuspectrum/management/commands/site_notice.py",
+            "manuspectrum/src/x.ts",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["stack"], "false")
+
     def test_the_stack_job_runs_unless_every_file_is_known_to_stay_out(self):
         for changed in (
             "manuspectrum/src/manuspectrum/pages/X.vue\nmanuspectrum/media/js/a.js",
@@ -191,6 +247,8 @@ class LockfileTests(unittest.TestCase):
             "README.md\nreleases/1.0.0.md\nCITATION.cff\nNOTICE",
             "tests/test_x.py\nmanuspectrum/locale/fr/LC_MESSAGES/django.po",
             "manuspectrum/templates/views/pages/about.htm",
+            "manuspectrum/views/x.py\nmanuspectrum/accounts/lockout.py",
+            "manuspectrum/management/commands/site_notice.py",
             ".github/ISSUE_TEMPLATE/bug_report.yml\n.github/PULL_REQUEST_TEMPLATE.md",
             "",
         ):
@@ -198,8 +256,8 @@ class LockfileTests(unittest.TestCase):
                 self.assertEqual(self.triggers(changed)["stack"], "false")
         for changed in (
             "foo/bar.txt",
-            "manuspectrum/views/x.py",
             "manuspectrum/templates/errors/500.htm",
+            "manuspectrum/views/x.py\nmanuspectrum/urls.py",
             "README.md\ndeploy/scripts/backup.sh",
             "docs-only.md\nREADME.md",
             "pyproject.toml",
@@ -239,6 +297,7 @@ class LockfileTests(unittest.TestCase):
             "package-lock.json",
             "webpack/webpack.common.js",
             "vitest.config.mts",
+            ".dockerignore",
             ".github/workflows/deploy-lint.yml",
         ):
             with self.subTest(path=path):
@@ -249,7 +308,7 @@ class LockfileTests(unittest.TestCase):
         jobs = load("deploy-lint.yml")["jobs"]
         job = jobs["frontend-build"]
         self.assertEqual(job["if"], "needs.changes.outputs.frontend == 'true'")
-        self.assertIn("timeout-minutes", job)
+        self.assertEqual(job["timeout-minutes"], 15)
         run = "\n".join(s.get("run", "") for s in steps(job))
         self.assertIn("--target collect", run)
         dockerfile = (ROOT / "deploy/docker/Dockerfile").read_text()

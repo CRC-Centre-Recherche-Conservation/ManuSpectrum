@@ -63,11 +63,12 @@ jobs:
           # check-stack.sh or its tests (Compose rules, nginx edge, scripts, rendered
           # systemd units). A new or unknown path therefore runs it. Keep a path out of
           # this list as soon as a test reads it. The Django tests (`tests/`) and the
-          # frontend never reach the kit; `errors/500.htm` is mounted by the nginx tests.
-          deny='^(manuspectrum/(src|media|locale)/|manuspectrum/templates/(?!errors/500\.htm$)|tests/|releases/|(README|CONTRIBUTING|SECURITY|CODE_OF_CONDUCT)\.md$|CITATION\.cff$|NOTICE$|LICENSE$|\.github/(ISSUE_TEMPLATE/|PULL_REQUEST_TEMPLATE\.md$)|vitest\.[^/]*$|.*\.spec\.(ts|js)$)'
+          # frontend never reach the kit. Inside `manuspectrum/` only the five files the
+          # kit's tests read run it (test_workflows.py lists them and checks the rest).
+          deny='^(manuspectrum/(?!(urls|settings)\.py$|observability/(metrics|multiproc)\.py$|templates/errors/500\.htm$)|tests/|releases/|(README|CONTRIBUTING|SECURITY|CODE_OF_CONDUCT)\.md$|CITATION\.cff$|NOTICE$|LICENSE$|\.github/(ISSUE_TEMPLATE/|PULL_REQUEST_TEMPLATE\.md$)|vitest\.[^/]*$|.*\.spec\.(ts|js)$)'
           # The image proof stays an allow-list (15-30 min): what it builds or installs from.
           kit='deploy/(docker|compose|certs|logrotate|systemd|runbooks|sbin)/|deploy/(check-stack\.sh|Makefile|OBSERVABILITY\.md)$|deploy/scripts/|\.gitleaks\.toml$|\.pre-commit-config\.yaml$|\.gitignore$|\.dockerignore$|\.trivyignore$|manuspectrum/templates/errors/500\.htm$|manage\.py$|manuspectrum/accounts/|manuspectrum/models\.py$|manuspectrum/sql/|manuspectrum/sql_config\.py$|manuspectrum/management/commands/(activity_summary|set_admin_password|site_notice|site_notice_snapshot)\.py$'
-          frontend='manuspectrum/(src|media)/|package(-lock)?\.json$|webpack/|webpack\.project\.js$|tsconfig\.json$|\.babelrc$|\.browserslistrc$|vitest\.config\.mts$|eslint\.config\.mjs$|\.prettierrc$|\.stylelintrc\.json$|gettext\.config\.js$|deploy/docker/(Dockerfile|check-explorer-bundle\.sh|placeholder\.env)$|manuspectrum/settings(_docker)?\.py$|uv\.lock$|pyproject\.toml$'
+          frontend='manuspectrum/(src|media)/|\.dockerignore$|package(-lock)?\.json$|webpack/|webpack\.project\.js$|tsconfig\.json$|\.babelrc$|\.browserslistrc$|vitest\.config\.mts$|eslint\.config\.mjs$|\.prettierrc$|\.stylelintrc\.json$|gettext\.config\.js$|deploy/docker/(Dockerfile|check-explorer-bundle\.sh|placeholder\.env)$|manuspectrum/settings(_docker)?\.py$|uv\.lock$|pyproject\.toml$'
           lock='uv\.lock$'
           project='pyproject\.toml$'
           build='\.babelrc$|\.browserslistrc$|tsconfig\.json$|eslint\.config\.mjs$|\.prettierrc$|\.stylelintrc\.json$|gettext\.config\.js$|pkg$|\.gitmodules$|package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/utils/client_ip\.py$|manuspectrum/management/commands/(rewrite_dev_origin|export_pkg|check_pkg_inventory)\.py$|manuspectrum/(migrations|system_settings)/|manuspectrum/basemaps\.py$|manuspectrum/constants/openfreemap_bright_layers\.json$|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
@@ -166,7 +167,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-26.04
-    timeout-minutes: 40
+    timeout-minutes: 15
     defaults:
       run:
         shell: bash
