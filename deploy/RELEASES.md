@@ -16,10 +16,10 @@ object is the digest, never a tag.
 | Build | `staging.yml`, on push to `main` | The image builds from scratch, with the day's Debian security updates, and carries the label `org.opencontainers.image.revision` = the commit |
 | Proof | `stack-proof.yml`, called by `staging.yml` | On that exact image: probe, the whole Compose stack, observability, mails, `down`/`up`, Docker restart, static swap, backup / loss / restore |
 | Publish | `staging.yml` | The image that passed is pushed as `sha-<commit>` and its build provenance is attested (workflow `staging.yml`, branch of the run); its digest is in the job summary |
-| Guard | `release.yml`, on a `v*` tag | A ruleset protects the `v*` tags (the job fails otherwise); final tags sit on the first-parent line of `main`, release candidates on the integration branch, no other tag name is accepted |
+| Guard | `release.yml`, on a `v*` tag | A ruleset protects the `v*` tags (the job fails otherwise); final tags sit on the first-parent line of `main`, release candidates on the integration branch (`dev`), no other tag name is accepted; the tag's `X.Y.Z` must equal `APP_VERSION` in `manuspectrum/settings.py` at the tagged commit (`release-version-guard.sh`) |
 | Promote | `release.yml` | The provenance of the `sha-<commit>` digest is verified (`gh attestation verify`: signer workflow `staging.yml`, branch `main` for a final tag, the integration branch for a candidate), then the digest gets the tag name; the digest is compared before and after. No `sha-<commit>` image means `staging.yml` did not publish the commit: the job fails and says so. An image built on the integration branch is therefore never released as final |
 | Scan | `release.yml` | Trivy (HIGH and CRITICAL with a fix) blocks; accepted findings and their expiry are in `.trivyignore` |
-| Sign | `release.yml` | The SBOM attestation is attached to the digest in GHCR; the job checks that an attested, unsigned digest fails `cosign verify`; then the digest is signed with cosign, keyless (GitHub OIDC) |
+| Sign | `release.yml` | The job first checks that a digest carrying only `staging.yml`'s provenance fails `cosign verify`; then the digest is signed with cosign, keyless (GitHub OIDC); then the SBOM attestation is attached to it in GHCR (made by the same workflow identity, which cosign v3 accepts as a signature, so it comes last) |
 | Verify | `release.yml` | `scripts/release-verify.sh`, the policy a host runs, accepts the release and refuses a `sha-*` reference, a signature of another tag and (for a candidate) the `prod` policy |
 | Release | `release.yml` | The GitHub Release is created (pre-release for a candidate) or edited if it exists |
 
@@ -31,7 +31,7 @@ image too.
 
 ## Cut a release
 
-1. Merge into the integration branch (`feat/production-platform`). To
+1. Merge into the integration branch (`dev`). To
    publish its tip as `sha-<commit>` before a merge to `main`, run
    `staging.yml` by hand on that branch and wait for it to finish. Until
    `staging.yml` exists on the default branch (`main`), the « Run workflow »
@@ -39,12 +39,15 @@ image too.
    workflow, use
 
    ```bash
-   gh workflow run staging.yml --ref feat/production-platform
+   gh workflow run staging.yml --ref dev
    ```
 
    Tag exactly the commit the run published: the job summary of `publish`
    shows its commit and digest. A manual run is never cancelled by a later push.
-2. Test candidate: tag the commit and push the tag.
+2. Test candidate: set `APP_VERSION` in `manuspectrum/settings.py` to the
+   version being released (`0.1.0`, no `v`, no prerelease), merge it, then tag
+   the commit and push the tag. `release.yml` refuses a tag whose `X.Y.Z`
+   differs from `APP_VERSION`.
 
    ```bash
    git tag -s v0.1.0-rc.1 <commit>
@@ -187,7 +190,7 @@ the first tag is pushed; the chain relies on all of them.
 3. The default workflow token permission is `read`.
 4. Merge, then wait for the warm-cache run on the integration branch (and, for
    a final release, for `staging.yml` on `main`).
-5. `gh workflow run staging.yml --ref feat/production-platform`; note the
+5. `gh workflow run staging.yml --ref dev`; note the
    commit and digest of the job summary.
 6. Dry run:
 
@@ -195,11 +198,11 @@ the first tag is pushed; the chain relies on all of them.
    gh attestation verify oci://ghcr.io/crc-centre-recherche-conservation/manuspectrum@sha256:<digest> \
      --repo CRC-Centre-Recherche-Conservation/ManuSpectrum \
      --signer-workflow CRC-Centre-Recherche-Conservation/ManuSpectrum/.github/workflows/staging.yml \
-     --source-ref refs/heads/feat/production-platform --source-digest <commit>
+     --source-ref refs/heads/dev --source-digest <commit>
    ```
 
 7. Signed tag on that commit, push it, watch `release.yml`: the step
-   « Attestations are not a signature » must pass, then verify the image by
+   « Provenance is not a signature » must pass, then verify the image by
    hand (« Verify an image by hand »).
 8. After the first push, make the GHCR package public.
 9. Migrations: a release with long migrations says how long its readiness
