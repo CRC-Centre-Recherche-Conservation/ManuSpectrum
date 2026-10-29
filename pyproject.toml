@@ -59,9 +59,9 @@ version = "1.0.0a0"
 dev = [
     "livereload",
     "coverage",
-    "django-silk==5.1.0",
+    "django-silk==5.6.0",
     "pre-commit==3.8.0",
-    "black==26.3.1",
+    "black==26.10.1",
     "jsonschema>=4.26,<5",
     "PyLD>=1.0.5,<2",
 ]
