@@ -80,13 +80,14 @@ def file_body(file):
     return body
 
 
-def raw_link(file):
-    """The ``seeAlso`` entry downloading a measurement file as stored."""
+def raw_rendering(file):
+    """The ``rendering`` entry downloading a measurement file as stored."""
     return {
         "id": ids.data_raw(file.id),
         "type": "Dataset",
         "format": file.media_type,
         "label": raw_label(file),
+        "service": services.dataset_services(file.id),
     }
 
 

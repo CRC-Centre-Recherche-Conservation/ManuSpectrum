@@ -8,7 +8,7 @@ import re
 
 from django.test import SimpleTestCase, override_settings
 
-from manuspectrum.iiif import selectors
+from manuspectrum.iiif import selectors, v2
 from tests.iiif_schema import assert_valid_iiif
 
 CANVAS = "https://example.org/iiif/ms59/canvas/f2r"
@@ -62,7 +62,7 @@ class SelectorTests(SimpleTestCase):
 
     def test_no_shape_targets_the_canvas(self):
         self.assertEqual(selectors.target(CANVAS, MANIFEST, None), CANVAS)
-        self.assertEqual(selectors.v2_on(CANVAS, MANIFEST, None), CANVAS)
+        self.assertEqual(v2.on(selectors.target(CANVAS, MANIFEST, None)), CANVAS)
 
     def test_the_target_names_its_canvas_within_its_manifest(self):
         target = selectors.target(CANVAS, MANIFEST, RECT)
@@ -84,11 +84,25 @@ class SelectorTests(SimpleTestCase):
 
     def test_the_v2_rectangle_is_a_fragment_of_the_canvas(self):
         self.assertEqual(
-            selectors.v2_on(CANVAS, MANIFEST, RECT), f"{CANVAS}#xywh=10,20,30,40"
+            v2.on(selectors.target(CANVAS, None, RECT)), f"{CANVAS}#xywh=10,20,30,40"
+        )
+
+    def test_the_v2_rectangle_within_a_manifest_is_a_fragment_selector(self):
+        self.assertEqual(
+            v2.on(selectors.target(CANVAS, MANIFEST, RECT)),
+            {
+                "@type": "oa:SpecificResource",
+                "full": CANVAS,
+                "selector": {
+                    "@type": "oa:FragmentSelector",
+                    "value": "xywh=10,20,30,40",
+                },
+                "within": {"@id": MANIFEST, "@type": "sc:Manifest"},
+            },
         )
 
     def test_the_v2_point_is_a_choice_of_box_and_svg(self):
-        on = selectors.v2_on(CANVAS, MANIFEST, POINT)
+        on = v2.on(selectors.target(CANVAS, MANIFEST, POINT))
 
         self.assertEqual(on["@type"], "oa:SpecificResource")
         self.assertEqual(on["full"], CANVAS)
@@ -103,7 +117,7 @@ class SelectorTests(SimpleTestCase):
         self.assertRegex(choice["item"]["value"], CIRCLE)
 
     def test_the_v2_polygon_defaults_to_its_bounding_box(self):
-        choice = selectors.v2_on(CANVAS, MANIFEST, POLYGON)["selector"]
+        choice = v2.on(selectors.target(CANVAS, MANIFEST, POLYGON))["selector"]
 
         self.assertEqual(choice["default"]["value"], "xywh=10,20,40,50")
         self.assertIn("<polygon", choice["item"]["value"])

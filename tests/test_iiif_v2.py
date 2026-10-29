@@ -73,19 +73,62 @@ class V2RouteTests(IIIFCase):
             annotation["on"]["within"], {"@id": MANIFEST, "@type": "sc:Manifest"}
         )
 
-    def test_the_v2_rectangle_is_a_canvas_fragment(self):
+    def test_the_v2_rectangle_is_a_fragment_of_its_canvas_within_the_manifest(self):
         analysis = self.analyses["on_document"].pk
         annotation = self.get(
             f"/iiif/v2/annotation/{analysis}/{FEATURES['on_document_3']}"
         )
 
-        self.assertRegex(
-            annotation["on"],
-            r"^https://example.org/iiif/ms59/canvas/f3r#xywh=\d+,\d+,\d+,\d+$",
-        )
+        on = annotation["on"]
+        self.assertEqual(on["@type"], "oa:SpecificResource")
+        self.assertEqual(on["full"], "https://example.org/iiif/ms59/canvas/f3r")
+        self.assertEqual(on["selector"]["@type"], "oa:FragmentSelector")
+        self.assertRegex(on["selector"]["value"], r"^xywh=\d+,\d+,\d+,\d+$")
+        self.assertEqual(on["within"]["@type"], "sc:Manifest")
         self.assertEqual(
             annotation["@id"], ids.annotation(analysis, FEATURES["on_document_3"], 2)
         )
+
+    def test_the_human_pages_are_related_and_the_raw_files_renderings(self):
+        file_id = self.stored_file(self.analyses["open"], "X01.csv", b"x,y\n1,2\n")
+        annotation = self.get(f"/iiif/v2/annotation/{self.analyses['open'].pk}")
+
+        self.assertNotIn("seeAlso", annotation)
+        self.assertEqual(
+            annotation["related"][0]["@id"], ids.report(self.analyses["open"].pk)
+        )
+        raw = next(
+            r for r in annotation["rendering"] if r["@id"] == ids.data_raw(file_id)
+        )
+        self.assertEqual(raw["@type"], "dctypes:Dataset")
+        self.assertEqual(raw["service"]["profile"], "http://iiif.io/api/auth/1/login")
+
+    def test_a_401_on_a_v2_route_is_a_presentation_2_description(self):
+        response = self.visitor.get(
+            f"/iiif/v2/annotation/{self.analyses['open'].pk}",
+            HTTP_AUTHORIZATION="Bearer nonsense",
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(
+            response["Content-Type"], f'application/ld+json;profile="{P2}"'
+        )
+        body = response.json()
+        self.assertEqual(body["@context"], P2)
+        self.assertEqual(body["@type"], "oa:Annotation")
+        self.assertTrue(
+            body["@id"].endswith(f"/iiif/v2/annotation/{self.analyses['open'].pk}")
+        )
+        self.assertEqual(body["service"]["profile"], "http://iiif.io/api/auth/1/login")
+
+    def test_a_401_on_a_v3_route_stays_presentation_3(self):
+        response = self.visitor.get(
+            f"/iiif/v3/annotation/{self.analyses['open'].pk}",
+            HTTP_AUTHORIZATION="Bearer nonsense",
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["type"], "Annotation")
 
     def test_the_v2_file_body_is_a_dataset(self):
         file_id = self.stored_file(self.analyses["open"], "X01.csv", b"x,y\n1,2\n")

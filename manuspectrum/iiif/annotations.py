@@ -6,9 +6,10 @@ is the zone on its canvas, part of the Document's source manifest
 (``selectors.target``). ``metadata`` holds, when present, the technique,
 dates, operators, instrument, conditions, projects, Document, Component and
 « Status: Draft » for an unpublished analysis; every label and value is a
-language map. ``seeAlso`` links the report, the published dataset (its web
-address as ``id``, its stored label under ``none``) and each measurement file
-as stored.
+language map. ``homepage`` lists the report and the published dataset (its
+web address as ``id``, its stored label under ``none``), the pages about the
+analysis for people; ``rendering`` lists each measurement file as stored, with
+the services protecting it.
 """
 
 from django.utils.translation import gettext_noop
@@ -48,7 +49,8 @@ def metadata(fact):
     return entries
 
 
-def see_also(fact):
+def homepage(fact):
+    """The web pages about *fact*: its report, then its published dataset."""
     links = [
         {
             "id": ids.report(fact.id),
@@ -64,8 +66,12 @@ def see_also(fact):
         if label:
             link["label"] = label
         links.append(link)
-    links.extend(bodies.raw_link(f) for f in fact.files if f.kind == "measurement")
     return links
+
+
+def rendering(fact):
+    """The measurement files of *fact* as stored."""
+    return [bodies.raw_rendering(f) for f in fact.files if f.kind == "measurement"]
 
 
 def analysis_annotation(doc, fact, zone):
@@ -84,5 +90,8 @@ def analysis_annotation(doc, fact, zone):
     entries = metadata(fact)
     if entries:
         annotation["metadata"] = entries
-    annotation["seeAlso"] = see_also(fact)
+    annotation["homepage"] = homepage(fact)
+    files = rendering(fact)
+    if files:
+        annotation["rendering"] = files
     return annotation

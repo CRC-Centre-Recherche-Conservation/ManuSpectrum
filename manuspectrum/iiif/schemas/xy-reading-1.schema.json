@@ -6,6 +6,7 @@
   "required": ["type"],
   "properties": {
     "type": {"const": "XYReading"},
+    "conformsTo": {"type": "string", "pattern": "^https?://"},
     "dialect": {
       "type": "object",
       "properties": {
@@ -83,6 +84,7 @@
         "type": {"const": "Dataset"},
         "format": {"type": "string"},
         "label": {"$ref": "#/definitions/languageMap"},
+        "service": {"type": "array", "items": {"type": "object"}},
         "xyReading": {"$ref": "#"}
       }
     }

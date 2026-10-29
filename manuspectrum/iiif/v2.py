@@ -6,11 +6,14 @@ same bodies (``dctypes:Dataset``, ``dctypes:Image``, ``sc:Manifest``,
 ``cnt:ContentAsText``, ``oa:SpecificResource`` with ``oa:hasPurpose`` as
 ``{"@id": "oa:<purpose>"}``), the
 same motivations (``supplementing`` becomes ``oa:commenting``, any other
-``oa:<motivation>``) and any ``xyReading`` of a body unchanged. A resource
+``oa:<motivation>``) and any ``xyReading`` of a body unchanged. ``homepage``
+becomes ``related`` and ``rendering`` stays ``rendering``. A resource
 declaring services declares the Auth 1.0 block (``services.v2_auth1_block``);
 Auth 2.0 has no Presentation 2 form and its context is dropped. Our ids move
 from ``iiif/v3/`` to ``iiif/v2/``. A target becomes ``on``: the canvas, a
-``#xywh=`` fragment of it for a rectangle, or an ``oa:Choice`` of the bounding
+``#xywh=`` fragment of it for a rectangle (an ``oa:SpecificResource`` with an
+``oa:FragmentSelector`` and the ``within`` manifest when the v3 target is part
+of one), or an ``oa:Choice`` of the bounding
 box (``default``) and the SVG (``item``) for a point or a polygon, which
 Mirador 4 reads (``AnnotationResource.js``).
 """
@@ -28,6 +31,8 @@ TYPES = {
     "Manifest": "sc:Manifest",
     "Canvas": "sc:Canvas",
     "Annotation": "oa:Annotation",
+    "AnnotationCollection": "sc:Layer",
+    "AnnotationPage": "sc:AnnotationList",
 }
 
 
@@ -123,8 +128,19 @@ def on(target):
     source = target.get("source") or {}
     canvas = source.get("id") if isinstance(source, dict) else source
     fragment, svg = _selector(target.get("selector") or [])
+    manifests = source.get("partOf") if isinstance(source, dict) else None
+    within = {"@id": manifests[0]["id"], "@type": "sc:Manifest"} if manifests else None
     if svg is None:
-        return f"{canvas}#{fragment}" if fragment else canvas
+        if not fragment:
+            return canvas
+        if within is None:
+            return f"{canvas}#{fragment}"
+        return {
+            "@type": "oa:SpecificResource",
+            "full": canvas,
+            "selector": {"@type": "oa:FragmentSelector", "value": fragment},
+            "within": within,
+        }
     result = {
         "@type": "oa:SpecificResource",
         "full": canvas,
@@ -134,9 +150,8 @@ def on(target):
             "item": {"@type": "oa:SvgSelector", "value": svg},
         },
     }
-    manifests = source.get("partOf") if isinstance(source, dict) else None
-    if manifests:
-        result["within"] = {"@id": manifests[0]["id"], "@type": "sc:Manifest"}
+    if within:
+        result["within"] = within
     return result
 
 
@@ -162,8 +177,13 @@ def annotation(v3, *, context=True):
             {"label": to_v2(m["label"]), "value": to_v2(m["value"])}
             for m in v3["metadata"]
         ]
-    if v3.get("seeAlso"):
-        converted["seeAlso"] = [_resource(link) for link in v3["seeAlso"]]
+    for v3_key, v2_key in (
+        ("homepage", "related"),
+        ("rendering", "rendering"),
+        ("seeAlso", "seeAlso"),
+    ):
+        if v3.get(v3_key):
+            converted[v2_key] = [_resource(link) for link in v3[v3_key]]
     return converted
 
 
@@ -199,3 +219,13 @@ def layer(v3_collection, page_ids):
     if page_ids:
         converted["otherContent"] = [ids.as_version(p, 2) for p in page_ids]
     return converted
+
+
+def description_401(url, type_):
+    """The body of a 401 on a v2 route: *url* described as a *type_* (a v3 type name) with the Auth 1.0 block."""
+    return {
+        "@context": PRESENTATION_2,
+        "@id": url,
+        "@type": TYPES.get(type_, type_),
+        "service": services.v2_auth1_block(),
+    }

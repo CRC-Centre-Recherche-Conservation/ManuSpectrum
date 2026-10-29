@@ -65,23 +65,28 @@ def gate_of(request, version=None):
     return memo.gate(reader_of(request), tokens.by_token(request), version)
 
 
-def unauthorized(request, kind="Annotation", file_id=None):
-    """401 describing the requested resource as a *kind* with the services to sign in through."""
+def unauthorized(request, kind="Annotation", file_id=None, version=3):
+    """401 describing the requested resource as a *kind* with the services to sign in through.
+
+    A *version* 2 route answers in Presentation 2.1 (``v2.description_401``,
+    its media type); a stored file is a version 3 route only.
+    """
     url = f"{settings.PUBLIC_SERVER_ADDRESS}{request.path.lstrip('/')}"
-    response = HttpResponse(
-        orjson.dumps(services.description_401(url, kind, file_id)),
-        status=401,
-        content_type=IIIF_MEDIA_TYPE,
-    )
+    if version == 2:
+        body, content_type = v2.description_401(url, kind), IIIF_V2_MEDIA_TYPE
+    else:
+        body = services.description_401(url, kind, file_id)
+        content_type = IIIF_MEDIA_TYPE
+    response = HttpResponse(orjson.dumps(body), status=401, content_type=content_type)
     response["WWW-Authenticate"] = 'Bearer realm="ManuSpectrum IIIF"'
     return _private(response)
 
 
-def refused(request, kind="Annotation", file_id=None):
+def refused(request, kind="Annotation", file_id=None, version=3):
     """401 (``unauthorized``) to the visitor, bodyless 403 to a signed-in or token reader."""
     if is_connected(reader_of(request)):
         return _private(HttpResponse(status=403))
-    return unauthorized(request, kind, file_id)
+    return unauthorized(request, kind, file_id, version)
 
 
 def parse_only(request):
@@ -114,7 +119,9 @@ class IIIFView(View):
         try:
             with request_memo(getattr(request, "user", None)):
                 if tokens.bearer_state(request) == tokens.INVALID:
-                    return unauthorized(request, self.described_as)
+                    return unauthorized(
+                        request, self.described_as, version=self.version
+                    )
                 return self.answer(request, **kwargs)
         except Missing:
             return not_found()
@@ -245,7 +252,7 @@ class AnnotationView(IIIFView):
         if access is None:
             raise Missing()
         if access is facts.REFUSED:
-            return refused(request)
+            return refused(request, version=self.version)
 
         def build():
             found = facts.annotated_fact(access, feature_id)

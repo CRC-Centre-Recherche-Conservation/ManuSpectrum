@@ -140,6 +140,37 @@ class RawTests(DataCase):
 
 
 class GuardTests(DataCase):
+    def test_a_hidden_micro_imaging_file_is_401_described_as_an_image(self):
+        file_id = self.stored_file(
+            self.analyses["open"],
+            "scan.png",
+            b"png",
+            node_alias="micro_macro_imaging",
+        )
+        self.embargo(self.analyses["open"])
+
+        body = json.loads(self.body(self.raw(file_id)))
+
+        self.assertEqual(body["type"], "Image")
+        self.assertEqual(body["service"][1]["id"].split("/")[-1], file_id)
+
+    def test_an_invalid_bearer_describes_the_file_as_a_dataset_without_a_lookup(self):
+        file_id = self.stored_file(
+            self.analyses["open"], "scan.png", b"png", node_alias="micro_macro_imaging"
+        )
+
+        response = self.raw(file_id, HTTP_AUTHORIZATION="Bearer nonsense")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(json.loads(self.body(response))["type"], "Dataset")
+
+    def test_an_image_without_a_stored_type_has_its_extension_type(self):
+        from manuspectrum.iiif.data import media_type
+
+        self.assertEqual(media_type("scan.png", None), "image/png")
+        self.assertEqual(media_type("scan.xyz", None), "application/octet-stream")
+        self.assertEqual(media_type("a.mca", "image/png"), "application/octet-stream")
+
     def test_a_hidden_resource_is_401_to_the_visitor_and_403_to_a_signed_in_reader(
         self,
     ):

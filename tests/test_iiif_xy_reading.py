@@ -250,6 +250,18 @@ class BodyTests(IIIFCase):
         self.assertEqual(body["label"]["en"], ["S.csv, series"])
         self.assertEqual(body["xyReading"]["derivedFrom"]["id"], ids.data_raw(file_id))
 
+    def test_the_reading_names_its_documentation_and_the_raw_file_its_services(self):
+        file_id = self.stored_file(
+            self.analyses["open"], "S.csv", b"350,1,10\n351,2,10\n", config=self.fors
+        )
+
+        body = self.body(file_id)
+        derived = body["xyReading"]["derivedFrom"]
+
+        self.assertEqual(body["xyReading"]["conformsTo"], ids.xy_doc())
+        self.assertEqual(derived["xyReading"]["conformsTo"], ids.xy_doc())
+        self.assertEqual(derived["service"], body["service"])
+
     def test_the_page_lists_our_context_first_and_p3_last(self):
         self.stored_file(
             self.analyses["open"], "S.csv", b"350,1,10\n351,2,10\n", config=self.fors

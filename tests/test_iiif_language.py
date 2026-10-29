@@ -103,13 +103,24 @@ class LanguageMapTests(SimpleTestCase):
         )
         self.assertEqual(joined, {"en": ["vermilion; Hg"], "fr": ["vermillon; Hg"]})
 
-    def test_joined_falls_back_to_the_first_language_of_a_map(self):
+    def test_joined_never_files_another_language_under_a_language(self):
         joined = language.joined(
             [{"en": ["Ms 59"], "fr": ["Ms 59"]}, {"fr": ["Initiale P"]}]
         )
-        self.assertEqual(
-            joined, {"en": ["Ms 59, Initiale P"], "fr": ["Ms 59, Initiale P"]}
+        self.assertEqual(joined, {"en": ["Ms 59"], "fr": ["Ms 59, Initiale P"]})
+
+    def test_listed_keeps_one_string_per_value(self):
+        listed = language.listed(
+            [{"en": ["Alice"], "fr": ["Alice"]}, {"none": ["Bob"]}, {"fr": ["Chloé"]}]
         )
+        self.assertEqual(
+            listed, {"en": ["Alice", "Bob"], "fr": ["Alice", "Bob", "Chloé"]}
+        )
+        self.assertEqual(
+            language.listed([{"none": ["A"]}, {}, {"none": ["B"]}]),
+            {"none": ["A", "B"]},
+        )
+        self.assertEqual(language.listed([]), {})
 
     def test_joined_of_untagged_values_stays_untagged(self):
         self.assertEqual(
@@ -142,12 +153,12 @@ class LanguageMapTests(SimpleTestCase):
             language.reference_labels(value), {"en": ["vermilion"], "fr": ["cinabre"]}
         )
 
-    def test_reference_labels_join_several_items(self):
+    def test_reference_labels_list_several_items(self):
         value = [
             reference(("en", "prefLabel", "red")),
             reference(("en", "prefLabel", "blue")),
         ]
-        self.assertEqual(language.reference_labels(value), {"en": ["red, blue"]})
+        self.assertEqual(language.reference_labels(value), {"en": ["red", "blue"]})
 
     def test_to_v2_omits_the_language_of_none(self):
         self.assertEqual(

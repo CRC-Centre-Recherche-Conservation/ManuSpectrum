@@ -10,7 +10,7 @@ and its ``label`` every label of the item (material ``classifying``,
 certainty ``assessing``, colour, layer and element ``describing``); and one
 ``linking`` body per zone of each cited analysis the reader may see, its
 source that zone's annotation id. A cited analysis with no zone on the
-Document's canvases is linked through its report in ``seeAlso`` instead.
+Document's canvases is linked through its report in ``homepage`` instead.
 No ``canonical``: the zones of one identified material are distinct
 annotations, and one canonical IRI would let a client merge them.
 """
@@ -110,7 +110,7 @@ def characterization_annotation(doc, fact, zone):
                 }
             )
     body += concept_bodies(fact)
-    see_also = [
+    homepage = [
         {
             "id": ids.report(fact.id),
             "type": "Text",
@@ -136,7 +136,7 @@ def characterization_annotation(doc, fact, zone):
         label = doc.names.get(analysis)
         if label:
             link["label"] = label
-        see_also.append(link)
+        homepage.append(link)
     annotation = {
         "id": ids.annotation(fact.id, zone.feature),
         "type": "Annotation",
@@ -146,5 +146,5 @@ def characterization_annotation(doc, fact, zone):
     if body:
         annotation["body"] = body
     annotation["target"] = selectors.target(zone.canvas, doc.manifest_url, zone.shape)
-    annotation["seeAlso"] = see_also
+    annotation["homepage"] = homepage
     return annotation

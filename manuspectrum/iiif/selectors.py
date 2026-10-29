@@ -1,12 +1,11 @@
 """Selectors and targets of the zones of IIIF annotations, in canvas pixels.
 
-v3 (Web Annotation, WADM §4.2: the selectors of an array select the same
-content): a point is ``[PointSelector, SvgSelector]`` whose SVG is a circle of
-``settings.IIIF_POINT_RADIUS`` pixels as a path Mirador draws; a rectangle one
-media-fragment ``xywh`` ``FragmentSelector``; a polygon ``[SvgSelector
-<polygon>, FragmentSelector of its bounding box]``. v2 (Open Annotation): a
-rectangle is ``<canvas>#xywh=``; a point or a polygon an ``oa:Choice`` whose
-``default`` is the bounding box and whose ``item`` is the SVG.
+v3 (Web Annotation): a point is ``[PointSelector, SvgSelector]`` whose SVG is a
+circle of ``settings.IIIF_POINT_RADIUS`` pixels as a path Mirador draws; a
+rectangle one media-fragment ``xywh`` ``FragmentSelector``; a polygon
+``[SvgSelector <polygon>, FragmentSelector of its bounding box]``. ``iiif.v2.on``
+converts a v3 target to Open Annotation. The selectors of a v3 array are not declared
+alternatives of one another: a client reads the ones it supports.
 """
 
 from django.conf import settings
@@ -78,24 +77,3 @@ def target(canvas_id, manifest_url, shape):
     if manifest_url:
         source["partOf"] = [{"id": manifest_url, "type": "Manifest"}]
     return {"type": "SpecificResource", "source": source, "selector": selectors(shape)}
-
-
-def v2_on(canvas_id, manifest_url, shape):
-    """v2 ``on``: the canvas, ``<canvas>#xywh=`` for a rectangle, else an ``oa:SpecificResource`` with a Choice."""
-    if shape is None:
-        return canvas_id
-    svg, box = _parts(shape)
-    if svg is None:
-        return f"{canvas_id}#{_xywh(box)}"
-    on = {
-        "@type": "oa:SpecificResource",
-        "full": canvas_id,
-        "selector": {
-            "@type": "oa:Choice",
-            "default": {"@type": "oa:FragmentSelector", "value": _xywh(box)},
-            "item": {"@type": "oa:SvgSelector", "value": svg},
-        },
-    }
-    if manifest_url:
-        on["within"] = {"@id": manifest_url, "@type": "sc:Manifest"}
-    return on

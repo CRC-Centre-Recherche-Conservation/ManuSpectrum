@@ -10,8 +10,9 @@ maps. ``v2_auth1_block`` is the Auth 1.0 block as Presentation 2.1 declares
 it. Every block is the same for every reader.
 
 ``description_401`` is the body of a 401: the requested resource described
-with its services, ``type`` ``Dataset`` (both blocks, the probe naming
-*file_id*) or any other type (the Auth 1.0 block only).
+with its services: both blocks, the probe naming *file_id*, for a stored file
+(*type_* ``Dataset`` or ``Image``), else the Auth 1.0 block only.
+``v2.description_401`` is the Presentation 2.1 form, with the Auth 1.0 block.
 """
 
 from django.conf import settings
@@ -139,7 +140,7 @@ def dataset_services(file_id):
 
 def description_401(url, type_, file_id=None):
     """The 401 body describing *url* as a *type_* with the services a client signs in through."""
-    if type_ == "Dataset" and file_id:
+    if file_id:
         return {
             "@context": [AUTH2_CONTEXT, PRESENTATION_3],
             "id": url,

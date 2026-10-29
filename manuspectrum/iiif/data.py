@@ -17,6 +17,7 @@ mirador-xyviewer refuses a body over 5 MB, so such a file plots in the
 Explorer and not there.
 """
 
+import mimetypes
 import os
 import re
 from dataclasses import dataclass, field
@@ -29,6 +30,8 @@ from manuspectrum.constants.licenses import effective_license
 from manuspectrum.iiif.constants import MEDIA_TYPE_BY_EXTENSION, OCTET_STREAM
 from manuspectrum.observability import metrics
 from manuspectrum.utils.public_visibility import visible_set
+from manuspectrum.utils.role_links import role_node
+from manuspectrum.utils.roles import ROLES
 from manuspectrum.utils.spectrum_preview import is_readable
 from manuspectrum.views.summary_service import readable_nodegroups
 
@@ -36,7 +39,29 @@ _MEDIA_TYPE = re.compile(r"^[a-z]+/[a-z0-9.+-]+$")
 
 
 class Refused(Exception):
-    """The file exists; the reader may not read it."""
+    """The file exists; the reader may not read it. ``kind`` is ``measurement`` or ``micro-imaging``."""
+
+    def __init__(self, file_id, kind="measurement"):
+        super().__init__(file_id)
+        self.kind = kind
+
+    @property
+    def type(self):
+        """The IIIF type of the file's representation: ``Image`` or ``Dataset``."""
+        return resource_type(self.kind)
+
+
+def resource_type(kind):
+    """The IIIF type a file of *kind* is described as."""
+    return "Image" if kind == "micro-imaging" else "Dataset"
+
+
+def kind_of(nodegroup_id):
+    """``micro-imaging`` for a file of the micro-imaging nodegroup, else ``measurement``."""
+    node = role_node(*ROLES["micro"])
+    if node is not None and node.nodegroup_id == str(nodegroup_id):
+        return "micro-imaging"
+    return "measurement"
 
 
 @dataclass(frozen=True)
@@ -66,7 +91,8 @@ def media_type(name, stored):
     """True media type of a file: by extension, else its stored type when it is a plain ``type/subtype``, else octet-stream.
 
     Raw instrument formats (``RAW_INSTRUMENT_EXTENSIONS``) are octet-stream;
-    a ``text/x-*`` type is never trusted.
+    a ``text/x-*`` type is never trusted. An image the stored type does not
+    name gets the type of its extension.
     """
     extension = os.path.splitext(name or "")[1].lower()
     if extension in MEDIA_TYPE_BY_EXTENSION:
@@ -76,7 +102,8 @@ def media_type(name, stored):
     stored = str(stored or "").strip().lower()
     if _MEDIA_TYPE.match(stored) and not stored.startswith("text/x-"):
         return stored
-    return OCTET_STREAM
+    guessed = mimetypes.guess_type(f"x{extension}")[0]
+    return guessed if guessed and guessed.startswith("image/") else OCTET_STREAM
 
 
 def file_allowed(resource_id, nodegroup_id, reader, version=None):
@@ -127,7 +154,7 @@ def readable_file(file_id, reader, version=None):
     nodegroup_id = str(row.tile.nodegroup_id)
     if not file_allowed(resource_id, nodegroup_id, reader, version):
         metrics.READ_REFUSALS.labels(surface="iiif_file").inc()
-        raise Refused(file_id)
+        raise Refused(file_id, kind_of(nodegroup_id))
     entry = file_entry(row.tile.data, file_id)
     path = row.path.path
     return FileRecord(

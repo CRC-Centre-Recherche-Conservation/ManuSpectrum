@@ -365,10 +365,8 @@ def _file_entries(values):
 
 
 def _one(values):
-    """The first text of each language map, joined into one ``none`` string."""
-    return lang.none(
-        ", ".join(t for t in (lang.first_text(v) for v in values if v) if t)
-    )
+    """The first text of each language map, one ``none`` string per value."""
+    return lang.none(*(lang.first_text(v) for v in values if v))
 
 
 def _conditions(values, type_node):
@@ -881,7 +879,7 @@ def _materials(analysis_ids, visible, readable):
         for c in ids
     }
     return {
-        a: lang.joined([t for c in cs for t in texts[c]]) for a, cs in citing.items()
+        a: lang.listed([t for c in cs for t in texts[c]]) for a, cs in citing.items()
     }
 
 
@@ -1005,7 +1003,7 @@ def _build(
                 zones=_in_order("analysis", zones.get(aid, ())),
                 files=tuple(files),
                 imaging=_imaging(v),
-                technique=lang.joined(
+                technique=lang.listed(
                     lang.reference_labels(x) for _, x, _ in v.get("technique", ())
                 ),
                 dates=lang.none(
@@ -1024,7 +1022,7 @@ def _build(
                     ]
                 ),
                 document=name_of.get(document, {}),
-                component=lang.joined(
+                component=lang.listed(
                     name_of.get(r, {}) for r in observed if r in visible.components
                 ),
                 dataset=dataset,

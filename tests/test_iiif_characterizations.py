@@ -212,12 +212,12 @@ class AnnotationTests(CharacterizationCase):
         self.assertTrue(links)
         self.assertFalse(any(str(self.analyses["open"].pk) in link for link in links))
 
-    def test_a_cited_analysis_without_a_zone_is_a_see_also_report(self):
+    def test_a_cited_analysis_without_a_zone_is_a_homepage_report(self):
         annotation = self.lead_white_annotation()
 
         self.assertIn(
             ids.report(self.unlocated.pk),
-            [link["id"] for link in annotation["seeAlso"]],
+            [link["id"] for link in annotation["homepage"]],
         )
         linked = [b["source"]["id"] for b in self.bodies(annotation, "linking")]
         self.assertFalse(any(str(self.unlocated.pk) in link for link in linked))
@@ -259,11 +259,11 @@ class AnalysisMaterialsTests(CharacterizationCase):
 
         self.assertEqual(set(materials), {"en", "fr"})
         self.assertEqual(
-            sorted(materials["en"][0].split(", ")),
+            sorted(materials["en"]),
             ["lead white", "vermilion (probable)"],
         )
         self.assertEqual(
-            sorted(materials["fr"][0].split(", ")),
+            sorted(materials["fr"]),
             ["blanc de plomb", "vermillon (probable)"],
         )
 

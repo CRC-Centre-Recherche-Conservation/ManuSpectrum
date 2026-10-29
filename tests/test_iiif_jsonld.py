@@ -9,7 +9,7 @@ import json
 from django.test import RequestFactory, SimpleTestCase, TestCase
 
 from manuspectrum.constants.xy_presets import XY_PRESETS
-from manuspectrum.iiif import ids, v2, xy_reading
+from manuspectrum.iiif import ids, services, v2, xy_reading
 from manuspectrum.iiif.pages import with_context
 from manuspectrum.views.iiif.context import XYReadingDocView
 from tests import iiif_jsonld
@@ -130,7 +130,8 @@ class DocumentExpansionTests(SimpleTestCase):
     def test_a_v3_annotation_expands_under_ours_and_presentation_3(self):
         document = annotation()
         self.assertEqual(
-            document["@context"], [ids.xy_context(), iiif_jsonld.PRESENTATION_3]
+            document["@context"],
+            [ids.xy_context(), services.AUTH2_CONTEXT, iiif_jsonld.PRESENTATION_3],
         )
 
         (node,) = iiif_jsonld.expand_presentation(document)

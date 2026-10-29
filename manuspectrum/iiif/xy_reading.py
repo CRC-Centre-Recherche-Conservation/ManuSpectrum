@@ -4,7 +4,8 @@ The clean CSV of a file (``/iiif/data/<file>/series.csv``) carries a reading
 of its two columns: ``dialect`` (the CSV this module writes), ``columns``,
 the ``x`` and ``y`` axes (label as a language map, and whether x is drawn
 reversed), ``corrections`` (none: the curve is already corrected) and
-``derivedFrom``, the raw file it comes from. The raw file of a
+``derivedFrom``, the raw file it comes from (with the ``service`` protecting it),
+and ``conformsTo``, the documentation of the version it follows. The raw file of a
 text format carries the reading ``read_series`` applies to it: the columns
 ``apply_config`` reads (``x``, ``yLeft``, ``reference``, ``dark``), and under
 ``reference-normalize`` that correction. Nothing else is published: every key
@@ -26,7 +27,7 @@ import itertools
 import re
 from collections import namedtuple
 
-from manuspectrum.iiif import ids
+from manuspectrum.iiif import ids, services
 from manuspectrum.iiif import language as lang
 from manuspectrum.utils.spectrum_preview import is_supported, series_points
 from manuspectrum.utils.xy_transforms import (
@@ -110,6 +111,7 @@ def raw_reading(config):
     )
     reading = {
         "type": "XYReading",
+        "conformsTo": ids.xy_doc(),
         "columns": [{"index": index, "role": role} for index, role in listed],
     }
     normalize = (
@@ -129,6 +131,7 @@ def derived_from(file, config):
         "type": "Dataset",
         "format": file.media_type,
         "label": raw_label(file),
+        "service": services.dataset_services(file.id),
     }
     if is_supported(file.name):
         derived["xyReading"] = raw_reading(config)
@@ -141,6 +144,7 @@ def xy_reading(file, config):
     reversed_x = bool(_stored_display(config).get("xReversed"))
     return {
         "type": "XYReading",
+        "conformsTo": ids.xy_doc(),
         "dialect": dict(DIALECT),
         "columns": [{"index": 0, "role": "x"}, {"index": 1, "role": "yLeft"}],
         "x": {**_axis(x_axis), "reversed": reversed_x},
@@ -199,6 +203,10 @@ def context_document():
                         "@context": {"none": "@none"},
                     },
                     "Dataset": "http://purl.org/dc/dcmitype/Dataset",
+                    "conformsTo": {
+                        "@id": "http://purl.org/dc/terms/conformsTo",
+                        "@type": "@id",
+                    },
                     "XYReading": "ms_xy:XYReading",
                     "dialect": {
                         "@id": "csvw:dialect",
