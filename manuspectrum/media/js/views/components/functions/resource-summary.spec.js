@@ -128,5 +128,15 @@ describe('resource-summary shell', () => {
 
             expect(applied.parse).not.toHaveBeenCalled();
         });
+
+        it('ignores an empty answer and a context without a model to parse', () => {
+            const applied = { id: 'row-1', graphid: 'g-1', parse: vi.fn() };
+            new ViewModel(applied);
+            mounted.props.onSynced(undefined);
+            new ViewModel({ id: 'row-1', graphid: 'g-1' });
+
+            expect(() => mounted.props.onSynced(stored)).not.toThrow();
+            expect(applied.parse).not.toHaveBeenCalled();
+        });
     });
 });
