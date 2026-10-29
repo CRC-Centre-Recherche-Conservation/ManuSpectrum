@@ -11,7 +11,7 @@
 # NoNewPrivileges: the result mail goes through the setgid sendmail. The engine writes the checkout, the state
 # directory, the backup directories and the metrics directory and drives
 # Docker through the socket, so no filesystem sandbox is applied. PP-8
-# substitutes the two placeholders and installs this file.
+# substitutes the placeholders and installs this file.
 [Unit]
 Description=ManuSpectrum update to %i
 After=docker.service network-online.target
@@ -20,7 +20,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 User=@APP_USER@
-Environment=APP_DIR=@DEPLOY_DIR@/..
+Environment=APP_DIR=@APP_DIR@
 Environment=STATE_DIR=/var/lib/manuspectrum/release
 Environment=RELEASE_LIB_DIR=/usr/local/lib/manuspectrum/release
 ExecStart=/usr/local/lib/manuspectrum/release/release-update.sh %i

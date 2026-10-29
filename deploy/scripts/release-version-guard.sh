@@ -13,7 +13,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/lib-release.sh"
 
 TAG="${1:?usage: release-version-guard.sh TAG [COMMIT]}"
-COMMIT="${2:-refs/tags/$TAG^{commit}}"
+if [ "$#" -ge 2 ]; then COMMIT="$2"; else COMMIT="refs/tags/$TAG^{commit}"; fi
 SETTINGS="manuspectrum/settings.py"
 
 fail() { echo "::error::$*" >&2; exit 1; }

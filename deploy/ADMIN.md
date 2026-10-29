@@ -496,6 +496,11 @@ To remove an operator, take the account out of `release_operators` and run the
 playbook again: the account leaves the group. An update already running is not
 affected, and the playbook refuses to run while an update unit is active.
 
+This restricts non-administrators only. A member of the `sudo` group (every
+account of `admin_users`) keeps full `sudo` and can still run
+`manuspectrum-update`; to withdraw an administrator, remove the account from
+`admin_users` as well.
+
 **Ansible and an update never run together.** While the `app` role runs, the
 file `/run/manuspectrum/ansible-running` exists (root, removed at the end of the
 run, failed or not; `/run` is emptied by a reboot). `--now`, `--at` and a
@@ -629,7 +634,8 @@ in progress at the slot makes it `refused` (`busy`). If one
 fails (a dirty worktree, a moved tag, a failed backup, another update running) the schedule is kept with the outcome `refused` and the reason, the
 announcement is withdrawn and a mail says why. If the host was off or busy and
 the slot passed more than 15 minutes ago without a run, the next watch marks it
-`missed` and mails. **A missed slot is never run late, and never at boot.**
+`missed` and mails. **A missed slot is never run late, and never at boot.** The
+watch reports it at its next hourly run; do not expect the report at boot.
 `--status` shows the outcome; acknowledge it with `sudo manuspectrum-update
 --cancel` (this clears the alert `ReleaseScheduleFailed`), then schedule again or
 install now.
