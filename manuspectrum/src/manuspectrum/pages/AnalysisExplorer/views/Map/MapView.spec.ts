@@ -1175,7 +1175,7 @@ describe("MapView", () => {
         expect(view.find(".third-party").exists()).toBe(false);
         const credits = view.get(".stage > .frame + .credits");
         expect(credits.text()).toBe(
-            "© OpenStreetMap contributors(new tab) · © OpenMapTiles(new tab) · OpenFreeMap(new tab)",
+            "© OpenStreetMap contributors(new tab) · © OpenMapTiles(new tab) · OpenFreeMap(new tab) · Privacy(new tab)",
         );
         expect(
             credits
@@ -1189,10 +1189,15 @@ describe("MapView", () => {
             ["https://www.openstreetmap.org/copyright", "noopener", "_blank"],
             ["https://www.openmaptiles.org/", "noopener", "_blank"],
             ["https://openfreemap.org/", "noopener", "_blank"],
+            [
+                "/en/manuspectrum:about-privacy#third-party-services",
+                "noopener",
+                "_blank",
+            ],
         ]);
         store.setMapState({ borders: true });
         await flushPromises();
-        expect(credits.findAll("a")).toHaveLength(3);
+        expect(credits.findAll("a")).toHaveLength(4);
         store.setMapState({ brush: [1301, 1400] });
         await flushPromises();
         const ohm = view.findAll(".credits a")[3];

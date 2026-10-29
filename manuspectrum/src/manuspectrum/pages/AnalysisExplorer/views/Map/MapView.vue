@@ -13,6 +13,8 @@ import { useMediaQuery } from "@vueuse/core";
 import Drawer from "primevue/drawer";
 import { useGettext } from "vue3-gettext";
 
+import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
+
 import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
 import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
@@ -356,6 +358,8 @@ const bordersLabel = computed(() =>
               true,
           ),
 );
+/** The privacy page's section naming the third-party services the map calls. */
+const privacyHref = `${generateArchesURL("manuspectrum:about-privacy")}#third-party-services`;
 /** The licence credits under the map; OpenHistoricalMap's only while its borders are drawn. */
 const credits = computed<{ href: string; text: string }[]>(() => [
     {
@@ -1682,6 +1686,16 @@ function skipToTimeline(): void {
                                 }}</span></a
                             >
                         </template>
+                        <span aria-hidden="true">{{ " · " }}</span>
+                        <a
+                            rel="noopener"
+                            target="_blank"
+                            :href="privacyHref"
+                            ><span>{{ $gettext("Privacy") }}</span
+                            ><span class="visually-hidden">{{
+                                $gettext("(new tab)")
+                            }}</span></a
+                        >
                     </p>
                     <div
                         v-if="mode === 'territories' && narrow && !failed"
