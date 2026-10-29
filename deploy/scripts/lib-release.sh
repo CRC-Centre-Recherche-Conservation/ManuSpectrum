@@ -377,7 +377,7 @@ release_mail() { # release_mail SUBJECT_SUFFIX BODY
   { [ -n "$suffix" ] && [[ "$suffix" != *[$'\r\n']* ]] && [ -z "$(printf '%s' "$suffix" | LC_ALL=C tr -d '\040-\176')" ]; } || { _release_err "mail subject must be non-empty printable ASCII on one line"; return 1; }
   to="$(release_env_get "${ENV_FILE:?ENV_FILE is not set}" ALERT_EMAILS)" || { _release_err "ALERT_EMAILS is not set"; return 1; }
   from="$(release_env_get "$ENV_FILE" ALERT_EMAIL_FROM)" || { _release_err "ALERT_EMAIL_FROM is not set"; return 1; }
-  addr='^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+$'
+  addr='^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$'
   [[ "$from" =~ $addr ]] || { _release_err "ALERT_EMAIL_FROM is not a plain address"; return 1; }
   [[ "$to" != ,* && "$to" != *, && "$to" != *,,* ]] || { _release_err "ALERT_EMAILS has an empty entry"; return 1; }
   IFS=',' read -r -a list <<<"$to"

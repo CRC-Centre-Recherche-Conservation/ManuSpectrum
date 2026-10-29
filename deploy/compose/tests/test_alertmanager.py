@@ -116,6 +116,15 @@ class RenderTests(RenderBase):
             )
         self.assertNotIn("email_configs", receivers["blackhole"])
 
+    def test_a_single_label_domain_is_accepted(self):
+        result = self.render(
+            ALERT_EMAILS="admin@localhost, b@manuspectrum.test",
+            ALERT_EMAIL_FROM="alerts@localhost",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        (email,) = self.config()["receivers"][1]["email_configs"]
+        self.assertEqual(email["to"], "admin@localhost,b@manuspectrum.test")
+
     def test_empty_list_exits_one_with_a_clear_message(self):
         for value in ("", "   "):
             with self.subTest(value=value):
@@ -131,7 +140,9 @@ class RenderTests(RenderBase):
             "a@manuspectrum.test,,b@manuspectrum.test",
             "a@manuspectrum.test,",
             ",a@manuspectrum.test",
-            "a@manuspectrum",
+            "a@manuspectrum..test",
+            "a@.manuspectrum",
+            "a@",
             "a b@manuspectrum.test",
             "a@manuspectrum.test; b@manuspectrum.test",
             "a@manuspectrum.test'\nreceivers: []",

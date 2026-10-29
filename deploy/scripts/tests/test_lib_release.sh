@@ -253,6 +253,10 @@ printf 'ALERT_EMAILS=ops@manuspectrum.test,\nALERT_EMAIL_FROM=noreply@manuspectr
 refused "mail refuses an empty recipient" release_mail ok body
 printf 'ALERT_EMAILS=ops@manuspectrum.test\rBcc: x@y.test\nALERT_EMAIL_FROM=noreply@manuspectrum.test\n' >"$ENV_FILE"
 refused "mail refuses CR in recipients" release_mail ok body
+printf 'ALERT_EMAILS=ops@localhost,team@manuspectrum.test\nALERT_EMAIL_FROM=noreply@localhost\n' >"$ENV_FILE"
+check "mail accepts a single-label domain" release_mail ok body
+printf 'ALERT_EMAILS=ops@manuspectrum..test\nALERT_EMAIL_FROM=noreply@manuspectrum.test\n' >"$ENV_FILE"
+refused "mail refuses an empty domain label" release_mail ok body
 printf 'ALERT_EMAILS=ops@manuspectrum.test\nALERT_EMAIL_FROM=a@b.test, c@d.test\n' >"$ENV_FILE"
 refused "mail refuses a list as sender" release_mail ok body
 printf 'ALERT_EMAILS=\nALERT_EMAIL_FROM=noreply@manuspectrum.test\n' >"$ENV_FILE"
