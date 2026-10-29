@@ -177,11 +177,15 @@ the first tag is pushed; the chain relies on all of them.
 - The default workflow token permission is `read` (each workflow widens it per
   job).
 - `main` and the integration branch are protected against force-push.
-- When branch protection requires status checks, require `conclusion` (the
-  job that gathers the workflows of `deploy-lint.yml`) and `gitleaks` (the job
-  of `secret-scan.yml`). Both workflows run on every pull request, with no
-  `paths:` filter, so the checks are never missing. The jobs of
-  `stack-proof.yml` are called workflows with generated names.
+- When branch protection requires status checks, require seven, all bound to
+  GitHub Actions: `conclusion` (the job that gathers the workflows of
+  `deploy-lint.yml`), `gitleaks` (the job of `secret-scan.yml`) and, from
+  `main.yml` (the Arches template), `build_feature_branch (3.11)`,
+  `build_feature_branch (3.12)`, `build_feature_branch (3.13)`,
+  `check_python_coverage` and `check_frontend_coverage`. `conclusion` and
+  `gitleaks` run on every pull request, with no `paths:` filter, so the checks
+  are never missing. The jobs of `stack-proof.yml` are called workflows with
+  generated names.
 - The GHCR package is made public after its first push, so a host can pull it
   without credentials.
 
@@ -191,7 +195,10 @@ the first tag is pushed; the chain relies on all of them.
    and `deletion`, and its bypass list is administrators only and holds the
    person who tags.
 2. `main` and the integration branch are protected (no force-push), and the
-   required checks are `conclusion` and `gitleaks`.
+   required checks are `conclusion`, `gitleaks`,
+   `build_feature_branch (3.11)`, `build_feature_branch (3.12)`,
+   `build_feature_branch (3.13)`, `check_python_coverage` and
+   `check_frontend_coverage`.
 3. The default workflow token permission is `read`.
 4. Merge, then wait for the warm-cache run on the integration branch (and, for
    a final release, for `staging.yml` on `main`).
