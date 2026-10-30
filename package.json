@@ -27,7 +27,7 @@
         "@vueuse/core": "^15.0.0",
         "arches": "archesproject/arches#stable/8.1.5",
         "arches_controlled_lists": "archesproject/arches-controlled-lists#stable/1.2.0",
-        "arches_vue_components": "archesproject/arches-vue-components#stable/2.0.2",
+        "arches_vue_components": "archesproject/arches-vue-components#stable/2.0.3",
         "dompurify": "^3.4.17",
         "es-toolkit": "^1.44.0",
         "gridstack": "14.0.0",
