@@ -11,11 +11,15 @@ updates:
       - javascript
     versioning-strategy: "increase"
     target-branch: "dev"
-    # Declared at the exact versions Arches pins, so the back office and the
-    # Analysis Explorer share one copy; they move with an Arches upgrade.
+    # The packages Arches pins exactly and the project follows at the same
+    # version: they move with an Arches upgrade. The list is kept equal to
+    # that set by tests/test_arches_pins.py.
     ignore:
+      - dependency-name: "@primeuix/themes"
       - dependency-name: "leaflet"
       - dependency-name: "leaflet-iiif"
+      - dependency-name: "primeicons"
+      - dependency-name: "primevue"
     groups:
       npm:
         patterns: ["*"]
@@ -58,9 +62,9 @@ updates:
     target-branch: "dev"
     versioning-strategy: "lockfile-only"
     ignore:
-      # Arches minor upgrades are manual (updateproject rebuilds webpack/).
+      # Arches upgrades are manual (updateproject rebuilds webpack/), and the
+      # npm side moves with them.
       - dependency-name: "arches*"
-        update-types: ["version-update:semver-minor", "version-update:semver-major"]
       - dependency-name: "django"
         update-types: ["version-update:semver-major"]
     groups:
