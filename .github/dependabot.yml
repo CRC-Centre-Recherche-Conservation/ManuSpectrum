@@ -2,44 +2,69 @@ version: 2
 updates:
   - package-ecosystem: "npm"
     directory: "/"
+    open-pull-requests-limit: 5
     schedule:
-      interval: "monthly"
+      interval: "weekly"
+      day: "monday"
     labels:
       - dependencies
       - javascript
     versioning-strategy: "increase"
     target-branch: "dev"
+    # The packages Arches pins exactly and the project follows at the same
+    # version: they move with an Arches upgrade. The list is kept equal to
+    # that set by tests/test_arches_pins.py.
+    ignore:
+      - dependency-name: "@primeuix/themes"
+      - dependency-name: "leaflet"
+      - dependency-name: "leaflet-iiif"
+      - dependency-name: "primeicons"
+      - dependency-name: "primevue"
+    groups:
+      npm:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
   # Base image digests of deploy/docker/Dockerfile: a rebuilt python or node
   # image carries the Debian security updates.
   - package-ecosystem: "docker"
     directory: "/deploy/docker"
+    open-pull-requests-limit: 5
     schedule:
       interval: "weekly"
+      day: "wednesday"
     labels:
       - dependencies
       - docker
     target-branch: "dev"
   # Compose service images, pinned by digest.
-  - package-ecosystem: "docker"
+  - package-ecosystem: "docker-compose"
     directory: "/deploy/compose"
+    open-pull-requests-limit: 5
     schedule:
       interval: "weekly"
+      day: "thursday"
     labels:
       - dependencies
       - docker
     target-branch: "dev"
-  - package-ecosystem: "pip"
+    groups:
+      compose-images:
+        patterns: ["*"]
+  - package-ecosystem: "uv"
     directory: "/"
+    open-pull-requests-limit: 5
     schedule:
       interval: "weekly"
+      day: "tuesday"
     labels:
       - dependencies
       - python
     target-branch: "dev"
+    versioning-strategy: "lockfile-only"
     ignore:
-      # Arches minor upgrades are manual (updateproject rebuilds webpack/).
-      - dependency-name: "arches*"
-        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+      # Arches core upgrades are manual (updateproject rebuilds webpack/), and
+      # the npm side moves with them. Arches applications stay free.
+      - dependency-name: "arches"
       - dependency-name: "django"
         update-types: ["version-update:semver-major"]
     groups:

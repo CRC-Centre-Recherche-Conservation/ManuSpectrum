@@ -1,7 +1,7 @@
 name: deploy-lint
 
 # Checks the deployment kit on every pull request: the rehearsal VM kit, the
-# image and Compose files offline, then the image itself (stack-proof.yml:
+# image and Compose files offline, the lock file against pyproject.toml, then the image itself (stack-proof.yml:
 # build, probe, the whole stack on the runner, a Trivy report). No `paths:` filter: the `changes`
 # job decides which jobs have work to do, the others are skipped, and the
 # `conclusion` job always concludes so it can be a required check.
@@ -34,7 +34,9 @@ jobs:
       rehearsal: ${{ steps.filter.outputs.rehearsal }}
       stack: ${{ steps.filter.outputs.stack }}
       image: ${{ steps.filter.outputs.image }}
+      lockfile: ${{ steps.filter.outputs.lockfile }}
       ansible: ${{ steps.filter.outputs.ansible }}
+      frontend: ${{ steps.filter.outputs.frontend }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -45,24 +47,39 @@ jobs:
         id: filter
         env:
           EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          if [ "$EVENT_NAME" != "pull_request" ]; then
-            { echo "rehearsal=true"; echo "stack=true"; echo "image=true"; echo "ansible=true"; } >> "$GITHUB_OUTPUT"
+          # A manual run and a pull request into `main` (a release) run every job.
+          if [ "$EVENT_NAME" != "pull_request" ] || [ "$BASE_REF" = main ]; then
+            { echo "rehearsal=true"; echo "stack=true"; echo "image=true"; echo "lockfile=true"; echo "ansible=true"; echo "frontend=true"; } >> "$GITHUB_OUTPUT"
             exit 0
           fi
           files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"
           matches() { if grep -Eq "$1" <<<"$files"; then echo true; else echo false; fi; }
           workflow='\.github/workflows/(deploy-lint|stack-proof)\.yml$'
-          # check-stack.sh lints every project workflow but main.yml (actionlint).
-          workflows='\.github/workflows/'
-          stack='deploy/(docker|compose|certs|logrotate|systemd|runbooks|sbin)/|deploy/(check-stack\.sh|Makefile|OBSERVABILITY\.md)$|deploy/scripts/|\.gitleaks\.toml$|\.pre-commit-config\.yaml$|\.gitignore$|\.dockerignore$|\.trivyignore$|manuspectrum/templates/errors/500\.htm$|pyproject\.toml$|uv\.lock$'
-          build='pkg$|\.gitmodules$|package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/utils/client_ip\.py$|manuspectrum/management/commands/(rewrite_dev_origin|export_pkg|check_pkg_inventory)\.py$|manuspectrum/(migrations|system_settings)/|manuspectrum/basemaps\.py$|manuspectrum/constants/openfreemap_bright_layers\.json$|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
+          # `stack` runs unless every changed file is known not to be read by
+          # check-stack.sh or its tests (Compose rules, nginx edge, scripts, rendered
+          # systemd units). A new or unknown path therefore runs it. Keep a path out of
+          # this list as soon as a test reads it. The Django tests (`tests/`) and the
+          # frontend never reach the kit. Inside `manuspectrum/` only the five files the
+          # kit's tests read run it (test_workflows.py lists them and checks the rest).
+          deny='^(manuspectrum/(?!(urls|settings)\.py$|observability/(metrics|multiproc)\.py$|templates/errors/500\.htm$)|tests/|releases/|(README|CONTRIBUTING|SECURITY|CODE_OF_CONDUCT)\.md$|CITATION\.cff$|NOTICE$|LICENSE$|\.github/(ISSUE_TEMPLATE/|PULL_REQUEST_TEMPLATE\.md$)|vitest\.[^/]*$|.*\.spec\.(ts|js)$)'
+          # The image proof stays an allow-list (15-30 min): what it builds or installs from.
+          kit='deploy/(docker|compose|certs|logrotate|systemd|runbooks|sbin)/|deploy/(check-stack\.sh|Makefile|OBSERVABILITY\.md)$|deploy/scripts/|\.gitleaks\.toml$|\.pre-commit-config\.yaml$|\.gitignore$|\.dockerignore$|\.trivyignore$|manuspectrum/templates/errors/500\.htm$|manage\.py$|manuspectrum/accounts/|manuspectrum/models\.py$|manuspectrum/sql/|manuspectrum/sql_config\.py$|manuspectrum/management/commands/(activity_summary|set_admin_password|site_notice|site_notice_snapshot)\.py$'
+          frontend='manuspectrum/(src|media)/|\.dockerignore$|package(-lock)?\.json$|webpack/|webpack\.project\.js$|tsconfig\.json$|\.babelrc$|\.browserslistrc$|vitest\.config\.mts$|eslint\.config\.mjs$|\.prettierrc$|\.stylelintrc\.json$|gettext\.config\.js$|deploy/docker/(Dockerfile|check-explorer-bundle\.sh|placeholder\.env)$|manuspectrum/settings(_docker)?\.py$|uv\.lock$|pyproject\.toml$'
+          lock='uv\.lock$'
+          project='pyproject\.toml$'
+          build='\.babelrc$|\.browserslistrc$|tsconfig\.json$|eslint\.config\.mjs$|\.prettierrc$|\.stylelintrc\.json$|gettext\.config\.js$|pkg$|\.gitmodules$|package(-lock)?\.json$|webpack/|webpack\.project\.js$|manuspectrum/(settings|settings_docker|wsgi|celery)\.py$|manuspectrum/views/health\.py$|manuspectrum/utils/client_ip\.py$|manuspectrum/management/commands/(rewrite_dev_origin|export_pkg|check_pkg_inventory)\.py$|manuspectrum/(migrations|system_settings)/|manuspectrum/basemaps\.py$|manuspectrum/constants/openfreemap_bright_layers\.json$|manuspectrum/(observability/|urls\.py$|apps\.py$|tasks\.py$)'
+          stack=false
+          if [ -n "$files" ] && grep -Pvq "$deny" <<<"$files"; then stack=true; fi
           {
             echo "rehearsal=$(matches "^(deploy/rehearsal/|$workflow)")"
-            echo "stack=$(matches "^($stack|$workflows)")"
-            echo "image=$(matches "^($stack|$build|$workflow)")"
+            echo "stack=$stack"
+            echo "image=$(matches "^($kit|$lock|$build|$workflow)")"
+            echo "frontend=$(matches "^($frontend|$workflow)")"
+            echo "lockfile=$(matches "^($lock|$project|$workflow)")"
             echo "ansible=$(matches "^(deploy/ansible/|deploy/systemd/|deploy/logrotate/|deploy/sbin/|deploy/scripts/release-|deploy/scripts/lib-(release|metrics)\\.sh$|deploy/scripts/image-(digest|retag)\\.sh$|deploy/Makefile$|deploy/compose/\\.env\\.example$|deploy/rehearsal/(host|verify)-baseline\\.sh$|$workflow)")"
           } >> "$GITHUB_OUTPUT"
 
@@ -112,12 +129,55 @@ jobs:
       - name: ACME flow against Pebble
         run: bash deploy/certs/tests/test_acme_pebble.sh
 
+  lockfile:
+    needs: changes
+    if: needs.changes.outputs.lockfile == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The uv binary comes from the Dockerfile's pinned image (distroless: no
+      # Python inside), so the lock is judged by the version that installs it;
+      # the runner's Python resolves.
+      - name: uv.lock matches pyproject.toml
+        run: |
+          uv_image="$(sed -n 's/^ARG UV_IMAGE=//p' deploy/docker/Dockerfile)"
+          container="$(docker create "$uv_image")"
+          docker cp "$container:/uv" "$RUNNER_TEMP/uv"
+          docker rm "$container" >/dev/null
+          UV_PYTHON_DOWNLOADS=never UV_CACHE_DIR="$RUNNER_TEMP/uv-cache" "$RUNNER_TEMP/uv" lock --check
+
   image:
     needs: changes
     if: needs.changes.outputs.image == 'true'
     uses: ./.github/workflows/stack-proof.yml
     with:
       git-sha: ${{ github.sha }}
+
+  # The Dockerfile's `frontend` and `collect` stages: the production webpack
+  # build (frontend_configuration comes from the python-deps stage) and the
+  # Explorer bundle check. The Node and Python versions are the Dockerfile's own.
+  frontend-build:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: npm ci, production build and bundle check
+        run: docker build --target collect --file deploy/docker/Dockerfile --tag frontend-build .
 
   ansible:
     needs: changes
@@ -165,7 +225,7 @@ jobs:
           RENDERED_UNITS_DIR="$RUNNER_TEMP/rendered/units" bash ../systemd/tests/test_units.sh
 
   conclusion:
-    needs: [changes, rehearsal-kit, stack, image, ansible]
+    needs: [changes, rehearsal-kit, stack, lockfile, frontend-build, image, ansible]
     if: always()
     runs-on: ubuntu-26.04
     timeout-minutes: 5
