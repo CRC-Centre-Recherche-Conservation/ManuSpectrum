@@ -11,6 +11,7 @@ feed them modified copies.
 """
 
 import copy
+import fnmatch
 import importlib.metadata
 import json
 import re
@@ -25,6 +26,12 @@ from packaging.utils import canonicalize_name
 ROOT = Path(__file__).resolve().parents[1]
 
 ARCHES_PACKAGES = ("arches", "arches-dev-dependencies")
+ARCHES_APPLICATIONS = (
+    "arches-controlled-lists",
+    "arches-querysets",
+    "arches_querysets",
+    "arches-vue-components",
+)
 EXACT_VERSION = re.compile(r"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$")
 ARCHES_REF = re.compile(r"#stable/(\d+\.\d+\.\d+)$")
 
@@ -153,15 +160,28 @@ def uv_ignore_problems(project):
     uv = next(
         u for u in project["dependabot"]["updates"] if u["package-ecosystem"] == "uv"
     )
-    rules = [r for r in uv.get("ignore", []) if r["dependency-name"] == "arches*"]
+    ignores = uv.get("ignore", [])
+    problems = []
+    rules = [r for r in ignores if r["dependency-name"] == "arches"]
     if not rules:
-        return ["dependabot.yml uv `ignore` has no rule for `arches*`."]
-    if any("update-types" in r for r in rules):
-        return [
-            "dependabot.yml uv `ignore` for `arches*` must cover every update "
+        problems.append("dependabot.yml uv `ignore` has no rule for `arches`.")
+    elif any("update-types" in r for r in rules):
+        problems.append(
+            "dependabot.yml uv `ignore` for `arches` must cover every update "
             "type: drop its `update-types`."
+        )
+    for rule in ignores:
+        caught = [
+            name
+            for name in ARCHES_APPLICATIONS
+            if fnmatch.fnmatchcase(name, rule["dependency-name"])
         ]
-    return []
+        if caught:
+            problems.append(
+                f"dependabot.yml uv `ignore` {rule['dependency-name']!r} also "
+                f"holds back {', '.join(caught)}: Arches applications stay free."
+            )
+    return problems
 
 
 def version_problems(project):
@@ -247,7 +267,7 @@ class ArchesPinsTests(unittest.TestCase):
     def test_dependabot_npm_ignore_is_the_pins_arches_imposes(self):
         self.assertNoProblems(dependabot_problems(self.project))
 
-    def test_dependabot_uv_ignores_every_arches_update(self):
+    def test_dependabot_uv_ignores_arches_core_only(self):
         self.assertNoProblems(uv_ignore_problems(self.project))
 
     def test_arches_version_agrees_across_files(self):
@@ -355,6 +375,18 @@ class CheckBehaviourTests(unittest.TestCase):
         )
         uv["ignore"][0]["update-types"] = ["version-update:semver-major"]
         self.assertNotEqual(uv_ignore_problems(project), [])
+
+    def test_a_uv_ignore_glob_catching_an_arches_application_fails(self):
+        project = self.project()
+        uv = next(
+            u
+            for u in project["dependabot"]["updates"]
+            if u["package-ecosystem"] == "uv"
+        )
+        uv["ignore"][0]["dependency-name"] = "arches*"
+        self.assertTrue(
+            any("arches-vue-components" in p for p in uv_ignore_problems(project))
+        )
 
     def test_a_pyproject_pin_of_an_arches_requirement_fails(self):
         pyproject = copy.deepcopy(self.real["pyproject"])

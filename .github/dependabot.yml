@@ -62,9 +62,9 @@ updates:
     target-branch: "dev"
     versioning-strategy: "lockfile-only"
     ignore:
-      # Arches upgrades are manual (updateproject rebuilds webpack/), and the
-      # npm side moves with them.
-      - dependency-name: "arches*"
+      # Arches core upgrades are manual (updateproject rebuilds webpack/), and
+      # the npm side moves with them. Arches applications stay free.
+      - dependency-name: "arches"
       - dependency-name: "django"
         update-types: ["version-update:semver-major"]
     groups:
