@@ -101,6 +101,9 @@ has none, apply stops and names `docker_apt_codename` (set it to a suite that
 exists, for example `noble`); it never installs from another suite silently.
 The Docker repository key is checked against the fingerprint published by
 Docker (`baseline_docker_key_fingerprint`) before it is installed.
+`ssh_permit_root_login` (`no` or `prohibit-password`, required) is both what
+apply writes and what verify expects from `sshd -T`: use `prohibit-password` on
+a host whose administrator keeps a root key.
 `vm.max_map_count` is only verified, never written. sshd is checked with
 `sshd -t` and reloaded, never restarted.
 
