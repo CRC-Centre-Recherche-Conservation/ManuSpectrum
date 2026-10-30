@@ -44,7 +44,7 @@
     quiet: true
     fail_msg: >-
       daemon.json would change and {{ host_running.stdout_lines | default([]) | length }} container(s) run:
-      Docker would restart (live-restore stops them the first time it is set). Pick a quiet moment and
+      Docker would restart, which stops them. Pick a quiet moment and
       run the playbook again with -e docker_restart_ok=true.
 
 - name: Configure the Docker daemon
