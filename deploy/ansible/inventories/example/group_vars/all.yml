@@ -28,6 +28,9 @@ admin_users:
 service_user: manuspectrum
 # yes or no, as printed by `sshd -T`.
 ssh_password_authentication: "no"
+# no or prohibit-password, as printed by `sshd -T`; prohibit-password is for a host
+# whose administrator keeps a root key.
+ssh_permit_root_login: "no"
 # Suite of the Docker apt repository to install from (for example noble). Empty
 # means the distribution's own codename; apply stops when that suite does not
 # exist.

@@ -131,7 +131,7 @@ class HostRoleTests(unittest.TestCase):
         config = json.loads(text)
         self.assertEqual(config["log-driver"], "json-file")
         self.assertEqual(config["log-opts"], {"max-size": "10m", "max-file": "5"})
-        self.assertIs(config["live-restore"], True)
+        self.assertNotIn("live-restore", config)
         self.assertIs(config["no-new-privileges"], True)
 
     def test_daemon_json_is_validated_before_it_replaces_the_old_one(self):
@@ -154,7 +154,7 @@ class HostRoleTests(unittest.TestCase):
                 self.assertNotEqual(args.get("name"), "docker", task["name"])
         restart = [h for h in handlers("host") if h.get("listen") == "restart docker"]
         self.assertEqual([module_of(h) for h in restart], ["debug", "service"])
-        self.assertIn("live-restore", restart[0]["ansible.builtin.debug"]["msg"])
+        self.assertIn("make -C deploy up", restart[0]["ansible.builtin.debug"]["msg"])
         self.assertEqual(restart[1]["ansible.builtin.service"]["state"], "restarted")
 
     def test_handlers_run_before_the_app_role(self):
