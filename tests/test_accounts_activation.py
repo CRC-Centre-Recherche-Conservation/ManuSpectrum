@@ -532,7 +532,7 @@ class LinkLandingTests(Base):
         self.assertContains(response, "Continuez pour lire les conditions")
 
     def test_a_link_clicked_in_a_webmail_reaches_the_form(self):
-        """A cross-site click carries no session cookie over a redirect (#280)."""
+        """A cross-site click carries no session cookie over a redirect."""
         # The production value, which `cross_site_click` reproduces.
         self.assertEqual(settings.SESSION_COOKIE_SAMESITE, "Strict")
         client = Client(enforce_csrf_checks=True)

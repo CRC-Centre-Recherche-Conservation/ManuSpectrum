@@ -197,7 +197,7 @@ class ResetPageTests(TestCase):
         self.assertContains(response, "Continuez pour saisir votre mot de passe")
 
     def test_a_link_clicked_in_a_webmail_reaches_the_password_form(self):
-        """A cross-site click carries no session cookie over a redirect (#280)."""
+        """A cross-site click carries no session cookie over a redirect."""
         client = Client(raise_request_exception=False, enforce_csrf_checks=True)
         landing = cross_site_click(client, self.path)
         self.assertEqual(landing.status_code, 200)

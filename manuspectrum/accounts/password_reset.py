@@ -1,17 +1,18 @@
 """The page a password-reset link opens.
 
-Arches answers `reset/<uidb64>/<token>/` (`password_reset_confirm`) with its
-own subclass of Django's `PasswordResetConfirmView`, which moves a valid token
-into the session on the GET of the link and redirects to `.../set-password/`.
-Clicked in a webmail or a mail client, that redirect reaches the form without
-the `SameSite=Strict` session cookie, so the link was refused (#280, see
-`mailed_links`).
+Overrides the core route `reset/<uidb64>/<token>/` (`password_reset_confirm`,
+`arches/urls.py`, Arches 8.1.5), which Arches answers with
+`arches.app.views.auth.PasswordResetConfirmView` (Django's view with
+`ArchesSetPasswordForm`). Core moves a valid token into the session on the GET
+of the link and redirects to `.../set-password/`; clicked from a webmail, that
+redirect reaches the form without the `SameSite=Strict` session cookie
+(see `mailed_links`).
 
-`PasswordResetConfirmView` answers the link with a « Continue » page instead
-and moves the token into the session on its post (`mailed_links.land`), under
-the session key and to the URL Django's view reads back. Everything else is
-Arches' view unchanged: the placeholder URL, the form (`ArchesSetPasswordForm`),
-the templates and the invalid-link page.
+The only difference: a valid token on a GET answers a « Continue » page, and
+its post moves the token into the session (`mailed_links.land`), under the
+session key and to the URL Django's view reads back. Every other behaviour is
+core's: the placeholder URL, the form, the templates and the invalid-link page.
+Re-check this module against `PasswordResetConfirmView` at each Arches upgrade.
 """
 
 from arches.app.views.auth import (

@@ -158,7 +158,7 @@ class PasswordRulesTests(TestCase):
 
 
 class PasswordResetLinkTests(TestCase):
-    """The mailed reset link: a « Continue » page, then Arches' form (#280)."""
+    """The mailed reset link: a « Continue » page, then Arches' form."""
 
     @classmethod
     def setUpTestData(cls):
@@ -222,6 +222,17 @@ class PasswordResetLinkTests(TestCase):
         self.assertRedirects(done, "/en/reset/done/", fetch_redirect_response=False)
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password(STRONG))
+
+    def test_a_signed_in_browser_keeps_its_session_after_a_cross_site_click(self):
+        other = User.objects.create_user("louis", "louis@manuspectrum.test", STRONG)
+        client = Client()
+        client.force_login(other)
+        cookie = client.cookies[settings.SESSION_COOKIE_NAME].value
+        landing = cross_site_click(client, self.link)
+        self.assertEqual(landing.status_code, 200)
+        self.assertNotIn(settings.SESSION_COOKIE_NAME, landing.cookies)
+        self.assertEqual(client.cookies[settings.SESSION_COOKIE_NAME].value, cookie)
+        self.assertEqual(client.session["_auth_user_id"], str(other.pk))
 
     def test_opening_the_link_stores_nothing_and_does_not_use_it(self):
         scanner = Client()

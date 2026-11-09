@@ -11,8 +11,8 @@ The session cookie is `SameSite=Strict` (`SESSION_COOKIE_SAMESITE`, set by
 Arches and kept). A link clicked in a webmail or a mail client is a cross-site
 navigation, and a browser sends no `Strict` cookie on any request of a redirect
 chain that started on another site, not even one that the chain set itself.
-Storing the token on that first GET and redirecting lost it: the next page had
-no session and refused the link (#280).
+A flow that stores the token on that first GET and redirects loses it: the next
+page has no session and refuses the link.
 
 `land` therefore stores nothing on a GET. It answers a page of the site whose
 « Continue » button posts back to the same URL. That post starts on a page of
@@ -23,12 +23,6 @@ it. A GET neither stores nor consumes anything, so a mail scanner that fetches
 the link leaves it working. The views answer every step with
 `Referrer-Policy: same-origin`: the « Continue » page has the token in its URL,
 and none of its requests to another site carries it in a `Referer`.
-
-Rejected alternatives: a meta refresh or a script that sends the page on is
-not reliably treated as same-site by every browser, and fires for a scanner
-too; the password form served at the link itself, the token in a hidden field,
-would put the token in the URL of the page where the password is typed, and in
-the `Referer` of every request that page makes.
 """
 
 from django.http import HttpResponseNotAllowed, HttpResponseRedirect
