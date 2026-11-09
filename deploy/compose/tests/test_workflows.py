@@ -1,6 +1,9 @@
 """Contracts of the release workflows: what each one may do, parsed from the YAML."""
 
+import os
 import re
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -111,6 +114,274 @@ def write_jobs(workflow, scope):
         if scope in (job.get("permissions") or {})
         and job["permissions"][scope] == "write"
     )
+
+
+KIT_APPLICATION_FILES = (
+    "manuspectrum/urls.py",
+    "manuspectrum/settings.py",
+    "manuspectrum/observability/metrics.py",
+    "manuspectrum/observability/multiproc.py",
+    "manuspectrum/templates/errors/500.htm",
+)
+# Writes its own settings.py in a temporary repository; reads nothing of the tree.
+NOT_TREE_READS = {"deploy/scripts/tests/test_release_version_guard.sh"}
+LITERAL_PATH = re.compile(r"manuspectrum/[\w./-]+")
+JOINED_PATH = re.compile(r'"manuspectrum"((?:\s*/\s*"[^"]+")+)')
+
+
+def application_files_read_by_the_kit():
+    """Files under `manuspectrum/` named by the kit's tests and scripts.
+
+    Both spellings are read: `manuspectrum/a/b.py` literals and
+    `REPO / "manuspectrum" / "a" / "b.py"` joins. Only paths that are files of
+    the repository count; this module is skipped, its paths are test data.
+    """
+    deploy = ROOT / "deploy"
+    sources = {
+        *deploy.glob("**/tests/*.py"),
+        *deploy.glob("**/tests/*.sh"),
+        deploy / "check-stack.sh",
+        deploy / "compose/observability/smoke_queries.py",
+    }
+    found = set()
+    for source in sorted(sources):
+        relative = source.relative_to(ROOT).as_posix()
+        if relative in NOT_TREE_READS or source.resolve() == Path(__file__).resolve():
+            continue
+        text = source.read_text(encoding="utf-8")
+        candidates = {m.group(0).rstrip(".") for m in LITERAL_PATH.finditer(text)}
+        for m in JOINED_PATH.finditer(text):
+            parts = re.findall(r'"([^"]+)"', m.group(1))
+            candidates.add("/".join(["manuspectrum", *parts]))
+        found |= {c for c in candidates if (ROOT / c).is_file()}
+    return sorted(found)
+
+
+class LockfileTests(unittest.TestCase):
+    @staticmethod
+    def filter_script():
+        changes = load("deploy-lint.yml")["jobs"]["changes"]
+        return next(s["run"] for s in steps(changes) if s.get("id") == "filter")
+
+    def triggers(self, changed, base="dev"):
+        """Run the filter's patterns on a changed-file list; return the outputs."""
+        script = self.filter_script().replace(
+            'files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"',
+            'files="$CHANGED"',
+        )
+        out = Path(tempfile.mkdtemp()) / "output"
+        result = subprocess.run(
+            ["bash", "-c", script],
+            env={
+                "PATH": os.environ["PATH"],
+                "EVENT_NAME": "pull_request",
+                "BASE_REF": base,
+                "CHANGED": changed,
+                "GITHUB_OUTPUT": str(out),
+            },
+            check=True,
+        )
+        self.assertEqual(result.returncode, 0)
+        try:
+            return dict(line.split("=") for line in out.read_text().split())
+        finally:
+            out.unlink()
+            out.parent.rmdir()
+
+    def test_pyproject_alone_only_runs_the_lock_check(self):
+        got = self.triggers("pyproject.toml")
+        self.assertEqual(got["image"], "false")
+        self.assertEqual(got["lockfile"], "true")
+
+    def test_files_read_by_the_compose_tests_run_the_stack_job_only(self):
+        for path in (
+            *KIT_APPLICATION_FILES,
+            "deploy/BACKUP.md",
+            "deploy/RELEASES.md",
+            "deploy/SECRETS.md",
+            "deploy/ACCEPTANCE.md",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["stack"], "true")
+        for path in ("deploy/BACKUP.md", "deploy/RELEASES.md"):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["image"], "false")
+
+    def test_build_context_config_files_build_the_image(self):
+        for path in (
+            "tsconfig.json",
+            ".babelrc",
+            ".browserslistrc",
+            "eslint.config.mjs",
+            ".prettierrc",
+            ".stylelintrc.json",
+            "gettext.config.js",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["image"], "true")
+
+    def test_an_unrelated_file_triggers_no_lock_check(self):
+        self.assertEqual(self.triggers("README.md")["lockfile"], "false")
+
+    def test_every_application_file_the_kit_reads_runs_the_stack_job(self):
+        read = application_files_read_by_the_kit()
+        self.assertTrue(set(KIT_APPLICATION_FILES) <= set(read), read)
+        for path in sorted({*read, *KIT_APPLICATION_FILES}):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["stack"], "true")
+
+    def test_application_files_the_kit_does_not_read_stay_out_of_the_stack_job(self):
+        for path in (
+            "manuspectrum/views/x.py",
+            "manuspectrum/accounts/lockout.py",
+            "manuspectrum/management/commands/site_notice.py",
+            "manuspectrum/src/x.ts",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["stack"], "false")
+
+    def test_the_stack_job_runs_unless_every_file_is_known_to_stay_out(self):
+        for changed in (
+            "manuspectrum/src/manuspectrum/pages/X.vue\nmanuspectrum/media/js/a.js",
+            "manuspectrum/media/js/utils/a.spec.js\nvitest.config.mts",
+            "README.md\nreleases/1.0.0.md\nCITATION.cff\nNOTICE",
+            "tests/test_x.py\nmanuspectrum/locale/fr/LC_MESSAGES/django.po",
+            "manuspectrum/templates/views/pages/about.htm",
+            "manuspectrum/views/x.py\nmanuspectrum/accounts/lockout.py",
+            "manuspectrum/management/commands/site_notice.py",
+            ".github/ISSUE_TEMPLATE/bug_report.yml\n.github/PULL_REQUEST_TEMPLATE.md",
+            "",
+        ):
+            with self.subTest(changed=changed):
+                self.assertEqual(self.triggers(changed)["stack"], "false")
+        for changed in (
+            "foo/bar.txt",
+            "manuspectrum/templates/errors/500.htm",
+            "manuspectrum/views/x.py\nmanuspectrum/urls.py",
+            "README.md\ndeploy/scripts/backup.sh",
+            "docs-only.md\nREADME.md",
+            "pyproject.toml",
+            "uv.lock",
+            ".github/workflows/pip-audit.yml",
+        ):
+            with self.subTest(changed=changed):
+                self.assertEqual(self.triggers(changed)["stack"], "true")
+
+    def test_the_image_proof_stays_an_allow_list(self):
+        for path in (
+            "manuspectrum/settings_docker.py",
+            "deploy/docker/entrypoint.sh",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["image"], "true")
+        for path in ("foo/bar.txt", "manuspectrum/views/x.py", "README.md"):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["image"], "false")
+
+    def test_a_pull_request_into_main_runs_every_job(self):
+        self.assertIn('"$BASE_REF" = main', self.filter_script())
+        for changed in ("README.md", ""):
+            with self.subTest(changed=changed):
+                got = self.triggers(changed, base="main")
+                self.assertEqual(
+                    sorted(got),
+                    ["ansible", "frontend", "image", "lockfile", "rehearsal", "stack"],
+                )
+                self.assertEqual(set(got.values()), {"true"})
+        self.assertEqual(set(self.triggers("README.md").values()), {"false"})
+
+    def test_frontend_paths_run_the_frontend_build_only_when_they_change(self):
+        for path in (
+            "manuspectrum/src/manuspectrum/a.vue",
+            "manuspectrum/media/js/a.js",
+            "package-lock.json",
+            "webpack/webpack.common.js",
+            "vitest.config.mts",
+            ".dockerignore",
+            ".github/workflows/deploy-lint.yml",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["frontend"], "true")
+        self.assertEqual(self.triggers("deploy/BACKUP.md")["frontend"], "false")
+
+    def test_the_frontend_job_builds_the_dockerfile_stage_that_checks_the_bundle(self):
+        jobs = load("deploy-lint.yml")["jobs"]
+        job = jobs["frontend-build"]
+        self.assertEqual(job["if"], "needs.changes.outputs.frontend == 'true'")
+        self.assertEqual(job["timeout-minutes"], 15)
+        run = "\n".join(s.get("run", "") for s in steps(job))
+        self.assertIn("--target collect", run)
+        dockerfile = (ROOT / "deploy/docker/Dockerfile").read_text()
+        self.assertRegex(dockerfile, r"(?m)^FROM \S+ AS collect$")
+        self.assertIn("check-explorer-bundle.sh", dockerfile)
+        self.assertIn("frontend-build", jobs["conclusion"]["needs"])
+
+    def test_kit_paths_the_proof_executes_build_the_image(self):
+        for path in (
+            "manage.py",
+            "manuspectrum/accounts/lockout.py",
+            "manuspectrum/models.py",
+            "manuspectrum/sql/triggers/a.sql",
+            "manuspectrum/sql_config.py",
+            "manuspectrum/management/commands/set_admin_password.py",
+            "manuspectrum/management/commands/site_notice.py",
+            "manuspectrum/management/commands/site_notice_snapshot.py",
+            "manuspectrum/management/commands/activity_summary.py",
+            "deploy/runbooks/release.md",
+            "deploy/OBSERVABILITY.md",
+            "deploy/compose/tests/test_x.py",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.triggers(path)["image"], "true")
+
+    def test_check_stack_and_dockerfile_pin_the_same_uv_version(self):
+        pattern = r"uv:(\d+\.\d+\.\d+)"
+        stack = re.search(pattern, (ROOT / "deploy/check-stack.sh").read_text())
+        image = re.search(pattern, (ROOT / "deploy/docker/Dockerfile").read_text())
+        self.assertTrue(stack and image)
+        self.assertEqual(stack[1], image[1])
+
+    def test_the_lockfile_job_uses_the_dockerfiles_uv_image(self):
+        jobs = load("deploy-lint.yml")["jobs"]
+        job = jobs["lockfile"]
+        self.assertEqual(job["needs"], "changes")
+        self.assertEqual(job["if"], "needs.changes.outputs.lockfile == 'true'")
+        self.assertIn("timeout-minutes", job)
+        run = "\n".join(s.get("run", "") for s in steps(job))
+        self.assertIn("lock --check", run)
+        self.assertIn("deploy/docker/Dockerfile", run)
+        self.assertIn("ARG UV_IMAGE=", (ROOT / "deploy/docker/Dockerfile").read_text())
+        checkout = next(s for s in steps(job) if "checkout" in s.get("uses", ""))
+        self.assertIs(checkout["with"]["persist-credentials"], False)
+        self.assertIn("lockfile", jobs["conclusion"]["needs"])
+
+
+class ReleaseScanTests(unittest.TestCase):
+    def test_the_trivy_action_keeps_no_cache(self):
+        scan = steps(load("release.yml")["jobs"]["scan"])
+        trivy = next(s for s in scan if "trivy-action" in s.get("uses", ""))
+        self.assertEqual(str(trivy["with"]["cache"]).lower(), "false")
+
+
+class DependabotTests(unittest.TestCase):
+    @staticmethod
+    def updates():
+        path = ROOT / ".github" / "dependabot.yml"
+        return yaml.safe_load(path.read_text())["updates"]
+
+    def test_python_updates_go_through_uv_and_every_entry_targets_dev(self):
+        updates = self.updates()
+        ecosystems = [u["package-ecosystem"] for u in updates]
+        self.assertIn("uv", ecosystems)
+        self.assertNotIn("pip", ecosystems)
+        self.assertIn("docker-compose", ecosystems)
+        for update in updates:
+            self.assertEqual(update["target-branch"], "dev", update["directory"])
+
+    def test_npm_groups_minor_and_patch(self):
+        npm = next(u for u in self.updates() if u["package-ecosystem"] == "npm")
+        group = next(iter(npm["groups"].values()))
+        self.assertEqual(sorted(group["update-types"]), ["minor", "patch"])
 
 
 class StagingTests(unittest.TestCase):
@@ -361,6 +632,15 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn(f"cosign:{version}@sha256:", script)
 
 
+MAIN_CHECKS = [
+    "build_feature_branch (3.11)",
+    "build_feature_branch (3.12)",
+    "build_feature_branch (3.13)",
+    "check_python_coverage",
+    "check_frontend_coverage",
+]
+
+
 class RequiredChecksTests(unittest.TestCase):
     """The checks RELEASES.md tells to require are jobs that run on every pull request."""
 
@@ -373,7 +653,8 @@ class RequiredChecksTests(unittest.TestCase):
             re.S | re.M,
         )
         assert match, "RELEASES.md no longer names the required checks"
-        return re.findall(r"`([\w-]+)`", match[1].split("The jobs of")[0])
+        names = re.findall(r"`([\w. ()-]+)`", match[1].split("The jobs of")[0])
+        return list(dict.fromkeys(n for n in names if not n.endswith(".yml")))
 
     def test_the_documented_checks_are_jobs_of_workflows_without_a_paths_filter(self):
         runs_everywhere = set()
@@ -387,8 +668,16 @@ class RequiredChecksTests(unittest.TestCase):
                 continue
             runs_everywhere |= set(workflow["jobs"])
         named = self.documented()
-        self.assertEqual(sorted(named), ["conclusion", "gitleaks"])
-        self.assertEqual([c for c in named if c not in runs_everywhere], [])
+        self.assertEqual(
+            sorted(named), sorted(["conclusion", "gitleaks", *MAIN_CHECKS])
+        )
+        # The CI checks come from main.yml (Arches template, not a project workflow).
+        ours = [c for c in named if c not in MAIN_CHECKS]
+        self.assertEqual([c for c in ours if c not in runs_everywhere], [])
+        main = yaml.safe_load((WORKFLOWS / "main.yml").read_text())
+        for check in MAIN_CHECKS:
+            job = re.sub(r" \(.*\)$", "", check)
+            self.assertIn(job, main["jobs"], check)
 
     def test_the_tag_checklist_repeats_the_required_checks(self):
         text = (ROOT / "deploy" / "RELEASES.md").read_text()
