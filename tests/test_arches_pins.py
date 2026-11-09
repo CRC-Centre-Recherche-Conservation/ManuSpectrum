@@ -44,6 +44,8 @@ DIVERGENCES = {
     "arches-dev-dependencies keeps its own nested 5.105.4.",
     "webpack-dev-server": "Override 5.2.7 clears an advisory present in 5.2.5.",
     "@babel/core": "Override ^7.29.6 clears advisories present in 7.29.0.",
+    "@primeuix/themes": "Only the public theme imports it (definePreset, palette), "
+    "whose output equals 1.2.3's; Arches keeps its own nested 1.2.3.",
 }
 
 # (parent package, name) pairs whose nested copy is the parent's own pin, not

@@ -15,7 +15,6 @@ updates:
     # version: they move with an Arches upgrade. The list is kept equal to
     # that set by tests/test_arches_pins.py.
     ignore:
-      - dependency-name: "@primeuix/themes"
       - dependency-name: "leaflet"
       - dependency-name: "leaflet-iiif"
       - dependency-name: "primeicons"
