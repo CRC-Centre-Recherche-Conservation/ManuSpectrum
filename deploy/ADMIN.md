@@ -25,7 +25,7 @@ because an administrator created it. People ask for one through the contact page
    password)**. An account that is inactive, has no e-mail or already has a password is
    skipped with a message. A failed send is reported and counted (`AccountMailFailures`):
    fix the relay (`runbooks/application.md`), then send a new invitation.
-3. The person opens the link, reads and accepts the terms of use (a required checkbox;
+3. The person opens the link, presses « Continue », reads and accepts the terms of use (a required checkbox;
    the acceptance is stored with its date and the version of the terms), chooses a
    password (12 characters or more, upper and lower case, a digit and a symbol; common
    or similar passwords are refused), then sets up two-factor authentication with an
@@ -166,7 +166,7 @@ reference:
   pages, reached from the link on the User page). The list shows the **Two-factor
   authentication** column and filter, the User page an « Account » section. The action clears the secret and mails
   the person a personal link (`account/two-factor/reset/...`, valid 24 hours, single use):
-  they type their password, scan the new QR code, confirm one code and are signed in. A
+  they press « Continue », type their password, scan the new QR code, confirm one code and are signed in. A
   wrong password counts as a failed sign-in (lockout). **Send the two-factor enrolment link
   (superuser)** mails the link again to the selected accounts that hold no secret (lost
   mail, expired link). An account without an address or inactive gets no mail: the action
