@@ -626,9 +626,7 @@ urlpatterns.append(
 )
 
 ### Manifests stored in Arches (imaging manifests, Document facsimiles), as
-### the IIIF output names them. Arches' own manifest/<uuid> is above the
-### language boundary and sends no CORS header: a viewer on another origin
-### cannot load it.
+### the IIIF output names them.
 urlpatterns.append(
     path(
         "iiif/manifest/<uuid:globalid>",

@@ -23,6 +23,7 @@ from django.http import HttpResponse, HttpResponseNotModified
 from manuspectrum.iiif import memo, stored_manifests
 from manuspectrum.iiif.constants import IIIF_MEDIA_TYPE, IIIF_V2_MEDIA_TYPE
 from manuspectrum.iiif.sources import published_manifest
+from manuspectrum.observability import metrics
 from manuspectrum.utils.cache import etag_already_held, renews_csrf_cookie
 from manuspectrum.utils.data_version import data_version
 from manuspectrum.utils.iiif_tools import CanvasIIIF
@@ -45,8 +46,10 @@ class StoredManifestView(IIIFView):
         shared = gate_of(request, version).shared and not renews_csrf_cookie(request)
         etag = f'"{hashlib.sha1(body, usedforsecurity=False).hexdigest()}"'
         if shared and etag_already_held(request, etag):
+            metrics.IIIF_ANSWERS.labels(mode="not_modified").inc()
             response = HttpResponseNotModified()
         else:
+            metrics.IIIF_ANSWERS.labels(mode="shared" if shared else "private").inc()
             response = HttpResponse(
                 body,
                 content_type=(

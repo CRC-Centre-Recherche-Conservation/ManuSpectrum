@@ -247,10 +247,9 @@ class ManifestDataType(BaseDataType):
 
         # 0. A local reference names the stored manifest by its globalid, as
         #    validate() reads it: /manifest/{uuid}, a language-prefixed copy,
-        #    or the /iiif/manifest/{uuid} URL the IIIF output publishes. It is
-        #    resolved here, never fetched: fetching our own site would import
-        #    a duplicate IIIFManifest. The row's url cannot serve as the key,
-        #    since an imported manifest keeps its publisher's URL there.
+        #    or the /iiif/manifest/{uuid} URL the IIIF output publishes. It
+        #    resolves to the stored row and is never fetched. The row's url is
+        #    not the key: an imported manifest keeps its publisher's URL there.
         local_uuid = _match_local_manifest(manifest_url)
         if local_uuid is not None:
             manifest = IIIFManifest.objects.filter(globalid=local_uuid).first()
@@ -275,9 +274,7 @@ class ManifestDataType(BaseDataType):
         #    -> IIIF compliance -> import. Hard failures RAISE so the enclosing
         #    transaction.atomic() rolls back instead of committing a tile that
         #    points at an un-imported manifest (raw URL / dangling /manifest/uuid).
-        #    A local reference that matched no row above names a manifest this
-        #    site does not have: an error, as in validate(), never a fetch of
-        #    our own site.
+        #    A local reference with no stored row raises, as in validate().
         if local_uuid is not None:
             raise FailParsingManifestIIIF(f"Manifest not found: {manifest_url}")
         try:

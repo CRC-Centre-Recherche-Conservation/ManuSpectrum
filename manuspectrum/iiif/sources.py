@@ -4,9 +4,8 @@ A local manifest (``/manifest/<uuid>``) is read from the database, never over
 HTTP; any other is fetched through ``CanvasIIIF``. Legacy hosts
 (``EXPLORER_LEGACY_HOSTS``) are rewritten in every id read.
 
-The IIIF output never names a local manifest by Arches' route, which a viewer
-on another origin cannot read (language prefix, no CORS): ``manifest_id``
-names it at ``ids.stored_manifest``, the route serving ``published_manifest``.
+The IIIF output names a local manifest at ``ids.stored_manifest`` (see
+``manifest_id``), the route serving ``published_manifest``.
 """
 
 import hashlib
@@ -57,8 +56,10 @@ def manifest_id(url):
     """The id the IIIF output gives the manifest a tile names by *url*.
 
     A local ``/manifest/<uuid>`` is ``ids.stored_manifest``, which serves the
-    same stored JSON with the IIIF CORS headers and no language redirect;
-    any other site path is made absolute; an external URL is unchanged.
+    stored JSON; any other site path is made absolute; an external URL is
+    unchanged. For an imported manifest the id names the stored copy, whose
+    served JSON keeps its publisher's ``id`` (``published_manifest``): the
+    copy is the referent, readable cross-origin whatever the publisher's CORS.
     """
     globalid = local_manifest_id(url)
     if globalid:

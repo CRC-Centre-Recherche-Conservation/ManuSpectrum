@@ -81,12 +81,7 @@ def selection_manifest(kind, resource_id):
 
 
 def stored_manifest(globalid):
-    """A manifest stored in Arches (``IIIFManifest``), named by its ``globalid``.
-
-    It replaces Arches' own ``/manifest/<uuid>``, which a viewer on another
-    origin cannot read: that route sits under the language prefix (a bare
-    request is a 302 to ``/en/``) and sends no CORS header.
-    """
+    """The language-neutral IIIF URL of a stored manifest (``IIIFManifest.globalid``)."""
     return _url(f"iiif/manifest/{globalid}")
 
 

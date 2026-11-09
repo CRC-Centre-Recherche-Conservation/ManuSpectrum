@@ -25,6 +25,7 @@ from manuspectrum.iiif import ids
 from manuspectrum.iiif.constants import IIIF_MEDIA_TYPE, IIIF_V2_MEDIA_TYPE
 from tests.explorer_fixtures import FEATURES, SOURCE_MANIFEST, IIIFCase
 from tests.iiif_auth import DEMO, bearer, token_for
+from tests.observability_helpers import delta
 
 BASE = settings.PUBLIC_SERVER_ADDRESS
 
@@ -322,6 +323,30 @@ class HttpTests(StoredManifestCase):
         self.assertEqual(again.status_code, 304)
         self.assertEqual(again["ETag"], first["ETag"])
         self.assertEqual(again["Access-Control-Allow-Origin"], "*")
+
+    def test_a_shared_answer_counts_as_shared(self):
+        with delta("manuspectrum_iiif_answers_total", mode="shared") as shared:
+            self.visitor.get(self.url())
+
+        self.assertEqual(shared.value, 1)
+
+    def test_a_not_modified_answer_counts_as_not_modified(self):
+        etag = self.visitor.get(self.url())["ETag"]
+
+        with delta("manuspectrum_iiif_answers_total", mode="not_modified") as held:
+            self.visitor.get(self.url(), HTTP_IF_NONE_MATCH=etag)
+
+        self.assertEqual(held.value, 1)
+
+    def test_a_private_answer_counts_as_private(self):
+        reader = Client()
+        reader.force_login(self.editor)
+        self.embargo(self.analyses["open"])
+
+        with delta("manuspectrum_iiif_answers_total", mode="private") as private:
+            self.assertEqual(reader.get(self.url()).status_code, 200)
+
+        self.assertEqual(private.value, 1)
 
     def test_a_changed_manifest_changes_the_etag(self):
         first = self.visitor.get(self.url())
