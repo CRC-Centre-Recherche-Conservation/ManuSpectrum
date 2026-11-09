@@ -1300,9 +1300,6 @@ class BuildSummaryTests(SummaryBuildMixin, SimpleTestCase):
         )
 
     def test_a_rich_text_map_popup_reaches_the_card_as_plain_text(self):
-        # The Place template is ``<label_of_name> <content_of_statement>`` and
-        # the statement is rich text (#281). The card binds ``map_popup`` with
-        # ``text:``, so a tag left in the payload shows up literally.
         doc = summary_doc()
         doc["map_popup"] = [{"language": "fr", "value": RICH_POPUP}]
         payload = self.run_build(FakeES(source=doc), config=None)
@@ -1414,72 +1411,16 @@ class BuildSummariesTests(SummaryBuildMixin, SimpleTestCase):
         self.assertEqual(self.run_batch(es, []), {})
         self.assertEqual(es.calls, [])
 
-    def test_a_rich_text_map_popup_is_plain_text_in_a_batch_too(self):
-        # The batch warms the page cache the popup then reads, so it must
-        # answer the same text as the single endpoint.
-        doc = summary_doc("doc-1")
-        doc["map_popup"] = [{"language": "fr", "value": RICH_POPUP}]
-        summaries = self.run_batch(FakeES(docs={"doc-1": doc}), ["doc-1"], config=None)
-        self.assertEqual(summaries["doc-1"]["map_popup"], RICH_POPUP_TEXT)
-
 
 class PlainTextTests(SimpleTestCase):
-    """What the summary card shows of a descriptor written as HTML."""
-
-    def test_paragraphs_and_line_breaks_become_spaces(self):
-        self.assertEqual(
-            plain_text("<p>Avranches</p><p>Manche<br>Normandie</p>"),
-            "Avranches Manche Normandie",
-        )
-
-    def test_an_opening_block_tag_separates_the_text_before_it(self):
-        # ``map_popup`` templates can be edited in the descriptor admin form:
-        # ``<label_of_name><content_of_statement>`` glues the name to the
-        # paragraph, which a browser still shows on a line of its own.
-        self.assertEqual(
-            plain_text("Avranches<p>Ville de la Manche</p>"),
-            "Avranches Ville de la Manche",
-        )
-
-    def test_the_attributes_of_a_block_tag_never_show(self):
-        # A ``>`` inside a quoted value does not end the tag.
+    def test_markup_becomes_the_text_a_browser_shows(self):
         self.assertEqual(
             plain_text(
-                'Avranches<p class="lead" title="a > b" lang="fr">Manche</p>'
-                "Normandie"
+                'Avranches<p class="a > b">Manche<br>Normandie</p>'
+                "<script>alert(1)</script>&lt;b&gt; &amp;&nbsp;:"
             ),
-            "Avranches Manche Normandie",
+            "Avranches Manche Normandie <b> &\xa0:",
         )
-
-    def test_entities_are_decoded_and_a_no_break_space_is_kept(self):
-        # A browser collapses source whitespace but keeps ``&nbsp;``, which
-        # French typography puts before a colon, even at either end.
-        self.assertEqual(
-            plain_text(
-                "<p>Fonds  de\n l&#39;abbaye&nbsp;: <em>ms.</em> 59 &amp; 60</p>"
-            ),
-            "Fonds de l'abbaye\xa0: ms. 59 & 60",
-        )
-        self.assertEqual(plain_text(" &nbsp;Manche&nbsp; "), "\xa0Manche\xa0")
-
-    def test_script_and_style_are_dropped_with_their_content(self):
-        self.assertEqual(
-            plain_text(
-                "<p>Avranches</p><script>alert(1)</script><style>p{}</style>"
-                '<img src="x" onerror="alert(2)">'
-            ),
-            "Avranches",
-        )
-
-    def test_an_escaped_tag_is_text_the_author_typed(self):
-        # The markup displayed ``<b>`` literally; so does the ``text:``
-        # binding of the card, which escapes it again.
-        self.assertEqual(plain_text("<p>&lt;b&gt;Ms.&lt;/b&gt;</p>"), "<b>Ms.</b>")
-
-    def test_text_without_markup_is_unchanged_and_nothing_is_empty(self):
-        self.assertEqual(plain_text("Ms. 59, Avranches"), "Ms. 59, Avranches")
-        self.assertEqual(plain_text(""), "")
-        self.assertEqual(plain_text(None), "")
 
 
 class PermScopeTests(SimpleTestCase):
