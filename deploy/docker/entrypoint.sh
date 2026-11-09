@@ -302,6 +302,10 @@ case "$command" in
     log "loading the data package ${PKG_MOUNT} (several minutes)"
     oneoff python manage.py packages -o load_package -s "$PKG_MOUNT" -y \
       || { log "load_package failed: drop the database and run make -C deploy init again (deploy/README.md, \"A failed first installation\")"; exit 1; }
+    # The package's Frollo TAPAC items carry bare Opentheso ids as URIs (#294):
+    # give them their Frollo address. A no-op once the package carries it.
+    oneoff python manage.py normalize_frollo_uris \
+      || { log "normalize_frollo_uris failed; run make -C deploy manage ARGS=\"normalize_frollo_uris\", then ARGS=\"i18n synclanguages\""; exit 1; }
     oneoff python manage.py i18n synclanguages \
       || { log "i18n synclanguages failed; run make -C deploy manage ARGS=\"i18n synclanguages\""; exit 1; }
     oneoff python manage.py check_pkg_inventory "$PKG_MOUNT/expected-inventory.json" \

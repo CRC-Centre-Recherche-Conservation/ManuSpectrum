@@ -231,10 +231,11 @@ expected="$(printf '%s\n' \
   'manage.py setup_db --force' \
   'manage.py set_admin_password' \
   "manage.py packages -o load_package -s $PKG -y" \
+  'manage.py normalize_frollo_uris' \
   'manage.py i18n synclanguages' \
   "manage.py check_pkg_inventory $PKG/expected-inventory.json")"
 [ "$status" -eq 0 ] && [ "$(cat "$TMP/initlog")" = "$expected" ] && ok=0 || ok=1
-assert "init: setup_db, admin password, load_package, synclanguages, inventory check, in that order" "$ok"
+assert "init: setup_db, admin password, load_package, Frollo URIs, synclanguages, inventory check, in that order" "$ok"
 
 grep -q 'set_controlled_lists_searchable' "$TMP/initlog" && ok=1 || ok=0
 assert "init: the lists are not made searchable by the entrypoint (the package's post SQL does it)" "$ok"
@@ -288,6 +289,11 @@ out="$(run_init FAIL_ON=load_package)" && status=0 || status=$?
 [ "$status" -eq 1 ] && grep -q 'load_package failed' <<<"$out" \
   && ! grep -q synclanguages "$TMP/initlog"
 assert "init: a failed load_package stops init" $?
+
+out="$(run_init FAIL_ON=normalize_frollo_uris)" && status=0 || status=$?
+[ "$status" -eq 1 ] && grep -q 'normalize_frollo_uris failed' <<<"$out" \
+  && ! grep -q synclanguages "$TMP/initlog"
+assert "init: a failed Frollo URI rewrite stops init" $?
 
 out="$(run_init FAIL_ON=synclanguages)" && status=0 || status=$?
 [ "$status" -eq 1 ] && grep -q 'i18n synclanguages failed' <<<"$out"
