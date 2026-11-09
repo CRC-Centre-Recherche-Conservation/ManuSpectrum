@@ -143,7 +143,11 @@ def dependabot_problems(project, divergences=DIVERGENCES):
     npm = next(
         u for u in project["dependabot"]["updates"] if u["package-ecosystem"] == "npm"
     )
-    actual = {rule["dependency-name"] for rule in npm.get("ignore", [])}
+    actual = {
+        rule["dependency-name"]
+        for rule in npm.get("ignore", [])
+        if "update-types" not in rule
+    }
     problems = []
     if expected - actual:
         problems.append(
@@ -336,6 +340,31 @@ class CheckBehaviourTests(unittest.TestCase):
         )
         npm["ignore"].append({"dependency-name": "pinia"})
         self.assertTrue(any("pinia" in p for p in dependabot_problems(project)))
+
+    def test_an_ignore_limited_to_update_types_is_not_a_pin(self):
+        project = self.project()
+        npm = next(
+            u
+            for u in project["dependabot"]["updates"]
+            if u["package-ecosystem"] == "npm"
+        )
+        npm["ignore"].append(
+            {
+                "dependency-name": "pinia",
+                "update-types": ["version-update:semver-major"],
+            }
+        )
+        npm["ignore"] = [
+            (
+                {**r, "update-types": ["version-update:semver-major"]}
+                if r["dependency-name"] == "primevue"
+                else r
+            )
+            for r in npm["ignore"]
+        ]
+        problems = dependabot_problems(project)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("primevue", problems[0])
 
     def test_a_nested_second_copy_fails(self):
         project = self.project()

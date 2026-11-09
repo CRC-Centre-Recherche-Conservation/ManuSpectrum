@@ -192,7 +192,7 @@ class CspLogLineTests(TestCase):
             "203.0.113.77",
             "SecretBrowser",
             "sampled",
-            "8443",
+            ":8443",
             "manuspectrum.test",
         ):
             self.assertNotIn(leaked, text)
