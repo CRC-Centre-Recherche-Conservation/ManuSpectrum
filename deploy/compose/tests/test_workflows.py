@@ -669,7 +669,16 @@ class RequiredChecksTests(unittest.TestCase):
             runs_everywhere |= set(workflow["jobs"])
         named = self.documented()
         self.assertEqual(
-            sorted(named), sorted(["conclusion", "gitleaks", *MAIN_CHECKS])
+            sorted(named),
+            sorted(
+                [
+                    "conclusion",
+                    "gitleaks",
+                    "branch-guard",
+                    "dependency-review",
+                    *MAIN_CHECKS,
+                ]
+            ),
         )
         # The CI checks come from main.yml (Arches template, not a project workflow).
         ours = [c for c in named if c not in MAIN_CHECKS]
