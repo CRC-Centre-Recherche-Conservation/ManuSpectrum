@@ -54,9 +54,9 @@ from manuspectrum.iiif import language as lang
 from manuspectrum.iiif import memo
 from manuspectrum.iiif.data import file_size, media_type
 from manuspectrum.iiif.sources import (
-    absolute_url,
     canvas_index,
     canvases_of,
+    manifest_id,
     manifest_json,
 )
 from manuspectrum.iiif.zones import FeatureRows, annotation_features
@@ -193,6 +193,8 @@ class CharacterizationFact:
 class DocumentFacts:
     """The subject (Document or Component), its Document's source manifest and its analyses.
 
+    ``manifest_url`` is the id of the source manifest
+    (``sources.manifest_id``): a stored one is named at its IIIF route.
     ``canvases`` and ``canvas_labels`` list the canvases of the source manifest
     in order; page *n* is canvas ``n - 1``. ``placed`` maps a kind to
     ``{page number: zone count}`` of the zones placed on the Document by
@@ -391,7 +393,7 @@ def _conditions(values, type_node):
 
 
 def _imaging(values):
-    """``(absolute url, label map)`` of each imaging manifest; the label is the stored manifest's, when local."""
+    """``(id, label map)`` of each imaging manifest (``sources.manifest_id``); the label is the stored manifest's, when local."""
     urls = []
     for _, value, _ in values.get("imaging", ()):
         for item in value if isinstance(value, list) else [value]:
@@ -410,7 +412,7 @@ def _imaging(values):
         labels[url] = label
     return tuple(
         (
-            absolute_url(url) or url,
+            manifest_id(url),
             lang.none(labels.get(url) or labels.get(paths[url]) or ""),
         )
         for url in urls
@@ -1033,7 +1035,7 @@ def _build(
     return DocumentFacts(
         document_id=subject_id,
         name=name_of.get(subject_id, {}),
-        manifest_url=(absolute_url(url) or url) if url else None,
+        manifest_url=manifest_id(url) if url else None,
         canvases=tuple(c["id"] for c in listed),
         canvas_labels=tuple(c["label"] for c in listed),
         analyses=tuple(analyses),

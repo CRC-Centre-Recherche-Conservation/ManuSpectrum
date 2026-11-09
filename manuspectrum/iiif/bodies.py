@@ -92,7 +92,11 @@ def raw_rendering(file):
 
 
 def imaging_body(url, label):
-    """The ``Manifest`` body of an imaging manifest."""
+    """The ``Manifest`` body of an imaging manifest.
+
+    *url* is already the manifest's id (``sources.manifest_id``): for a
+    stored manifest, its language-neutral IIIF route.
+    """
     body = {"id": url, "type": "Manifest"}
     if label:
         body["label"] = label

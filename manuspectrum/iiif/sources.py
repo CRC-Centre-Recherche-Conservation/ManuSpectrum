@@ -3,6 +3,10 @@
 A local manifest (``/manifest/<uuid>``) is read from the database, never over
 HTTP; any other is fetched through ``CanvasIIIF``. Legacy hosts
 (``EXPLORER_LEGACY_HOSTS``) are rewritten in every id read.
+
+The IIIF output never names a local manifest by Arches' route, which a viewer
+on another origin cannot read (language prefix, no CORS): ``manifest_id``
+names it at ``ids.stored_manifest``, the route serving ``published_manifest``.
 """
 
 import hashlib
@@ -15,6 +19,7 @@ from django.conf import settings
 from arches.app.models.models import IIIFManifest
 
 from manuspectrum.constants.licenses import iiif_rights
+from manuspectrum.iiif import ids
 from manuspectrum.iiif import language as lang
 from manuspectrum.utils.iiif_tools import CanvasIIIF
 from manuspectrum.views.explorer.values import rewrite_legacy_url
@@ -33,6 +38,59 @@ def _local_uuid(url):
     ):
         return match["uuid"]
     return None
+
+
+def local_manifest_id(url):
+    """The ``globalid`` (canonical uuid) of the stored manifest a local ``/manifest/<uuid>`` *url* names, else None.
+
+    *url* is read as ``manifest_json`` reads it, a legacy host rewritten
+    first.
+    """
+    local = _local_uuid(rewrite_legacy_url(url or "")) if url else None
+    try:
+        return str(uuid.UUID(local)) if local else None
+    except ValueError:
+        return None
+
+
+def manifest_id(url):
+    """The id the IIIF output gives the manifest a tile names by *url*.
+
+    A local ``/manifest/<uuid>`` is ``ids.stored_manifest``, which serves the
+    same stored JSON with the IIIF CORS headers and no language redirect;
+    any other site path is made absolute; an external URL is unchanged.
+    """
+    globalid = local_manifest_id(url)
+    if globalid:
+        return ids.stored_manifest(globalid)
+    return absolute_url(url) or url
+
+
+def published_manifest(manifest, globalid):
+    """The stored *manifest* of *globalid* as ``ids.stored_manifest`` serves it.
+
+    Legacy hosts are rewritten in every id, as everywhere a manifest is read
+    here, so its canvases keep the ids the annotations target. Its own id
+    becomes the route's URL when it names Arches' ``/manifest/<globalid>``
+    (on any host: Arches writes the host of the request that created it), a
+    manifest's id being the URL it is published at; an imported manifest
+    keeps the id its publisher gave it.
+    """
+    published = _rewritten(manifest)
+    for key in ("id", "@id"):
+        value = published.get(key)
+        if isinstance(value, str) and _names_stored(value, globalid):
+            published[key] = ids.stored_manifest(globalid)
+    return published
+
+
+def _names_stored(url, globalid):
+    """Whether the path of *url* ends with ``/manifest/<globalid>``."""
+    try:
+        match = _LOCAL_MANIFEST.search(urlsplit(url).path)
+    except ValueError:
+        return False
+    return bool(match) and match["uuid"].lower() == str(globalid)
 
 
 def manifest_json(url):

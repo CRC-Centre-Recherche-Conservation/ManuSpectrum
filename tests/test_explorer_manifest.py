@@ -467,7 +467,7 @@ class ManifestRouteTests(CorpusCase):
         fetch.assert_not_called()
         self.assertEqual([c["id"] for c in manifest["items"]], [CANVAS])
         assert_valid_manifest(self, manifest)
-        absolute = f"{settings.PUBLIC_SERVER_ADDRESS}manifest/{stored.globalid}"
+        absolute = ids.stored_manifest(stored.globalid)
         self.assertEqual(manifest["items"][0]["partOf"][0]["id"], absolute)
         self.assertTrue(annotations)
         for annotation in annotations:
@@ -497,6 +497,29 @@ class ManifestRouteTests(CorpusCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.content, b"")
+
+    def test_the_layers_of_a_stored_imaging_manifest_are_part_of_its_iiif_route(self):
+        stored = IIIFManifest.objects.create(
+            label="maXRF X01", url="", manifest=copy.deepcopy(IMAGING_SOURCE)
+        )
+        self.tile(
+            self.analyses["open"],
+            "chemical_imaging_manifest",
+            f"/manifest/{stored.globalid}",
+        )
+
+        manifest = self.manifest(self.document_query())
+
+        part_of = ids.stored_manifest(stored.globalid)
+        self.assertEqual([c["id"] for c in manifest["items"][1:]], list(LAYERS))
+        for layer in manifest["items"][1:]:
+            self.assertEqual(layer["partOf"], [{"id": part_of, "type": "Manifest"}])
+        response = Client().get(
+            part_of[len(settings.PUBLIC_SERVER_ADDRESS) - 1 :],
+            HTTP_ORIGIN="https://viewer.example",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Access-Control-Allow-Origin"], "*")
 
     def test_imaging_layers_are_canvases_with_one_range_per_analysis(self):
         self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)

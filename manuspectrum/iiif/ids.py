@@ -80,6 +80,16 @@ def selection_manifest(kind, resource_id):
     return explorer_manifest(f"ids={prefix}:{resource_id}:-")
 
 
+def stored_manifest(globalid):
+    """A manifest stored in Arches (``IIIFManifest``), named by its ``globalid``.
+
+    It replaces Arches' own ``/manifest/<uuid>``, which a viewer on another
+    origin cannot read: that route sits under the language prefix (a bare
+    request is a 302 to ``/en/``) and sends no CORS header.
+    """
+    return _url(f"iiif/manifest/{globalid}")
+
+
 def data_raw(file_id):
     """The stored file, served with its true media type."""
     return _url(f"iiif/data/{file_id}/raw")

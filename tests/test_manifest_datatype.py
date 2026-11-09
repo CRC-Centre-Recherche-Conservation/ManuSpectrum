@@ -940,6 +940,39 @@ class TestLocalManifestMatch(TestCase):
             self.manifest._match_local_manifest("https://example.org/iiif/manifest")
         )
 
+    # The IIIF output names a stored manifest /iiif/manifest/{uuid}
+    # (manuspectrum.iiif.ids.stored_manifest), so a URL copied out of an
+    # annotation or a viewer names the same local manifest.
+    def test_relative_iiif_route_is_local(self):
+        self.assertEqual(
+            self.manifest._match_local_manifest(f"/iiif/manifest/{self.UUID}"),
+            self.UUID,
+        )
+
+    @override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
+    def test_iiif_route_on_canonical_host_is_local(self):
+        self.assertEqual(
+            self.manifest._match_local_manifest(
+                f"https://manuspectrum.example/iiif/manifest/{self.UUID}"
+            ),
+            self.UUID,
+        )
+
+    @override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
+    def test_iiif_route_on_foreign_host_is_not_local(self):
+        self.assertIsNone(
+            self.manifest._match_local_manifest(
+                f"https://evil.com/iiif/manifest/{self.UUID}"
+            )
+        )
+
+    def test_language_prefixed_iiif_route_is_not_local(self):
+        # The IIIF route sits below the language boundary: /en/iiif/... is
+        # not one of its URLs.
+        self.assertIsNone(
+            self.manifest._match_local_manifest(f"/en/iiif/manifest/{self.UUID}")
+        )
+
 
 class TestGetPrefLabel(TestCase):
     """Tests for get_pref_label class method."""
@@ -1221,6 +1254,123 @@ class TestPreTileSave(TestCase):
         mock_manifest_model.objects.filter.assert_called_once_with(
             url="/manifest/abc-123"
         )
+
+
+@override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
+class TestLocalReferenceToStoredManifest(TestCase):
+    """A URL the IIIF output publishes resolves to the stored row, never fetched.
+
+    The IIIF output names a stored manifest /iiif/manifest/{uuid} (imaging
+    Manifest bodies, target partOf/within). A curator who pastes that URL
+    into a manifest widget must get the existing IIIFManifest back: fetching
+    it from our own site would import a duplicate. The canonical host is a
+    public name here (it resolves publicly in production), so without the
+    local resolution the datatype would go on to fetch it.
+    """
+
+    def setUp(self):
+        translation.activate("en")
+        self.addCleanup(translation.deactivate)
+        with patch("arches.app.models.models.Widget") as mock_widget:
+            mock_widget.objects.get.return_value = MagicMock()
+            from manuspectrum.datatypes.manifest import ManifestDataType
+
+            self.datatype = ManifestDataType()
+        from arches.app.models.models import IIIFManifest
+        from manuspectrum.iiif import ids
+
+        self.IIIFManifest = IIIFManifest
+        self.ids = ids
+        # Created with Arches' Image Service Manager: its url is the local path.
+        globalid = uuid.uuid4()
+        self.created = IIIFManifest.objects.create(
+            globalid=globalid,
+            url=f"/manifest/{globalid}",
+            label="Imaging",
+            manifest=ManifestTestData.VALID_V3,
+        )
+        # Imported from another site: its url is the publisher's URL, while
+        # tiles (and so the IIIF output) name it by its globalid.
+        self.imported = IIIFManifest.objects.create(
+            globalid=uuid.uuid4(),
+            url="https://example.org/iiif/book1/manifest",
+            label="Book 1",
+            manifest=ManifestTestData.VALID_V3,
+        )
+
+        # Were the URL fetched, it would answer the stored JSON, as our own
+        # site does: the datatype would then import it as a new manifest.
+        resolver = resolves_publicly()
+        resolver.start()
+        self.addCleanup(resolver.stop)
+        response = MagicMock()
+        response.json.return_value = ManifestTestData.VALID_V3
+        fetcher = patch(
+            "manuspectrum.datatypes.manifest.fetch_iiif_manifest",
+            return_value=response,
+        )
+        self.fetch = fetcher.start()
+        self.addCleanup(fetcher.stop)
+
+    def _pre_tile_save(self, value):
+        nodeid = str(uuid.uuid4())
+        tile = MagicMock()
+        tile.data = {nodeid: value}
+        self.datatype.pre_tile_save(tile, nodeid)
+        return tile.data[nodeid]
+
+    def _assert_resolves(self, value, manifest):
+        before = self.IIIFManifest.objects.count()
+        stored = self._pre_tile_save(value)
+        self.fetch.assert_not_called()
+        self.assertEqual(self.IIIFManifest.objects.count(), before)
+        self.assertEqual(stored, f"/manifest/{manifest.globalid}")
+
+    def test_the_published_url_resolves_to_the_stored_manifest(self):
+        url = self.ids.stored_manifest(self.created.globalid)
+        self.assertTrue(url.startswith("https://manuspectrum.example/iiif/manifest/"))
+        self._assert_resolves(url, self.created)
+
+    def test_the_relative_route_resolves_to_the_stored_manifest(self):
+        self._assert_resolves(f"/iiif/manifest/{self.created.globalid}", self.created)
+
+    def test_an_imported_manifest_named_by_the_route_is_not_imported_again(self):
+        self._assert_resolves(
+            self.ids.stored_manifest(self.imported.globalid), self.imported
+        )
+
+    def test_every_local_form_resolves_by_globalid(self):
+        # The row's url is no key: an imported manifest keeps its
+        # publisher's URL there, while its tiles store /manifest/{globalid}.
+        for value, manifest in (
+            (f"/manifest/{self.imported.globalid}", self.imported),
+            (f"/en/manifest/{self.created.globalid}", self.created),
+            (
+                f"https://manuspectrum.example/fr/manifest/{self.imported.globalid}",
+                self.imported,
+            ),
+        ):
+            with self.subTest(value=value):
+                self._assert_resolves(value, manifest)
+
+    def test_an_unknown_manifest_on_the_route_is_an_error_not_a_fetch(self):
+        from manuspectrum.datatypes.manifest import FailParsingManifestIIIF
+
+        before = self.IIIFManifest.objects.count()
+        with self.assertRaisesMessage(FailParsingManifestIIIF, "Manifest not found"):
+            self._pre_tile_save(self.ids.stored_manifest(uuid.uuid4()))
+        self.fetch.assert_not_called()
+        self.assertEqual(self.IIIFManifest.objects.count(), before)
+
+    def test_validate_accepts_the_relative_route(self):
+        self.assertEqual(
+            self.datatype.validate(f"/iiif/manifest/{self.created.globalid}"), []
+        )
+
+    def test_validate_reports_an_unknown_manifest_on_the_route(self):
+        errors = self.datatype.validate(self.ids.stored_manifest(uuid.uuid4()))
+        self.assertEqual(len(errors), 1)
+        self.assertIn("not found", str(errors[0]["message"]).lower())
 
 
 # ======================================================================

@@ -42,6 +42,7 @@ from manuspectrum.views.iiif.auth import (
 )
 from manuspectrum.views.iiif.content_state import ContentStateView
 from manuspectrum.views.iiif.data import RawDataView, SeriesDataView
+from manuspectrum.views.iiif.manifests import StoredManifestView
 from manuspectrum.views.iiif.annotations import (
     AnnotationView,
     AnnotationViewV2,
@@ -621,6 +622,18 @@ urlpatterns.append(
         "iiif/v3/content-state/<uuid:resource_id>/<uuid:feature_id>",
         ContentStateView.as_view(),
         name="iiif-v3-content-state",
+    )
+)
+
+### Manifests stored in Arches (imaging manifests, Document facsimiles), as
+### the IIIF output names them. Arches' own manifest/<uuid> is above the
+### language boundary and sends no CORS header: a viewer on another origin
+### cannot load it.
+urlpatterns.append(
+    path(
+        "iiif/manifest/<uuid:globalid>",
+        StoredManifestView.as_view(),
+        name="iiif-manifest",
     )
 )
 

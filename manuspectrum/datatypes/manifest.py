@@ -33,13 +33,17 @@ class FailParsingManifestIIIF(Exception):
 # Local IIIF manifest reference: /manifest/{uuid4}, optionally absolute and
 # optionally language-prefixed. Tiles store the bare path, but every Arches
 # route lives under a language prefix, so /en/manifest/{uuid} is the URL a
-# curator copies out of the address bar and pastes back in.
+# curator copies out of the address bar and pastes back in. The IIIF output
+# names the same stored manifest /iiif/manifest/{uuid} (the language-neutral
+# route a viewer on another origin can read, see manuspectrum.iiif.sources),
+# so a URL copied out of an annotation or a viewer is local too. That route
+# has no language-prefixed form.
 _LANGUAGE_PREFIX_RE = "|".join(
     re.escape(code) for code, _label in django_settings.LANGUAGES
 )
 _LOCAL_MANIFEST_RE = re.compile(
     r"^(?:https?://[^/]+)?"
-    r"(?:/(?:" + _LANGUAGE_PREFIX_RE + r"))?"
+    r"(?:/iiif|/(?:" + _LANGUAGE_PREFIX_RE + r"))?"
     r"/manifest/"
     r"(?P<uuid>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$",
     re.IGNORECASE,
@@ -73,8 +77,10 @@ def get_local_hosts():
 def _match_local_manifest(url):
     """Return the local manifest UUID iff ``url`` points at THIS server.
 
-    Accepts a relative ``/manifest/{uuid}`` path or an absolute URL whose host
-    is in ``get_local_hosts()``. Returns ``None`` for any other host (e.g.
+    Accepts a relative path in any form ``_LOCAL_MANIFEST_RE`` knows
+    (``/manifest/{uuid}``, language-prefixed, or ``/iiif/manifest/{uuid}``)
+    or such a path on an absolute URL whose host is in ``get_local_hosts()``.
+    Returns ``None`` for any other host (e.g.
     ``http://evil.com/manifest/{uuid}``) so it is handled as an external URL.
     The authority is ``urlparse(url).hostname`` (NOT the regex host group), so
     userinfo tricks like ``http://localhost@evil.com/...`` cannot bypass it.
@@ -239,6 +245,19 @@ class ManifestDataType(BaseDataType):
 
         manifest_url = self._normalize_url(value)
 
+        # 0. A local reference names the stored manifest by its globalid, as
+        #    validate() reads it: /manifest/{uuid}, a language-prefixed copy,
+        #    or the /iiif/manifest/{uuid} URL the IIIF output publishes. It is
+        #    resolved here, never fetched: fetching our own site would import
+        #    a duplicate IIIFManifest. The row's url cannot serve as the key,
+        #    since an imported manifest keeps its publisher's URL there.
+        local_uuid = _match_local_manifest(manifest_url)
+        if local_uuid is not None:
+            manifest = IIIFManifest.objects.filter(globalid=local_uuid).first()
+            if manifest:
+                tile.data[str(nodeid)] = f"/manifest/{manifest.globalid}"
+                return
+
         # 1. Already-known local manifest (relative path, or our own host).
         relative_path = self._to_relative_path(manifest_url)
         manifest = IIIFManifest.objects.filter(url=relative_path).first()
@@ -256,6 +275,11 @@ class ManifestDataType(BaseDataType):
         #    -> IIIF compliance -> import. Hard failures RAISE so the enclosing
         #    transaction.atomic() rolls back instead of committing a tile that
         #    points at an un-imported manifest (raw URL / dangling /manifest/uuid).
+        #    A local reference that matched no row above names a manifest this
+        #    site does not have: an error, as in validate(), never a fetch of
+        #    our own site.
+        if local_uuid is not None:
+            raise FailParsingManifestIIIF(f"Manifest not found: {manifest_url}")
         try:
             _validate_url_format(manifest_url)
         except ValidationError as exc:
