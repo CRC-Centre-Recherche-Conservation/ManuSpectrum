@@ -9,7 +9,7 @@ Roles, played in order:
 | Role | What it does |
 |---|---|
 | `preflight` | Assertions only: OS, memory, CPUs, free space, Docker version, `vm.max_map_count`, clock, ports 80/443, DNS (warning), SMTP relay. |
-| `baseline` | `baseline_mode: apply` sets the system baseline (accounts, sshd, UFW, fail2ban, Docker CE, data mount, unattended-upgrades, postfix); both modes then run the same assertion list on the host's effective state (`sshd -T`, `ufw status`, `apt-config dump`, `findmnt`...). |
+| `baseline` | `baseline_mode: apply` sets the system baseline (accounts, sshd, UFW, fail2ban, Docker CE, data mount, unattended-upgrades, postfix); both modes then run the same assertion list on the host's effective state (`sshd -T`, `ufw status verbose`, `apt-config dump`, `findmnt`...). |
 | `host` | `/etc/docker/daemon.json` (validated by `dockerd --validate`) and the journald drop-in. It refuses to overwrite a `daemon.json` that holds other keys, and, when containers run and the file would change, needs `-e docker_restart_ok=true` (Docker restarts). |
 | `app` | `make`, `git`, `openssl`, `python3`, `curl`, `tzdata` and `util-linux` (both modes), directories (and the parent of `SECRETS_DIR`), checkout, `.env`, logrotate and systemd units, the release programs and access rule (below), then the gates, `make up`, the checks and the timers. |
 
