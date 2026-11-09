@@ -1,0 +1,44 @@
+name: branch-guard
+
+# A pull request into main comes from dev, a release/X.Y.Z branch or a
+# hotfix/X.Y.Z branch of this repository (deploy/RELEASES.md). Runs on every
+# pull request so the check can be required on every protected branch: any
+# other base passes at once. `edited` re-runs it when the base changes.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions: {}
+
+concurrency:
+  group: branch-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  branch-guard:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 2
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Source branch
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          if [ "$BASE_REF" != main ]; then
+            echo "Base $BASE_REF: no rule."
+            exit 0
+          fi
+          if [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::A pull request into main comes from a branch of this repository."
+            exit 1
+          fi
+          if [[ "$HEAD_REF" == dev || "$HEAD_REF" =~ ^(release|hotfix)/[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "$HEAD_REF may target main."
+            exit 0
+          fi
+          echo "::error::$HEAD_REF may not target main: only dev, release/X.Y.Z or hotfix/X.Y.Z (deploy/RELEASES.md)."
+          exit 1
