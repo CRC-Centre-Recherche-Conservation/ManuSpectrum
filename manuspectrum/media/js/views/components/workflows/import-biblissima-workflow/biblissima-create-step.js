@@ -65,7 +65,8 @@
  *
  * Each item carries a `typeConceptId` observable — the concept id, which is
  * also its controlled list item id — bridged to an inline `reference-select-widget`
- * editor by `typeReference`. Component items additionally have a
+ * editor by `typeReference`, which carries the labels of that list item in
+ * every language (`loadTypeItems`). Component items additionally have a
  * `typeIsFallback` flag set by the backend resolver: it's ``true`` **only**
  * when no Biblissima input matched the type mapping at all, so that an
  * explicit "Enluminure" (which genuinely matches the mapping) isn't
@@ -555,15 +556,52 @@ const viewModel = function(params) {
     // The labels have to be carried, not just the id: the widget renders the
     // selection through `getPrefLabel`, which looks for a prefLabel in the
     // ACTIVE language and falls back to "Unlabeled Item" when the array holds
-    // none. So we keep whatever the widget hands us on write, and synthesise an
-    // entry from the badge label otherwise — which also keeps the dropdown and
-    // the badge showing the same wording.
+    // none. The reference is therefore built from the list item itself, with
+    // every label of every language, as a value picked from the dropdown is
+    // (#290): a reference holding the active language only would show
+    // "Unlabeled Item" once the user switches language. Until the list is read
+    // (or if it cannot be), the widget's own pick is kept, else a display-only
+    // entry from the badge label stands in; the backend never stores it, it
+    // rebuilds the tile value from `conceptMappings.type`.
+    this.typeItems = ko.observable({});
+
+    // Reads the type list from the endpoint the reference-select widget itself
+    // queries, and keeps per item what a pick from the dropdown would carry:
+    // its labels (prefLabel and altLabel), list id and uri.
+    this.loadTypeItems = async () => {
+        const listId = ko.unwrap(self.typeControlledList);
+        try {
+            const resp = await fetch(
+                `${arches.urls.controlled_list_filtered(listId)}?flat=true`
+            );
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            const byId = {};
+            (data.items || []).forEach((listItem) => {
+                byId[listItem.id] = {
+                    labels: (listItem.values || []).filter((value) =>
+                        ['prefLabel', 'altLabel'].includes(value.valuetype_id)
+                    ),
+                    list_id: listItem.list_id,
+                    uri: listItem.uri,
+                };
+            });
+            self.typeItems(byId);
+        } catch (err) {
+            console.warn(`Cannot read the type list ${listId}`, err);
+        }
+    };
+
     this._attachTypeReference = (item) => {
         const pickedLabels = ko.observable(null);
         item.typeReference = ko.pureComputed({
             read: () => {
                 const conceptId = item.typeConceptId();
                 if (!conceptId) return null;
+                const listItem = self.typeItems()[conceptId];
+                if (listItem && listItem.labels.length) {
+                    return [{ ...listItem, labels: [...listItem.labels] }];
+                }
                 const kept = pickedLabels();
                 const labels =
                     kept && kept[0]?.list_item_id === conceptId
@@ -1692,6 +1730,8 @@ const viewModel = function(params) {
     //    that merge-adds newly discovered deps (e.g. Naples production
     //    place) without losing the first-pass deps (Paris, Groups).
     this.initializeItems();
+    // Independent of the rest: only the inline type editor reads it.
+    self.loadTypeItems();
     (async () => {
         // Parent-resolver runs in parallel with deps/enrichment in
         // Component mode — they are independent: parent resolution hits

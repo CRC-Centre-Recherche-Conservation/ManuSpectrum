@@ -120,6 +120,7 @@ vi.mock('arches', () => ({
         urls: {
             search_results: '/search/results',
             api_resources: (id) => `/api/resources/${id}`,
+            controlled_list_filtered: (id) => `/api/controlled_list_filtered/${id}`,
         },
     },
 }));
@@ -319,6 +320,114 @@ describe('biblissima-create-step', () => {
             item.typeConceptId(null);
 
             expect(item.typeReference()).toBeNull();
+        });
+    });
+
+    // =========================================================================
+    // typeReference built from the list item (#290): a reference holding the
+    // active language only shows "Unlabeled Item" in the other one.
+    // =========================================================================
+
+    describe('typeReference from the list item', () => {
+        const LIST_DOC_TYPE = '73cf3108-5fef-429b-a92f-24074871aed9';
+        const LIST_COMP_TYPE = 'e85080b2-c39b-4e37-b6bc-b57d34092b7b';
+        const MANUSCRIT = '56c61151-3bc5-45b4-957e-3cccde26abe7';
+        const LETTRINE = 'b6c7e3dc-38dd-42f9-98fd-eb1827b3c37b';
+
+        const value = (itemId, id, valuetype, language, text) => ({
+            id,
+            list_item_id: itemId,
+            valuetype_id: valuetype,
+            language_id: language,
+            value: text,
+        });
+
+        // What `api/controlled_list_filtered/<list>?flat=true` returns for an item.
+        const listItem = (id, listId, values) => ({
+            id,
+            list_id: listId,
+            uri: `https://manuspectrum.test/${id}`,
+            values,
+        });
+
+        const manuscrit = listItem(MANUSCRIT, LIST_DOC_TYPE, [
+            value(MANUSCRIT, 'v-fr', 'prefLabel', 'fr', 'manuscrit'),
+            value(MANUSCRIT, 'v-en', 'prefLabel', 'en', 'manuscript'),
+            value(MANUSCRIT, 'v-alt', 'altLabel', 'fr', 'codex'),
+            value(MANUSCRIT, 'v-note', 'scopeNote', 'en', 'A handwritten book.'),
+        ]);
+        const lettrine = listItem(LETTRINE, LIST_DOC_TYPE, [
+            value(LETTRINE, 'l-fr', 'prefLabel', 'fr', 'lettrine'),
+            value(LETTRINE, 'l-en', 'prefLabel', 'en', 'initial'),
+        ]);
+
+        // The list endpoint answers with `items`, every other init call as usual.
+        const listFetch = (items, listOk = true) => vi.fn().mockImplementation((url) =>
+            Promise.resolve(
+                String(url).startsWith('/api/controlled_list_filtered/')
+                    ? { ok: listOk, status: listOk ? 200 : 500, json: () => Promise.resolve({ items }) }
+                    : { ok: true, json: () => Promise.resolve({ results: [], resourceId: null }) }
+            )
+        );
+
+        it('carries every label of every language, not the active language only', async () => {
+            const fetchMock = listFetch([manuscrit, lettrine]);
+            const vm = await makeViewModel([makeRawItem()], 'Document', fetchMock);
+
+            const [reference] = vm.items()[0].typeReference();
+
+            expect(reference.labels.map((l) => l.id)).toEqual(['v-fr', 'v-en', 'v-alt']);
+            expect(
+                reference.labels
+                    .filter((l) => l.valuetype_id === 'prefLabel')
+                    .map((l) => l.language_id)
+                    .sort()
+            ).toEqual(['en', 'fr']);
+            expect(reference.list_id).toBe(LIST_DOC_TYPE);
+            expect(reference.uri).toBe(manuscrit.uri);
+            expect(fetchMock).toHaveBeenCalledWith(
+                `/api/controlled_list_filtered/${LIST_DOC_TYPE}?flat=true`
+            );
+        });
+
+        it('reads the Component type list in Component mode', async () => {
+            const fetchMock = listFetch([]);
+            await makeViewModel([makeRawItem()], 'Component', fetchMock);
+
+            expect(fetchMock).toHaveBeenCalledWith(
+                `/api/controlled_list_filtered/${LIST_COMP_TYPE}?flat=true`
+            );
+        });
+
+        it('follows the type when it changes', async () => {
+            const vm = await makeViewModel([makeRawItem()], 'Document', listFetch([manuscrit, lettrine]));
+            const item = vm.items()[0];
+
+            item.typeConceptId(LETTRINE);
+
+            const [reference] = item.typeReference();
+            expect(reference.labels.map((l) => l.value)).toEqual(['lettrine', 'initial']);
+        });
+
+        it('hands the widget a copy, so the list read stays as it came', async () => {
+            const vm = await makeViewModel([makeRawItem()], 'Document', listFetch([manuscrit]));
+            const item = vm.items()[0];
+
+            item.typeReference()[0].labels.pop();
+
+            expect(item.typeReference()[0].labels).toHaveLength(3);
+        });
+
+        it('keeps the badge label as a stand-in when the list cannot be read', async () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const vm = await makeViewModel([makeRawItem()], 'Document', listFetch([manuscrit], false));
+            const item = vm.items()[0];
+
+            const [reference] = item.typeReference();
+
+            expect(reference.labels).toHaveLength(1);
+            expect(reference.labels[0].value).toBe(vm.typeBadgeLabel(item));
+            expect(warn).toHaveBeenCalled();
         });
     });
 
