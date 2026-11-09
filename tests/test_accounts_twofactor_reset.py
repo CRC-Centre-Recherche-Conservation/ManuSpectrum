@@ -7,11 +7,12 @@ from unittest import mock
 import pyotp
 from arches.app.models.models import UserProfile
 from axes.models import AccessAttempt
+from django.conf import settings
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import User
 from django.core import mail, signing
 from django.core.cache import cache
-from django.utils import timezone
+from django.utils import timezone, translation
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
@@ -19,7 +20,7 @@ from manuspectrum.accounts import twofactor
 from manuspectrum.accounts.terms import TERMS_VERSION
 from manuspectrum.models import TermsAcceptance
 from manuspectrum.accounts.twofactor import decrypt_secret, encrypt_secret
-from tests.test_accounts_activation import browser_post
+from tests.test_accounts_activation import browser_post, cross_site_click, open_link
 from tests.test_accounts_twofactor import PASSWORD, WRONG, enrol, stored
 from tests.totp import current_code
 
@@ -165,23 +166,72 @@ class ResetPageTests(TestCase):
         self.page = "/en/account/two-factor/reset/enrol"
 
     def open(self):
-        response = self.client.get(self.path)
+        response = open_link(self.client, self.path)
         self.assertRedirects(response, self.page, fetch_redirect_response=False)
         return response
 
-    def test_the_link_moves_its_token_to_the_session(self):
-        response = self.open()
+    def test_the_link_shows_continue_then_moves_its_token_to_the_session(self):
+        token = self.path.rsplit("/", 1)[1]
+        landing = self.client.get(self.path)
+        self.assertEqual(landing.status_code, 200)
+        self.assertEqual(landing["Referrer-Policy"], "same-origin")
+        self.assertIn("no-store", landing["Cache-Control"])
+        self.assertNotContains(landing, token)
+        self.assertNotContains(landing, 'name="password"')
+        self.assertContains(landing, ">Continue</button>")
+        self.assertNotIn(twofactor.RESET_TOKEN_KEY, self.client.session)
+        response = self.client.post(self.path)
+        self.assertRedirects(response, self.page, fetch_redirect_response=False)
         self.assertEqual(response["Referrer-Policy"], "same-origin")
-        self.assertNotIn(self.path.rsplit("/", 1)[1], response["Location"])
+        self.assertNotIn(token, response["Location"])
         page = self.client.get(self.page)
         self.assertEqual(page.status_code, 200)
         self.assertEqual(page["Referrer-Policy"], "same-origin")
-        self.assertNotContains(page, self.path.rsplit("/", 1)[1])
+        self.assertNotContains(page, token)
         self.assertContains(page, 'name="password"')
+
+    def test_the_continue_page_is_in_french_under_fr(self):
+        with translation.override("fr"):
+            response = self.client.get("/fr" + self.path.removeprefix("/en"))
+        self.assertContains(response, ">Continuer</button>")
+        self.assertContains(response, "Continuez pour saisir votre mot de passe")
+
+    def test_a_link_clicked_in_a_webmail_reaches_the_password_form(self):
+        """A cross-site click carries no session cookie over a redirect (#280)."""
+        client = Client(raise_request_exception=False, enforce_csrf_checks=True)
+        landing = cross_site_click(client, self.path)
+        self.assertEqual(landing.status_code, 200)
+        self.assertContains(landing, "Continue</button>")
+        response = browser_post(client, landing, self.path)
+        self.assertRedirects(response, self.page, fetch_redirect_response=False)
+        page = client.get(self.page)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'name="password"')
+
+    def test_opening_the_link_stores_nothing_and_does_not_use_it(self):
+        scanner = Client()
+        self.assertEqual(scanner.get(self.path).status_code, 200)
+        self.assertEqual(scanner.head(self.path).status_code, 200)
+        self.assertNotIn(settings.SESSION_COOKIE_NAME, scanner.cookies)
+        self.assertEqual(scanner.get(self.page).status_code, 410)
+        self.open()
+
+    def test_continue_without_the_csrf_token_is_refused(self):
+        client = Client(raise_request_exception=False, enforce_csrf_checks=True)
+        client.get(self.path)
+        response = client.post(self.path, HTTP_ORIGIN="http://testserver")
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn(twofactor.RESET_TOKEN_KEY, client.session)
+
+    def test_continue_on_a_bad_link_is_refused(self):
+        response = post(self.client, "/en/account/two-factor/reset/not-a-token")
+        self.assertEqual(response.status_code, 410)
+        self.assertNotIn(twofactor.RESET_TOKEN_KEY, self.client.session)
 
     def test_the_password_form_posts_from_the_browser_with_csrf_checks_on(self):
         client = Client(raise_request_exception=False, enforce_csrf_checks=True)
-        client.get(self.path)
+        landing = client.get(self.path)
+        browser_post(client, landing, self.path)
         page = client.get(self.page)
         response = browser_post(
             client, page, self.page, action="password", password=PASSWORD
@@ -192,7 +242,10 @@ class ResetPageTests(TestCase):
     def test_a_user_with_stale_terms_is_not_sent_to_the_terms_with_the_token(self):
         self.client.force_login(self.alice)
         self.alice.refresh_from_db()
-        response = self.client.get(token_path(self.alice), **HTML)
+        path = token_path(self.alice)
+        landing = self.client.get(path, **HTML)
+        self.assertEqual(landing.status_code, 200)
+        response = self.client.post(path, **HTML)
         self.assertRedirects(response, self.page, fetch_redirect_response=False)
         page = self.client.get(self.page, **HTML)
         self.assertEqual(page.status_code, 200)
@@ -276,7 +329,7 @@ class ResetPageTests(TestCase):
             email="b@manuspectrum.test",
             password=make_password(PASSWORD, hasher="pbkdf2_sha256"),
         )
-        self.client.get(token_path(bob))
+        open_link(self.client, token_path(bob))
         response = post(self.client, self.page, action="password", password=PASSWORD)
         self.assertEqual(response.status_code, 200)
         bob.refresh_from_db()
@@ -357,7 +410,7 @@ class AdminActionTests(TestCase):
         ).group(0)
         path = "/" + path.split("/", 3)[3]
         self.assertRedirects(
-            Client().get(path),
+            open_link(Client(), path),
             "/en/account/two-factor/reset/enrol",
             fetch_redirect_response=False,
         )

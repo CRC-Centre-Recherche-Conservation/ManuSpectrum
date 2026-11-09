@@ -8,6 +8,7 @@ from arches.app.views.auth import PasswordResetView
 
 from manuspectrum.accounts.notices import AccountPasswordResetForm
 from manuspectrum.accounts.activation import AcceptTermsView, ActivateAccountView
+from manuspectrum.accounts.password_reset import PasswordResetConfirmView
 from manuspectrum.accounts.twofactor import TwoFactorResetView, TwoFactorSetupView
 from manuspectrum.observability.csp import CspReportView
 from manuspectrum.observability.views import MetricsView
@@ -120,6 +121,13 @@ urlpatterns = [
         r"^thumbnail/(?P<resource_id>%s)$" % settings.UUID_REGEX,
         CachedThumbnailView.as_view(),
         name="thumbnail",
+    ),
+    # The mailed password-reset link opens a « Continue » page first: a
+    # redirect started from a webmail loses the SameSite=Strict session cookie.
+    path(
+        "reset/<uidb64>/<token>/",
+        PasswordResetConfirmView.as_view(),
+        name="password_reset_confirm",
     ),
     # Core order: an id pattern before its slug twin, which would also match
     # an id and look it up as a slug.
