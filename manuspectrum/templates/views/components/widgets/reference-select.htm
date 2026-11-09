@@ -1,0 +1,49 @@
+{% extends "views/components/widgets/reference-select.htm" %}
+
+{% comment %}
+Report block of the reference widget (arches-controlled-lists 1.2.0). The
+original binds `href: uri` as is, so a reference whose list item URI is not an
+absolute URL (a bare thesaurus id such as "61296", issue #294) became a link
+relative to the report page (/fr/report/61296). Here a reference is linked
+only when its URI is an http(s) URL with a host. Any other reference, a
+`javascript:` URI included, shows its label without a link. The rest of the
+template is the arches-controlled-lists one.
+
+The block must work with the unchanged arches-controlled-lists view model.
+It reads only what the original block reads (value, label, nodeCssClasses,
+getPrefLabel, $root.translations) and computes the link in the binding, with
+`let` and `ko` (Knockout puts `ko` on every binding context). Do not move that
+logic to a helper on the view model. Django serves this template, but the
+widget's JS module is loaded by utils/load-component-dependencies.js, which
+tries the arches applications in INSTALLED_APPS order: the
+arches-controlled-lists module is found before the project's, so a project
+copy of views/components/widgets/reference-select.js would never load.
+media/js/views/components/widgets/reference-select-template.spec.js binds
+this block to that view model surface.
+
+`manuspectrum/templates` is reachable both through TEMPLATES["DIRS"] and as an
+app directory, so this template is found twice and extends itself once before
+reaching the arches-controlled-lists one. The block replaces rather than
+appends, which survives that.
+{% endcomment %}
+
+{% block report %}
+<dt data-bind="text: label, class: nodeCssClasses"></dt>
+<!-- ko foreach: value -->
+    <dd data-bind="class: $parent.nodeCssClasses">
+        <!-- ko let: {referenceHref: /^https?:\/\/[^\/\s?#]+/i.test(String(ko.unwrap($data.uri) || '').trim()) ? String(ko.unwrap($data.uri)).trim() : null} -->
+        <!-- ko if: referenceHref -->
+        <a data-bind="attr: {'href': referenceHref, 'target': '_blank', 'rel': 'noopener noreferrer'}, text: $parent.getPrefLabel(labels), style: {'color': 'steelblue'}"></a>
+        <!-- /ko -->
+        <!-- ko ifnot: referenceHref -->
+        <span data-bind="text: $parent.getPrefLabel(labels)"></span>
+        <!-- /ko -->
+        <!-- /ko -->
+    </dd>
+<!-- /ko -->
+<!-- ko ifnot: value() -->
+<dd data-bind="class: nodeCssClasses">
+    <span data-bind="text: $root.translations.none"></span>
+</dd>
+<!-- /ko -->
+{% endblock report %}
