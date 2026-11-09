@@ -38,7 +38,7 @@
 # The UFW assertions below match lines of `ufw status verbose`, not of
 # `ufw status`: the verbose form adds the direction ("LIMIT IN") and prints an
 # application profile after its port ("22/tcp (OpenSSH)" where `ufw status`
-# prints "OpenSSH"). tests/test_baseline_ufw.py feeds them samples of it.
+# prints "OpenSSH").
 - name: Read the UFW status
   ansible.builtin.command: ufw status verbose
   register: baseline_ufw
