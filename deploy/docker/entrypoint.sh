@@ -10,7 +10,8 @@
 #                  secret, then the data package mounted at PKG_MOUNT
 #                  (/srv/pkg: load_package, i18n synclanguages, then
 #                  check_pkg_inventory against the package's
-#                  expected-inventory.json); refused when the database already
+#                  expected-inventory.json, then repair_iconographic_widget);
+#                  refused when the database already
 #                  exists (setup_db drops and recreates it) or when the package
 #                  is missing. A PUBLIC_SERVER_ADDRESS without its trailing
 #                  slash stops the deployment checks (settings_docker.py)
@@ -306,6 +307,13 @@ case "$command" in
       || { log "i18n synclanguages failed; run make -C deploy manage ARGS=\"i18n synclanguages\""; exit 1; }
     oneoff python manage.py check_pkg_inventory "$PKG_MOUNT/expected-inventory.json" \
       || { log "the loaded database differs from the package inventory (above); drop the database and run make -C deploy init again, or inspect the differences first"; exit 1; }
+    # The package gives the Component node "Iconographic representation" the
+    # generic URL widget; this assigns biblissima-concept-widget in place, without
+    # a new publication (#289). After the inventory check, which compares the
+    # database with the package as shipped; a no-op for a package that already
+    # assigns it.
+    oneoff python manage.py repair_iconographic_widget \
+      || { log "repair_iconographic_widget failed (above); the package is loaded: run make -C deploy manage ARGS=\"repair_iconographic_widget\""; exit 1; }
     log "data package loaded"
     ;;
   manage)

@@ -284,8 +284,9 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   command when the file is missing), then `make -C deploy init` → Arches `setup_db` output, then the lines
   `entrypoint: admin password set from the admin_password secret`,
   `entrypoint: loading the data package /srv/pkg (several minutes)`, the `load_package`
-  output, `Inventory check passed: the database matches expected-inventory.json` and
-  `entrypoint: data package loaded`, exit 0 (`echo $?`). A line `Inventory check FAILED` lists the
+  output, `Inventory check passed: the database matches expected-inventory.json`,
+  `Iconographic representation (56018940-…) now uses biblissima-concept-widget: …` (`… nothing to do`
+  with a package that already assigns it) and `entrypoint: data package loaded`, exit 0 (`echo $?`). A line `Inventory check FAILED` lists the
   differences and stops `init`. It takes noticeably
   longer than `setup_db` alone.
   - Refusals before `setup_db`: `holds no data package` (submodule not initialised),

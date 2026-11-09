@@ -124,7 +124,10 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   `manage.py check_pkg_inventory` against the package's `expected-inventory.json`
   (a difference fails `init`) and warns when the origin the package was
   written for differs from `PUBLIC_SERVER_ADDRESS` (the list sort orders are
-  then not loaded; acceptable on a rehearsal host only). The
+  then not loaded; acceptable on a rehearsal host only). Last, `manage.py
+  repair_iconographic_widget` gives the Component node « Iconographic
+  representation » the Biblissima concept widget the package does not assign
+  (#289), in place: no new graph publication. The
   entrypoint's `manage` refuses every command that would do it: `setup_db`,
   `packages ... -db` / `--setup_db`, `packages -o setup`. `web` refuses to
   start on a database that exists without the Arches system settings.

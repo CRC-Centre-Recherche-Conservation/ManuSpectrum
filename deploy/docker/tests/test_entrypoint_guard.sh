@@ -232,9 +232,10 @@ expected="$(printf '%s\n' \
   'manage.py set_admin_password' \
   "manage.py packages -o load_package -s $PKG -y" \
   'manage.py i18n synclanguages' \
-  "manage.py check_pkg_inventory $PKG/expected-inventory.json")"
+  "manage.py check_pkg_inventory $PKG/expected-inventory.json" \
+  'manage.py repair_iconographic_widget')"
 [ "$status" -eq 0 ] && [ "$(cat "$TMP/initlog")" = "$expected" ] && ok=0 || ok=1
-assert "init: setup_db, admin password, load_package, synclanguages, inventory check, in that order" "$ok"
+assert "init: setup_db, admin password, load_package, synclanguages, inventory check, widget repair, in that order" "$ok"
 
 grep -q 'set_controlled_lists_searchable' "$TMP/initlog" && ok=1 || ok=0
 assert "init: the lists are not made searchable by the entrypoint (the package's post SQL does it)" "$ok"
@@ -258,15 +259,21 @@ out="$(run_init PKG_MOUNT="$TMP/half-pkg")" && status=0 || status=$?
 [ "$status" -eq 1 ] && grep -q 'holds no data package' <<<"$out" && ! grep -q 'setup_db' "$TMP/initlog"
 assert "init: a package without its inventory is refused before setup_db" $?
 
-# Inventory check and origin warning.
+# Inventory check, widget repair and origin warning.
 out="$(run_init)" && status=0 || status=$?
 [ "$status" -eq 0 ] && grep -q 'data package loaded' <<<"$out" && ok=0 || ok=1
-assert "init: the inventory check runs last, on the package's own inventory" "$ok"
+assert "init: the inventory check runs on the package's own inventory, then init succeeds" "$ok"
 
 out="$(run_init FAIL_ON=check_pkg_inventory)" && status=0 || status=$?
 [ "$status" -eq 1 ] && grep -q 'the loaded database differs from the package inventory' <<<"$out" \
+  && ! grep -q 'data package loaded' <<<"$out" && ! grep -q repair_iconographic_widget "$TMP/initlog" \
+  && ok=0 || ok=1
+assert "init: a failing inventory check fails init before the widget repair" "$ok"
+
+out="$(run_init FAIL_ON=repair_iconographic_widget)" && status=0 || status=$?
+[ "$status" -eq 1 ] && grep -q 'repair_iconographic_widget failed (above); the package is loaded: run make -C deploy manage ARGS="repair_iconographic_widget"' <<<"$out" \
   && ! grep -q 'data package loaded' <<<"$out" && ok=0 || ok=1
-assert "init: a failing inventory check fails init" "$ok"
+assert "init: a failing widget repair fails init and says how to finish" "$ok"
 
 printf '{\n  "public_origin": "https://manuspectrum.test/"\n}\n' >"$PKG/expected-inventory.json"
 out="$(run_init)" && status=0 || status=$?

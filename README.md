@@ -175,6 +175,9 @@ npm install
 # Local settings (database, Elasticsearch, Redis) go in manuspectrum/settings_local.py
 ../venv/bin/python manage.py setup_db
 ../venv/bin/python manage.py packages -o load_package -s pkg -db -y
+# Gives "Iconographic representation" the Biblissima concept widget that the package does not
+# assign yet (#289). Drop this line once manuspectrum-pkg assigns it.
+../venv/bin/python manage.py repair_iconographic_widget
 
 npm start                                   # webpack dev server
 ../venv/bin/python manage.py runserver      # then open http://localhost:8000/
