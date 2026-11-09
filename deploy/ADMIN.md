@@ -436,6 +436,14 @@ Any other value stops web from starting. Change it in `.env`, then `make -C depl
 per-address request budget and how to raise it before an event are in
 `deploy/runbooks/explorer.md`.
 
+## Google Search Console
+
+To verify the site, add a URL-prefix property, choose the « HTML tag » method and copy the
+`content` value of the `<meta name="google-site-verification">` tag it shows. Set it as
+`env_google_site_verification` in the inventory (`GOOGLE_SITE_VERIFICATION` in `.env`), run
+Ansible, then `make -C deploy up`, and click Verify. Empty means no tag; a value with anything
+but letters, digits, `-` and `_` stops web from starting.
+
 ## Abandoned workflows
 
 An open workflow run with no activity for 90 days (`WORKFLOW_CLEANUP_AFTER_DAYS`) is cleaned
