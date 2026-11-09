@@ -19,9 +19,11 @@ WHAT IT KEEPS:
 The publication itself. No ``graphs_x_published_graphs`` row is created,
 ``graphs.publicationid`` and ``resource_instances.graphpublicationid`` do not
 change, so every existing resource stays editable. A missing language row is
-created in the same publication. As ``Graph.update_published_graphs()`` does,
-a ``published_graph_edits`` entry records each rewrite in the publication's
-history.
+created in the same publication. The write is Arches' own
+``Graph.update_published_graphs()``, called on the graph loaded from its
+tables, so it also records a ``published_graph_edits`` entry in the
+publication's history and refreshes every language row of a graph that has a
+differing one.
 
 SKIPPED:
 A graph with unpublished changes: its tables hold edits that its publication
@@ -32,20 +34,24 @@ OPTIONS:
 --dry-run: lists the rows that differ from the graph tables (with the parts of
            the serialised graph that differ), writes nothing.
 
-Idempotent: a row already equal to its rebuild is not written. Each graph's
-rows are written in one transaction: an error (a graph that cannot be
-serialised) exits 1, leaves that graph as it was and keeps the graphs already
-rewritten.
+Idempotent: a graph whose rows all equal their rebuild is not written. Each
+graph is handled in one transaction that locks its ``graphs`` row, so its
+unpublished-changes flag and current publication are read where they are used
+and a concurrent publish from the Graph Designer waits. An error (a graph that
+cannot be serialised) exits 1, leaves that graph as it was and keeps the graphs
+already rewritten.
 """
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.utils import translation
 
 from arches.app.models import models
 from arches.app.utils.i18n import LanguageSynchronizer
 
 from manuspectrum.utils.graph_translations import (
     language_codes,
+    load_from_tables,
     published_graphs,
     rebuild,
 )
@@ -77,6 +83,55 @@ class Command(BaseCommand):
             help="List the rows that differ from the graph tables, write nothing",
         )
 
+    def handle_graph(self, graph_id, codes, dry_run):
+        """Compare, and unless ``dry_run`` rewrite, one graph's current publication.
+
+        Returns ``(rows that differ, rows compared)``, or the label of the graph
+        when it is skipped. Runs inside the caller's transaction; the graph row
+        is locked unless ``dry_run``.
+        """
+        graphs = models.GraphModel.objects
+        graph = (graphs if dry_run else graphs.select_for_update()).get(pk=graph_id)
+        label = f"{graph.name} ({graph.graphid})"
+        if graph.publication_id is None:
+            return None
+        if graph.has_unpublished_changes:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Skipped {label}: it has unpublished changes; publish "
+                    "it from the Graph Designer."
+                )
+            )
+            return label
+        stored = dict(
+            models.PublishedGraph.objects.filter(
+                publication_id=graph.publication_id
+            ).values_list("language_id", "serialized_graph")
+        )
+        load_language = next((code for code in codes if code in stored), None)
+        if load_language is None:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Skipped {label}: its publication {graph.publication_id} "
+                    "has no row in any language of LANGUAGES; run "
+                    "`manage.py i18n synclanguages`, then this command."
+                )
+            )
+            return label
+
+        rebuilt = rebuild(graph.graphid, codes, load_language)
+        changed = [code for code, ser in rebuilt.items() if stored.get(code) != ser]
+        if changed and not dry_run:
+            with translation.override(load_language):
+                load_from_tables(graph.graphid, load_language).update_published_graphs(
+                    notes=EDIT_NOTES.format(languages=", ".join(changed))
+                )
+        for code in changed:
+            parts = ", ".join(differing_parts(stored.get(code), rebuilt[code]))
+            verb = "Differs" if dry_run else "Rewrote"
+            self.stdout.write(f"{verb}: {code} of {label}: {parts}")
+        return len(changed), len(rebuilt)
+
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
         codes = language_codes()
@@ -89,60 +144,18 @@ class Command(BaseCommand):
 
         differing = up_to_date = 0
         skipped = []
-        for graph in published_graphs():
-            label = f"{graph.name} ({graph.graphid})"
-            if graph.has_unpublished_changes:
-                skipped.append(label)
-                self.stdout.write(
-                    self.style.WARNING(
-                        f"Skipped {label}: it has unpublished changes; publish "
-                        "it from the Graph Designer."
-                    )
-                )
+        graph_ids = list(published_graphs().values_list("graphid", flat=True))
+        for graph_id in graph_ids:
+            with transaction.atomic():
+                outcome = self.handle_graph(graph_id, codes, dry_run)
+            if outcome is None:
                 continue
-            stored = dict(
-                models.PublishedGraph.objects.filter(
-                    publication_id=graph.publication_id
-                ).values_list("language_id", "serialized_graph")
-            )
-            load_language = next((code for code in codes if code in stored), None)
-            if load_language is None:
-                skipped.append(label)
-                self.stdout.write(
-                    self.style.WARNING(
-                        f"Skipped {label}: its publication {graph.publication_id} "
-                        "has no row in any language of LANGUAGES; run "
-                        "`manage.py i18n synclanguages`, then this command."
-                    )
-                )
+            if isinstance(outcome, str):
+                skipped.append(outcome)
                 continue
-
-            rebuilt = rebuild(graph.graphid, codes, load_language)
-            changed = {
-                code: serialized
-                for code, serialized in rebuilt.items()
-                if stored.get(code) != serialized
-            }
-            up_to_date += len(rebuilt) - len(changed)
-            differing += len(changed)
-            if changed and not dry_run:
-                with transaction.atomic():
-                    for code, serialized in changed.items():
-                        models.PublishedGraph.objects.update_or_create(
-                            publication_id=graph.publication_id,
-                            language_id=code,
-                            defaults={"serialized_graph": serialized},
-                        )
-                    # The trace Graph.update_published_graphs() also leaves for
-                    # an in-place rewrite; the publication itself is unchanged.
-                    models.PublishedGraphEdit.objects.create(
-                        publication_id=graph.publication_id,
-                        notes=EDIT_NOTES.format(languages=", ".join(changed)),
-                    )
-            for code in changed:
-                parts = ", ".join(differing_parts(stored.get(code), rebuilt[code]))
-                verb = "Differs" if dry_run else "Rewrote"
-                self.stdout.write(f"{verb}: {code} of {label}: {parts}")
+            changed, count = outcome
+            differing += changed
+            up_to_date += count - changed
 
         if dry_run:
             summary = (

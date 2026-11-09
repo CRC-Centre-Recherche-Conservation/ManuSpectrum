@@ -1,4 +1,4 @@
-"""republish_graph_translations and the W006 check (issue #288).
+"""republish_graph_translations and the W006 check.
 
 The graphs are built and published through Arches, then ``i18n synclanguages``
 runs as in ``entrypoint.sh init``: Arches' ``Graph.update_published_graphs()``
@@ -12,6 +12,7 @@ from io import StringIO
 from django.core.management import call_command
 from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 
 from arches.app.models import models
 from arches.app.models.graph import Graph
@@ -45,13 +46,18 @@ def build_resource_model():
     card = models.CardModel.objects.get(nodegroup_id=node.nodegroup_id)
     card.name = {"en": "Name of Analysis", "fr": "Nom de l'analyse"}
     card.helptext = {"en": "Give the name.", "fr": "Donnez le nom."}
+    card.description = {"en": "About the name.", "fr": "A propos du nom."}
+    card.instructions = {"en": "Type it.", "fr": "Saisissez-le."}
     card.save()
     models.CardXNodeXWidget.objects.create(
         card=card,
         node_id=node.nodeid,
         widget_id=TEXT_WIDGET_ID,
         label={"en": "Label", "fr": "Libellé"},
-        config={},
+        config={
+            "placeholder": {"en": "Enter a name", "fr": "Saisir un nom"},
+            "i18n_properties": ["placeholder"],
+        },
         sortorder=0,
     )
     Graph.objects.get(pk=graph.pk).publish()
@@ -221,6 +227,26 @@ class RepublishGraphTranslationsTests(TestCase):
         self.assertNotIn("Differs: en of", output)
         self.assertIn("Nothing was written", output)
 
+    def test_a_write_locks_the_graph_rows_and_a_dry_run_does_not(self):
+        self.break_translations()
+
+        with CaptureQueriesContext(connection) as dry:
+            republish("--dry-run")
+        with CaptureQueriesContext(connection) as write:
+            republish()
+
+        self.assertFalse([q for q in dry if "FOR UPDATE" in q["sql"]])
+        self.assertEqual(
+            len(
+                [
+                    q
+                    for q in write
+                    if 'FROM "graphs"' in q["sql"] and "FOR UPDATE" in q["sql"]
+                ]
+            ),
+            2,
+        )
+
     def test_a_second_run_writes_nothing(self):
         self.break_translations()
         republish()
@@ -353,6 +379,53 @@ class PublishedGraphTranslationsCheckTests(TestCase):
 
         self.assertEqual([m.id for m in messages], ["manuspectrum.W006"])
         self.assertIn("(Translated model)", messages[0].msg)
+
+    def test_a_card_description_alone_is_reported(self):
+        self.show_english_in_fr("cards", "description")
+
+        messages = check_published_graph_translations(None, ["default"])
+
+        self.assertEqual([m.id for m in messages], ["manuspectrum.W006"])
+        self.assertIn("(Translated model)", messages[0].msg)
+
+    def test_card_instructions_alone_are_reported(self):
+        self.show_english_in_fr("cards", "instructions")
+
+        messages = check_published_graph_translations(None, ["default"])
+
+        self.assertEqual([m.id for m in messages], ["manuspectrum.W006"])
+
+    def test_a_widget_placeholder_alone_is_reported(self):
+        row = models.PublishedGraph.objects.get(
+            publication_id=publication_of(self.model_id), language_id="fr"
+        )
+        row.serialized_graph["cards_x_nodes_x_widgets"][0]["config"][
+            "placeholder"
+        ] = "Enter a name"
+        row.save()
+
+        messages = check_published_graph_translations(None, ["default"])
+
+        self.assertEqual([m.id for m in messages], ["manuspectrum.W006"])
+        self.assertIn("(Translated model)", messages[0].msg)
+
+    def test_the_command_repairs_description_instructions_and_placeholder(self):
+        call_command("i18n", "synclanguages")
+        fr = rows(self.model_id)["fr"]
+        self.assertEqual(fr["cards"][0]["description"], "About the name.")
+        self.assertEqual(
+            fr["cards_x_nodes_x_widgets"][0]["config"]["placeholder"], "Enter a name"
+        )
+
+        republish()
+
+        fr = rows(self.model_id)["fr"]
+        self.assertEqual(fr["cards"][0]["description"], "A propos du nom.")
+        self.assertEqual(fr["cards"][0]["instructions"], "Saisissez-le.")
+        self.assertEqual(
+            fr["cards_x_nodes_x_widgets"][0]["config"]["placeholder"], "Saisir un nom"
+        )
+        self.assertEqual(check_published_graph_translations(None, ["default"]), [])
 
     def test_a_graph_with_unpublished_changes_is_not_compared(self):
         """Its tables may hold edits its publication does not have yet."""

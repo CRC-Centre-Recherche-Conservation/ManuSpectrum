@@ -29,7 +29,9 @@ def check_published_graph_languages(app_configs, databases, **kwargs):
     Arches page under /<lang>/ then 500s (`NoneType has no attribute
     'serialized_graph'` — find_publication_in_language has no fallback).
     Fix: ``python manage.py i18n synclanguages`` (official add-a-language sync,
-    covers resource models AND branches).
+    covers resource models AND branches), then ``python manage.py
+    republish_graph_translations`` (the sync writes one language's strings into
+    every language; see W006).
 
     Database-tagged so it runs with migrate — the natural deploy gate. Wrapped
     defensively: on a fresh database the Arches tables may not exist yet.
@@ -88,9 +90,10 @@ def check_published_graph_translations(app_configs, databases, **kwargs):
 
     Arches' ``i18n synclanguages`` (and ``packages`` before each graph import)
     serialises every language of a publication with the strings of the active
-    one, so /fr/ shows the English card names, help texts and widget labels
-    (manuspectrum/utils/graph_translations.py); those three are compared. Fix:
-    ``python manage.py republish_graph_translations``, which keeps the
+    one, so /fr/ shows the English card texts and widget labels
+    (manuspectrum/utils/graph_translations.py). Compared: card names,
+    descriptions, instructions and help texts, widget labels and placeholders.
+    Fix: ``python manage.py republish_graph_translations``, which keeps the
     publication.
 
     Database-tagged so it runs with migrate, and, like W002, silent on a
@@ -106,8 +109,8 @@ def check_published_graph_translations(app_configs, databases, **kwargs):
         return []
     return [
         checks.Warning(
-            f"The '{code}' publication of {len(names)} graph(s) shows card names, "
-            "help texts or widget labels other than the graph tables "
+            f"The '{code}' publication of {len(names)} graph(s) shows card texts, "
+            "widget labels or placeholders other than the graph tables "
             f"({', '.join(names)}): pages under /{code}/ show another "
             "language's text. Run `python manage.py "
             "republish_graph_translations` (it keeps the publication, so the "
