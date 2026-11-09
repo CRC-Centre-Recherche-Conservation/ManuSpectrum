@@ -655,9 +655,15 @@ templates, the update command, the release programs) that differs between the ta
 « Re-run Ansible first ». From a laptop checkout:
 
 1. Check out the new tag (`git switch --detach vX.Y.Z`), with no uncommitted
-   change in the managed paths (the playbook refuses otherwise).
+   change in the managed paths (the playbook refuses otherwise). A clone that
+   held a release before the package's line-ending fix needs
+   `git submodule update --init --force` once: otherwise the CIDOC-CRM
+   ontology of `pkg/` looks modified.
 2. Run the playbook for the host (`deploy/ansible/README.md`).
-3. Install again with `--now` or `--at`.
+3. Check that `sudo manuspectrum-update --status` shows `needs_ansible=0` on the
+   armed release. No new mail says the release is ready once Ansible has run:
+   the watch resets the flag silently.
+4. Install again with `--now` or `--at`.
 
 Ansible never changes the running version; it only brings the host's files up to
 what the tag expects.

@@ -109,6 +109,10 @@ host uses `rc`, production uses `prod`.
   the update, not with the Ansible run that precedes it. Ansible renders `.env`
   from the inventory, so an inventory value the running version refuses waits
   for the update.
+- **After « Re-run Ansible first ».** Once the playbook has run, no second mail
+  announces the release: the watch sets `needs_ansible` back to 0 without
+  notice. Check `sudo manuspectrum-update --status` (`needs_ansible=0`) before
+  installing.
 - **The update** is started by an operator, now or at a scheduled time, with
   `sudo manuspectrum-update`. It installs the armed release only, after a
   backup, and rolls back on its own when the application does not become ready.
