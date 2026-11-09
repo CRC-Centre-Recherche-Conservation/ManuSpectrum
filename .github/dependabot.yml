@@ -19,6 +19,10 @@ updates:
       - dependency-name: "leaflet-iiif"
       - dependency-name: "primeicons"
       - dependency-name: "primevue"
+      # Major only: the expression evaluator the map tests use must stay on
+      # the style-spec major that maplibre-gl bundles (20 for maplibre-gl 4).
+      - dependency-name: "@maplibre/maplibre-gl-style-spec"
+        update-types: ["version-update:semver-major"]
     groups:
       npm:
         patterns: ["*"]
