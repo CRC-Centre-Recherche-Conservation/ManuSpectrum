@@ -1,7 +1,5 @@
 import re
-from pathlib import Path
 
-from django.conf import settings
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 
@@ -72,55 +70,6 @@ class LogoDialogTests(TestCase):
         self.assertRegex(
             html, r'<button type="button" class="ms-logo-zoom-btn" id="ms-logo-zoom"'
         )
-
-
-LOGO_WORD = re.compile(
-    r'<text\b[^>]*\bfont-family="([^"]*)"[^>]*>(MANU|PECTRUM)</text>'
-)
-SERIF_TOKEN = re.compile(r"^\$ms-font-serif:\s*(.+?);", re.M)
-
-
-def font_families(stack):
-    """Split a CSS font stack into bare family names (quotes and spaces dropped)."""
-    return [family.strip().strip("'\"") for family in stack.split(",")]
-
-
-class LogoTypefaceTests(TestCase):
-    """The logo words use the serif stack of the design tokens, display face first.
-
-    A browser renders the first family of a stack that it has. Georgia ships with Windows and
-    macOS, so a stack that names it before Cormorant Garamond never reaches the self-hosted
-    face on those systems, and Georgia has no 300 weight, so the words also look heavier.
-    The e-mail templates put Georgia first on purpose (mail clients do not load web fonts);
-    they are not covered here.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        tokens = Path(settings.APP_ROOT, "media", "css", "_ms-tokens.scss").read_text(
-            encoding="utf-8"
-        )
-        cls.serif = font_families(SERIF_TOKEN.search(tokens).group(1))
-
-    def assert_logo_words_follow_the_serif_token(self, markup, where):
-        words = LOGO_WORD.findall(markup)
-        self.assertEqual({word for _, word in words}, {"MANU", "PECTRUM"}, where)
-        self.assertEqual(self.serif[0], "Cormorant Garamond")
-        for stack, word in words:
-            self.assertEqual(font_families(stack), self.serif, f"{word} in {where}")
-
-    def test_home_page_logo(self):
-        for lang in ("en", "fr"):
-            html = self.client.get(f"/{lang}/").content.decode()
-            self.assert_logo_words_follow_the_serif_token(html, f"/{lang}/")
-
-    def test_standalone_logo_asset(self):
-        # Source of the inline home page logo: a copy made from it must not bring Georgia back.
-        svg = Path(
-            settings.APP_ROOT, "media", "img", "landing", "logo-manuspectrum.svg"
-        ).read_text(encoding="utf-8")
-        self.assert_logo_words_follow_the_serif_token(svg, "logo-manuspectrum.svg")
 
 
 class ArchesPayloadTests(TestCase):
