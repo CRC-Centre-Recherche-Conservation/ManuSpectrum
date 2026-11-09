@@ -287,6 +287,11 @@ TEMPLATES = build_templates_config(
 TEMPLATES[0]["OPTIONS"]["context_processors"].append(
     "manuspectrum.context_processors.language_switch"
 )
+# A page reached by a personal mailed link must not copy its own URL, which
+# holds the token, into its head (see accounts.mailed_links).
+TEMPLATES[0]["OPTIONS"]["context_processors"].append(
+    "manuspectrum.context_processors.personal_link"
+)
 
 ALLOWED_HOSTS = []
 

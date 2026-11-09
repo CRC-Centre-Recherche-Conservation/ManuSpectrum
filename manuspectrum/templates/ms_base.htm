@@ -13,14 +13,19 @@
     {# scheme+host+path only: build_absolute_uri kept the query string, so #}
     {# /about/team?utm_source=x canonicalised to itself. site_origin is "" on #}
     {# the 400 page of a disallowed Host: no absolute URL is built there. #}
+    {# personal_link (context processor): the page's own path can hold the #}
+    {# token of a mailed link. Its head then repeats the URL nowhere: no #}
+    {# canonical, no hreflang alternate, no og:url. #}
     {% site_origin as MS_ORIGIN %}
-    {% if MS_ORIGIN %}<link rel="canonical" href="{{ MS_ORIGIN }}{{ request.path }}">{% endif %}
+    {% if MS_ORIGIN and not personal_link %}<link rel="canonical" href="{{ MS_ORIGIN }}{{ request.path }}">{% endif %}
     {% if robots_noindex %}<meta name="robots" content="noindex, follow">{% endif %}
+    {% if not personal_link %}
     {% get_available_languages as MS_LANGS %}
     {% for lang_code, lang_name in MS_LANGS %}
     <link rel="alternate" hreflang="{{ lang_code }}" href="{% translated_page_url lang_code %}">
     {% endfor %}
     <link rel="alternate" hreflang="x-default" href="{% translated_page_url 'en' %}">
+    {% endif %}
 
     {# Social cards. og_title/og_description default to the generic site copy; #}
     {# pages that set page_title should override them with the same text. #}
@@ -29,7 +34,7 @@
     <meta property="og:site_name" content="ManuSpectrum">
     <meta property="og:title" content="{% block og_title %}ManuSpectrum{% endblock %}">
     <meta property="og:description" content="{% block og_description %}{% trans 'ManuSpectrum — interoperable database for physicochemical analysis of written cultural heritage.' %}{% endblock %}">
-    {% if MS_ORIGIN %}<meta property="og:url" content="{{ MS_ORIGIN }}{{ request.path }}">{% endif %}
+    {% if MS_ORIGIN and not personal_link %}<meta property="og:url" content="{{ MS_ORIGIN }}{{ request.path }}">{% endif %}
     {% if LANGUAGE_CODE|slice:":2" == "fr" %}
     <meta property="og:locale" content="fr_FR">
     {% else %}

@@ -18,7 +18,12 @@ from django.utils import translation
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
-from tests.test_accounts_activation import browser_post, cross_site_click, open_link
+from tests.test_accounts_activation import (
+    browser_post,
+    cross_site_click,
+    head_copies_of,
+    open_link,
+)
 
 STRONG = "Gr33n-Lantern!Walks"
 OLD_PASSWORD = "Old-Passw0rd!Value"
@@ -250,6 +255,8 @@ class PasswordResetLinkTests(TestCase):
         response = client.post(self.link, HTTP_ORIGIN="http://testserver")
         self.assertEqual(response.status_code, 403)
         self.assertNotIn(INTERNAL_RESET_SESSION_TOKEN, client.session)
+        # The refusal is a page of the site at the URL of the link.
+        self.assertEqual(head_copies_of(response, self.link.rsplit("/", 2)[1]), [])
 
     def test_a_bad_link_shows_no_continue_and_no_form(self):
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))

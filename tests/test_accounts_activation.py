@@ -117,6 +117,12 @@ def cross_site_click(client, path):
         path = response["Location"]
 
 
+def head_copies_of(response, token):
+    """The attribute values of the page's head that hold *token*."""
+    document = lxml.html.fromstring(response.content)
+    return document.xpath("//head//@*[contains(., $token)]", token=token)
+
+
 def open_link(client, path):
     """Open a mailed link and press « Continue », as a browser does.
 
@@ -510,9 +516,20 @@ class LinkLandingTests(Base):
         self.assertEqual(landing["Referrer-Policy"], "same-origin")
         self.assertIn("no-store", landing["Cache-Control"])
         self.assertContains(landing, '<meta name="robots" content="noindex')
-        # The token is in the page's own URL (and so in its canonical and
-        # language links), never in what the form sends.
-        (form,) = lxml.html.fromstring(landing.content).xpath('//form[@method="post"]')
+        # The token is in the page's own URL, so its head repeats that URL
+        # nowhere (canonical, alternates, og:url); the language links of the
+        # header keep it, to show this page in the other language. It is never
+        # in what the form sends.
+        document = lxml.html.fromstring(landing.content)
+        self.assertEqual(head_copies_of(landing, token), [])
+        self.assertEqual(
+            document.xpath('//link[@rel="canonical" or @rel="alternate"]'), []
+        )
+        self.assertEqual(document.xpath('//meta[@property="og:url"]'), [])
+        self.assertTrue(
+            document.xpath("//a[@hreflang][contains(@href, $token)]", token=token)
+        )
+        (form,) = document.xpath('//form[@method="post"]')
         self.assertIsNone(form.get("action"))
         self.assertNotIn(token, lxml.html.tostring(form).decode())
         response = client.post(self.link)
@@ -555,8 +572,12 @@ class LinkLandingTests(Base):
         client = Client(enforce_csrf_checks=True)
         other = User.objects.create_user("other", "other@manuspectrum.test", PASSWORD)
         client.force_login(other)
+        cookie = client.cookies[settings.SESSION_COOKIE_NAME].value
         landing = cross_site_click(client, self.link)
         self.assertEqual(landing.status_code, 200)
+        # A new session cookie would replace the one the click did not send.
+        self.assertNotIn(settings.SESSION_COOKIE_NAME, landing.cookies)
+        self.assertEqual(client.cookies[settings.SESSION_COOKIE_NAME].value, cookie)
         response = browser_post(client, landing, self.link)
         self.assertRedirects(response, self.path, fetch_redirect_response=False)
         self.assertContains(client.get(self.path), 'name="accept_terms"')
@@ -583,6 +604,8 @@ class LinkLandingTests(Base):
         )
         self.assertEqual(response.status_code, 403)
         self.assertNotIn(activation.SESSION_TOKEN_KEY, client.session)
+        # The refusal is a page of the site at the URL of the link.
+        self.assertEqual(head_copies_of(response, self.link.rsplit("/", 1)[1]), [])
 
     def test_other_methods_on_the_link_are_not_allowed(self):
         response = Client().put(self.link)

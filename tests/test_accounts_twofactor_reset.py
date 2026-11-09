@@ -208,6 +208,20 @@ class ResetPageTests(TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertContains(page, 'name="password"')
 
+    def test_a_signed_in_browser_clicking_in_a_webmail_reaches_the_password_form(self):
+        client = Client(raise_request_exception=False, enforce_csrf_checks=True)
+        other = User.objects.create_user("other", "other@manuspectrum.test", PASSWORD)
+        client.force_login(other)
+        cookie = client.cookies[settings.SESSION_COOKIE_NAME].value
+        landing = cross_site_click(client, self.path)
+        self.assertEqual(landing.status_code, 200)
+        # A new session cookie would replace the one the click did not send.
+        self.assertNotIn(settings.SESSION_COOKIE_NAME, landing.cookies)
+        self.assertEqual(client.cookies[settings.SESSION_COOKIE_NAME].value, cookie)
+        response = browser_post(client, landing, self.path)
+        self.assertRedirects(response, self.page, fetch_redirect_response=False)
+        self.assertContains(client.get(self.page), 'name="password"')
+
     def test_opening_the_link_stores_nothing_and_does_not_use_it(self):
         scanner = Client()
         self.assertEqual(scanner.get(self.path).status_code, 200)

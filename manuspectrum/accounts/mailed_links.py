@@ -23,10 +23,21 @@ it. A GET neither stores nor consumes anything, so a mail scanner that fetches
 the link leaves it working. The views answer every step with
 `Referrer-Policy: same-origin`: the « Continue » page has the token in its URL,
 and none of its requests to another site carries it in a `Referer`.
+
+A page of one of `ROUTES` repeats its own URL nowhere in its head
+(`context_processors.personal_link`, read by `ms_base.htm`), and the log
+formatters mask the path of these routes (`observability.logging`): Django
+logs the path of every request it refuses, a « Continue » post without a valid
+CSRF token included.
 """
 
 from django.http import HttpResponseNotAllowed, HttpResponseRedirect
 from django.shortcuts import render
+
+# The names of the routes whose path holds the token of a mailed link.
+ROUTES = frozenset(
+    {"account-activate", "account-two-factor-reset", "password_reset_confirm"}
+)
 
 
 def land(request, *, token, session_key, target, template_name, context=None):
