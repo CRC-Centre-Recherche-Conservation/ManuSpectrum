@@ -17,6 +17,8 @@ committed) and in the secret files of `SECRETS_DIR`.
 | `compose/compose.prod.yaml` | Sizing of the production host only |
 | `compose/.env.example` | Variables to copy into `compose/.env` |
 | `compose/secrets/` | Secret files read by Compose (see its README); the default `SECRETS_DIR` |
+| `DEPLOY.md` | Rebuild production from zero: the ordered path through the other documents, secrets, release rollback, annual maintenance |
+| `INCIDENT.md` | Decision tree for the operator: unreachable site, errors, disk, certificate, backup, failed release, suspected compromise, planned maintenance |
 | `RELEASES.md` | Releases: staging image, tags, signature, verification by hand, retention |
 | `BACKUP.md` | Backups: what is kept where, the schedule, the restore test, restore of a file or of the stack, moving day, personal data |
 | `ADMIN.md` | Administration: accounts, invitation and two-factor, unlocking, terms, embargoes, abandoned workflows, draft register of processing |
