@@ -29,6 +29,7 @@ SPEC_VARIABLES = [
     "admin_users",
     "service_user",
     "ssh_password_authentication",
+    "ssh_permit_root_login",
     "docker_apt_codename",
     "data_mount",
     "unattended_reboot",

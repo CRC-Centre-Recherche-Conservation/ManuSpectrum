@@ -125,8 +125,9 @@ Detailed build procedure: `deploy/rehearsal/README.md`. Here, the checks.
   - Expected: no failed task, and `changed=2` for the two marker tasks of `site.yml` (the marker is touched, then removed; `changed=3` when `/run/manuspectrum` does not exist yet, as its creation also counts), nothing else.
   - If an assertion fails: its message says what to do; note it and the output of the matching command.
 - [ ] Re-run `sudo ./host-baseline.sh` → everything "already done", then the Ansible verification again → the same two marker tasks only (`changed=2`).
-- [ ] After a full `ansible-playbook site.yml` (not only the baseline tags): `cat /etc/docker/daemon.json` (written by the Ansible `host` role) → `json-file` logs 10m x 5, `live-restore`,
-  `no-new-privileges`; `docker info --format '{{.LiveRestoreEnabled}}'` → `true`.
+- [ ] After a full `ansible-playbook site.yml` (not only the baseline tags): `cat /etc/docker/daemon.json` (written by the Ansible `host` role) → `json-file` logs 10m x 5 and
+  `no-new-privileges`, no `live-restore`; `docker info --format '{{.LiveRestoreEnabled}}'` → `false`.
+  `sudo systemctl reboot` with the stack up: the host is back within a few minutes and every container is healthy again.
   When containers already run and the file would change, the play stops and asks for
   `-e docker_restart_ok=true`: the Docker restart stops the stack (plan a window on a live host).
   A `daemon.json` with keys the role does not manage stops the play: merge them by hand first.

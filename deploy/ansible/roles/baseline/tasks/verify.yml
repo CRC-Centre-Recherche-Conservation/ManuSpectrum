@@ -15,11 +15,12 @@
   ansible.builtin.assert:
     that:
       - baseline_sshd.rc == 0
-      - "'permitrootlogin no' in baseline_sshd.stdout_lines"
+      - "('permitrootlogin ' ~ ssh_permit_root_login) in baseline_sshd.stdout_lines"
     quiet: true
     fail_msg: >-
-      sshd allows root to log in (sshd -T). Set PermitRootLogin no in a drop-in that sorts before
-      the other files of /etc/ssh/sshd_config.d: sshd keeps the first value it reads.
+      sshd does not report PermitRootLogin {{ ssh_permit_root_login }} (sshd -T). Fix the
+      configuration (a drop-in that sorts before the other files of /etc/ssh/sshd_config.d: sshd
+      keeps the first value it reads) or ssh_permit_root_login in the inventory.
   register: baseline_chk_01
   failed_when: false
 
@@ -57,10 +58,12 @@
 - name: Assert UFW rate-limits SSH
   ansible.builtin.assert:
     that:
-      - baseline_ufw.stdout_lines | select('match', '^22/tcp +LIMIT IN') | list | length == 1
-      - baseline_ufw.stdout_lines | select('match', '^22/tcp \(v6\) +LIMIT IN') | list | length == 1
+      - baseline_ufw.stdout_lines | select('match', '^(22/tcp|OpenSSH) +LIMIT IN') | list | length == 1
+      - baseline_ufw.stdout_lines | select('match', '^(22/tcp|OpenSSH) \(v6\) +LIMIT IN') | list | length == 1
     quiet: true
-    fail_msg: "UFW must have exactly one 22/tcp LIMIT IN rule per IP family (ufw limit 22/tcp)."
+    fail_msg: >-
+      UFW must have exactly one LIMIT IN rule on SSH per IP family, named 22/tcp or OpenSSH
+      (ufw limit 22/tcp, or ufw limit OpenSSH).
   register: baseline_chk_04
   failed_when: false
 
@@ -361,11 +364,11 @@
   ansible.builtin.assert:
     that:
       - baseline_data_fstab.rc == 0
-      - baseline_data_fstab.stdout.split() == [data_mount.src, 'nfs4']
+      - baseline_data_fstab.stdout.split() in [[data_mount.src, 'nfs'], [data_mount.src, 'nfs4']]
     quiet: true
     fail_msg: >-
-      /etc/fstab has no "{{ data_mount.src }} nfs4" entry for {{ data_mount.path }}: without it the
-      mount is lost at the next reboot.
+      /etc/fstab has no "{{ data_mount.src }} nfs" or "{{ data_mount.src }} nfs4" entry for
+      {{ data_mount.path }}: without it the mount is lost at the next reboot.
   register: baseline_chk_23
   failed_when: false
   when: data_mount.type == 'nfs'

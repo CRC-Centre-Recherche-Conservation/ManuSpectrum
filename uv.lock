@@ -1368,7 +1368,7 @@ requires-dist = [
     { name = "arches", specifier = ">=8.1.4,<8.2.0" },
     { name = "arches-controlled-lists", specifier = ">=1.2.0,<1.3.0" },
     { name = "arches-querysets", extras = ["drf"], specifier = ">=1.1.1,<1.2.0" },
-    { name = "arches-vue-components", specifier = ">=2.0.2,<3.0.0" },
+    { name = "arches-vue-components", specifier = ">=2.0.3,<3.0.0" },
     { name = "argon2-cffi", specifier = ">=25.1,<26" },
     { name = "bibtexparser", specifier = ">=2.0.1,<3" },
     { name = "defusedcsv", specifier = ">=3,<4" },

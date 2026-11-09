@@ -13,6 +13,7 @@
       - admin_users is defined
       - service_user is defined
       - ssh_password_authentication in ['yes', 'no']
+      - ssh_permit_root_login in ['no', 'prohibit-password']
       - docker_apt_codename is defined
       - data_mount.type in ['nfs', 'local']
       - data_mount.path is defined
@@ -32,7 +33,7 @@
       - (env_release_ready_wait_seconds | int) <= 1800
     quiet: true
     fail_msg: >-
-      The inventory misses a variable, or baseline_mode / ssh_password_authentication /
+      The inventory misses a variable, or baseline_mode / ssh_password_authentication / ssh_permit_root_login /
       data_mount.type / env_release_channel (prod or rc) / env_release_ready_wait_seconds (digits, 1 to 1800)
       holds an unknown value. Compare it with inventories/example/group_vars/all.yml.
 
