@@ -284,7 +284,10 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   command when the file is missing), then `make -C deploy init` → Arches `setup_db` output, then the lines
   `entrypoint: admin password set from the admin_password secret`,
   `entrypoint: loading the data package /srv/pkg (several minutes)`, the `load_package`
-  output, `Inventory check passed: the database matches expected-inventory.json` and
+  output, the `repair_reference_defaults` output (`Site languages: en, fr`,
+  `widget default rows repaired: N`, `published graphs (current publication) repaired: N`,
+  and no `[unresolved]` or `[list item]` line),
+  `Inventory check passed: the database matches expected-inventory.json` and
   `entrypoint: data package loaded`, exit 0 (`echo $?`). A line `Inventory check FAILED` lists the
   differences and stops `init`. It takes noticeably
   longer than `setup_db` alone.

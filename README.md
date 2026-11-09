@@ -175,6 +175,7 @@ npm install
 # Local settings (database, Elasticsearch, Redis) go in manuspectrum/settings_local.py
 ../venv/bin/python manage.py setup_db
 ../venv/bin/python manage.py packages -o load_package -s pkg -db -y
+../venv/bin/python manage.py repair_reference_defaults   # reference defaults: labels in every language
 
 npm start                                   # webpack dev server
 ../venv/bin/python manage.py runserver      # then open http://localhost:8000/

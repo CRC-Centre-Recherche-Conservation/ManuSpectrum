@@ -145,6 +145,47 @@ def check_summary_function_registered(app_configs, databases, **kwargs):
     ]
 
 
+@checks.register(checks.Tags.database)
+def check_reference_default_labels(app_configs, databases, **kwargs):
+    """W007: a reference widget default lacks a prefLabel in a site language.
+
+    The reference-select widget renders the prefLabel stored in the value for
+    the active language, with no fallback: such a default shows "Unlabeled
+    Item" in that language, and a resource saved with it stores the gap in its
+    tile (#290). ``repair_reference_defaults`` completes the defaults from their
+    list items; ``init`` and migration 0017 run it, so this fires after a graph
+    or package loaded some other way.
+
+    Database-tagged so it runs with migrate, and, like W002, silent on a
+    half-migrated database.
+    """
+    if "default" not in (databases or []):
+        return []
+    try:
+        from manuspectrum.utils.reference_labels import incomplete_defaults
+
+        found = incomplete_defaults()
+    except Exception:  # noqa: BLE001 — a half-migrated DB must not block migrate
+        return []
+    if not found:
+        return []
+    shown = "; ".join(
+        f"{graph} / {node} (no {', '.join(missing)})"
+        for graph, node, missing in found[:5]
+    )
+    more = f"; and {len(found) - 5} more" if len(found) > 5 else ""
+    return [
+        checks.Warning(
+            f"{len(found)} reference widget default value(s) lack a prefLabel in a "
+            f"site language: {shown}{more}. The widget shows 'Unlabeled Item' in "
+            "that language and a resource saved with the default keeps the gap. "
+            "Run `python manage.py repair_reference_defaults` (and give the list "
+            "item the missing label first if it lacks it too).",
+            id="manuspectrum.W007",
+        )
+    ]
+
+
 @checks.register()
 def check_contact_email(app_configs, **kwargs):
     """Block prod deploys while the public contact address is a placeholder.
