@@ -105,8 +105,11 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
 - The first installation goes through `make init` only. It runs the `init`
   service (profile `init`, not started by `up`): `setup_db`, the admin password,
   then `packages -o load_package -s /srv/pkg -y` (the package, mounted
-  read-only) and `i18n synclanguages`; the controlled lists are made searchable
-  by the package's own post SQL.
+  read-only), `i18n synclanguages`, then `republish_graph_translations`, which
+  rewrites each language's serialisation of the graphs from the graph tables,
+  in the same publication (the two steps before it leave the English card
+  names, help texts and widget labels in the French one); the controlled lists
+  are made searchable by the package's own post SQL.
   It takes several minutes longer than `setup_db` alone (graphs, 30 000 list
   values, a full reindex). It refuses to run when the database exists, because
   `setup_db` drops and recreates it; before `setup_db` it also refuses an empty

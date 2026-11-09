@@ -175,6 +175,8 @@ npm install
 # Local settings (database, Elasticsearch, Redis) go in manuspectrum/settings_local.py
 ../venv/bin/python manage.py setup_db
 ../venv/bin/python manage.py packages -o load_package -s pkg -db -y
+# load_package leaves English card names and labels in the French graph publications: rewrite them from the tables
+../venv/bin/python manage.py republish_graph_translations
 
 npm start                                   # webpack dev server
 ../venv/bin/python manage.py runserver      # then open http://localhost:8000/

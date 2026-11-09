@@ -299,6 +299,11 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
     `has no Arches system settings`. Drop it, then start again:
     `dc exec postgres sh -c 'dropdb -U "$POSTGRES_USER" --if-exists <PGDBNAME>'` and
     `make -C deploy init` (Elasticsearch indexes are recreated by `setup_db`).
+- [ ] *(service account)* `make -C deploy manage ARGS="check --database default"` raises no `manuspectrum.W006`:
+  `init` ran `republish_graph_translations` after `i18n synclanguages`, so each language's serialisation of the
+  graphs carries the texts of the graph tables. Once `web` is up,
+  `/fr/add-resource/60c85aba-f079-45bc-997f-21cdd4f77b6d` (Analysis) shows the card « Nom de l'analyse », not
+  « Name of Analysis ».
 - [ ] *(service account)* The end of the `init` output says
   `admin password set from the admin_password secret`. Read the password once,
   `cat "$SECRETS_DIR/admin_password"`, and sign in as `admin` on the
