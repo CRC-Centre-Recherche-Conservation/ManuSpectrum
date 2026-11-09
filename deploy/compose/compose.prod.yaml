@@ -91,11 +91,10 @@ services:
     cpu_shares: 128
 
   grafana:
-    # The cgroup limit counts the page cache. At 512m Grafana re-read its binary,
-    # plugins and SQLite database from disk without end and its health check
-    # timed out; at 1g it climbed back to the limit under normal use (#272).
-    # docker stats and the working-set metric leave that cache out: read the
-    # memory.pressure and io.stat of the container's cgroup before lowering this.
+    # The cgroup limit counts the page cache, which Grafana needs for its binary,
+    # plugins and SQLite database. docker stats and the working-set metric leave
+    # that cache out: read the memory.pressure and io.stat of the container's
+    # cgroup before lowering this.
     deploy: {resources: {limits: {memory: 1536m}}}
     memswap_limit: 1536m
     cpu_shares: 128

@@ -41,8 +41,7 @@ PROD_LIMITS = {
 PROD_LIMITS_CEILING = 17.5 * GIB
 OBS_LIMITS = {
     "prometheus": 1024 * MIB,
-    # The cgroup limit counts the page cache: below 1536m Grafana re-reads its
-    # files from disk without end (issue #272).
+    # The cgroup limit counts the page cache Grafana reads its files through.
     "grafana": 1536 * MIB,
     "alertmanager": 128 * MIB,
     "postgres-exporter": 96 * MIB,
