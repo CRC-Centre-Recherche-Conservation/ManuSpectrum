@@ -106,7 +106,7 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   service (profile `init`, not started by `up`): `setup_db`, the admin password,
   then `packages -o load_package -s /srv/pkg -y` (the package, mounted
   read-only), `normalize_frollo_uris` (the Frollo TAPAC list items get their
-  Frollo address instead of a bare Opentheso id) and `i18n synclanguages`; the
+  Frollo ARK URI instead of a bare Opentheso id) and `i18n synclanguages`; the
   controlled lists are made searchable by the package's own post SQL.
   It takes several minutes longer than `setup_db` alone (graphs, 30 000 list
   values, a full reindex). It refuses to run when the database exists, because

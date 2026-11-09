@@ -16,10 +16,12 @@ the IIIF annotations use the URI as an identifier: a bare number is wrong in
 all of them.
 
 OBJECTIVE:
-Give each of these items the address of its concept on Frollo,
-``https://frollo.notre-dame.science/opentheso/?idc=<id>&idt=th12``, and give
-the same string to every copy of it in tiles. The search and the Analysis
-Explorer compare the tile copy with the item URI, so both move together.
+Give each of these items the URI Frollo publishes for its concept, the ARK
+``https://ark.notre-dame.science/ark:/35572/<name>`` (looked up in
+``manuspectrum.constants.frollo_arks.FROLLO_ARKS``: an ARK is not derived from
+the id), and give the same string to every copy of it in tiles. The search and
+the Analysis Explorer compare the tile copy with the item URI, so both move
+together.
 
 HOW IT WORKS:
 1. ``lists``: the items of the Frollo lists whose URI is digits only.
@@ -40,6 +42,8 @@ HOW IT WORKS:
 
 A URI made of anything other than digits (an AAT or ManuSpectrum URI on a few
 TAPAC items, an address written by hand) and every other list are left alone.
+So is a bare id missing from the ARK table (a concept the package does not
+carry): the command reports it, and its ARK is to be looked up on Frollo.
 
 OPTIONS:
 --dry-run: reports the counts, writes and indexes nothing (run this first)
@@ -63,17 +67,23 @@ from arches.app.models.resource import Resource
 from arches.app.utils.index_database import index_resources_using_singleprocessing
 from arches_controlled_lists.models import List, ListItem
 
-from manuspectrum.constants.frollo import FROLLO_LIST_IDS, frollo_concept_url
+from manuspectrum.constants.frollo import FROLLO_LIST_IDS, frollo_concept_uri
 
 BARE_ID = re.compile(r"[0-9]+")
 BATCH = 500
 
 
-def concept_url(uri):
-    """The Frollo address for *uri* when it is a bare concept id, else None."""
+def bare_id(uri):
+    """*uri* stripped when it is a bare Opentheso concept id, else None."""
     if isinstance(uri, str) and BARE_ID.fullmatch(uri.strip()):
-        return frollo_concept_url(uri.strip())
+        return uri.strip()
     return None
+
+
+def concept_uri(uri):
+    """The ARK URI for *uri* when it is a known bare concept id, else None."""
+    concept_id = bare_id(uri)
+    return frollo_concept_uri(concept_id) if concept_id else None
 
 
 def canonical_id(value):
@@ -84,23 +94,27 @@ def canonical_id(value):
         return None
 
 
-def rewrite(value, list_ids):
+def rewrite(value, list_ids, unknown=None):
     """``(new_value, rewritten_count)``: the reference URIs of *value* fixed.
 
     A reference is any object holding ``uri`` and ``list_id``, wherever it
     sits in the JSON (a tile's node value, or a pending edit's copy of it).
+    Bare ids missing from the ARK table are left as they are and added to
+    *unknown* (a set) when one is given.
     """
     if isinstance(value, list):
-        pairs = [rewrite(item, list_ids) for item in value]
+        pairs = [rewrite(item, list_ids, unknown) for item in value]
         return [new for new, _ in pairs], sum(n for _, n in pairs)
     if not isinstance(value, dict):
         return value, 0
     if "uri" in value and canonical_id(value.get("list_id")) in list_ids:
-        new_uri = concept_url(value["uri"])
+        new_uri = concept_uri(value["uri"])
         if new_uri is not None:
             return {**value, "uri": new_uri}, 1
+        if unknown is not None and bare_id(value["uri"]):
+            unknown.add(bare_id(value["uri"]))
         return value, 0
-    pairs = {key: rewrite(item, list_ids) for key, item in value.items()}
+    pairs = {key: rewrite(item, list_ids, unknown) for key, item in value.items()}
     return (
         {key: new for key, (new, _) in pairs.items()},
         sum(n for _, n in pairs.values()),
@@ -110,8 +124,8 @@ def rewrite(value, list_ids):
 class Command(BaseCommand):
     help = (
         "Replace the bare Opentheso ids of the Frollo TAPAC list items by the "
-        "concepts' Frollo addresses, in the lists and in tiles (--dry-run "
-        "reports counts only)."
+        "concepts' ARK URIs, in the lists and in tiles (--dry-run reports "
+        "counts only)."
     )
 
     def add_arguments(self, parser):
@@ -127,6 +141,7 @@ class Command(BaseCommand):
         self.list_ids = {str(uuid.UUID(list_id)) for list_id in FROLLO_LIST_IDS}
         self.resource_ids = set()
         self.changed_lists = set()
+        self.unknown_ids = set()
         verb = "would rewrite" if self.dry_run else "rewrote"
 
         with transaction.atomic():
@@ -137,6 +152,14 @@ class Command(BaseCommand):
         self.stdout.write(
             f"tiles: {verb} {references} reference(s) in {tile_rows} row(s)"
         )
+        if self.unknown_ids:
+            self.stderr.write(
+                self.style.WARNING(
+                    f"{len(self.unknown_ids)} bare id(s) have no ARK in "
+                    "manuspectrum/constants/frollo_arks.py and were left as is: "
+                    + ", ".join(sorted(self.unknown_ids, key=int))
+                )
+            )
         if self.dry_run:
             self.stdout.write("dry-run: run without --dry-run to write.")
             return
@@ -145,13 +168,16 @@ class Command(BaseCommand):
 
     def do_lists(self):
         """Rewrite the bare ids of the Frollo list items; returns their number."""
-        items = list(
-            ListItem.objects.filter(
-                list_id__in=self.list_ids, uri__regex=r"^\s*[0-9]+\s*$"
-            ).only("pk", "uri")
-        )
-        for item in items:
-            item.uri = concept_url(item.uri)
+        items = []
+        for item in ListItem.objects.filter(
+            list_id__in=self.list_ids, uri__regex=r"^\s*[0-9]+\s*$"
+        ).only("pk", "uri", "list_id"):
+            new_uri = concept_uri(item.uri)
+            if new_uri is None:
+                self.unknown_ids.add(bare_id(item.uri))
+                continue
+            item.uri = new_uri
+            items.append(item)
             self.changed_lists.add(item.list_id)
         if items and not self.dry_run:
             ListItem.objects.bulk_update(items, ["uri"], batch_size=BATCH)
@@ -175,7 +201,7 @@ class Command(BaseCommand):
                 for pk, resource_id, value in chunk.values_list(
                     "pk", "resourceinstance_id", field
                 ):
-                    new, count = rewrite(value, self.list_ids)
+                    new, count = rewrite(value, self.list_ids, self.unknown_ids)
                     if not count:
                         continue
                     rows += 1

@@ -3,20 +3,23 @@
 Pure data, like the other constants modules: no Django import.
 
 The "Thesaurus des Techniques d'analyses et d'examens (TAPAC)" is published on
-the Frollo Opentheso instance as thesaurus ``th12`` (``pkg/NOTICE``, 1.5). Its
-concepts are addressed by their Opentheso id (``idc``) and the thesaurus id
-(``idt``): ``https://frollo.notre-dame.science/opentheso/?idc=61296&idt=th12``
-is the page of "fiber optic reflectance spectrometry" (FORS).
+the Frollo Opentheso instance as thesaurus ``th12`` (``pkg/NOTICE``, 1.5). Each
+concept has an Opentheso id (``idc``, the value the package's SKOS files carry
+in ``dcterms:identifier``) and an ARK, which Opentheso publishes as the
+concept's URI: "fiber optic reflectance spectrometry" (FORS) is ``idc`` 61296
+and ``https://ark.notre-dame.science/ark:/35572/ndpnf4ww5qcbn0h5b67ctmt``. The
+ARK resolver redirects to the concept's page, and the ARK is the persistent
+identifier the RO-Crate export and the IIIF annotations should cite. ARKs are
+not derived from the ``idc``: ``frollo_arks.FROLLO_ARKS`` lists them.
 """
+
+from manuspectrum.constants.frollo_arks import FROLLO_ARKS
 
 #: Opentheso id of the TAPAC thesaurus on Frollo.
 FROLLO_THESAURUS_ID = "th12"
 
-#: Address of a TAPAC concept, from its Opentheso concept id.
-FROLLO_CONCEPT_URL = (
-    "https://frollo.notre-dame.science/opentheso/?idc={concept_id}&idt="
-    + FROLLO_THESAURUS_ID
-)
+#: The ARK resolver: a concept's URI is this prefix followed by its ARK name.
+FROLLO_ARK_RESOLVER = "https://ark.notre-dame.science/ark:/"
 
 #: Controlled lists whose items are TAPAC concepts (both from th12, see
 #: ``pkg/NOTICE``). The ids are those of the package's ConceptSchemes.
@@ -28,6 +31,11 @@ FROLLO_LIST_IDS = (
 )
 
 
-def frollo_concept_url(concept_id):
-    """The Frollo address of the TAPAC concept whose Opentheso id is *concept_id*."""
-    return FROLLO_CONCEPT_URL.format(concept_id=concept_id)
+def frollo_concept_uri(concept_id):
+    """The ARK URI of the TAPAC concept whose Opentheso id is *concept_id*.
+
+    None when the id is not in ``FROLLO_ARKS`` (a concept the package does not
+    carry): its URI cannot be derived and must be looked up on Frollo.
+    """
+    ark = FROLLO_ARKS.get(str(concept_id).strip())
+    return FROLLO_ARK_RESOLVER + ark if ark else None

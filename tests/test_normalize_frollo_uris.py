@@ -2,14 +2,18 @@
 
 The Frollo TAPAC items stored their bare Opentheso id ("61296") as URI, and the
 report linked it relative to the report page. The command must give the item
-and every tile copy the same Frollo address, and touch nothing else.
+and every tile copy the same ARK URI, the one Frollo publishes for the concept,
+and touch nothing else.
 
 Usage:
     python manage.py test tests.test_normalize_frollo_uris --settings="tests.test_settings"
 """
 
+import re
 import uuid
 from io import StringIO
+from pathlib import Path
+from unittest import skipUnless
 from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
@@ -25,11 +29,19 @@ from arches.app.models.models import (
 )
 from arches_controlled_lists.models import List, ListItem
 
-from manuspectrum.constants.frollo import FROLLO_LIST_IDS, frollo_concept_url
+from manuspectrum.constants.frollo import FROLLO_LIST_IDS, frollo_concept_uri
+from manuspectrum.constants.frollo_arks import FROLLO_ARKS
 from manuspectrum.management.commands.normalize_frollo_uris import Command
 
 TAPAC, SAMPLING = FROLLO_LIST_IDS
-FORS = "https://frollo.notre-dame.science/opentheso/?idc=61296&idt=th12"
+FORS = "https://ark.notre-dame.science/ark:/35572/ndpnf4ww5qcbn0h5b67ctmt"
+# The Sample Taking Technique concept 61042, as Frollo publishes it.
+SAMPLING_61042 = "https://ark.notre-dame.science/ark:/35572/ndpfb6r8xcsrhsv2t7n95gq"
+# An id the package does not carry: its ARK cannot be derived.
+UNKNOWN_ID = "99999999"
+PKG_LISTS = (
+    Path(__file__).resolve().parent.parent / "pkg/reference_data/controlled_lists"
+)
 AAT = "http://vocab.getty.edu/aat/300053228"
 INDEX = "manuspectrum.management.commands.normalize_frollo_uris.Command.index_resources"
 
@@ -99,23 +111,57 @@ class Base(TestCase):
 
 
 class AddressTests(TestCase):
-    def test_the_address_is_the_frollo_concept_page(self):
-        self.assertEqual(frollo_concept_url("61296"), FORS)
+    def test_the_uri_is_the_ark_frollo_publishes(self):
+        self.assertEqual(frollo_concept_uri("61296"), FORS)
+        self.assertEqual(frollo_concept_uri(" 61042 "), SAMPLING_61042)
 
-    def test_the_address_is_a_url_where_the_bare_id_is_not(self):
+    def test_an_id_missing_from_the_table_has_no_uri(self):
+        self.assertIsNone(frollo_concept_uri(UNKNOWN_ID))
+
+    def test_the_uri_is_a_url_where_the_bare_id_is_not(self):
         # ListItem.uri is a URLField: the stored bare id never was a valid value.
         URLValidator()(FORS)
         with self.assertRaises(ValidationError):
             URLValidator()("61296")
 
+    def test_the_table_holds_distinct_arks_of_the_frollo_naan(self):
+        self.assertEqual(len(FROLLO_ARKS), 325)
+        self.assertEqual(len(set(FROLLO_ARKS.values())), len(FROLLO_ARKS))
+        for concept_id, ark in FROLLO_ARKS.items():
+            with self.subTest(concept_id=concept_id):
+                self.assertRegex(concept_id, r"^[0-9]+$")
+                self.assertRegex(ark, r"^35572/[0-9a-z]+$")
+                URLValidator()(frollo_concept_uri(concept_id))
+
+    @skipUnless(PKG_LISTS.is_dir(), "the pkg submodule is not checked out")
+    def test_every_frollo_id_of_the_package_has_an_ark(self):
+        ids = set()
+        for name in (
+            "frollo_analysis_and_examination_techniques_tapac.xml",
+            "frollo_sample_taking_technique.xml",
+        ):
+            text = (PKG_LISTS / name).read_text(encoding="utf-8")
+            ids |= set(re.findall(r"<dcterms:identifier>([0-9]+)<", text))
+        self.assertEqual(ids - set(FROLLO_ARKS), set())
+
 
 class ListTests(Base):
-    def test_bare_ids_of_both_frollo_lists_become_frollo_addresses(self):
+    def test_bare_ids_of_both_frollo_lists_become_their_arks(self):
         fors = self.item("61296")
         sampling = self.item("61042", self.sampling)
         run()
         self.assertEqual(self.uri(fors), FORS)
-        self.assertEqual(self.uri(sampling), frollo_concept_url("61042"))
+        self.assertEqual(self.uri(sampling), SAMPLING_61042)
+
+    def test_a_bare_id_without_an_ark_is_kept_and_reported(self):
+        unknown = self.item(UNKNOWN_ID)
+        fors = self.item("61296")
+        output = run()
+        self.assertEqual(self.uri(unknown), UNKNOWN_ID)
+        self.assertEqual(self.uri(fors), FORS)
+        self.assertIn("lists: rewrote 1 item URI(s)", output)
+        self.assertIn("have no ARK in manuspectrum/constants/frollo_arks.py", output)
+        self.assertIn(UNKNOWN_ID, output)
 
     def test_absolute_uris_of_a_frollo_list_are_untouched(self):
         aat = self.item(AAT)
@@ -146,7 +192,15 @@ class TileTests(Base):
         )
         run()
         uris = [ref["uri"] for ref in self.stored(tile)["n"]]
-        self.assertEqual(uris, [FORS, AAT, frollo_concept_url("61042")])
+        self.assertEqual(uris, [FORS, AAT, SAMPLING_61042])
+
+    def test_a_reference_without_an_ark_is_kept_and_reported(self):
+        tile = self.tile({"n": [reference(UNKNOWN_ID), reference("61296")]})
+        output = run()
+        uris = [ref["uri"] for ref in self.stored(tile)["n"]]
+        self.assertEqual(uris, [UNKNOWN_ID, FORS])
+        self.assertIn("tiles: rewrote 1 reference(s) in 1 row(s)", output)
+        self.assertIn(UNKNOWN_ID, output)
 
     def test_a_list_id_in_upper_case_is_recognised(self):
         tile = self.tile({"n": [reference("61296", TAPAC.upper())]})

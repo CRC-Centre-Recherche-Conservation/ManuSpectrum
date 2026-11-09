@@ -45,7 +45,8 @@ const UPSTREAM_TEMPLATE = path.join(
     TEMPLATE,
 );
 
-const FORS = "https://frollo.notre-dame.science/opentheso/?idc=61296&idt=th12";
+const FORS =
+    "https://ark.notre-dame.science/ark:/35572/ndpnf4ww5qcbn0h5b67ctmt";
 const AAT = "http://vocab.getty.edu/aat/300053228";
 
 const reportBlock = (file) => {
