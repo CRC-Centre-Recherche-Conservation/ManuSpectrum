@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from arches.app.models.models import (
     Concept,
@@ -221,6 +221,28 @@ class ManifestTests(Base):
         row.save()
         run("--from", "http://nowhere.example", "--to", NEW)
         self.assertEqual(self.stored_manifest(row), data)
+
+
+class OriginMapTests(SimpleTestCase):
+    def setUp(self):
+        from manuspectrum.management.commands.rewrite_dev_origin import OriginMap
+
+        self.origins = OriginMap([WEB, CANTALOUPE], NEW)
+
+    def test_arches_minted_ids_move_under_the_iiifserver_prefix(self):
+        for kind in ("canvas", "sequence", "annotation"):
+            with self.subTest(kind=kind):
+                self.assertEqual(
+                    self.origins.map(f"{CANTALOUPE}/iiif/manifest/{kind}/1.json"),
+                    f"{NEW}iiifserver/iiif/manifest/{kind}/1.json",
+                )
+
+    def test_stored_manifest_route_keeps_its_path(self):
+        key = uuid.uuid4()
+        self.assertEqual(
+            self.origins.map(f"{WEB}/iiif/manifest/{key}"),
+            f"{NEW}iiif/manifest/{key}",
+        )
 
 
 class CanvasConsistencyTests(Base):
