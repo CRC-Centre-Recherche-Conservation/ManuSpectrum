@@ -388,6 +388,12 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        # One line per remote manifest an annotation save registers (signals.py).
+        "manuspectrum.manifests": {
+            "handlers": ["file", "console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         # consider adding your own project here if it logs
     },
 }
