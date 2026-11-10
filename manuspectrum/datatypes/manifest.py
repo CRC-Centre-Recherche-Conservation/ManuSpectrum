@@ -3,16 +3,13 @@ import re
 from urllib.parse import urlparse
 
 from django.conf import settings as django_settings
-from django.core.validators import URLValidator, ValidationError
+from django.core.validators import ValidationError
 from arches.app.datatypes.base import BaseDataType
 from arches.app.models.models import IIIFManifest, Widget
 from django.utils.translation import gettext_lazy as _
 
 from manuspectrum.utils import manifest_registry
-from manuspectrum.utils.manifest_registry import (  # noqa: F401
-    FailParsingManifestIIIF,
-    InvalidManifestURL,
-)
+from manuspectrum.utils.manifest_registry import FailParsingManifestIIIF
 
 text: Widget = Widget.objects.get(name="manifest-widget")
 
@@ -44,11 +41,6 @@ _LOCAL_MANIFEST_RE = re.compile(
     r"(?P<uuid>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$",
     re.IGNORECASE,
 )
-
-# Cheap, network-free URL FORMAT gate. The host / private-IP / SSRF policy lives
-# in manuspectrum.utils.http.assert_url_is_safe (DNS-based, opened only by
-# SSRF_ALLOW_PRIVATE), NOT here — so there is no dev/prod regex split.
-_validate_url_format = URLValidator(schemes=["http", "https"])
 
 
 def get_local_hosts():
@@ -116,10 +108,6 @@ class ManifestDataType(BaseDataType):
             return url
         return url
 
-    @staticmethod
-    def is_iiif_manifest(manifest_json):
-        return manifest_registry.is_iiif_manifest(manifest_json)
-
     def validate(self, value, **kwargs):
         """Validate the manifest value without creating any DB records.
 
@@ -179,18 +167,25 @@ class ManifestDataType(BaseDataType):
                 # server saves), so reachability + IIIF compliance are checked
                 # in pre_tile_save(), the side-effecting lifecycle hook.
                 try:
-                    _validate_url_format(manifest_url)
+                    manifest_registry.check_url_format(manifest_url)
                 except ValidationError:
                     errors.append({"type": "ERROR", "message": _("Invalid URL format")})
 
         return errors
 
     def pre_tile_save(self, tile, nodeid):
-        """Ensure the IIIFManifest DB record exists and store local path.
+        """Ensure the IIIFManifest DB record exists and store its local path.
 
         Always normalizes tile.data to a local relative path
         (/manifest/{globalid}) so all tiles point to the local server,
         regardless of whether the manifest was created locally or imported.
+        The value is resolved in this order: a local reference by globalid,
+        then a row already registered for the URL (as given, normalized or
+        with a trailing slash; ``manifest_registry.find_registered``), then an
+        import. A local reference whose globalid has no row is not fetched
+        and fails. Every failure RAISES so the enclosing transaction.atomic()
+        rolls back instead of committing a tile that points at an un-imported
+        manifest.
         """
         value = tile.data.get(str(nodeid))
         if not value or not isinstance(value, str):
@@ -204,28 +199,14 @@ class ManifestDataType(BaseDataType):
             pass
 
         manifest_url = self._normalize_url(value)
-
-        # 1. Already-known local manifest (relative path, or our own host).
-        relative_path = self._to_relative_path(manifest_url)
-        manifest = IIIFManifest.objects.filter(url=relative_path).first()
-        if manifest:
-            tile.data[str(nodeid)] = (
-                manifest.url
-                if manifest.url.startswith("/")
-                else f"/manifest/{manifest.globalid}"
-            )
-            return
-
-        # 2. External manifest already imported (stored by absolute URL).
-        manifest = IIIFManifest.objects.filter(url=manifest_url).first()
-        if manifest:
-            tile.data[str(nodeid)] = f"/manifest/{manifest.globalid}"
-            return
-
-        # 3. New external manifest: every failure RAISES so the enclosing
-        #    transaction.atomic() rolls back instead of committing a tile that
-        #    points at an un-imported manifest.
-        manifest, _created = manifest_registry.import_manifest(manifest_url)
+        lookup = self._to_relative_path(manifest_url) or manifest_url
+        manifest, outcome = manifest_registry.find_registered(lookup)
+        if manifest is None and outcome is None and lookup != manifest_url:
+            manifest, outcome = manifest_registry.find_registered(manifest_url)
+        if manifest is None:
+            if outcome == manifest_registry.LOCAL:
+                raise FailParsingManifestIIIF(f"Manifest not found: {value}")
+            manifest, _created = manifest_registry.import_manifest(manifest_url)
         tile.data[str(nodeid)] = f"/manifest/{manifest.globalid}"
 
     def transform_value_for_tile(self, value, **kwargs):
@@ -267,12 +248,6 @@ class ManifestDataType(BaseDataType):
         value = tile.data.get(str(nodeid))
         if value in ["", None]:
             tile.data[str(nodeid)] = None
-
-    def _extract_manifest_label(self, manifest_json):
-        return manifest_registry.extract_label(manifest_json)
-
-    def _extract_manifest_description(self, manifest_json):
-        return manifest_registry.extract_description(manifest_json)
 
     @classmethod
     def get_pref_label(cls):

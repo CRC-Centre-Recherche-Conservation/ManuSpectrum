@@ -35,9 +35,6 @@ def local_manifest_uuid(url):
     return None
 
 
-_local_uuid = local_manifest_uuid
-
-
 def manifest_json(url):
     """Manifest JSON of *url*: a local ``/manifest/<uuid>`` is read from ``IIIFManifest`` in the database, never over HTTP.
 
