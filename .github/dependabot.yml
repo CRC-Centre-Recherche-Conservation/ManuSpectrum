@@ -11,6 +11,11 @@ updates:
       - javascript
     versioning-strategy: "increase"
     target-branch: "dev"
+    # A new release waits a week before its pull request: a hijacked package
+    # version is usually caught and pulled within days. Security updates do
+    # not wait.
+    cooldown:
+      default-days: 7
     # The packages Arches pins exactly and the project follows at the same
     # version: they move with an Arches upgrade. The list is kept equal to
     # that set by tests/test_arches_pins.py.
@@ -28,8 +33,8 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
   # Base image digests of deploy/docker/Dockerfile: a rebuilt python or node
-  # image carries the Debian security updates.
-  - package-ecosystem: "docker"
+  # image carries the Debian security updates, so no cooldown.
+  - package-ecosystem: "docker" # zizmor: ignore[dependabot-cooldown]
     directory: "/deploy/docker"
     open-pull-requests-limit: 5
     schedule:
@@ -40,7 +45,7 @@ updates:
       - docker
     target-branch: "dev"
   # Compose service images, pinned by digest.
-  - package-ecosystem: "docker-compose"
+  - package-ecosystem: "docker-compose" # zizmor: ignore[dependabot-cooldown]
     directory: "/deploy/compose"
     open-pull-requests-limit: 5
     schedule:
@@ -64,6 +69,8 @@ updates:
       - python
     target-branch: "dev"
     versioning-strategy: "lockfile-only"
+    cooldown:
+      default-days: 7
     ignore:
       # Arches core upgrades are manual (updateproject rebuilds webpack/), and
       # the npm side moves with them. Arches applications stay free.
