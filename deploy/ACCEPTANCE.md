@@ -344,6 +344,14 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
     `dc logs --tail=100 <service>`.
 - [ ] *(service account)* Same Host rule by hand: `dc exec -T web curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: web' http://127.0.0.1:8000/healthz`
   → `200`; with `-H 'Host: localhost'` → `400`.
+- [ ] *(service account)* The graph content is complete in every site language. The command prints
+  `0 reference default(s) and 0 published one(s) missing a site language; 0 resource(s) with such a stored value []`:
+  ```bash
+  make -C deploy manage ARGS='shell -c "import json; from django.conf import settings; from django.db import connection; langs = {code for code, name in settings.LANGUAGES}; lst = lambda x: x if isinstance(x, list) else []; full = lambda v: langs <= {l[\"language_id\"] for l in v.get(\"labels\") or [] if l[\"valuetype_id\"] == \"prefLabel\"}; c = connection.cursor(); c.execute(\"SELECT nodeid::text, nodegroupid::text FROM nodes WHERE datatype = %s\", [\"reference\"]); refs = dict(c.fetchall()); c.execute(\"SELECT nodeid::text, config FROM cards_x_nodes_x_widgets\"); d = sum(1 for n, cfg in c.fetchall() if n in refs for v in lst(json.loads(cfg).get(\"defaultValue\")) if not full(v)); c.execute(\"SELECT p.serialized_graph->%s FROM published_graphs p JOIN graphs g ON g.publicationid = p.publicationid\", [\"cards_x_nodes_x_widgets\"]); p = sum(1 for (ws,) in c.fetchall() for w in json.loads(ws or \"[]\") if w[\"node_id\"] in refs for v in lst((w.get(\"config\") or {}).get(\"defaultValue\")) if not full(v)); c.execute(\"SELECT resourceinstanceid::text, tiledata FROM tiles WHERE nodegroupid::text = ANY(%s)\", [list(set(refs.values()))]); r = sorted({i for i, td in c.fetchall() for n, x in json.loads(td).items() if n in refs for v in lst(x) if not full(v)}); print(d, \"reference default(s) and\", p, \"published one(s) missing a site language;\", len(r), \"resource(s) with such a stored value\", r[:20])"'
+  ```
+  Then in the browser, signed in: `/fr/add-resource/60c85aba-f079-45bc-997f-21cdd4f77b6d` (Analysis), card « Nom de
+  l'analyse », shows the Type « termes préférentiels », and `/en/` shows « preferred terms », never « Unlabeled Item »;
+  on a Component, « Représentation iconographique » is the Biblissima autocomplete (a plain URL field is wrong).
 
 ### 2.5 Resources and restart policy (D-H6)
 
@@ -1708,6 +1716,8 @@ Needs the stack running `vOld` and `vA` armed.
   https://<host>/readyz` → `200`. The site answers; `smoke.sh edge` passes. `ReleasePendingTooLong` and `UpdateRolledBack`
   are not firing once the 64 hours of a previous rollback are over.
 - [ ] `docker image ls` holds the images of `vB` and `vA` (current and previous), no older armed one.
+- [ ] When `releases/<vB>.md` « Upgrading » lists one-off steps, run them in their order after the update, then the
+  graph content check of §2.4: same output, and the resources of the snapshot still open in the editor.
 
 ### 9.9 Refusals of the update
 
