@@ -18,10 +18,10 @@
     <div style="padding: 25px 60px 0px;">
         <div class="widget-input-label">{% trans "Type of Project" %}*</div>
         <div data-bind="component: {
-            name: 'concept-radio-widget',
+            name: 'reference-select-widget',
             params: {
-                node: {config: {rdmCollection: projectEventTypeRdmCollection }},
-                config: {label: ''},
+                node: {config: {controlledList: projectTypeControlledList, multiValue: false}},
+                config: {label: '', placeholder: ''},
                 renderContext: 'workflow',
                 value: typeValue,
             }
