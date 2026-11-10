@@ -293,7 +293,8 @@ def register_remote_manifest(url, *, expected_service=None, use_memo=True):
     ``invalid_url``, ``rejected`` (SSRF guard, HTTP 4xx), ``unreachable``
     (network, timeout, 5xx), ``not_iiif`` or ``canvas_mismatch``. With
     ``use_memo`` a URL that failed for any of these reasons is not fetched
-    again for an hour; without it nothing is read or stored in the memo.
+    again for an hour; without it nothing is read or stored in the memo. A
+    spent request budget is the caller's, not the URL's: it is not memoised.
     Does not catch exceptions it cannot name.
     """
     row, outcome = find_registered(url)
@@ -309,7 +310,7 @@ def register_remote_manifest(url, *, expected_service=None, use_memo=True):
         reason = _reason_of(exc)
         if reason is None:
             raise
-        if use_memo:
+        if use_memo and not isinstance(exc, BudgetSpent):
             cache.add(_memo_key(url), reason, FAILURE_MEMO_TTL)
         raise ManifestRegistrationError(reason, type(exc).__name__) from exc
     return row, REGISTERED if created else KNOWN

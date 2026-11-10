@@ -16,9 +16,8 @@ from manuspectrum.utils import manifest_registry
 def referenced_manifests():
     """``{manifest URL: [annotation count, [canvas ids]]}`` of every http(s) manifest named by a stored annotation.
 
-    Reads Arches' annotation view because it needs the approved features of
-    every annotation node; the IIIF read path rule « zones from tiles » does
-    not apply to this operator report. One canvas per URL: the first seen.
+    Reads Arches' annotation view: the approved features of every annotation
+    node. One canvas per URL: the first seen.
     """
     found = defaultdict(lambda: [0, []])
     for feature in VwAnnotation.objects.values_list("feature", flat=True).iterator():

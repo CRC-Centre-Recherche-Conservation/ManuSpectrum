@@ -27,6 +27,7 @@ from arches.app.models.tile import Tile
 
 from manuspectrum.iiif import sources
 from manuspectrum.utils import manifest_registry as registry
+from manuspectrum.utils.budget import BudgetSpent
 from manuspectrum.utils.http import UnsafeURLError
 
 from tests.test_manifest_datatype import resolves_publicly
@@ -249,6 +250,12 @@ class FailureMemoTests(RegistryCase):
                 self.refused(reason, **kwargs)
                 self.refused(reason, **kwargs)
             self.assertEqual(fetch.call_count, 1, reason)
+
+    def test_a_spent_budget_is_not_memoised(self):
+        with fetching(error=BudgetSpent()):
+            self.refused(registry.UNREACHABLE)
+        (_row, outcome), fetched = self.register(v2_manifest())
+        self.assertEqual((outcome, fetched), (registry.REGISTERED, 1))
 
     def test_bypass_neither_reads_nor_stores_the_memo(self):
         with fetching({"a": 1}) as fetch:
