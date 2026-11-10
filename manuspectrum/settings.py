@@ -813,6 +813,8 @@ SEARCH_THUMBNAIL_MAX_AGE = 60 * 60 * 24
 SEARCH_THUMBNAIL_DEADLINE = 8
 SEARCH_THUMBNAIL_CONNECT_TIMEOUT = 2.5
 SEARCH_THUMBNAIL_HOST_DOWN_TTL = 5 * 60
+# How long a thumbnail that ended without an image is not asked again.
+SEARCH_THUMBNAIL_MISS_TTL = 5 * 60
 
 # Knockout component templates (manuspectrum.views.knockout_templates).
 # max-age: how long a browser reuses a template without asking. The URL carries

@@ -1,19 +1,33 @@
 import logging
+import sys
+
+from django.conf import settings
+from django.core.cache import cache
 
 from arches.app.utils.search_thumbnail_fetcher import SearchThumbnailFetcher
 from arches.app.utils.search_thumbnail_fetcher_factory import (
     SearchThumbnailFetcherFactory,
 )
-from manuspectrum.iiif.sources import manifest_json
+from manuspectrum.iiif.sources import canvas_index, canvases_of, manifest_json
 from manuspectrum.utils.http import safe_fetch
 from manuspectrum.utils.iiif_tools import (
     CanvasIIIF,
     BBoxCalculator,
     own_cantaloupe_target,
 )
+from manuspectrum.utils.cache import stable_cache_key
 from manuspectrum.utils.manifest_values import first_manifest_url
+from manuspectrum.views.explorer.values import rewrite_legacy_url
 
 logger = logging.getLogger(__name__)
+
+# Longest side, in pixels, a region thumbnail is asked at.
+THUMBNAIL_SIZE = 300
+
+# Zone point radius when the annotation states none.
+DEFAULT_POINT_RADIUS = 10
+
+_NO_SOURCE = object()
 
 # The shared session asks for JSON-LD (it exists for manifests); an image
 # request has to say what it is actually after.
@@ -74,300 +88,233 @@ def _image_payload(response):
     return (response.content, content_type)
 
 
-@SearchThumbnailFetcherFactory.register("0c8226c1-11a9-4c48-9601-a7a0c6f2df6b")
-class DocumentThumbnailFetcher(SearchThumbnailFetcher):
+def _miss_key(resource):
+    return stable_cache_key("search-thumbnail-miss", resource.resourceinstanceid)
+
+
+def _recent_miss(resource):
+    """Whether a retrieval for *resource* ended without an image within ``SEARCH_THUMBNAIL_MISS_TTL``."""
+    try:
+        return bool(cache.get(_miss_key(resource)))
+    except Exception:
+        return False
+
+
+def _remember_miss(resource):
+    try:
+        cache.set(_miss_key(resource), True, settings.SEARCH_THUMBNAIL_MISS_TTL)
+    except Exception:
+        logger.warning("Search thumbnail miss flag not stored", exc_info=True)
+
+
+def _region_size(width, height):
+    """The IIIF ``w,`` size of a *width* x *height* region: bounded by ``THUMBNAIL_SIZE``, never larger than the region."""
+    longest = max(width, height)
+    if longest <= THUMBNAIL_SIZE:
+        return width
+    return max(1, round(width * THUMBNAIL_SIZE / longest))
+
+
+def _region_url(service, bbox):
+    x, y, w, h = bbox
+    return f"{service}/{x},{y},{w},{h}/{_region_size(w, h)},/0/default.jpg"
+
+
+def _zone_region_url(annotation, read_manifest):
+    """IIIF region URL of one annotation zone, or None when it cannot be shown.
+
+    Polygons and Points are accepted. The zone's canvas is found in its
+    manifest by id or image service; a canvas missing from the manifest does
+    not clamp the region. A zone whose region is empty (drawn outside the
+    image) gives None.
     """
-    Fetcher for Documents: the thumbnail of the IIIF manifest (v2/v3) held in
-    the Document's 'manifest' node (facsimiles). An Arches-hosted manifest
-    (``/manifest/<uuid>``) is read from the database, any other over HTTP.
+    feature = annotation.feature or {}
+    properties = feature.get("properties") or {}
+    service = rewrite_legacy_url(annotation.canvas or "")
+    manifest_url = properties.get("manifest")
+    if not service or not manifest_url:
+        return None
+    manifest = read_manifest(manifest_url)
+    if not manifest:
+        return None
+    _, width, height = canvas_index(canvases_of(manifest)).get(service.rstrip("/")) or (
+        None,
+        sys.maxsize,
+        sys.maxsize,
+    )
+
+    geometry = feature.get("geometry") or {}
+    coordinates = geometry.get("coordinates")
+    if not coordinates:
+        return None
+    if geometry.get("type") == "Polygon":
+        bbox = BBoxCalculator.polygon_bbox(coordinates, width, height)
+    elif geometry.get("type") == "Point":
+        radius = properties.get("radius", DEFAULT_POINT_RADIUS)
+        bbox = BBoxCalculator.point_bbox(coordinates, width, height, radius=radius)
+    else:
+        return None
+    if not bbox or bbox[2] <= 0 or bbox[3] <= 0:
+        return None
+    return _region_url(service, bbox)
+
+
+def _zone_payload(resource):
+    """The image of the first zone of *resource* that has a region, or None.
+
+    Zones are taken in feature id order, the Explorer's first zone. Only that
+    zone's image is requested: its failure ends the search, and so does a
+    manifest that cannot be read.
+    """
+    from arches.app.models.models import VwAnnotation
+
+    unreadable = []
+
+    def read_manifest(url):
+        manifest = manifest_json(url)
+        if not manifest:
+            unreadable.append(url)
+        return manifest
+
+    for annotation in VwAnnotation.objects.filter(resourceinstance=resource).order_by(
+        "feature_id"
+    ):
+        url = _zone_region_url(annotation, read_manifest)
+        if url:
+            return _image_payload(_fetch_thumbnail(url))
+        if unreadable:
+            return None
+    return None
+
+
+def _has_zone(resource):
+    from arches.app.models.models import VwAnnotation
+
+    return VwAnnotation.objects.filter(resourceinstance=resource).exists()
+
+
+def _manifest_url(resource):
+    from arches.app.models.models import TileModel
+
+    tiles = TileModel.objects.filter(
+        resourceinstance=resource, nodegroup__node__datatype="manifest"
+    )
+    return first_manifest_url(value for tile in tiles for value in tile.data.values())
+
+
+def _manifest_payload(manifest_url):
+    """The image of a manifest's thumbnail, or None."""
+    manifest = manifest_json(manifest_url)
+    if not manifest:
+        return None
+    thumbnail_url = CanvasIIIF.get_thumbnail_url(manifest)
+    if not thumbnail_url:
+        return None
+    return _image_payload(_fetch_thumbnail(thumbnail_url))
+
+
+class _SourceFetcher(SearchThumbnailFetcher):
+    """Shared contract of the search-thumbnail fetchers.
+
+    With ``retrieve=False`` the answer is ``True`` when the resource has a
+    thumbnail source and ``None`` when it has none, without any network call;
+    ``False`` is never returned. With ``retrieve=True`` it is
+    ``(bytes, content_type)`` or ``None``. A retrieval over an existing source
+    that ends without an image is remembered for
+    ``SEARCH_THUMBNAIL_MISS_TTL`` seconds, and both modes answer ``None`` from
+    that memory without reading anything else.
     """
 
     def get_thumbnail(self, retrieve=False):
-        # Late import to avoid AppRegistryNotReady
-        from arches.app.models.models import TileModel
-
+        if _recent_miss(self.resource):
+            return None
         if not retrieve:
-            return self._check_thumbnail_exists()
-
+            try:
+                return True if self._has_source() else None
+            except Exception as e:
+                logger.error(f"Error checking thumbnail existence: {e}")
+                return None
         try:
-            tiles = TileModel.objects.filter(
-                resourceinstance=self.resource, nodegroup__node__datatype="manifest"
-            )
-
-            manifest_url = first_manifest_url(
-                value for tile in tiles for value in tile.data.values()
-            )
-
-            if not manifest_url:
-                logger.warning(
-                    f"No manifest found for resource {self.resource.resourceinstanceid}"
-                )
-                return None
-
-            manifest_data = manifest_json(manifest_url)
-            if not manifest_data:
-                return None
-
-            thumbnail_url = CanvasIIIF.get_thumbnail_url(manifest_data)
-            if not thumbnail_url:
-                logger.warning(
-                    f"No thumbnail URL found in manifest for resource {self.resource.resourceinstanceid}"
-                )
-                return None
-
-            return _image_payload(_fetch_thumbnail(thumbnail_url))
-
+            payload = self._payload()
         except Exception as e:
             logger.error(
-                f"Error fetching manifest thumbnail for resource {self.resource.resourceinstanceid}: {e}"
+                f"Error fetching thumbnail for resource {self.resource.resourceinstanceid}: {e}"
             )
+            payload = None
+        if payload is _NO_SOURCE:
             return None
+        if payload is None:
+            _remember_miss(self.resource)
+        return payload
 
-    def _check_thumbnail_exists(self):
-        try:
-            from arches.app.models.models import TileModel
+    def _has_source(self):
+        raise NotImplementedError
 
-            return TileModel.objects.filter(
-                resourceinstance=self.resource, nodegroup__node__datatype="manifest"
-            ).exists()
-        except Exception as e:
-            logger.error(f"Error checking thumbnail existence: {e}")
-            return False
+    def _payload(self):
+        """The image, None when a source gave none, ``_NO_SOURCE`` when there is no source."""
+        raise NotImplementedError
+
+
+@SearchThumbnailFetcherFactory.register("0c8226c1-11a9-4c48-9601-a7a0c6f2df6b")
+class DocumentThumbnailFetcher(_SourceFetcher):
+    """
+    Fetcher for Documents: the thumbnail of the IIIF manifest (v2/v3) named by
+    the first of the Document's 'manifest' values that is a manifest URL
+    (``first_manifest_url``). An Arches-hosted manifest (``/manifest/<uuid>``)
+    is read from the database, any other over HTTP.
+    """
+
+    def _has_source(self):
+        return _manifest_url(self.resource) is not None
+
+    def _payload(self):
+        manifest_url = _manifest_url(self.resource)
+        if not manifest_url:
+            return _NO_SOURCE
+        return _manifest_payload(manifest_url)
 
 
 @SearchThumbnailFetcherFactory.register("d47595b4-f8a6-419c-8f33-b388206280c4")
-class ComponentThumbnailFetcher(SearchThumbnailFetcher):
+class ComponentThumbnailFetcher(_SourceFetcher):
     """
-    Fetcher for resources with IIIF annotations of type Polygon only.
-    Generates a thumbnail of the annotated region using the IIIF Image API.
+    Fetcher for resources with IIIF annotations: the region of the first usable
+    zone (Polygon or Point), by the IIIF Image API.
     """
 
-    def get_thumbnail(self, retrieve=False):
-        from arches.app.models.models import VwAnnotation
+    def _has_source(self):
+        return _has_zone(self.resource)
 
-        if not retrieve:
-            try:
-                return VwAnnotation.objects.filter(
-                    resourceinstance=self.resource
-                ).exists()
-            except Exception as e:
-                logger.error(f"Error checking annotation existence: {e}")
-                return False
-
-        try:
-            annotation = VwAnnotation.objects.filter(
-                resourceinstance=self.resource
-            ).first()
-            if not annotation:
-                logger.info(
-                    f"No annotations found for resource {self.resource.resourceinstanceid}"
-                )
-                return None
-
-            feature = annotation.feature or {}
-            canvas_service_url = annotation.canvas
-            manifest_url = feature.get("properties", {}).get("manifest")
-
-            if not canvas_service_url or not manifest_url:
-                logger.info(
-                    f"Missing canvas service or manifest for {self.resource.resourceinstanceid}"
-                )
-                return None
-
-            manifest_data = manifest_json(manifest_url)
-            if not manifest_data:
-                return None
-
-            canvas_info = ComponentThumbnailFetcher._find_canvas_by_service(
-                manifest_data, canvas_service_url
-            )
-            width, height = CanvasIIIF.get_canvas_dimensions(canvas_info)
-
-            geometry = feature.get("geometry", {})
-            if geometry.get("type") != "Polygon":
-                logger.info(
-                    f"Skipping non-polygon annotation for {self.resource.resourceinstanceid}"
-                )
-                return None
-
-            coords = geometry.get("coordinates", [])
-            bbox = BBoxCalculator.polygon_bbox(coords, width, height)
-            if not bbox:
-                return None
-            x, y, w, h = bbox
-
-            # IIIF Image API request (region -> full size -> rotation 0 -> default.jpg)
-            thumb_url = f"{canvas_service_url}/{x},{y},{w},{h}/full/0/default.jpg"
-
-            return _image_payload(_fetch_thumbnail(thumb_url))
-
-        except Exception as e:
-            logger.error(
-                f"Error fetching annotation thumbnail for resource {self.resource.resourceinstanceid}: {e}"
-            )
-            return None
-
-    @staticmethod
-    def _find_canvas_by_service(manifest_data, service_url):
-        """Find canvas whose first image service matches service_url (v2/v3)."""
-        if not manifest_data or not service_url:
-            return None
-        version = CanvasIIIF.detect_version(manifest_data)
-
-        try:
-            if version == 3:
-                for canvas in manifest_data.get("items", []):
-                    svc = CanvasIIIF._get_service_from_canvas_v3(canvas)
-                    if svc == service_url:
-                        return canvas
-                return None
-            else:
-                for seq in manifest_data.get("sequences", []):
-                    for canvas in seq.get("canvases", []):
-                        svc = CanvasIIIF._get_service_from_canvas_v2(canvas)
-                        if svc == service_url:
-                            return canvas
-                return None
-        except Exception as e:
-            logger.warning(f"Error searching canvas by service: {e}")
-            return None
+    def _payload(self):
+        if not _has_zone(self.resource):
+            return _NO_SOURCE
+        return _zone_payload(self.resource)
 
 
 @SearchThumbnailFetcherFactory.register("60c85aba-f079-45bc-997f-21cdd4f77b6d")
-class AnalysisThumbnailFetcher(SearchThumbnailFetcher):
+class AnalysisThumbnailFetcher(_SourceFetcher):
     """
     Fetcher for analysis resources with manifest or IIIF annotations.
     Priority:
-    1. Manifest thumbnail if manifest tile exists (any failure of that step
-       falls through to the annotation)
-    2. Annotation-based thumbnail (Point with circle or Polygon region)
+    1. Manifest thumbnail, from the first manifest URL among the manifest tiles
+       (any failure of that step falls through to the annotation)
+    2. Annotation-based thumbnail: the region of the first usable zone
     """
 
-    def get_thumbnail(self, retrieve=False):
-        from arches.app.models.models import TileModel, VwAnnotation
+    def _has_source(self):
+        return _manifest_url(self.resource) is not None or _has_zone(self.resource)
 
-        if not retrieve:
+    def _payload(self):
+        manifest_url = _manifest_url(self.resource)
+        if manifest_url:
             try:
-                if TileModel.objects.filter(
-                    resourceinstance=self.resource, nodegroup__node__datatype="manifest"
-                ).exists():
-                    return True
-                return VwAnnotation.objects.filter(
-                    resourceinstance=self.resource
-                ).exists()
+                payload = _manifest_payload(manifest_url)
             except Exception as e:
-                logger.error(f"Error checking thumbnail existence: {e}")
-                return False
-
-        try:
-            # 1) Try manifest thumbnail
-            manifest_tile = TileModel.objects.filter(
-                resourceinstance=self.resource, nodegroup__node__datatype="manifest"
-            ).first()
-
-            manifest_url = None
-            if manifest_tile and manifest_tile.data:
-                for _, value in manifest_tile.data.items():
-                    if value and isinstance(value, str) and "manifest" in value.lower():
-                        manifest_url = value
-                        break
-
-            if manifest_url:
+                logger.warning(
+                    f"Manifest thumbnail unavailable for resource {self.resource.resourceinstanceid}: {e}"
+                )
                 payload = None
-                try:
-                    manifest_data = manifest_json(manifest_url)
-                    if manifest_data:
-                        thumb_url = CanvasIIIF.get_thumbnail_url(manifest_data)
-                        if thumb_url:
-                            payload = _image_payload(_fetch_thumbnail(thumb_url))
-                except Exception as e:
-                    logger.warning(
-                        f"Manifest thumbnail unavailable for resource {self.resource.resourceinstanceid}: {e}"
-                    )
-                if payload:
-                    return payload
-
-            # 2) Fallback: annotation-based (Point or Polygon)
-            annotation = VwAnnotation.objects.filter(
-                resourceinstance=self.resource
-            ).first()
-            if not annotation:
-                logger.info(
-                    f"No manifest or annotations found for resource {self.resource.resourceinstanceid}"
-                )
-                return None
-
-            feature = annotation.feature or {}
-            canvas_service_url = annotation.canvas  # base IIIF Image API
-            manifest_url = feature.get("properties", {}).get("manifest")
-
-            if not canvas_service_url or not manifest_url:
-                logger.info(
-                    f"Missing canvas service or manifest for annotation {self.resource.resourceinstanceid}"
-                )
-                return None
-
-            manifest_data = manifest_json(manifest_url)
-            if not manifest_data:
-                return None
-
-            canvas_info = AnalysisThumbnailFetcher._find_canvas_by_service(
-                manifest_data, canvas_service_url
-            )
-            width, height = CanvasIIIF.get_canvas_dimensions(canvas_info)
-
-            geometry = feature.get("geometry", {})
-            geo_type = geometry.get("type")
-            coords = geometry.get("coordinates", [])
-            if not coords:
-                return None
-
-            if geo_type == "Point":
-                radius = feature.get("properties", {}).get("radius", 10)
-                bbox = BBoxCalculator.point_bbox(coords, width, height, radius=radius)
-            elif geo_type == "Polygon":
-                bbox = BBoxCalculator.polygon_bbox(coords, width, height)
-            else:
-                logger.info(
-                    f"Unsupported geometry type: {geo_type} for resource {self.resource.resourceinstanceid}"
-                )
-                return None
-
-            if not bbox:
-                return None
-
-            x, y, w, h = bbox
-            thumb_url = f"{canvas_service_url}/{x},{y},{w},{h}/full/0/default.jpg"
-
-            return _image_payload(_fetch_thumbnail(thumb_url))
-
-        except Exception as e:
-            logger.error(
-                f"Error fetching analysis thumbnail for resource {self.resource.resourceinstanceid}: {e}"
-            )
-            return None
-
-    @staticmethod
-    def _find_canvas_by_service(manifest_data, service_url):
-        """Find canvas whose first image service matches service_url (v2/v3)."""
-        if not manifest_data or not service_url:
-            return None
-        version = CanvasIIIF.detect_version(manifest_data)
-
-        try:
-            if version == 3:
-                for canvas in manifest_data.get("items", []):
-                    svc = CanvasIIIF._get_service_from_canvas_v3(canvas)
-                    if svc == service_url:
-                        return canvas
-                return None
-            else:
-                for seq in manifest_data.get("sequences", []):
-                    for canvas in seq.get("canvases", []):
-                        svc = CanvasIIIF._get_service_from_canvas_v2(canvas)
-                        if svc == service_url:
-                            return canvas
-                return None
-        except Exception as e:
-            logger.warning(f"Error searching canvas by service: {e}")
-            return None
+            if payload:
+                return payload
+        if not _has_zone(self.resource):
+            return None if manifest_url else _NO_SOURCE
+        return _zone_payload(self.resource)
