@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from unittest import mock
 
 import requests
+from django.conf import settings
 from django.contrib.auth.models import Group, User
 from django.core.cache import cache
 from django.core.management import call_command
@@ -232,11 +233,30 @@ class FailureMemoTests(RegistryCase):
             self.refused(registry.UNREACHABLE, use_memo=False)
         self.assertEqual(fetch.call_count, 2)
 
-    def test_not_iiif_and_mismatch_are_not_memoised(self):
+    def test_every_failure_reason_is_memoised(self):
+        cases = (
+            (registry.NOT_IIIF, {"payload": {"a": 1}}, {}),
+            (
+                registry.CANVAS_MISMATCH,
+                {"payload": v2_manifest()},
+                {"expected_service": "https://other/x"},
+            ),
+            (registry.REJECTED, {"error": http_error(404)}, {}),
+        )
+        for reason, patch_args, kwargs in cases:
+            cache.clear()
+            with fetching(**patch_args) as fetch:
+                self.refused(reason, **kwargs)
+                self.refused(reason, **kwargs)
+            self.assertEqual(fetch.call_count, 1, reason)
+
+    def test_bypass_neither_reads_nor_stores_the_memo(self):
         with fetching({"a": 1}) as fetch:
-            self.refused(registry.NOT_IIIF)
-            self.refused(registry.NOT_IIIF)
+            self.refused(registry.NOT_IIIF, use_memo=False)
+            self.refused(registry.NOT_IIIF, use_memo=False)
         self.assertEqual(fetch.call_count, 2)
+        with fetching(v2_manifest()):
+            self.assertEqual(self.register(v2_manifest())[0][1], registry.REGISTERED)
 
 
 class ConcurrencyTests(TransactionTestCase):
@@ -278,6 +298,60 @@ class DatatypeSharesTheRowTests(RegistryCase):
             ManifestDataType().pre_tile_save(tile, nodeid)
         self.assertEqual(fetch.call_count, 0)
         self.assertEqual(tile.data[nodeid], f"/manifest/{row.globalid}")
+
+    def datatype_save(self, value):
+        with mock.patch("arches.app.models.models.Widget") as widget:
+            widget.objects.get.return_value = mock.MagicMock()
+            from manuspectrum.datatypes.manifest import ManifestDataType
+        tile = mock.MagicMock()
+        nodeid = str(uuid.uuid4())
+        tile.data = {nodeid: value}
+        with fetching(v2_manifest()) as fetch:
+            ManifestDataType().pre_tile_save(tile, nodeid)
+        return tile.data[nodeid], fetch.call_count
+
+    def test_resave_of_an_imported_value_is_stable_and_fetches_nothing(self):
+        value, fetched = self.datatype_save(URL)
+        row = IIIFManifest.objects.get(url=URL)
+        self.assertEqual((value, fetched), (f"/manifest/{row.globalid}", 1))
+        again, fetched = self.datatype_save(value)
+        self.assertEqual((again, fetched), (value, 0))
+
+    def test_local_reference_of_a_remote_url_row_resaves_without_fetch(self):
+        row = IIIFManifest.objects.create(
+            url=URL, label="Remote", manifest=v2_manifest()
+        )
+        value, fetched = self.datatype_save(f"/manifest/{row.globalid}")
+        self.assertEqual((value, fetched), (f"/manifest/{row.globalid}", 0))
+
+    def test_registered_trailing_slash_variant_is_reused_without_fetch(self):
+        row = IIIFManifest.objects.create(
+            url=URL + "/", label="Slash", manifest=v2_manifest()
+        )
+        value, fetched = self.datatype_save(URL)
+        self.assertEqual((value, fetched), (f"/manifest/{row.globalid}", 0))
+        self.assertEqual(IIIFManifest.objects.count(), 1)
+
+    def test_dangling_local_reference_is_refused(self):
+        with self.assertRaises(registry.FailParsingManifestIIIF):
+            self.datatype_save(f"/manifest/{uuid.uuid4()}")
+
+    def test_dangling_own_host_reference_is_refused_without_fetch(self):
+        missing = (
+            f"{settings.PUBLIC_SERVER_ADDRESS.rstrip('/')}/manifest/{uuid.uuid4()}"
+        )
+        with fetching(v2_manifest()) as fetch:
+            with self.assertRaises(registry.FailParsingManifestIIIF):
+                self.datatype_save(missing)
+        self.assertEqual(fetch.call_count, 0)
+
+    def test_own_host_url_with_a_query_finds_its_stored_row(self):
+        stored = f"{settings.PUBLIC_SERVER_ADDRESS.rstrip('/')}/iiif/v3/explorer-manifest?ids=1"
+        row = IIIFManifest.objects.create(
+            url=stored, label="Own", manifest=v2_manifest()
+        )
+        value, fetched = self.datatype_save(stored)
+        self.assertEqual((value, fetched), (f"/manifest/{row.globalid}", 0))
 
     def test_registering_leaves_local_readers_unchanged(self):
         local = IIIFManifest.objects.create(
@@ -398,6 +472,31 @@ class AnnotationReceiverTests(AnnotationFixtures):
     def test_provisional_save_registers_nothing(self):
         editor = User.objects.create_user("plain_editor", password="pw")
         fetch = self.saved(self.annotation, feature_collection(), user=editor)
+        self.assertEqual(fetch.call_count, 0)
+        self.assertFalse(IIIFManifest.objects.filter(url=URL).exists())
+
+    def test_provisional_update_registers_nothing_new(self):
+        other = "https://example.org/iiif/other/manifest"
+        IIIFManifest.objects.create(url=URL, label="Known", manifest=v2_manifest())
+        tile = self.save(self.annotation, feature_collection(), user=None)
+        editor = User.objects.create_user("plain_editor2", password="pw")
+        stored = Tile.objects.get(pk=tile.pk)
+        stored.data[str(self.annotation.pk)] = feature_collection(manifest=other)
+        stored.serialized_graph = tile.serialized_graph
+        with fetching(v2_manifest()) as fetch:
+            with self.captureOnCommitCallbacks(execute=True):
+                stored.save(index=False, user=editor)
+        self.assertEqual(fetch.call_count, 0)
+        self.assertFalse(IIIFManifest.objects.filter(url=other).exists())
+
+    def test_tile_save_failing_after_the_signal_fetches_nothing(self):
+        with mock.patch.object(
+            Tile, "datatype_post_save_actions", side_effect=RuntimeError("late")
+        ):
+            with fetching(v2_manifest()) as fetch:
+                with self.captureOnCommitCallbacks(execute=True):
+                    with self.assertRaises(RuntimeError):
+                        self.save(self.annotation, feature_collection())
         self.assertEqual(fetch.call_count, 0)
         self.assertFalse(IIIFManifest.objects.filter(url=URL).exists())
 

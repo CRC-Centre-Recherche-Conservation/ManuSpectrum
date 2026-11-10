@@ -3,7 +3,8 @@
 Every model receiver drops a cache entry once the writing transaction
 commits: a reader landing between the write and the commit would otherwise
 memoise the old rows again. The logout receiver revokes the IIIF tokens of
-the session at once.
+the session at once. The manifest receiver registers the remote manifests
+that annotations name once the save commits; it drops no cache.
 """
 
 import logging
@@ -163,30 +164,6 @@ def revoke_iiif_tokens(sender, request=None, **kwargs):
     revoke(getattr(session, "session_key", None))
 
 
-def annotation_manifests(data):
-    """``{node id: {manifest URL: [canvas ids]}}`` of the http(s) manifests named by the FeatureCollections of ``data``."""
-    found = {}
-    for nodeid, value in (data or {}).items():
-        if not isinstance(value, dict) or value.get("type") != "FeatureCollection":
-            continue
-        for feature in value.get("features") or []:
-            properties = (
-                feature.get("properties") if isinstance(feature, dict) else None
-            )
-            if not isinstance(properties, dict):
-                continue
-            manifest = properties.get("manifest")
-            if not isinstance(manifest, str) or not manifest.startswith(
-                ("http://", "https://")
-            ):
-                continue
-            canvases = found.setdefault(nodeid, {}).setdefault(manifest, [])
-            canvas = properties.get("canvas")
-            if isinstance(canvas, str) and canvas not in canvases:
-                canvases.append(canvas)
-    return found
-
-
 def register_annotation_manifests(tile_id, user_id, manifests):
     """Register each ``{URL: [canvas ids]}`` of ``manifests`` in ``iiif_manifests``.
 
@@ -205,11 +182,16 @@ def register_annotation_manifests(tile_id, user_id, manifests):
                 )
             except manifest_registry.ManifestRegistrationError as exc:
                 logger.warning(
-                    "manifest not registered", extra={**extra, "outcome": exc.reason}
+                    "manifest not registered (%s): %s",
+                    exc.reason,
+                    url,
+                    extra={**extra, "outcome": exc.reason},
                 )
             except Exception:
                 logger.exception(
-                    "manifest registration failed", extra={**extra, "outcome": "error"}
+                    "manifest registration failed: %s",
+                    url,
+                    extra={**extra, "outcome": "error"},
                 )
             else:
                 level = (
@@ -218,7 +200,11 @@ def register_annotation_manifests(tile_id, user_id, manifests):
                     else logging.DEBUG
                 )
                 logger.log(
-                    level, "manifest %s", outcome, extra={**extra, "outcome": outcome}
+                    level,
+                    "manifest %s: %s",
+                    outcome,
+                    url,
+                    extra={**extra, "outcome": outcome},
                 )
 
 
@@ -233,7 +219,7 @@ def register_manifests_of_annotations(sender, instance, raw=False, **kwargs):
     """
     if raw:
         return
-    candidates = annotation_manifests(instance.data)
+    candidates = manifest_registry.annotation_manifests(instance.data)
     if not candidates:
         return
     annotation_nodes = {
@@ -257,5 +243,6 @@ def register_manifests_of_annotations(sender, instance, raw=False, **kwargs):
     )
     tile_id = str(instance.tileid)
     transaction.on_commit(
-        lambda: register_annotation_manifests(tile_id, user_id, manifests)
+        lambda: register_annotation_manifests(tile_id, user_id, manifests),
+        robust=True,
     )

@@ -44,10 +44,16 @@ CANVAS_MISMATCH = "canvas_mismatch"
 
 FAILURE_MEMO_PREFIX = "manifest-register:failed"
 FAILURE_MEMO_TTL = 3600
-MEMOISED_REASONS = (REJECTED, UNREACHABLE)
+
+ADVISORY_LOCK_NAMESPACE = 0x4D534D46
 
 # Cheap, network-free URL format gate; the host policy is the SSRF guard's.
 _validate_url_format = URLValidator(schemes=["http", "https"])
+
+
+def check_url_format(url):
+    """Raise ``django.core.validators.ValidationError`` unless ``url`` is a well-formed http(s) URL."""
+    _validate_url_format(url)
 
 
 class FailParsingManifestIIIF(Exception):
@@ -205,7 +211,7 @@ def fetch_manifest_json(url):
     ``UnsafeURLError``, ``requests`` errors, ``FailParsingManifestIIIF``).
     """
     try:
-        _validate_url_format(url)
+        check_url_format(url)
     except ValidationError as exc:
         raise InvalidManifestURL(f"Not a valid manifest URL: {url}") from exc
     assert_url_is_safe(url)
@@ -219,12 +225,18 @@ def fetch_manifest_json(url):
 def store_manifest(url, manifest_json):
     """Create the row for ``url`` unless a concurrent call did; return ``(row, created)``.
 
-    A transaction-scoped advisory lock on the URL serialises registrations of
-    one URL, and existence is re-checked under it.
+    A transaction-scoped advisory lock on the normalized URL serialises
+    registrations of one URL, and existence is re-checked under it. The lock
+    lives until the outermost commit (on the datatype path, after the rest of
+    ``Tile.save``), so two saves registering the same two URLs in opposite
+    orders can deadlock and PostgreSQL fails one of them.
     """
     with transaction.atomic():
         with connection.cursor() as cursor:
-            cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", [url])
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(%s, hashtext(%s))",
+                [ADVISORY_LOCK_NAMESPACE, normalize_url(url)],
+            )
         existing = _find_known(url)
         if existing:
             return existing, False
@@ -252,7 +264,7 @@ def import_manifest(url, *, expected_service=None):
 
 
 def _memo_key(url):
-    return f"{FAILURE_MEMO_PREFIX}:{hashlib.sha1(url.encode()).hexdigest()}"
+    return f"{FAILURE_MEMO_PREFIX}:{hashlib.sha256(url.encode()).hexdigest()}"
 
 
 def _reason_of(exc):
@@ -279,16 +291,17 @@ def register_remote_manifest(url, *, expected_service=None, use_memo=True):
     ``registered``, ``local`` (a local reference per ``local_row``, never fetched; the
     row or None). Anything else raises ``ManifestRegistrationError`` whose reason is
     ``invalid_url``, ``rejected`` (SSRF guard, HTTP 4xx), ``unreachable``
-    (network, timeout, 5xx), ``not_iiif`` or ``canvas_mismatch``. A
-    ``rejected`` or ``unreachable`` URL is not fetched again for an hour
-    unless ``use_memo`` is false. Does not catch exceptions it cannot name.
+    (network, timeout, 5xx), ``not_iiif`` or ``canvas_mismatch``. With
+    ``use_memo`` a URL that failed for any of these reasons is not fetched
+    again for an hour; without it nothing is read or stored in the memo.
+    Does not catch exceptions it cannot name.
     """
     row, outcome = find_registered(url)
     if outcome:
         return row, outcome
     if use_memo:
         memoised = cache.get(_memo_key(url))
-        if memoised in MEMOISED_REASONS:
+        if memoised:
             raise ManifestRegistrationError(memoised, "recent failure")
     try:
         row, created = import_manifest(url, expected_service=expected_service)
@@ -296,7 +309,42 @@ def register_remote_manifest(url, *, expected_service=None, use_memo=True):
         reason = _reason_of(exc)
         if reason is None:
             raise
-        if reason in MEMOISED_REASONS:
+        if use_memo:
             cache.add(_memo_key(url), reason, FAILURE_MEMO_TTL)
         raise ManifestRegistrationError(reason, type(exc).__name__) from exc
     return row, REGISTERED if created else KNOWN
+
+
+def feature_manifest(feature):
+    """``(manifest URL, canvas id or None)`` of an annotation feature naming an http(s) manifest, else None."""
+    properties = feature.get("properties") if isinstance(feature, dict) else None
+    if not isinstance(properties, dict):
+        return None
+    manifest = properties.get("manifest")
+    if not isinstance(manifest, str) or not manifest.startswith(
+        ("http://", "https://")
+    ):
+        return None
+    canvas = properties.get("canvas")
+    return manifest, canvas if isinstance(canvas, str) else None
+
+
+def annotation_manifests(data):
+    """``{node id: {manifest URL: [canvas ids]}}`` of the http(s) manifests named by the FeatureCollections of tile ``data``.
+
+    The one rule for which manifests an annotation names; canvas ids are kept
+    in the order first seen, once each.
+    """
+    found = {}
+    for nodeid, value in (data or {}).items():
+        if not isinstance(value, dict) or value.get("type") != "FeatureCollection":
+            continue
+        for feature in value.get("features") or []:
+            named = feature_manifest(feature)
+            if named is None:
+                continue
+            url, canvas = named
+            canvases = found.setdefault(nodeid, {}).setdefault(url, [])
+            if canvas and canvas not in canvases:
+                canvases.append(canvas)
+    return found

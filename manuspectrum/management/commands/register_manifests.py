@@ -14,17 +14,21 @@ from manuspectrum.utils import manifest_registry
 
 
 def referenced_manifests():
-    """``{manifest URL: [annotation count, [canvas ids]]}`` of every http(s) manifest named by a stored annotation."""
+    """``{manifest URL: [annotation count, [canvas ids]]}`` of every http(s) manifest named by a stored annotation.
+
+    Reads Arches' annotation view because it needs the approved features of
+    every annotation node; the IIIF read path rule « zones from tiles » does
+    not apply to this operator report. One canvas per URL: the first seen.
+    """
     found = defaultdict(lambda: [0, []])
     for feature in VwAnnotation.objects.values_list("feature", flat=True).iterator():
-        properties = (feature or {}).get("properties") or {}
-        url = properties.get("manifest")
-        if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+        named = manifest_registry.feature_manifest(feature)
+        if named is None:
             continue
+        url, canvas = named
         entry = found[url]
         entry[0] += 1
-        canvas = properties.get("canvas")
-        if isinstance(canvas, str) and canvas not in entry[1] and len(entry[1]) < 3:
+        if canvas and not entry[1]:
             entry[1].append(canvas)
     return dict(found)
 
