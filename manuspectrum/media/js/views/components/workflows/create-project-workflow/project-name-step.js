@@ -25,10 +25,11 @@ const viewModel = function(params) {
     const nameTileId = ko.observable(getProp('name', 'tileid'));
 
     this.projectResourceId = ko.observable(getProp('projectResourceId'));
-    this.typeValue = ko.observable(getProp('type', 'value'));
+    const storedType = getProp('type', 'value');
+    this.typeValue = ko.observable(Array.isArray(storedType) ? storedType : null);
     this.nameValue = ko.observable(getProp('name', 'value', true));
-    // rdmCollection UUID from: pkg/graphs/resource_models/Project.json > nodes > Type (nodeid: 67d1c39e-7021-11ef-8753-0575b5bada34) > config.rdmCollection
-    this.projectEventTypeRdmCollection = ko.observable('194f514f-9088-4152-b52e-3e7d938f9185');
+    // Controlled list of the Project « Type » reference node (pkg/graphs/resource_models/Project.json, config.controlledList)
+    this.projectTypeControlledList = '194f514f-9088-4152-b52e-3e7d938f9185';
 
     const snapshot = {
         typeValue: self.typeValue(),
