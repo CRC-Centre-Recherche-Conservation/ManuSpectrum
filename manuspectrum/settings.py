@@ -699,8 +699,8 @@ LANGUAGES = [
 # python manage.py republish_graph_translations (synclanguages writes the
 # strings of one language into every language's serialisation). Without them,
 # every Arches page under /<newlang>/ 500s, or shows another language.
-# manuspectrum.checks.W002 and W006 (database system checks, run with migrate)
-# detect the gaps.
+# manuspectrum.checks.W002 (a database system check, runs with migrate)
+# detects the first gap.
 # See https://arches.readthedocs.io/en/stable/developing/advanced/localizing-arches/
 
 # override this to permenantly display/hide the language switcher

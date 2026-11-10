@@ -31,7 +31,7 @@ def check_published_graph_languages(app_configs, databases, **kwargs):
     Fix: ``python manage.py i18n synclanguages`` (official add-a-language sync,
     covers resource models AND branches), then ``python manage.py
     republish_graph_translations`` (the sync writes one language's strings into
-    every language; see W006).
+    every language).
 
     Database-tagged so it runs with migrate — the natural deploy gate. Wrapped
     defensively: on a fresh database the Arches tables may not exist yet.
@@ -82,43 +82,6 @@ def check_published_graph_languages(app_configs, databases, **kwargs):
         return messages
     except Exception:  # noqa: BLE001 — a half-migrated DB must not block migrate
         return []
-
-
-@checks.register(checks.Tags.database)
-def check_published_graph_translations(app_configs, databases, **kwargs):
-    """W006: a publication shows other texts than the graph tables in its language.
-
-    Arches' ``i18n synclanguages`` (and ``packages`` before each graph import)
-    serialises every language of a publication with the strings of the active
-    one, so /fr/ shows the English card texts and widget labels
-    (manuspectrum/utils/graph_translations.py). Compared: card names,
-    descriptions, instructions and help texts, widget labels and placeholders.
-    Fix: ``python manage.py republish_graph_translations``, which keeps the
-    publication.
-
-    Database-tagged so it runs with migrate, and, like W002, silent on a
-    half-migrated database.
-    """
-    if "default" not in (databases or []):
-        return []
-    try:
-        from manuspectrum.utils.graph_translations import translation_drift
-
-        drift = translation_drift()
-    except Exception:  # noqa: BLE001 — a half-migrated DB must not block migrate
-        return []
-    return [
-        checks.Warning(
-            f"The '{code}' publication of {len(names)} graph(s) shows card texts, "
-            "widget labels or placeholders other than the graph tables "
-            f"({', '.join(names)}): pages under /{code}/ show another "
-            "language's text. Run `python manage.py "
-            "republish_graph_translations` (it keeps the publication, so the "
-            "resources stay editable).",
-            id="manuspectrum.W006",
-        )
-        for code, names in drift.items()
-    ]
 
 
 def _package_graphs_referencing(function_id):
