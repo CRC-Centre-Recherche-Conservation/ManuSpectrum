@@ -700,9 +700,12 @@ LANGUAGES = [
 ]
 # OPS — after ADDING a language here, run:  python manage.py i18n synclanguages
 # (the official Arches sync: creates the Language row and republishes the
-# per-language graph serialisations for models AND branches). Without it,
-# every Arches page under /<newlang>/ 500s. manuspectrum.checks.W002 (a
-# database system check, runs with migrate) detects the gap.
+# per-language graph serialisations for models AND branches), then
+# python manage.py republish_graph_translations (synclanguages writes the
+# strings of one language into every language's serialisation). Without them,
+# every Arches page under /<newlang>/ 500s, or shows another language.
+# manuspectrum.checks.W002 (a database system check, runs with migrate)
+# detects the first gap.
 # See https://arches.readthedocs.io/en/stable/developing/advanced/localizing-arches/
 
 # override this to permenantly display/hide the language switcher
