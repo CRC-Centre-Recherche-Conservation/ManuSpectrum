@@ -171,6 +171,7 @@ setup() {
   printf 'zip bytes\n' >"$MEDIA/export_deliverables/e.zip"
   printf 'staged\n' >"$MEDIA/archestemp/x.zip"
   printf 'image bytes\n' >"$MEDIA/uploadedfiles/pic.png"
+  printf 'odd name\n' >"$MEDIA/uploadedfiles/odd(1).csv"
 
   local release
   for release in aaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbb; do
@@ -411,6 +412,10 @@ group_loopback() {
   check "uploaded bytes carry nosniff and a sandbox CSP" \
     bash -c 'grep -qi "X-Content-Type-Options: nosniff" <<<"$1" && grep -qi "sandbox" <<<"$1"' _ "$out"
   check "a CSV is an attachment" grep -qi 'Content-Disposition: attachment' <<<"$out"
+  check "the attachment names the stored file (RFC 8187)" \
+    grep -qi "Content-Disposition: attachment; filename\*=UTF-8''smoke%20file%20%C3%A9.csv\$" <<<"$out"
+  out="$(docker exec "$NGINX" wget -S -q -O /dev/null 'http://127.0.0.1:8081/files/uploadedfiles/odd(1).csv' 2>&1)"
+  check "a name outside attr-chars is a bare attachment" grep -qi 'Content-Disposition: attachment$' <<<"$out"
   out="$(docker exec "$NGINX" wget -S -q -O /dev/null 'http://127.0.0.1:8081/files/uploadedfiles/pic.png' 2>&1)"
   check "a PNG is not an attachment" bash -c '! grep -qi "Content-Disposition" <<<"$1"' _ "$out"
   check "export deliverables are served" \
@@ -460,11 +465,15 @@ group_media() {
   equals "files/<A>: 200" 200 "$(head -1 <<<"$out" | cut -d' ' -f2)"
   equals "files/<A>: the bytes of the stored file" "$(printf 'smoke,é\n')" "$(get "/en/files/$FILE_A")"
   check "files/<A>: attachment" grep -qi '^Content-Disposition: attachment' <<<"$out"
+  equals "files/<A>: the attachment names the stored file" \
+    "attachment; filename*=UTF-8''smoke%20file%20%C3%A9.csv" "$(header_value content-disposition <<<"$out")"
   check "files/<A>: sandbox CSP" grep -qi "^Content-Security-Policy: default-src 'none'; sandbox" <<<"$out"
   assert_one_of_each "files/<A>" "$out"
   equals "files/<A>: exactly one nosniff" 1 "$(header_count X-Content-Type-Options <<<"$out")"
   equals "files/<E> (export deliverable): 200" 200 "$(code "/fr/files/$FILE_E")"
   equals "files/<E>: the bytes of the export" "zip bytes" "$(get "/fr/files/$FILE_E")"
+  equals "files/<E>: the attachment names the export" "attachment; filename*=UTF-8''e.zip" \
+    "$(header_value content-disposition <<<"$(headers "/fr/files/$FILE_E")")"
   out="$(headers "/en/files/$FILE_F")"
   equals "files/<F> (file missing on disk): 404" 404 "$(head -1 <<<"$out" | cut -d' ' -f2)"
   check "files/<F>: the site page, no attachment header" bash -c '! grep -qi "^Content-Disposition" <<<"$1"' _ "$out"
