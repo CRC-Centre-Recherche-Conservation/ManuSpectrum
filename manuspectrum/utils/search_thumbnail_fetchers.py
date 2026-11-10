@@ -8,7 +8,7 @@ from arches.app.utils.search_thumbnail_fetcher import SearchThumbnailFetcher
 from arches.app.utils.search_thumbnail_fetcher_factory import (
     SearchThumbnailFetcherFactory,
 )
-from manuspectrum.iiif.sources import canvas_index, canvases_of, manifest_json
+from manuspectrum.iiif.sources import ManifestReader, canvases_of, manifest_json
 from manuspectrum.utils.http import safe_fetch
 from manuspectrum.utils.iiif_tools import (
     CanvasIIIF,
@@ -23,6 +23,11 @@ logger = logging.getLogger(__name__)
 
 # Longest side, in pixels, a region thumbnail is asked at.
 THUMBNAIL_SIZE = 300
+
+# Zoom of annotation coordinates (``BBoxCalculator``) and the factor of a
+# Point's view radius.
+ANNOTATION_ZOOM = 5
+POINT_CONTEXT = 5
 
 # Zone point radius when the annotation states none.
 DEFAULT_POINT_RADIUS = 10
@@ -120,43 +125,105 @@ def _region_url(service, bbox):
     return f"{service}/{x},{y},{w},{h}/{_region_size(w, h)},/0/default.jpg"
 
 
-def _zone_region_url(annotation, read_manifest):
+def _canvas_names(manifest):
+    """``{name: (image service, width, height)}`` of a manifest's canvases, by canvas id and by image service."""
+    names = {}
+    for canvas in canvases_of(manifest):
+        image = canvas["image"]
+        entry = (image["service"], image["width"], image["height"])
+        names[canvas["id"].rstrip("/")] = entry
+        if image["service"]:
+            names[image["service"].rstrip("/")] = entry
+    return names
+
+
+def _extent(geometry, radius):
+    """``(xmin, ymin, xmax, ymax)`` of a Polygon or Point in canvas pixels, margins excluded; None when not computable."""
+    scale = 2**ANNOTATION_ZOOM
+    coordinates = geometry.get("coordinates")
+    try:
+        if geometry.get("type") == "Polygon":
+            ring = coordinates[0]
+            xs = [lng * scale for lng, lat in ring]
+            ys = [-lat * scale for lng, lat in ring]
+            reach = 0
+        else:
+            xs = [coordinates[0] * scale]
+            ys = [-coordinates[1] * scale]
+            reach = radius * POINT_CONTEXT
+        return min(xs) - reach, min(ys) - reach, max(xs) + reach, max(ys) + reach
+    except Exception:
+        return None
+
+
+def _zone_region_url(annotation, manifests):
     """IIIF region URL of one annotation zone, or None when it cannot be shown.
 
     Polygons and Points are accepted. The zone's canvas is found in its
-    manifest by id or image service; a canvas missing from the manifest does
-    not clamp the region. A zone whose region is empty (drawn outside the
-    image) gives None.
+    manifest by id or image service, and the region is asked of that canvas's
+    image service (the stored name when the canvas is unknown or has none). A
+    canvas missing from the manifest does not clamp the region. A zone drawn
+    outside a known canvas gives None.
     """
     feature = annotation.feature or {}
     properties = feature.get("properties") or {}
-    service = rewrite_legacy_url(annotation.canvas or "")
+    stored = rewrite_legacy_url(annotation.canvas or "")
     manifest_url = properties.get("manifest")
-    if not service or not manifest_url:
+    geometry = feature.get("geometry") or {}
+    if not stored or not manifest_url or not geometry.get("coordinates"):
         return None
-    manifest = read_manifest(manifest_url)
-    if not manifest:
+    if geometry.get("type") not in ("Polygon", "Point"):
         return None
-    _, width, height = canvas_index(canvases_of(manifest)).get(service.rstrip("/")) or (
+    names = manifests.names(manifest_url)
+    if names is None:
+        return None
+    service, width, height = names.get(stored.rstrip("/")) or (
         None,
         sys.maxsize,
         sys.maxsize,
     )
+    service = (service or stored).rstrip("/")
 
-    geometry = feature.get("geometry") or {}
-    coordinates = geometry.get("coordinates")
-    if not coordinates:
-        return None
-    if geometry.get("type") == "Polygon":
-        bbox = BBoxCalculator.polygon_bbox(coordinates, width, height)
-    elif geometry.get("type") == "Point":
-        radius = properties.get("radius", DEFAULT_POINT_RADIUS)
-        bbox = BBoxCalculator.point_bbox(coordinates, width, height, radius=radius)
+    radius = properties.get("radius", DEFAULT_POINT_RADIUS)
+    if width != sys.maxsize:
+        extent = _extent(geometry, radius)
+        if extent is None:
+            return None
+        xmin, ymin, xmax, ymax = extent
+        if xmax <= 0 or ymax <= 0 or xmin >= width or ymin >= height:
+            return None
+    if geometry["type"] == "Polygon":
+        bbox = BBoxCalculator.polygon_bbox(geometry["coordinates"], width, height)
     else:
-        return None
+        bbox = BBoxCalculator.point_bbox(
+            geometry["coordinates"], width, height, radius=radius
+        )
     if not bbox or bbox[2] <= 0 or bbox[3] <= 0:
         return None
     return _region_url(service, bbox)
+
+
+class _Manifests:
+    """The manifests one search reads, each read once, with its canvas names.
+
+    ``names`` is None for a manifest that cannot be read; ``unreadable`` then
+    lists it.
+    """
+
+    def __init__(self):
+        self._reader = ManifestReader()
+        self._names = {}
+        self.unreadable = []
+
+    def names(self, url):
+        if url not in self._names:
+            manifest = self._reader(url)
+            if manifest:
+                self._names[url] = _canvas_names(manifest)
+            else:
+                self._names[url] = None
+                self.unreadable.append(url)
+        return self._names[url]
 
 
 def _zone_payload(resource):
@@ -168,21 +235,15 @@ def _zone_payload(resource):
     """
     from arches.app.models.models import VwAnnotation
 
-    unreadable = []
-
-    def read_manifest(url):
-        manifest = manifest_json(url)
-        if not manifest:
-            unreadable.append(url)
-        return manifest
+    manifests = _Manifests()
 
     for annotation in VwAnnotation.objects.filter(resourceinstance=resource).order_by(
         "feature_id"
     ):
-        url = _zone_region_url(annotation, read_manifest)
+        url = _zone_region_url(annotation, manifests)
         if url:
             return _image_payload(_fetch_thumbnail(url))
-        if unreadable:
+        if manifests.unreadable:
             return None
     return None
 
@@ -222,7 +283,8 @@ class _SourceFetcher(SearchThumbnailFetcher):
     ``(bytes, content_type)`` or ``None``. A retrieval over an existing source
     that ends without an image is remembered for
     ``SEARCH_THUMBNAIL_MISS_TTL`` seconds, and both modes answer ``None`` from
-    that memory without reading anything else.
+    that memory without reading anything else. A resource fixed within that
+    time keeps answering no thumbnail until the flag expires.
     """
 
     def get_thumbnail(self, retrieve=False):
@@ -231,14 +293,15 @@ class _SourceFetcher(SearchThumbnailFetcher):
         if not retrieve:
             try:
                 return True if self._has_source() else None
-            except Exception as e:
-                logger.error(f"Error checking thumbnail existence: {e}")
+            except Exception:
+                logger.exception("Error checking thumbnail existence")
                 return None
         try:
             payload = self._payload()
-        except Exception as e:
-            logger.error(
-                f"Error fetching thumbnail for resource {self.resource.resourceinstanceid}: {e}"
+        except Exception:
+            logger.exception(
+                "Error fetching thumbnail for resource %s",
+                self.resource.resourceinstanceid,
             )
             payload = None
         if payload is _NO_SOURCE:

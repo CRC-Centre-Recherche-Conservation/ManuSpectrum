@@ -1133,7 +1133,7 @@ class ZoneChoiceTests(FetcherTestCase):
         ComponentThumbnailFetcher(RESOURCE).get_thumbnail(retrieve=True)
 
         safe_fetch.assert_called_once_with(
-            f"{canvas_id}/22,22,38,38/38,/0/default.jpg",
+            f"{CANVAS_SERVICE}/22,22,38,38/38,/0/default.jpg",
             headers=IMAGE_HEADERS,
             purpose="thumbnail",
         )
@@ -1153,6 +1153,111 @@ class ZoneChoiceTests(FetcherTestCase):
 
         self.assertEqual(result, (JPEG_BYTES, "image/jpeg"))
         safe_fetch.assert_called_once()
+
+    def test_a_zone_left_of_or_above_the_image_is_skipped(
+        self, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        left = [[[-20.0, -1.0], [-10.0, -1.0], [-10.0, -2.0], [-20.0, -2.0]]]
+        above = [[[1.0, 10.0], [2.0, 10.0], [2.0, 5.0], [1.0, 5.0]]]
+        zones = {
+            "polygon left": {"type": "Polygon", "coordinates": left},
+            "polygon above": {"type": "Polygon", "coordinates": above},
+            "point left": {"type": "Point", "coordinates": [-20.0, -2.0]},
+            "point above": {"type": "Point", "coordinates": [1.5, 20.0]},
+        }
+        fetch_manifest.return_value = v2_manifest(width=100, height=100)
+        safe_fetch.return_value = response(content=REGION_BYTES)
+        for label, geometry in zones.items():
+            with self.subTest(zone=label):
+                safe_fetch.reset_mock()
+                vw_annotation.objects.filter.return_value = queryset(
+                    [annotation(geometry=geometry), annotation()]
+                )
+                result = ComponentThumbnailFetcher(RESOURCE).get_thumbnail(True)
+                self.assertEqual(result, (REGION_BYTES, "image/jpeg"))
+                safe_fetch.assert_called_once_with(
+                    f"{CANVAS_SERVICE}/{POLYGON_REGION_SIZE}/0/default.jpg",
+                    headers=IMAGE_HEADERS,
+                    purpose="thumbnail",
+                )
+
+    def test_a_point_whose_view_radius_reaches_the_image_is_kept(
+        self, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        vw_annotation.objects.filter.return_value = queryset(
+            [annotation(geometry={"type": "Point", "coordinates": [-1.0, -2.0]})]
+        )
+        fetch_manifest.return_value = v2_manifest(width=100, height=100)
+        safe_fetch.return_value = response()
+
+        self.assertTrue(ComponentThumbnailFetcher(RESOURCE).get_thumbnail(True))
+
+    def test_a_trailing_slash_gives_no_double_slash(
+        self, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        vw_annotation.objects.filter.return_value = queryset(
+            [annotation(canvas="https://other.example/iiif/2/unknown/")]
+        )
+        fetch_manifest.return_value = v2_manifest()
+        safe_fetch.return_value = response()
+
+        ComponentThumbnailFetcher(RESOURCE).get_thumbnail(retrieve=True)
+
+        safe_fetch.assert_called_once_with(
+            f"https://other.example/iiif/2/unknown/{POLYGON_REGION_SIZE}/0/default.jpg",
+            headers=IMAGE_HEADERS,
+            purpose="thumbnail",
+        )
+
+    @override_settings(EXPLORER_LEGACY_HOSTS=("legacy.example",))
+    def test_a_legacy_host_canvas_is_rewritten_before_use(
+        self, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        legacy = "http://legacy.example/iiif/2/page1"
+        vw_annotation.objects.filter.return_value = queryset(
+            [annotation(canvas=legacy)]
+        )
+        fetch_manifest.return_value = v2_manifest(
+            service=f"{settings.PUBLIC_SERVER_ADDRESS}iiif/2/page1"
+        )
+        safe_fetch.return_value = response()
+
+        ComponentThumbnailFetcher(RESOURCE).get_thumbnail(retrieve=True)
+
+        safe_fetch.assert_called_once_with(
+            f"{settings.PUBLIC_SERVER_ADDRESS}iiif/2/page1/{POLYGON_REGION_SIZE}/0/default.jpg",
+            headers=IMAGE_HEADERS,
+            purpose="thumbnail",
+        )
+
+    def test_an_unreadable_manifest_ends_the_search_without_an_image_fetch(
+        self, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        vw_annotation.objects.filter.return_value = queryset(
+            [
+                annotation(manifest="https://example.org/a/manifest.json"),
+                annotation(),
+            ]
+        )
+        fetch_manifest.return_value = None
+
+        self.assertIsNone(ComponentThumbnailFetcher(RESOURCE).get_thumbnail(True))
+        fetch_manifest.assert_called_once()
+        safe_fetch.assert_not_called()
+
+    def test_each_manifest_is_read_once_per_call(
+        self, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        outside = annotation(geometry={"type": "Polygon", "coordinates": FAR_POLYGON})
+        vw_annotation.objects.filter.return_value = queryset(
+            [outside, outside, annotation()]
+        )
+        fetch_manifest.return_value = v2_manifest(width=100, height=100)
+        safe_fetch.return_value = response()
+
+        ComponentThumbnailFetcher(RESOURCE).get_thumbnail(retrieve=True)
+
+        fetch_manifest.assert_called_once_with(ANNOTATION_MANIFEST_URL)
 
     def test_a_large_region_is_asked_at_a_bounded_size(
         self, vw_annotation, fetch_manifest, safe_fetch
