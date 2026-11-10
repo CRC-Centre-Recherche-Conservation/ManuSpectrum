@@ -260,6 +260,8 @@ class FailureMemoTests(RegistryCase):
 
 
 class ConcurrencyTests(TransactionTestCase):
+    serialized_rollback = True
+
     def test_eight_threads_one_url_give_one_row(self):
         cache.clear()
         guard = resolves_publicly()
