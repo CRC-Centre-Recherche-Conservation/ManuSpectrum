@@ -1,12 +1,13 @@
-"""The read guard of the stored manifests the IIIF output names (``ids.stored_manifest``).
+"""The read guard of the stored manifests served at ``ids.stored_manifest``.
 
 A stored manifest (Arches' ``IIIFManifest``) is not a resource: Arches' own
-``/manifest/<uuid>`` serves any of them to anyone. The IIIF route serves only
-the ones the IIIF output names for the reader: a manifest that a tile of a
-naming role names (``sources.local_manifest_id`` of the tile value), the
-imaging manifests of an analysis of ``visible_set(reader).analyses`` or the
-source manifest of a Document of ``visible_set(reader).documents``, through a
-nodegroup of ``readable_nodegroup_ids(reader)``. That is the rule
+``/manifest/<uuid>`` serves any of them to anyone. The IIIF route serves a
+manifest only when a tile of a naming role names it
+(``sources.local_manifest_id`` of any URL of the tile value): an imaging tile
+of an analysis of ``visible_set(reader).analyses`` or a source-manifest tile
+of a Document of ``visible_set(reader).documents``, in a nodegroup of
+``readable_nodegroup_ids(reader)``. This covers every manifest the IIIF output
+names, and the further manifests such tiles hold. That is the rule
 ``data.file_allowed`` applies to the tile holding a stored file. Any other
 manifest, and an unknown id, gives None: a bodyless 404, as for a Document
 the reader may not see.
