@@ -20,10 +20,11 @@ signed-in user without a secret on the enrolment page. A user whose secret was
 cleared by an administrator (lost device, new `SECRET_KEY`) cannot sign in to
 get there, so the reset mails a personal link (`TwoFactorResetView`): a signed
 token bound to the password hash and to the empty secret, so it dies with the
-first enrolment or any password change. The token moves to the session and the
-browser is redirected to the same route with the placeholder `enrol`, as in
-`ActivateAccountView`. The user types the password (counted by django-axes like
-a sign-in), enrols with a valid code and is signed in.
+first enrolment or any password change. The link answers a « Continue » page
+whose post moves the token to the session and redirects to the same route with
+the placeholder `enrol`, as in `ActivateAccountView` (see `mailed_links`).
+The user types the password (counted by django-axes like a sign-in), enrols
+with a valid code and is signed in.
 """
 
 import base64
@@ -56,6 +57,7 @@ from manuspectrum.accounts.activation import (
     LOGIN_BACKEND,
     is_real_user,
 )
+from manuspectrum.accounts.mailed_links import land
 
 logger = logging.getLogger(__name__)
 
@@ -309,8 +311,15 @@ class TwoFactorResetView(View):
         if token == RESET_PLACEHOLDER:
             token = request.session.get(RESET_TOKEN_KEY, "")
         elif user_for_reset(token) is not None:
-            request.session[RESET_TOKEN_KEY] = token
-            return redirect("account-two-factor-reset", token=RESET_PLACEHOLDER)
+            return land(
+                request,
+                token=token,
+                session_key=RESET_TOKEN_KEY,
+                target=reverse(
+                    "account-two-factor-reset", kwargs={"token": RESET_PLACEHOLDER}
+                ),
+                template_name="accounts/two_factor_reset_continue.htm",
+            )
         self.account = user_for_reset(token) if token else None
         if self.account is None:
             return render(request, "accounts/two_factor_reset_invalid.htm", status=410)

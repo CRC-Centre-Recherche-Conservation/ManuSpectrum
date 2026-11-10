@@ -25,7 +25,7 @@ because an administrator created it. People ask for one through the contact page
    password)**. An account that is inactive, has no e-mail or already has a password is
    skipped with a message. A failed send is reported and counted (`AccountMailFailures`):
    fix the relay (`runbooks/application.md`), then send a new invitation.
-3. The person opens the link, reads and accepts the terms of use (a required checkbox;
+3. The person opens the link, presses « Continue », reads and accepts the terms of use (a required checkbox;
    the acceptance is stored with its date and the version of the terms), chooses a
    password (12 characters or more, upper and lower case, a digit and a symbol; common
    or similar passwords are refused), then sets up two-factor authentication with an
@@ -166,7 +166,7 @@ reference:
   pages, reached from the link on the User page). The list shows the **Two-factor
   authentication** column and filter, the User page an « Account » section. The action clears the secret and mails
   the person a personal link (`account/two-factor/reset/...`, valid 24 hours, single use):
-  they type their password, scan the new QR code, confirm one code and are signed in. A
+  they press « Continue », type their password, scan the new QR code, confirm one code and are signed in. A
   wrong password counts as a failed sign-in (lockout). **Send the two-factor enrolment link
   (superuser)** mails the link again to the selected accounts that hold no secret (lost
   mail, expired link). An account without an address or inactive gets no mail: the action
@@ -663,9 +663,15 @@ templates, the update command, the release programs) that differs between the ta
 « Re-run Ansible first ». From a laptop checkout:
 
 1. Check out the new tag (`git switch --detach vX.Y.Z`), with no uncommitted
-   change in the managed paths (the playbook refuses otherwise).
+   change in the managed paths (the playbook refuses otherwise). A clone that
+   held a release before the package's line-ending fix needs
+   `git submodule update --init --force` once: otherwise the CIDOC-CRM
+   ontology of `pkg/` looks modified.
 2. Run the playbook for the host (`deploy/ansible/README.md`).
-3. Install again with `--now` or `--at`.
+3. Check that `sudo manuspectrum-update --status` shows `needs_ansible=0` on the
+   armed release. No new mail says the release is ready once Ansible has run:
+   the watch resets the flag silently.
+4. Install again with `--now` or `--at`.
 
 Ansible never changes the running version; it only brings the host's files up to
 what the tag expects.

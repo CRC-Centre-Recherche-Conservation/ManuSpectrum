@@ -4,12 +4,12 @@ An administrator creates an account with no password and sends the invitation
 (`send_invitation`). The mail carries a link built like Django's password
 reset: `urlsafe_base64_encode(pk)` and a `default_token_generator` token, valid
 for `PASSWORD_RESET_TIMEOUT` and dead once the password is set. The link opens
-`ActivateAccountView`: a valid token is moved into the session and the browser
-is redirected to the same route with the placeholder `set-password`, so the
-token is in no page URL, `Referer` or access-log line (Django's
-`PasswordResetConfirmView` does the same). That page shows the terms, asks for
-their acceptance and a password, signs the user in and sends them to the
-two-factor enrolment page.
+`ActivateAccountView`, which answers a valid token with a « Continue » page;
+its post moves the token into the session and redirects to the same route with
+the placeholder `set-password` (the `mailed_links` module explains why the GET
+cannot do it with a `SameSite=Strict` session cookie). That page shows the
+terms, asks for their acceptance and a password, signs the user in and sends
+them to the two-factor enrolment page.
 
 `TermsAcceptance` holds one row per user and version of the terms
 (`accounts.terms.TERMS_VERSION`). `TermsAcceptanceMiddleware` sends a signed-in
@@ -46,6 +46,7 @@ from django.views.decorators.cache import never_cache
 from django_ratelimit.decorators import ratelimit
 
 from manuspectrum.accounts import notices
+from manuspectrum.accounts.mailed_links import land
 from manuspectrum.accounts.password_rules import password_rule_list, password_rules
 from manuspectrum.accounts.terms import TERMS_VERSION
 from manuspectrum.models import TermsAcceptance
@@ -195,8 +196,17 @@ class ActivateAccountView(_TermsPage):
         if token == TOKEN_PLACEHOLDER:
             token = request.session.get(SESSION_TOKEN_KEY, "")
         elif user_for_link(uidb64, token) is not None:
-            request.session[SESSION_TOKEN_KEY] = token
-            return redirect("account-activate", uidb64=uidb64, token=TOKEN_PLACEHOLDER)
+            return land(
+                request,
+                token=token,
+                session_key=SESSION_TOKEN_KEY,
+                target=reverse(
+                    "account-activate",
+                    kwargs={"uidb64": uidb64, "token": TOKEN_PLACEHOLDER},
+                ),
+                template_name="accounts/activate_continue.htm",
+                context={"robots_noindex": True},
+            )
         self.account = user_for_link(uidb64, token) if token else None
         if self.account is None:
             self.template_name = "accounts/activation_invalid.htm"

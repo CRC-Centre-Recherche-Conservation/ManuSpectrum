@@ -32,6 +32,7 @@ from manuspectrum.views.summary_service import (
     outgoing_ids,
     parse_rollup_response,
     perm_scope,
+    plain_text,
     run_rollup,
 )
 
@@ -1117,6 +1118,18 @@ def summary_doc(resource_id="doc-1", geometries=(("point",))):
     }
 
 
+# A Place's ``map_popup`` as Arches indexes it: the name, then the rich text
+# of its statement, as the editor writes it.
+RICH_POPUP = (
+    "Avranches <p>Ville de la <strong>Manche</strong>&nbsp;: fonds de "
+    "l&#39;abbaye du Mont-Saint-Michel.</p><p>Bibliothèque patrimoniale</p>"
+)
+RICH_POPUP_TEXT = (
+    "Avranches Ville de la Manche\xa0: fonds de l'abbaye du Mont-Saint-Michel. "
+    "Bibliothèque patrimoniale"
+)
+
+
 def link_page():
     """The search naming the linked resources of one popup."""
     return page(
@@ -1286,6 +1299,12 @@ class BuildSummaryTests(SummaryBuildMixin, SimpleTestCase):
             },
         )
 
+    def test_a_rich_text_map_popup_reaches_the_card_as_plain_text(self):
+        doc = summary_doc()
+        doc["map_popup"] = [{"language": "fr", "value": RICH_POPUP}]
+        payload = self.run_build(FakeES(source=doc), config=None)
+        self.assertEqual(payload["map_popup"], RICH_POPUP_TEXT)
+
     def test_an_id_the_index_does_not_hold_is_not_found(self):
         es = FakeES(get_error=NotFoundError("missing", meta=None, body=None))
         with self.assertRaises(ResourceNotFound):
@@ -1391,6 +1410,17 @@ class BuildSummariesTests(SummaryBuildMixin, SimpleTestCase):
         es = FakeES()
         self.assertEqual(self.run_batch(es, []), {})
         self.assertEqual(es.calls, [])
+
+
+class PlainTextTests(SimpleTestCase):
+    def test_markup_becomes_the_text_a_browser_shows(self):
+        self.assertEqual(
+            plain_text(
+                'Avranches<p class="a > b">Manche<br>Normandie</p>'
+                "<script>alert(1)</script>&lt;b&gt; &amp;&nbsp;:"
+            ),
+            "Avranches Manche Normandie <b> &\xa0:",
+        )
 
 
 class PermScopeTests(SimpleTestCase):
