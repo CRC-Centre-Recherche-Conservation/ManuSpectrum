@@ -31,6 +31,7 @@ from arches.app.utils.search_thumbnail_fetcher_factory import (
 
 from manuspectrum.utils.search_thumbnail_fetchers import (
     _region_size,
+    _sniff_image_type,
     AnalysisThumbnailFetcher,
     ComponentThumbnailFetcher,
     DocumentThumbnailFetcher,
@@ -619,6 +620,19 @@ class ComponentFetcherRetrieveTests(FetcherTestCase):
             headers=IMAGE_HEADERS,
             purpose="thumbnail",
         )
+
+    def test_malformed_coordinates_on_an_unmatched_canvas_fetch_nothing(
+        self, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        vw_annotation.objects.filter.return_value = queryset(
+            [annotation(geometry={"type": "Polygon", "coordinates": [["x"]]})]
+        )
+        fetch_manifest.return_value = v2_manifest(
+            service="https://img.example.org/iiif/2/other"
+        )
+
+        self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
+        safe_fetch.assert_not_called()
 
     def test_returns_none_when_the_resource_has_no_annotation(
         self, vw_annotation, fetch_manifest, safe_fetch
@@ -1289,6 +1303,16 @@ class RegionSizeTests(SimpleTestCase):
 
     def test_the_width_is_at_least_one_pixel(self):
         self.assertEqual(_region_size(1, 3000), 1)
+
+
+class SniffImageTypeTests(SimpleTestCase):
+    def test_webp_is_recognised_by_its_marker_at_offset_eight(self):
+        self.assertEqual(
+            _sniff_image_type(b"RIFF\x00\x00\x00\x00WEBPVP8 "), "image/webp"
+        )
+
+    def test_unknown_bytes_are_not_an_image(self):
+        self.assertIsNone(_sniff_image_type(b"<html>"))
 
 
 @mock.patch(SAFE_FETCH)

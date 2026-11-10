@@ -285,6 +285,9 @@ class _SourceFetcher(SearchThumbnailFetcher):
     ``SEARCH_THUMBNAIL_MISS_TTL`` seconds, and both modes answer ``None`` from
     that memory without reading anything else. A resource fixed within that
     time keeps answering no thumbnail until the flag expires.
+
+    A subclass defines ``_has_source()`` and ``_payload()``: the image, None
+    when a source gave none, ``_NO_SOURCE`` when there is no source.
     """
 
     def get_thumbnail(self, retrieve=False):
@@ -309,13 +312,6 @@ class _SourceFetcher(SearchThumbnailFetcher):
         if payload is None:
             _remember_miss(self.resource)
         return payload
-
-    def _has_source(self):
-        raise NotImplementedError
-
-    def _payload(self):
-        """The image, None when a source gave none, ``_NO_SOURCE`` when there is no source."""
-        raise NotImplementedError
 
 
 @SearchThumbnailFetcherFactory.register("0c8226c1-11a9-4c48-9601-a7a0c6f2df6b")
