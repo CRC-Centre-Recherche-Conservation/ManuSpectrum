@@ -510,6 +510,10 @@ ACCOUNT_SUMMARY_RECIPIENTS = []
 # drops the unusable parts (Arches defaults PUBLIC_SERVER_ADDRESS to localhost).
 CONTACT_EMAIL = ""
 
+# Google Search Console site-verification token, rendered as a <meta> tag on the
+# public pages by the {% google_site_verification %} template tag. Empty: no tag.
+GOOGLE_SITE_VERIFICATION = ""
+
 CELERY_BROKER_URL = "redis://localhost:6379/0"  # RabbitMQ --> "amqp://guest:guest@localhost",  Redis --> "redis://localhost:6379/0"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TIMEZONE = "Europe/Paris"

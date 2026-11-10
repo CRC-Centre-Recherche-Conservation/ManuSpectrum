@@ -18,6 +18,7 @@
     {# canonical, no hreflang alternate, no og:url. #}
     {% site_origin as MS_ORIGIN %}
     {% if MS_ORIGIN and not personal_link %}<link rel="canonical" href="{{ MS_ORIGIN }}{{ request.path }}">{% endif %}
+    {% google_site_verification as MS_GSC %}{% if MS_GSC %}<meta name="google-site-verification" content="{{ MS_GSC }}">{% endif %}
     {% if robots_noindex %}<meta name="robots" content="noindex, follow">{% endif %}
     {% if not personal_link %}
     {% get_available_languages as MS_LANGS %}
