@@ -52,6 +52,7 @@ ARCHES_VIEWS = {
 }
 IGNORED = {
     "password_reset": "account page, not a consultation",
+    "password_reset_confirm": "account plumbing, not a consultation",
     "account-two-factor": "account page, not a consultation",
     "account-two-factor-reset": "account plumbing, not a consultation",
     "account-activate": "account plumbing, not a consultation",

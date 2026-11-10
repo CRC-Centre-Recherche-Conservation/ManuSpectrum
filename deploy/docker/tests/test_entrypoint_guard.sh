@@ -232,9 +232,10 @@ expected="$(printf '%s\n' \
   'manage.py set_admin_password' \
   "manage.py packages -o load_package -s $PKG -y" \
   'manage.py i18n synclanguages' \
+  'manage.py republish_graph_translations' \
   "manage.py check_pkg_inventory $PKG/expected-inventory.json")"
 [ "$status" -eq 0 ] && [ "$(cat "$TMP/initlog")" = "$expected" ] && ok=0 || ok=1
-assert "init: setup_db, admin password, load_package, synclanguages, inventory check, in that order" "$ok"
+assert "init: setup_db, admin password, load_package, synclanguages, graph translations, inventory check, in that order" "$ok"
 
 grep -q 'set_controlled_lists_searchable' "$TMP/initlog" && ok=1 || ok=0
 assert "init: the lists are not made searchable by the entrypoint (the package's post SQL does it)" "$ok"
@@ -290,8 +291,14 @@ out="$(run_init FAIL_ON=load_package)" && status=0 || status=$?
 assert "init: a failed load_package stops init" $?
 
 out="$(run_init FAIL_ON=synclanguages)" && status=0 || status=$?
-[ "$status" -eq 1 ] && grep -q 'i18n synclanguages failed' <<<"$out"
+[ "$status" -eq 1 ] && grep -q 'i18n synclanguages failed' <<<"$out" \
+  && ! grep -q republish_graph_translations "$TMP/initlog"
 assert "init: failed synclanguages stop init" $?
+
+out="$(run_init FAIL_ON=republish_graph_translations)" && status=0 || status=$?
+[ "$status" -eq 1 ] && grep -q 'republish_graph_translations failed; run make -C deploy manage ARGS="republish_graph_translations"' <<<"$out" \
+  && ! grep -q check_pkg_inventory "$TMP/initlog" && ! grep -q 'data package loaded' <<<"$out"
+assert "init: a failed translation republish stops init before the inventory check" $?
 
 out="$(run_init FAIL_ON=set_admin_password)" && status=0 || status=$?
 [ "$status" -eq 1 ] && grep -q 'admin password could not be set' <<<"$out" && ! grep -q load_package "$TMP/initlog"

@@ -26,6 +26,7 @@ Homepage — Prismatic Luminescence aesthetic
     {# Canonical: scheme+host+path only — build_absolute_uri kept the query #}
     {# string, so /?utm_source=x canonicalised to itself. #}
     <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host }}{{ request.path }}">
+    {% google_site_verification as MS_GSC %}{% if MS_GSC %}<meta name="google-site-verification" content="{{ MS_GSC }}">{% endif %}
     {% get_available_languages as MS_LANGS %}
     {% for lang_code, lang_name in MS_LANGS %}
     <link rel="alternate" hreflang="{{ lang_code }}" href="{% translated_page_url lang_code %}">

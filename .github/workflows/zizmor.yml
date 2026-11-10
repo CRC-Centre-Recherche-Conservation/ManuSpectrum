@@ -1,0 +1,63 @@
+name: zizmor
+
+# Static analysis of the GitHub Actions files (template injection, unpinned or
+# compromised actions, credential persistence, permissions). Exceptions live in
+# .zizmor.yml with their reason. Runs on the pull requests that touch them, and
+# weekly on the default branch, where an advisory published since against a
+# pinned action opens or updates one issue.
+on:
+  pull_request:
+    paths:
+      - ".github/**"
+      - ".zizmor.yml"
+  schedule:
+    - cron: "53 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zizmor-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zizmor:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install zizmor
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zizmor"
+          "$RUNNER_TEMP/zizmor/bin/python" -m pip install zizmor==1.30.1
+
+      - name: Audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: '"$RUNNER_TEMP/zizmor/bin/zizmor" --format github --config .zizmor.yml .'
+
+      - name: Open or update the issue
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Weekly zizmor audit: findings in the GitHub Actions files"
+          body="The weekly zizmor audit failed: $RUN_URL. Fix each finding, or accept it in .zizmor.yml with its reason."
+          number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$title\"" \
+            --json number,title --jq ".[] | select(.title == \"$title\") | .number" | head -n1)"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi

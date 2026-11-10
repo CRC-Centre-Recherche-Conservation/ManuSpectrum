@@ -109,6 +109,10 @@ host uses `rc`, production uses `prod`.
   the update, not with the Ansible run that precedes it. Ansible renders `.env`
   from the inventory, so an inventory value the running version refuses waits
   for the update.
+- **After « Re-run Ansible first ».** Once the playbook has run, no second mail
+  announces the release: the watch sets `needs_ansible` back to 0 without
+  notice. Check `sudo manuspectrum-update --status` (`needs_ansible=0`) before
+  installing.
 - **The update** is started by an operator, now or at a scheduled time, with
   `sudo manuspectrum-update`. It installs the armed release only, after a
   backup, and rolls back on its own when the application does not become ready.
@@ -177,15 +181,22 @@ the first tag is pushed; the chain relies on all of them.
 - The default workflow token permission is `read` (each workflow widens it per
   job).
 - `main` and the integration branch are protected against force-push.
-- When branch protection requires status checks, require seven, all bound to
+- When branch protection requires status checks, require nine, all bound to
   GitHub Actions: `conclusion` (the job that gathers the workflows of
-  `deploy-lint.yml`), `gitleaks` (the job of `secret-scan.yml`) and, from
-  `main.yml` (the Arches template), `build_feature_branch (3.11)`,
-  `build_feature_branch (3.12)`, `build_feature_branch (3.13)`,
-  `check_python_coverage` and `check_frontend_coverage`. `conclusion` and
-  `gitleaks` run on every pull request, with no `paths:` filter, so the checks
-  are never missing. The jobs of `stack-proof.yml` are called workflows with
-  generated names.
+  `deploy-lint.yml`), `gitleaks` (the job of `secret-scan.yml`),
+  `branch-guard` (a pull request into main comes from dev, a release branch or
+  a hotfix branch), `dependency-review` (no new dependency version with a high
+  or critical advisory) and, from `main.yml` (the Arches template),
+  `build_feature_branch (3.11)`, `build_feature_branch (3.12)`,
+  `build_feature_branch (3.13)`, `check_python_coverage` and
+  `check_frontend_coverage`. `conclusion`, `gitleaks`, `branch-guard` and
+  `dependency-review` run on every pull request, with no `paths:` filter, so
+  the checks are never missing. The jobs of `stack-proof.yml` are called
+  workflows with generated names.
+- `zizmor` (the GitHub Actions files, exceptions in `.zizmor.yml`) runs only
+  when `.github/` changes, and weekly: it is not a required check.
+- Code scanning: CodeQL default setup (Settings → Code security), Python and
+  JavaScript/TypeScript, results in the Security tab.
 - The GHCR package is made public after its first push, so a host can pull it
   without credentials.
 
@@ -195,8 +206,8 @@ the first tag is pushed; the chain relies on all of them.
    and `deletion`, and its bypass list is administrators only and holds the
    person who tags.
 2. `main` and the integration branch are protected (no force-push), and the
-   required checks are `conclusion`, `gitleaks`,
-   `build_feature_branch (3.11)`, `build_feature_branch (3.12)`,
+   required checks are `conclusion`, `gitleaks`, `branch-guard`,
+   `dependency-review`, `build_feature_branch (3.11)`, `build_feature_branch (3.12)`,
    `build_feature_branch (3.13)`, `check_python_coverage` and
    `check_frontend_coverage`.
 3. The default workflow token permission is `read`.

@@ -272,82 +272,75 @@ class ManifestTestData:
 
 
 class TestIsIIIFManifest(TestCase):
-    """Tests for the is_iiif_manifest static method."""
+    """Tests for manifest_registry.is_iiif_manifest."""
 
     def setUp(self):
         with patch("arches.app.models.models.Widget") as mock_widget:
             mock_widget.objects.get.return_value = MagicMock()
-            from manuspectrum.datatypes.manifest import (
-                ManifestDataType,
-                FailParsingManifestIIIF,
-            )
+            from manuspectrum.utils import manifest_registry
 
-            self.ManifestDataType = ManifestDataType
-            self.FailParsingManifestIIIF = FailParsingManifestIIIF
+            self.registry = manifest_registry
+            self.FailParsingManifestIIIF = manifest_registry.FailParsingManifestIIIF
 
     def test_valid_v3_manifest_returns_true(self):
         """A valid IIIF v3 manifest should return True."""
-        result = self.ManifestDataType.is_iiif_manifest(ManifestTestData.VALID_V3)
+        result = self.registry.is_iiif_manifest(ManifestTestData.VALID_V3)
         self.assertTrue(result)
 
     def test_valid_v2_manifest_returns_true(self):
         """A valid IIIF v2 manifest should return True."""
-        result = self.ManifestDataType.is_iiif_manifest(ManifestTestData.VALID_V2)
+        result = self.registry.is_iiif_manifest(ManifestTestData.VALID_V2)
         self.assertTrue(result)
 
     def test_minimal_v3_manifest_returns_true(self):
         """A minimal IIIF v3 manifest should return True."""
-        result = self.ManifestDataType.is_iiif_manifest(ManifestTestData.MINIMAL_V3)
+        result = self.registry.is_iiif_manifest(ManifestTestData.MINIMAL_V3)
         self.assertTrue(result)
 
     def test_minimal_v2_manifest_returns_true(self):
         """A minimal IIIF v2 manifest should return True."""
-        result = self.ManifestDataType.is_iiif_manifest(ManifestTestData.MINIMAL_V2)
+        result = self.registry.is_iiif_manifest(ManifestTestData.MINIMAL_V2)
         self.assertTrue(result)
 
     def test_non_dict_raises_exception(self):
         """A non-dict value should raise FailParsingManifestIIIF."""
         with self.assertRaises(self.FailParsingManifestIIIF) as ctx:
-            self.ManifestDataType.is_iiif_manifest("not a dict")
+            self.registry.is_iiif_manifest("not a dict")
         self.assertIn("not a dict", str(ctx.exception))
 
     def test_list_raises_exception(self):
         """A list value should raise FailParsingManifestIIIF."""
         with self.assertRaises(self.FailParsingManifestIIIF) as ctx:
-            self.ManifestDataType.is_iiif_manifest([{"type": "Manifest"}])
+            self.registry.is_iiif_manifest([{"type": "Manifest"}])
         self.assertIn("not a dict", str(ctx.exception))
 
     def test_missing_context_raises_exception(self):
         """A manifest without valid @context should raise FailParsingManifestIIIF."""
         with self.assertRaises(self.FailParsingManifestIIIF) as ctx:
-            self.ManifestDataType.is_iiif_manifest(ManifestTestData.INVALID_NO_CONTEXT)
+            self.registry.is_iiif_manifest(ManifestTestData.INVALID_NO_CONTEXT)
         self.assertIn("no valid @context", str(ctx.exception))
 
     def test_wrong_type_v2_raises_exception(self):
         """A v2 manifest with wrong @type should raise FailParsingManifestIIIF."""
         with self.assertRaises(self.FailParsingManifestIIIF) as ctx:
-            self.ManifestDataType.is_iiif_manifest(
-                ManifestTestData.INVALID_WRONG_TYPE_V2
-            )
+            self.registry.is_iiif_manifest(ManifestTestData.INVALID_WRONG_TYPE_V2)
         self.assertIn("invalid @type", str(ctx.exception))
 
     def test_wrong_type_v3_raises_exception(self):
         """A v3 manifest with wrong type should raise FailParsingManifestIIIF."""
         with self.assertRaises(self.FailParsingManifestIIIF) as ctx:
-            self.ManifestDataType.is_iiif_manifest(
-                ManifestTestData.INVALID_WRONG_TYPE_V3
-            )
+            self.registry.is_iiif_manifest(ManifestTestData.INVALID_WRONG_TYPE_V3)
         self.assertIn("invalid type", str(ctx.exception))
 
     def test_none_raises_exception(self):
         """None should raise FailParsingManifestIIIF."""
         with self.assertRaises(self.FailParsingManifestIIIF):
-            self.ManifestDataType.is_iiif_manifest(None)
+            self.registry.is_iiif_manifest(None)
 
     def test_empty_dict_raises_exception(self):
         """An empty dict should raise FailParsingManifestIIIF."""
         with self.assertRaises(self.FailParsingManifestIIIF):
-            self.ManifestDataType.is_iiif_manifest({})
+            self.registry.is_iiif_manifest({})
 
     def test_v2_missing_type_raises_exception(self):
         """A v2 manifest missing @type should raise FailParsingManifestIIIF."""
@@ -356,7 +349,7 @@ class TestIsIIIFManifest(TestCase):
             "@id": "http://example.org/manifest",
         }
         with self.assertRaises(self.FailParsingManifestIIIF) as ctx:
-            self.ManifestDataType.is_iiif_manifest(manifest)
+            self.registry.is_iiif_manifest(manifest)
         self.assertIn("invalid @type", str(ctx.exception))
 
     def test_v3_missing_type_raises_exception(self):
@@ -366,7 +359,7 @@ class TestIsIIIFManifest(TestCase):
             "id": "https://example.org/manifest",
         }
         with self.assertRaises(self.FailParsingManifestIIIF) as ctx:
-            self.ManifestDataType.is_iiif_manifest(manifest)
+            self.registry.is_iiif_manifest(manifest)
         self.assertIn("invalid type", str(ctx.exception))
 
 
@@ -374,38 +367,36 @@ class TestExtractManifestLabel(TestCase):
     """Tests for manifest label extraction."""
 
     def setUp(self):
-        with patch("arches.app.models.models.Widget") as mock_widget:
-            mock_widget.objects.get.return_value = MagicMock()
-            from manuspectrum.datatypes.manifest import ManifestDataType
+        from manuspectrum.utils import manifest_registry
 
-            self.datatype = ManifestDataType()
+        self.registry = manifest_registry
 
     def test_extract_label_v3_full_manifest(self):
         """Extract label from full v3 manifest."""
-        result = self.datatype._extract_manifest_label(ManifestTestData.VALID_V3)
+        result = self.registry.extract_label(ManifestTestData.VALID_V3)
         self.assertEqual(result, "Book 1")
 
     def test_extract_label_v2_full_manifest(self):
         """Extract label from full v2 manifest (simple string)."""
-        result = self.datatype._extract_manifest_label(ManifestTestData.VALID_V2)
+        result = self.registry.extract_label(ManifestTestData.VALID_V2)
         self.assertEqual(result, "Book 1")
 
     def test_extract_label_v3_dict_with_en(self):
         """Extract dict label with 'en' key (IIIF v3 style)."""
         manifest = {"label": {"en": ["English Label"], "fr": ["French Label"]}}
-        result = self.datatype._extract_manifest_label(manifest)
+        result = self.registry.extract_label(manifest)
         self.assertEqual(result, "English Label")
 
     def test_extract_label_v3_dict_with_none_key(self):
         """Extract dict label with 'none' key (language-independent)."""
         manifest = {"label": {"none": ["Universal Label"]}}
-        result = self.datatype._extract_manifest_label(manifest)
+        result = self.registry.extract_label(manifest)
         self.assertEqual(result, "Universal Label")
 
     def test_extract_label_v3_dict_without_en_falls_back(self):
         """Extract dict label without 'en' key, falls back to first available."""
         manifest = {"label": {"de": ["German Label"]}}
-        result = self.datatype._extract_manifest_label(manifest)
+        result = self.registry.extract_label(manifest)
         self.assertEqual(result, "German Label")
 
     def test_extract_label_v2_list_with_language(self):
@@ -416,35 +407,35 @@ class TestExtractManifestLabel(TestCase):
                 {"@value": "Titre français", "@language": "fr"},
             ]
         }
-        result = self.datatype._extract_manifest_label(manifest)
+        result = self.registry.extract_label(manifest)
         self.assertEqual(result, "English Title")
 
     def test_extract_label_list_of_strings(self):
         """Extract list of plain strings."""
         manifest = {"label": ["First Label", "Second Label"]}
-        result = self.datatype._extract_manifest_label(manifest)
+        result = self.registry.extract_label(manifest)
         self.assertEqual(result, "First Label")
 
     def test_extract_label_from_none_returns_none(self):
         """Extracting from None manifest returns None."""
-        result = self.datatype._extract_manifest_label(None)
+        result = self.registry.extract_label(None)
         self.assertIsNone(result)
 
     def test_extract_label_missing_returns_none(self):
         """Extracting from manifest without label returns None."""
-        result = self.datatype._extract_manifest_label({"id": "test"})
+        result = self.registry.extract_label({"id": "test"})
         self.assertIsNone(result)
 
     def test_extract_label_empty_list_returns_none(self):
         """Extracting from manifest with empty label list returns None."""
         manifest = {"label": []}
-        result = self.datatype._extract_manifest_label(manifest)
+        result = self.registry.extract_label(manifest)
         self.assertIsNone(result)
 
     def test_extract_label_empty_dict_returns_none(self):
         """Extracting from manifest with empty label dict returns None."""
         manifest = {"label": {}}
-        result = self.datatype._extract_manifest_label(manifest)
+        result = self.registry.extract_label(manifest)
         self.assertIsNone(result)
 
 
@@ -452,15 +443,13 @@ class TestExtractManifestDescription(TestCase):
     """Tests for manifest description extraction."""
 
     def setUp(self):
-        with patch("arches.app.models.models.Widget") as mock_widget:
-            mock_widget.objects.get.return_value = MagicMock()
-            from manuspectrum.datatypes.manifest import ManifestDataType
+        from manuspectrum.utils import manifest_registry
 
-            self.datatype = ManifestDataType()
+        self.registry = manifest_registry
 
     def test_extract_description_v2_full_manifest(self):
         """Extract description from full v2 manifest."""
-        result = self.datatype._extract_manifest_description(ManifestTestData.VALID_V2)
+        result = self.registry.extract_description(ManifestTestData.VALID_V2)
         self.assertEqual(
             result,
             "A longer description of this example book. It should give some real information.",
@@ -468,7 +457,7 @@ class TestExtractManifestDescription(TestCase):
 
     def test_extract_summary_v3_full_manifest(self):
         """Extract summary from full v3 manifest (v3 uses 'summary' not 'description')."""
-        result = self.datatype._extract_manifest_description(ManifestTestData.VALID_V3)
+        result = self.registry.extract_description(ManifestTestData.VALID_V3)
         self.assertEqual(
             result, "Book 1, written be Anne Author, published in Paris around 1400."
         )
@@ -479,13 +468,13 @@ class TestExtractManifestDescription(TestCase):
             "description": "Description text",
             "summary": {"en": ["Summary text"]},
         }
-        result = self.datatype._extract_manifest_description(manifest)
+        result = self.registry.extract_description(manifest)
         self.assertEqual(result, "Description text")
 
     def test_extract_summary_v3_dict(self):
         """Extract v3 summary dict with language keys."""
         manifest = {"summary": {"en": ["English summary"], "fr": ["French summary"]}}
-        result = self.datatype._extract_manifest_description(manifest)
+        result = self.registry.extract_description(manifest)
         self.assertEqual(result, "English summary")
 
     def test_extract_description_v2_list_with_language(self):
@@ -493,17 +482,17 @@ class TestExtractManifestDescription(TestCase):
         manifest = {
             "description": [{"@value": "English description", "@language": "en"}]
         }
-        result = self.datatype._extract_manifest_description(manifest)
+        result = self.registry.extract_description(manifest)
         self.assertEqual(result, "English description")
 
     def test_extract_description_none_returns_none(self):
         """Extracting from None manifest returns None."""
-        result = self.datatype._extract_manifest_description(None)
+        result = self.registry.extract_description(None)
         self.assertIsNone(result)
 
     def test_extract_description_missing_returns_none(self):
         """Extracting from manifest without description/summary returns None."""
-        result = self.datatype._extract_manifest_description({"label": "Test"})
+        result = self.registry.extract_description({"label": "Test"})
         self.assertIsNone(result)
 
 
@@ -609,12 +598,10 @@ class TestManifestValidation(TestCase):
         )
         self.assertEqual(errors, [])
 
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_validate_local_path_passes_when_exists(self, mock_manifest_model):
         """Local path /manifest/{uuid} should pass if manifest exists by globalid."""
-        mock_filter = MagicMock()
-        mock_filter.exists.return_value = True
-        mock_manifest_model.objects.filter.return_value = mock_filter
+        mock_manifest_model.objects.filter.return_value.first.return_value = MagicMock()
 
         errors = self.datatype.validate(
             "/manifest/ceaf19e3-e1c5-4638-af81-b79562d33787"
@@ -624,12 +611,10 @@ class TestManifestValidation(TestCase):
             globalid="ceaf19e3-e1c5-4638-af81-b79562d33787"
         )
 
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_validate_local_path_with_host_passes(self, mock_manifest_model):
         """Full local URL http://host/manifest/{uuid} should also validate by globalid."""
-        mock_filter = MagicMock()
-        mock_filter.exists.return_value = True
-        mock_manifest_model.objects.filter.return_value = mock_filter
+        mock_manifest_model.objects.filter.return_value.first.return_value = MagicMock()
 
         errors = self.datatype.validate(
             "http://localhost:8000/manifest/ceaf19e3-e1c5-4638-af81-b79562d33787"
@@ -639,12 +624,10 @@ class TestManifestValidation(TestCase):
             globalid="ceaf19e3-e1c5-4638-af81-b79562d33787"
         )
 
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_validate_local_path_fails_when_not_found(self, mock_manifest_model):
         """Local path should fail if the manifest globalid is not in DB."""
-        mock_filter = MagicMock()
-        mock_filter.exists.return_value = False
-        mock_manifest_model.objects.filter.return_value = mock_filter
+        mock_manifest_model.objects.filter.return_value.first.return_value = None
 
         errors = self.datatype.validate(
             "/manifest/ceaf19e3-e1c5-4638-af81-b79562d33787"
@@ -861,17 +844,15 @@ class TestURLFormatGate(TestCase):
     """
 
     def setUp(self):
-        with patch("arches.app.models.models.Widget") as mock_widget:
-            mock_widget.objects.get.return_value = MagicMock()
-            from manuspectrum.datatypes import manifest
+        from manuspectrum.utils import manifest_registry
 
-            self.manifest = manifest
+        self.manifest = manifest_registry
 
     def _ok(self, url):
         from django.core.exceptions import ValidationError
 
         try:
-            self.manifest._validate_url_format(url)
+            self.manifest.check_url_format(url)
             return True
         except ValidationError:
             return False
@@ -895,83 +876,49 @@ class TestURLFormatGate(TestCase):
 
 
 class TestLocalManifestMatch(TestCase):
-    """Host-aware detection of local /manifest/{uuid} references."""
+    """Host-aware detection of local manifest references (``manifest_registry.local_row``)."""
 
     UUID = "ceaf19e3-e1c5-4638-af81-b79562d33787"
 
-    def setUp(self):
-        with patch("arches.app.models.models.Widget") as mock_widget:
-            mock_widget.objects.get.return_value = MagicMock()
-            from manuspectrum.datatypes import manifest
+    def is_local(self, url):
+        from manuspectrum.utils.manifest_registry import local_row
 
-            self.manifest = manifest
+        return local_row(url)[0]
 
     def test_relative_path_is_local(self):
-        self.assertEqual(
-            self.manifest._match_local_manifest(f"/manifest/{self.UUID}"), self.UUID
-        )
+        self.assertTrue(self.is_local(f"/manifest/{self.UUID}"))
 
     @override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
     def test_canonical_host_is_local(self):
-        self.assertEqual(
-            self.manifest._match_local_manifest(
-                f"https://manuspectrum.example/manifest/{self.UUID}"
-            ),
-            self.UUID,
+        self.assertTrue(
+            self.is_local(f"https://manuspectrum.example/manifest/{self.UUID}")
         )
 
     @override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
     def test_foreign_host_is_not_local(self):
-        self.assertIsNone(
-            self.manifest._match_local_manifest(f"http://evil.com/manifest/{self.UUID}")
-        )
+        self.assertFalse(self.is_local(f"http://evil.com/manifest/{self.UUID}"))
 
     @override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
     def test_userinfo_trick_does_not_bypass(self):
-        # urlparse().hostname == 'evil.com', not the userinfo 'manuspectrum.example'.
-        self.assertIsNone(
-            self.manifest._match_local_manifest(
-                f"http://manuspectrum.example@evil.com/manifest/{self.UUID}"
-            )
+        self.assertFalse(
+            self.is_local(f"http://manuspectrum.example@evil.com/manifest/{self.UUID}")
         )
 
-    def test_non_manifest_url_is_none(self):
-        self.assertIsNone(
-            self.manifest._match_local_manifest("https://example.org/iiif/manifest")
-        )
+    def test_non_manifest_url_is_not_local(self):
+        self.assertFalse(self.is_local("https://example.org/iiif/manifest"))
 
-    # The IIIF output names a stored manifest /iiif/manifest/{uuid}
-    # (manuspectrum.iiif.ids.stored_manifest), so a URL copied out of an
-    # annotation or a viewer names the same local manifest.
     def test_relative_iiif_route_is_local(self):
-        self.assertEqual(
-            self.manifest._match_local_manifest(f"/iiif/manifest/{self.UUID}"),
-            self.UUID,
-        )
+        self.assertTrue(self.is_local(f"/iiif/manifest/{self.UUID}"))
 
     @override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
     def test_iiif_route_on_canonical_host_is_local(self):
-        self.assertEqual(
-            self.manifest._match_local_manifest(
-                f"https://manuspectrum.example/iiif/manifest/{self.UUID}"
-            ),
-            self.UUID,
+        self.assertTrue(
+            self.is_local(f"https://manuspectrum.example/iiif/manifest/{self.UUID}")
         )
 
     @override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
     def test_iiif_route_on_foreign_host_is_not_local(self):
-        self.assertIsNone(
-            self.manifest._match_local_manifest(
-                f"https://evil.com/iiif/manifest/{self.UUID}"
-            )
-        )
-
-    def test_language_prefixed_iiif_route_is_not_local(self):
-        # The IIIF route sits below the language boundary: /en/iiif/... is
-        # not one of its URLs.
-        self.assertIsNone(
-            self.manifest._match_local_manifest(f"/en/iiif/manifest/{self.UUID}")
-        )
+        self.assertFalse(self.is_local(f"https://evil.com/iiif/manifest/{self.UUID}"))
 
 
 class TestGetPrefLabel(TestCase):
@@ -1157,8 +1104,8 @@ class TestPreTileSave(TestCase):
         # Value should be untouched — pre_tile_save only handles strings
         self.assertEqual(tile.data[nodeid], original_value)
 
-    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @patch("manuspectrum.utils.manifest_registry.fetch_iiif_manifest")
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_pre_tile_save_imports_external_manifest_as_local(
         self, mock_manifest_model, mock_fetch
     ):
@@ -1190,70 +1137,7 @@ class TestPreTileSave(TestCase):
         mock_manifest_model.objects.create.assert_called_once()
         create_kwargs = mock_manifest_model.objects.create.call_args[1]
         self.assertEqual(create_kwargs["label"], "Book 1")
-        # tile.data should point at the globalid that was actually persisted:
-        # pre_tile_save generates the uuid and uses it for both create() and
-        # the rewritten tile value.
-        self.assertEqual(tile.data[nodeid], f"/manifest/{create_kwargs['globalid']}")
-
-    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_pre_tile_save_reuses_already_imported_external(
-        self, mock_manifest_model, mock_fetch
-    ):
-        """pre_tile_save should reuse existing record for already-imported external URL."""
-        nodeid = str(uuid.uuid4())
-        existing_globalid = uuid.uuid4()
-        tile = MagicMock()
-        tile.data = {
-            nodeid: "https://gallica.bnf.fr/iiif/ark:/12148/btv1b105477296/manifest.json"
-        }
-
-        # Step 1: relative path lookup returns None
-        # Step 2: full URL lookup returns existing manifest
-        mock_filter_none = MagicMock()
-        mock_filter_none.first.return_value = None
-        mock_filter_found = MagicMock()
-        mock_filter_found.first.return_value = MagicMock(
-            globalid=existing_globalid,
-            url="https://gallica.bnf.fr/iiif/ark:/12148/btv1b105477296/manifest.json",
-        )
-        mock_manifest_model.objects.filter.side_effect = [
-            mock_filter_none,
-            mock_filter_found,
-        ]
-
-        self.datatype.pre_tile_save(tile, nodeid)
-
-        # Should NOT fetch or create (reuses existing)
-        mock_fetch.assert_not_called()
-        mock_manifest_model.objects.create.assert_not_called()
-        # tile.data should be the local path from globalid
-        self.assertEqual(tile.data[nodeid], f"/manifest/{existing_globalid}")
-
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_pre_tile_save_dedup_local_manifest(self, mock_manifest_model):
-        """When local manifest exists by relative path, should store its url."""
-        nodeid = str(uuid.uuid4())
-        tile = MagicMock()
-        tile.data = {nodeid: "http://localhost:8000/manifest/abc-123"}
-
-        # Relative path lookup succeeds
-        mock_manifest = MagicMock()
-        mock_manifest.url = "/manifest/abc-123"
-        mock_filter = MagicMock()
-        mock_filter.first.return_value = mock_manifest
-        mock_manifest_model.objects.filter.return_value = mock_filter
-
-        self.datatype.pre_tile_save(tile, nodeid)
-
-        # Should NOT create (manifest already exists)
-        mock_manifest_model.objects.create.assert_not_called()
-        # tile.data should be the relative path from DB
-        self.assertEqual(tile.data[nodeid], "/manifest/abc-123")
-        # Verify lookup used relative path
-        mock_manifest_model.objects.filter.assert_called_once_with(
-            url="/manifest/abc-123"
-        )
+        self.assertEqual(tile.data[nodeid], f"/manifest/{created_globalid}")
 
 
 @override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
@@ -1306,7 +1190,7 @@ class TestLocalReferenceToStoredManifest(TestCase):
         response = MagicMock()
         response.json.return_value = ManifestTestData.VALID_V3
         fetcher = patch(
-            "manuspectrum.datatypes.manifest.fetch_iiif_manifest",
+            "manuspectrum.utils.manifest_registry.fetch_iiif_manifest",
             return_value=response,
         )
         self.fetch = fetcher.start()
@@ -1392,8 +1276,8 @@ class TestSSRF_RedirectBlocked(TestCase):
 
             self.datatype = ManifestDataType()
 
-    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @patch("manuspectrum.utils.manifest_registry.fetch_iiif_manifest")
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_pre_tile_save_uses_resilient_fetch(self, mock_manifest_model, mock_fetch):
         """pre_tile_save() fetches external manifests via the resilient helper.
 
@@ -1432,8 +1316,8 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
             self.datatype = ManifestDataType()
 
     @override_settings(SSRF_ALLOW_PRIVATE=False)
-    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @patch("manuspectrum.utils.manifest_registry.fetch_iiif_manifest")
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_pre_tile_save_blocks_private_ip(self, mock_manifest_model, mock_fetch):
         """The SSRF guard blocks private IPs (e.g. 192.168.1.1).
 
@@ -1455,8 +1339,8 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
         mock_fetch.assert_not_called()
 
     @override_settings(SSRF_ALLOW_PRIVATE=False)
-    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @patch("manuspectrum.utils.manifest_registry.fetch_iiif_manifest")
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_pre_tile_save_blocks_cloud_metadata(self, mock_manifest_model, mock_fetch):
         """The SSRF guard blocks the cloud-metadata endpoint.
 
@@ -1477,8 +1361,8 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
         mock_fetch.assert_not_called()
 
     @override_settings(SSRF_ALLOW_PRIVATE=False)
-    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @patch("manuspectrum.utils.manifest_registry.fetch_iiif_manifest")
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_pre_tile_save_blocks_localhost(self, mock_manifest_model, mock_fetch):
         """pre_tile_save() must reject localhost URLs."""
         nodeid = str(uuid.uuid4())
@@ -1494,8 +1378,8 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
             self.datatype.pre_tile_save(tile, nodeid)
         mock_fetch.assert_not_called()
 
-    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @patch("manuspectrum.utils.manifest_registry.fetch_iiif_manifest")
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_pre_tile_save_allows_valid_external_url(
         self, mock_manifest_model, mock_fetch
     ):

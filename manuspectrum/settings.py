@@ -287,6 +287,11 @@ TEMPLATES = build_templates_config(
 TEMPLATES[0]["OPTIONS"]["context_processors"].append(
     "manuspectrum.context_processors.language_switch"
 )
+# A page reached by a personal mailed link must not copy its own URL, which
+# holds the token, into its head (see accounts.mailed_links).
+TEMPLATES[0]["OPTIONS"]["context_processors"].append(
+    "manuspectrum.context_processors.personal_link"
+)
 
 ALLOWED_HOSTS = []
 
@@ -379,6 +384,12 @@ LOGGING = {
         },
         # One INFO line per Explorer corpus bundle build (explorer.memo).
         "manuspectrum.explorer": {
+            "handlers": ["file", "console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        # One line per remote manifest an annotation save registers (signals.py).
+        "manuspectrum.manifests": {
             "handlers": ["file", "console"],
             "level": "INFO",
             "propagate": False,
@@ -504,6 +515,10 @@ ACCOUNT_SUMMARY_RECIPIENTS = []
 # settings_local.py on a production host, otherwise the User-Agent silently
 # drops the unusable parts (Arches defaults PUBLIC_SERVER_ADDRESS to localhost).
 CONTACT_EMAIL = ""
+
+# Google Search Console site-verification token, rendered as a <meta> tag on the
+# public pages by the {% google_site_verification %} template tag. Empty: no tag.
+GOOGLE_SITE_VERIFICATION = ""
 
 CELERY_BROKER_URL = "redis://localhost:6379/0"  # RabbitMQ --> "amqp://guest:guest@localhost",  Redis --> "redis://localhost:6379/0"
 CELERY_ACCEPT_CONTENT = ["json"]
@@ -695,9 +710,12 @@ LANGUAGES = [
 ]
 # OPS — after ADDING a language here, run:  python manage.py i18n synclanguages
 # (the official Arches sync: creates the Language row and republishes the
-# per-language graph serialisations for models AND branches). Without it,
-# every Arches page under /<newlang>/ 500s. manuspectrum.checks.W002 (a
-# database system check, runs with migrate) detects the gap.
+# per-language graph serialisations for models AND branches), then
+# python manage.py republish_graph_translations (synclanguages writes the
+# strings of one language into every language's serialisation). Without them,
+# every Arches page under /<newlang>/ 500s, or shows another language.
+# manuspectrum.checks.W002 (a database system check, runs with migrate)
+# detects the first gap.
 # See https://arches.readthedocs.io/en/stable/developing/advanced/localizing-arches/
 
 # override this to permenantly display/hide the language switcher

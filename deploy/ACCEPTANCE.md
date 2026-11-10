@@ -299,6 +299,9 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
     `has no Arches system settings`. Drop it, then start again:
     `dc exec postgres sh -c 'dropdb -U "$POSTGRES_USER" --if-exists <PGDBNAME>'` and
     `make -C deploy init` (Elasticsearch indexes are recreated by `setup_db`).
+- [ ] *(service account)* Once `web` is up,
+  `/fr/add-resource/60c85aba-f079-45bc-997f-21cdd4f77b6d` (Analysis) shows the card « Nom de l'analyse », not
+  « Name of Analysis ».
 - [ ] *(service account)* The end of the `init` output says
   `admin password set from the admin_password secret`. Read the password once,
   `cat "$SECRETS_DIR/admin_password"`, and sign in as `admin` on the
@@ -344,6 +347,14 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
     `dc logs --tail=100 <service>`.
 - [ ] *(service account)* Same Host rule by hand: `dc exec -T web curl -s -o /dev/null -w '%{http_code}\n' -H 'Host: web' http://127.0.0.1:8000/healthz`
   → `200`; with `-H 'Host: localhost'` → `400`.
+- [ ] *(service account)* The graph content is complete in every site language. The command prints
+  `0 reference default(s) and 0 published one(s) missing a site language; 0 resource(s) with such a stored value []`:
+  ```bash
+  make -C deploy manage ARGS='shell -c "import json; from django.conf import settings; from django.db import connection; langs = {code for code, name in settings.LANGUAGES}; lst = lambda x: x if isinstance(x, list) else []; full = lambda v: langs <= {l[\"language_id\"] for l in v.get(\"labels\") or [] if l[\"valuetype_id\"] == \"prefLabel\"}; c = connection.cursor(); c.execute(\"SELECT nodeid::text, nodegroupid::text FROM nodes WHERE datatype = %s\", [\"reference\"]); refs = dict(c.fetchall()); c.execute(\"SELECT nodeid::text, config FROM cards_x_nodes_x_widgets\"); d = sum(1 for n, cfg in c.fetchall() if n in refs for v in lst(json.loads(cfg).get(\"defaultValue\")) if not full(v)); c.execute(\"SELECT p.serialized_graph->%s FROM published_graphs p JOIN graphs g ON g.publicationid = p.publicationid\", [\"cards_x_nodes_x_widgets\"]); p = sum(1 for (ws,) in c.fetchall() for w in json.loads(ws or \"[]\") if w[\"node_id\"] in refs for v in lst((w.get(\"config\") or {}).get(\"defaultValue\")) if not full(v)); c.execute(\"SELECT resourceinstanceid::text, tiledata FROM tiles WHERE nodegroupid::text = ANY(%s)\", [list(set(refs.values()))]); r = sorted({i for i, td in c.fetchall() for n, x in json.loads(td).items() if n in refs for v in lst(x) if not full(v)}); print(d, \"reference default(s) and\", p, \"published one(s) missing a site language;\", len(r), \"resource(s) with such a stored value\", r[:20])"'
+  ```
+  Then in the browser, signed in: `/fr/add-resource/60c85aba-f079-45bc-997f-21cdd4f77b6d` (Analysis), card « Nom de
+  l'analyse », shows the Type « termes préférentiels », and `/en/` shows « preferred terms », never « Unlabeled Item »;
+  on a Component, « Représentation iconographique » is the Biblissima autocomplete (a plain URL field is wrong).
 
 ### 2.5 Resources and restart policy (D-H6)
 
@@ -1461,8 +1472,8 @@ Create the test accounts in the admin and delete them afterwards.
   save lands on the change page, and Mailpit holds one message
   with the subject prefix `[ManuSpectrum][Account]` and the header `X-ManuSpectrum-Category: Account`, English then French.
 - [ ] Open the link (read it as in « Reading a mail link » of step 7: a link cut at a line break answers `410`):
-  the terms of use are shown with a required checkbox; submitting without it is refused; with it, set a
-  password (an 11-character or common one is refused), then enrol an authenticator at `/en/account/two-factor`.
+  a « Continue » page, then the terms of use with a required checkbox; submitting without it is refused; with it, set
+  a password (an 11-character or common one is refused), then enrol an authenticator at `/en/account/two-factor`.
   The admin lists the acceptance (version, date) under "Terms acceptances".
 - [ ] Sign out and in again with the code. A POST to `/en/account/two-factor` and `/en/account/terms` repeated 7 times in
   a minute gets `429` from the edge.
@@ -1470,16 +1481,27 @@ Create the test accounts in the admin and delete them afterwards.
   version, not the administrator who set the stack up: the next page after sign-in is the acceptance page. A person
   who has not accepted yet sees the terms at activation instead, and the acceptance page does not appear
   for an account that already accepted the current version.
-- [ ] The activation link redirects at once to a URL without the token (`.../set-password`), and the nginx access log
-  shows `[redacted]` for the activation path in both `uri` and `referer`.
+- [ ] The activation link answers a « Continue » page that stores nothing (opening the link again still works);
+  « Continue » leads to a URL without the token (`.../set-password`), and the nginx access log shows `[redacted]`
+  for the activation path in both `uri` and `referer`.
+- [ ] Click the activation link from another site, as from a webmail: the Mailpit web page. Mailpit publishes no port;
+  *(service account)* `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$(dc ps -q mailpit)"`
+  prints its addresses, then *(host)* `ssh -L 8025:<one of them>:8025 <admin>@192.168.123.10` and open
+  `http://localhost:8025`. The Mailpit page must be on another host name than the application (`localhost` against
+  `<site>`): the same host name on another port is the same site, and the click would prove nothing (the code before
+  the fix passed it too). With the browser developer tools recording the network in the tab that the click opens
+  (Chromium: DevTools settings, « Auto-open DevTools for popups »), click the link: the first request shows
+  `Sec-Fetch-Site: cross-site`, otherwise the check does not count. The « Continue » page answers, not « This link is
+  not valid », and « Continue » leads to the terms. The same for a password-reset link (the new password form) and,
+  below, the two-factor re-enrolment link (the password field).
 - [ ] Set `FORCE_TWO_FACTOR_AUTHENTICATION=true` in `.env`, recreate `web`. Invite and activate a second test user:
   after the password the browser lands on `/en/account/two-factor` and any other page sends it back there until a
   code is confirmed. Check in the browser that the enrolment page works fully (QR code, manual key, confirmation)
   for that not-yet-enrolled user. An enrolled user signs in with the code.
 - [ ] Lost phone, with forced two-factor still on: as a superuser, run **Reset two-factor authentication (superuser)**
   in the admin Users list (tick the account, choose the action; the User page shows the « Account » section).
-  Mailpit holds the re-enrolment mail; the link asks for the password (a wrong one counts as a
-  failed sign-in), then a new code, then signs the user in. Opening the link a second time is refused.
+  Mailpit holds the re-enrolment mail; the link shows a « Continue » page, then asks for the password (a wrong one
+  counts as a failed sign-in), then a new code, then signs the user in. Opening the link a second time is refused.
 - [ ] `make -C deploy manage ARGS="check --database default"` raises no `manuspectrum.W004` (no OAuth application with the
   password grant). Put `FORCE_TWO_FACTOR_AUTHENTICATION` back to `false` if the rehearsal continues without it.
 
@@ -1697,6 +1719,8 @@ Needs the stack running `vOld` and `vA` armed.
   https://<host>/readyz` → `200`. The site answers; `smoke.sh edge` passes. `ReleasePendingTooLong` and `UpdateRolledBack`
   are not firing once the 64 hours of a previous rollback are over.
 - [ ] `docker image ls` holds the images of `vB` and `vA` (current and previous), no older armed one.
+- [ ] When `releases/<vB>.md` « Upgrading » lists one-off steps, run them in their order after the update, then the
+  graph content check of §2.4: same output, and the resources of the snapshot still open in the editor.
 
 ### 9.9 Refusals of the update
 

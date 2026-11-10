@@ -1267,6 +1267,14 @@ msgstr ""
 msgid "Accept and choose your password"
 msgstr "Accept and choose your password"
 
+#: templates/accounts/activate_continue.htm:10
+msgid ""
+"Your invitation link is valid. Continue to read the terms of use and choose "
+"your password."
+msgstr ""
+"Your invitation link is valid. Continue to read the terms of use and choose "
+"your password."
+
 #: templates/accounts/activation_invalid.htm:3
 #: templates/accounts/activation_invalid.htm:4
 #: templates/accounts/two_factor_reset_invalid.htm:3
@@ -1445,6 +1453,14 @@ msgstr "Password"
 #: templates/accounts/two_factor_reset.htm:46
 msgid "Continue"
 msgstr "Continue"
+
+#: templates/accounts/two_factor_reset_continue.htm:14
+msgid ""
+"Your link is valid. Continue to type your password and set up your "
+"authenticator again."
+msgstr ""
+"Your link is valid. Continue to type your password and set up your "
+"authenticator again."
 
 #: templates/accounts/two_factor_reset_invalid.htm:7
 msgid "The link has expired, has already been used or is incorrect."
@@ -3862,6 +3878,10 @@ msgid ""
 msgstr ""
 "ManuSpectrum — interoperable database for physicochemical analysis of "
 "written cultural heritage."
+
+#: templates/registration/password_reset_continue.html:3
+msgid "Your link is valid. Continue to choose a new password."
+msgstr "Your link is valid. Continue to choose a new password."
 
 #: templates/registration/password_reset_email_html.html:17
 #, python-format

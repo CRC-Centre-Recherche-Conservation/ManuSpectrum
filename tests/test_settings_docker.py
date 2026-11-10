@@ -55,6 +55,7 @@ NAMES = [
     "FORCE_TWO_FACTOR_AUTHENTICATION",
     "RELATED_RESOURCES_EXPORT_LIMIT",
     "EXPLORER_UI_ONLY",
+    "GOOGLE_SITE_VERIFICATION",
     "SESSION_COOKIE_SECURE",
     "CSRF_COOKIE_SECURE",
     "SESSION_COOKIE_HTTPONLY",
@@ -201,6 +202,17 @@ class SettingsDockerTests(SimpleTestCase):
                 self.assertRefused(
                     dict(BASE_ENV, EXPLORER_UI_ONLY=text), "EXPLORER_UI_ONLY"
                 )
+
+    def test_the_search_console_token_is_empty_by_default_and_must_be_a_plain_token(
+        self,
+    ):
+        self.assertEqual(load(BASE_ENV)["GOOGLE_SITE_VERIFICATION"], "")
+        values = load(dict(BASE_ENV, GOOGLE_SITE_VERIFICATION=" aB-9_x "))
+        self.assertEqual(values["GOOGLE_SITE_VERIFICATION"], "aB-9_x")
+        self.assertRefused(
+            dict(BASE_ENV, GOOGLE_SITE_VERIFICATION='x"><script>'),
+            "GOOGLE_SITE_VERIFICATION",
+        )
 
     def test_metrics_are_on_with_prometheus_middleware_around_the_stack(self):
         values = load(BASE_ENV)

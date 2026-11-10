@@ -5,6 +5,7 @@ from html.parser import HTMLParser
 from unittest import mock
 
 import lxml.html
+from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
@@ -12,6 +13,7 @@ from django.core import mail
 from django.core.cache import cache
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
+from django.utils import translation
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
@@ -79,6 +81,60 @@ def activate(client, path, **data):
     return client.post(path, data, HTTP_X_REAL_IP=IP, REMOTE_ADDR="10.0.0.1")
 
 
+REDIRECT_STATUSES = (301, 302, 303, 307, 308)
+
+
+def is_strict(name, morsel):
+    """True for a cookie a browser leaves out of a cross-site request."""
+    if morsel["samesite"]:
+        return morsel["samesite"].lower() == "strict"
+    # `Client.force_login` stores the session cookie without its attributes.
+    return (
+        name == settings.SESSION_COOKIE_NAME
+        and (settings.SESSION_COOKIE_SAMESITE or "").lower() == "strict"
+    )
+
+
+def cross_site_click(client, path):
+    """GET *path* as a browser does for a link clicked in a webmail or a mail client.
+
+    The navigation starts on another site, so every request of its redirect
+    chain is cross-site: none carries a `SameSite=Strict` cookie, not even one
+    set by an earlier response of the same chain. The cookies received are
+    kept in *client* (the test client stores them itself); its later requests
+    stand for same-site ones and carry them all. Returns the last response of
+    the chain.
+    """
+    while True:
+        sent = "; ".join(
+            f"{name}={morsel.coded_value}"
+            for name, morsel in client.cookies.items()
+            if not is_strict(name, morsel)
+        )
+        response = client.get(path, HTTP_COOKIE=sent, HTTP_SEC_FETCH_SITE="cross-site")
+        if response.status_code not in REDIRECT_STATUSES:
+            return response
+        path = response["Location"]
+
+
+def head_copies_of(response, token):
+    """The attribute values of the page's head that hold *token*."""
+    document = lxml.html.fromstring(response.content)
+    return document.xpath("//head//@*[contains(., $token)]", token=token)
+
+
+def open_link(client, path):
+    """Open a mailed link and press « Continue », as a browser does.
+
+    Returns the answer to the « Continue » post: the redirect to the URL
+    without the token.
+    """
+    landing = client.get(path)
+    if landing.status_code != 200:
+        raise AssertionError(f"the link answered {landing.status_code}")
+    return client.post(path)
+
+
 class _ParagraphNesting(HTMLParser):
     """Collect the block elements that a browser would pull out of an open `<p>`."""
 
@@ -138,7 +194,9 @@ class InvitationTests(Base):
         )
         path = re.search(r"https?://[^\s]+/account/activate/[^\s]+", body).group(0)
         path = "/" + path.split("/", 3)[3]
-        response = self.client.get(path, follow=True)
+        response = cross_site_click(self.client, path)
+        self.assertEqual(response.status_code, 200)
+        response = self.client.post(path, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'name="accept_terms"')
 
@@ -172,7 +230,7 @@ class ActivationTests(Base):
         self.user = invited()
         self.link = link_path(self.user)
         self.path = placeholder_path(self.user)
-        self.client.get(self.link)
+        open_link(self.client, self.link)
 
     def good(self, **overrides):
         data = {
@@ -349,20 +407,10 @@ class ActivationTests(Base):
         self.assertEqual(response.status_code, 410)
         self.assertEqual(expired.status_code, 410)
 
-    def test_a_valid_link_moves_its_token_to_the_session_and_redirects(self):
-        client = Client()
-        response = client.get(self.link)
-        self.assertRedirects(response, self.path, fetch_redirect_response=False)
-        self.assertNotIn(self.link.rsplit("/", 1)[1], response["Location"])
-        self.assertEqual(response["Referrer-Policy"], "same-origin")
-        page = client.get(self.path)
-        self.assertEqual(page.status_code, 200)
-        self.assertEqual(page["Referrer-Policy"], "same-origin")
-        self.assertNotContains(page, self.link.rsplit("/", 1)[1])
-
     def test_the_form_posts_from_the_browser_with_csrf_checks_on(self):
         client = Client(enforce_csrf_checks=True)
-        client.get(self.link)
+        landing = client.get(self.link)
+        browser_post(client, landing, self.link)
         page = client.get(self.path)
         self.assertEqual(page.status_code, 200)
         response = browser_post(client, page, self.path, **self.good())
@@ -374,7 +422,8 @@ class ActivationTests(Base):
 
     def test_a_no_referrer_page_would_post_a_null_origin_that_csrf_refuses(self):
         client = Client(enforce_csrf_checks=True)
-        client.get(self.link)
+        landing = client.get(self.link)
+        browser_post(client, landing, self.link)
         page = client.get(self.path)
         page["Referrer-Policy"] = "no-referrer"
         response = browser_post(client, page, self.path, **self.good())
@@ -441,6 +490,134 @@ class ActivationTests(Base):
                 for _ in range(7)
             ]
         self.assertIn(429, statuses)
+
+
+class LinkLandingTests(Base):
+    """The page a mailed activation link opens, and its « Continue » post."""
+
+    def setUp(self):
+        super().setUp()
+        self.user = invited()
+        self.link = link_path(self.user)
+        self.path = placeholder_path(self.user)
+
+    def good(self):
+        return {
+            "new_password1": PASSWORD,
+            "new_password2": PASSWORD,
+            "accept_terms": "on",
+        }
+
+    def test_a_valid_link_shows_continue_then_moves_its_token_and_redirects(self):
+        client = Client()
+        token = self.link.rsplit("/", 1)[1]
+        landing = client.get(self.link)
+        self.assertEqual(landing.status_code, 200)
+        self.assertEqual(landing["Referrer-Policy"], "same-origin")
+        self.assertIn("no-store", landing["Cache-Control"])
+        self.assertContains(landing, '<meta name="robots" content="noindex')
+        # The token is in the page's own URL, so its head repeats that URL
+        # nowhere (canonical, alternates, og:url); the language links of the
+        # header keep it, to show this page in the other language. It is never
+        # in what the form sends.
+        document = lxml.html.fromstring(landing.content)
+        self.assertEqual(head_copies_of(landing, token), [])
+        self.assertEqual(
+            document.xpath('//link[@rel="canonical" or @rel="alternate"]'), []
+        )
+        self.assertEqual(document.xpath('//meta[@property="og:url"]'), [])
+        self.assertTrue(
+            document.xpath("//a[@hreflang][contains(@href, $token)]", token=token)
+        )
+        (form,) = document.xpath('//form[@method="post"]')
+        self.assertIsNone(form.get("action"))
+        self.assertNotIn(token, lxml.html.tostring(form).decode())
+        response = client.post(self.link)
+        self.assertRedirects(response, self.path, fetch_redirect_response=False)
+        self.assertNotIn(token, response["Location"])
+        self.assertEqual(response["Referrer-Policy"], "same-origin")
+        page = client.get(self.path)
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(page["Referrer-Policy"], "same-origin")
+        self.assertNotContains(page, token)
+
+    def test_the_continue_page_is_in_french_under_fr(self):
+        with translation.override("fr"):
+            response = Client().get("/fr" + self.link.removeprefix("/en"))
+        self.assertContains(response, "Activer mon compte")
+        self.assertContains(response, ">Continuer</button>")
+        self.assertContains(response, "Continuez pour lire les conditions")
+
+    def test_a_link_clicked_in_a_webmail_reaches_the_form(self):
+        """A cross-site click carries no session cookie over a redirect."""
+        # The production value, which `cross_site_click` reproduces.
+        self.assertEqual(settings.SESSION_COOKIE_SAMESITE, "Strict")
+        client = Client(enforce_csrf_checks=True)
+        landing = cross_site_click(client, self.link)
+        self.assertEqual(landing.status_code, 200)
+        self.assertContains(landing, ">Continue</button>")
+        response = browser_post(client, landing, self.link)
+        self.assertRedirects(response, self.path, fetch_redirect_response=False)
+        page = client.get(self.path)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'name="accept_terms"')
+        done = browser_post(client, page, self.path, **self.good())
+        self.assertRedirects(
+            done, "/en/account/two-factor", fetch_redirect_response=False
+        )
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(PASSWORD))
+
+    def test_a_signed_in_browser_clicking_in_a_webmail_reaches_the_form(self):
+        client = Client(enforce_csrf_checks=True)
+        other = User.objects.create_user("other", "other@manuspectrum.test", PASSWORD)
+        client.force_login(other)
+        cookie = client.cookies[settings.SESSION_COOKIE_NAME].value
+        landing = cross_site_click(client, self.link)
+        self.assertEqual(landing.status_code, 200)
+        # A new session cookie would replace the one the click did not send.
+        self.assertNotIn(settings.SESSION_COOKIE_NAME, landing.cookies)
+        self.assertEqual(client.cookies[settings.SESSION_COOKIE_NAME].value, cookie)
+        response = browser_post(client, landing, self.link)
+        self.assertRedirects(response, self.path, fetch_redirect_response=False)
+        self.assertContains(client.get(self.path), 'name="accept_terms"')
+
+    def test_opening_the_link_stores_nothing_and_does_not_use_it(self):
+        scanner = Client()
+        for response in (
+            scanner.get(self.link),
+            scanner.head(self.link),
+            scanner.get(self.link),
+        ):
+            self.assertEqual(response.status_code, 200)
+        self.assertNotIn(settings.SESSION_COOKIE_NAME, scanner.cookies)
+        self.assertEqual(scanner.get(self.path).status_code, 410)
+        self.assertEqual(
+            open_link(Client(), self.link)["Location"], self.path, "link still valid"
+        )
+
+    def test_continue_without_the_csrf_token_is_refused(self):
+        client = Client(enforce_csrf_checks=True)
+        client.get(self.link)
+        response = client.post(
+            self.link, HTTP_ORIGIN="http://testserver", HTTP_X_REAL_IP=IP
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertNotIn(activation.SESSION_TOKEN_KEY, client.session)
+        # The refusal is a page of the site at the URL of the link.
+        self.assertEqual(head_copies_of(response, self.link.rsplit("/", 1)[1]), [])
+
+    def test_other_methods_on_the_link_are_not_allowed(self):
+        response = Client().put(self.link)
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response["Referrer-Policy"], "same-origin")
+
+    def test_continue_on_a_bad_link_is_refused(self):
+        uid = urlsafe_base64_encode(force_bytes(self.user.pk))
+        client = Client()
+        response = client.post(f"/en/account/activate/{uid}/bad-token")
+        self.assertEqual(response.status_code, 410)
+        self.assertNotIn(activation.SESSION_TOKEN_KEY, client.session)
 
 
 class MiddlewareTests(Base):

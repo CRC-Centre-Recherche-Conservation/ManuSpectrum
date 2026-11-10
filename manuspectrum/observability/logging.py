@@ -5,8 +5,11 @@ record carries the request id (``RequestIdFilter``). The formatters redact
 secrets and personal data whatever the logger: values of keys that name a
 password, token, cookie, session, CSRF value, API key or credential; in text,
 ``Authorization`` values, IIIF tokens (``msiiif1.``), ``password=``-style query
-values, URL credentials and e-mail addresses. ``LogRecordCounter`` counts
-records at WARNING and above into ``manuspectrum_log_records_total``.
+values, URL credentials, e-mail addresses and what follows the path of a
+personal mailed link (password reset, account activation, two-factor
+re-enrolment: the token is in the path, and Django logs the path of every
+refused request). ``LogRecordCounter`` counts records at WARNING and above into
+``manuspectrum_log_records_total``.
 """
 
 import datetime
@@ -52,6 +55,13 @@ _TEXT_RULES = (
             r"|client_secret|api_?key|sessionid|csrftoken|csrfmiddlewaretoken"
             r"|code|key|sig|signature)=)[^&\s;,]+"
         ),
+        r"\1" + REDACTED,
+    ),
+    # The routes of `accounts.mailed_links`, as nginx redacts them in its
+    # access log (deploy/compose/nginx/snippets/logging.conf). The `reset`
+    # alternative also ends the two-factor path.
+    (
+        re.compile(r"(?i)(/(?:reset|account/activate)/)[^\s\"'<>]+"),
         r"\1" + REDACTED,
     ),
     (

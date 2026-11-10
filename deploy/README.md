@@ -17,6 +17,8 @@ committed) and in the secret files of `SECRETS_DIR`.
 | `compose/compose.prod.yaml` | Sizing of the production host only |
 | `compose/.env.example` | Variables to copy into `compose/.env` |
 | `compose/secrets/` | Secret files read by Compose (see its README); the default `SECRETS_DIR` |
+| `DEPLOY.md` | Rebuild production from zero: the ordered path through the other documents, secrets, release rollback, annual maintenance |
+| `INCIDENT.md` | Decision tree for the operator: unreachable site, errors, disk, certificate, backup, failed release, suspected compromise, planned maintenance |
 | `RELEASES.md` | Releases: staging image, tags, signature, verification by hand, retention |
 | `BACKUP.md` | Backups: what is kept where, the schedule, the restore test, restore of a file or of the stack, moving day, personal data |
 | `ADMIN.md` | Administration: accounts, invitation and two-factor, unlocking, terms, embargoes, abandoned workflows, draft register of processing |
@@ -105,8 +107,11 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
 - The first installation goes through `make init` only. It runs the `init`
   service (profile `init`, not started by `up`): `setup_db`, the admin password,
   then `packages -o load_package -s /srv/pkg -y` (the package, mounted
-  read-only) and `i18n synclanguages`; the controlled lists are made searchable
-  by the package's own post SQL.
+  read-only), `i18n synclanguages` and `republish_graph_translations` (restores
+  the French card texts that the two steps before it overwrite; run it again
+  after `i18n synclanguages` or « Update published graphs » in the Graph
+  Designer); the controlled lists are made searchable by the package's own post
+  SQL.
   It takes several minutes longer than `setup_db` alone (graphs, 30 000 list
   values, a full reindex). It refuses to run when the database exists, because
   `setup_db` drops and recreates it; before `setup_db` it also refuses an empty
