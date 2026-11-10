@@ -1124,8 +1124,8 @@ class TestPreTileSave(TestCase):
         # Value should be untouched — pre_tile_save only handles strings
         self.assertEqual(tile.data[nodeid], original_value)
 
-    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @patch("manuspectrum.utils.manifest_registry.fetch_iiif_manifest")
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_pre_tile_save_imports_external_manifest_as_local(
         self, mock_manifest_model, mock_fetch
     ):
@@ -1157,12 +1157,9 @@ class TestPreTileSave(TestCase):
         mock_manifest_model.objects.create.assert_called_once()
         create_kwargs = mock_manifest_model.objects.create.call_args[1]
         self.assertEqual(create_kwargs["label"], "Book 1")
-        # tile.data should point at the globalid that was actually persisted:
-        # pre_tile_save generates the uuid and uses it for both create() and
-        # the rewritten tile value.
-        self.assertEqual(tile.data[nodeid], f"/manifest/{create_kwargs['globalid']}")
+        self.assertEqual(tile.data[nodeid], f"/manifest/{created_globalid}")
 
-    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
+    @patch("manuspectrum.utils.manifest_registry.fetch_iiif_manifest")
     @patch("manuspectrum.datatypes.manifest.IIIFManifest")
     def test_pre_tile_save_reuses_already_imported_external(
         self, mock_manifest_model, mock_fetch
@@ -1242,8 +1239,8 @@ class TestSSRF_RedirectBlocked(TestCase):
 
             self.datatype = ManifestDataType()
 
-    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @patch("manuspectrum.utils.manifest_registry.fetch_iiif_manifest")
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_pre_tile_save_uses_resilient_fetch(self, mock_manifest_model, mock_fetch):
         """pre_tile_save() fetches external manifests via the resilient helper.
 
@@ -1282,8 +1279,8 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
             self.datatype = ManifestDataType()
 
     @override_settings(SSRF_ALLOW_PRIVATE=False)
-    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @patch("manuspectrum.utils.manifest_registry.fetch_iiif_manifest")
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_pre_tile_save_blocks_private_ip(self, mock_manifest_model, mock_fetch):
         """The SSRF guard blocks private IPs (e.g. 192.168.1.1).
 
@@ -1305,8 +1302,8 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
         mock_fetch.assert_not_called()
 
     @override_settings(SSRF_ALLOW_PRIVATE=False)
-    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @patch("manuspectrum.utils.manifest_registry.fetch_iiif_manifest")
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_pre_tile_save_blocks_cloud_metadata(self, mock_manifest_model, mock_fetch):
         """The SSRF guard blocks the cloud-metadata endpoint.
 
@@ -1327,8 +1324,8 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
         mock_fetch.assert_not_called()
 
     @override_settings(SSRF_ALLOW_PRIVATE=False)
-    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @patch("manuspectrum.utils.manifest_registry.fetch_iiif_manifest")
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_pre_tile_save_blocks_localhost(self, mock_manifest_model, mock_fetch):
         """pre_tile_save() must reject localhost URLs."""
         nodeid = str(uuid.uuid4())
@@ -1344,8 +1341,8 @@ class TestSSRF_PreTileSaveURLValidation(TestCase):
             self.datatype.pre_tile_save(tile, nodeid)
         mock_fetch.assert_not_called()
 
-    @patch("manuspectrum.datatypes.manifest.fetch_iiif_manifest")
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @patch("manuspectrum.utils.manifest_registry.fetch_iiif_manifest")
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_pre_tile_save_allows_valid_external_url(
         self, mock_manifest_model, mock_fetch
     ):

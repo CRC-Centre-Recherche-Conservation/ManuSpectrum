@@ -1,6 +1,6 @@
 import uuid
 import re
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse
 
 from django.conf import settings as django_settings
 from django.core.validators import URLValidator, ValidationError
@@ -8,7 +8,11 @@ from arches.app.datatypes.base import BaseDataType
 from arches.app.models.models import IIIFManifest, Widget
 from django.utils.translation import gettext_lazy as _
 
-from manuspectrum.utils.http import assert_url_is_safe, fetch_iiif_manifest
+from manuspectrum.utils import manifest_registry
+from manuspectrum.utils.manifest_registry import (  # noqa: F401
+    FailParsingManifestIIIF,
+    InvalidManifestURL,
+)
 
 text: Widget = Widget.objects.get(name="manifest-widget")
 
@@ -24,10 +28,6 @@ details: dict[str, str | Widget | bool | None] = {
     "isgeometric": False,
     "issearchable": False,
 }
-
-
-class FailParsingManifestIIIF(Exception):
-    pass
 
 
 # Local IIIF manifest reference: /manifest/{uuid4}, optionally absolute and
@@ -95,21 +95,8 @@ def _match_local_manifest(url):
 class ManifestDataType(BaseDataType):
     @staticmethod
     def _normalize_url(url):
-        """Normalize a URL to prevent duplicates from cosmetic differences.
-
-        - Strips trailing slashes
-        - Removes fragments (#...)
-        - Returns the cleaned URL string
-        """
-        if not url:
-            return url
-        parsed = urlparse(url)
-        # Remove fragment, strip trailing slash from path
-        path = parsed.path.rstrip("/")
-        normalized = urlunparse(
-            (parsed.scheme, parsed.netloc, path, parsed.params, parsed.query, "")
-        )
-        return normalized
+        """Strip the fragment and the trailing slash (``manifest_registry.normalize_url``)."""
+        return manifest_registry.normalize_url(url)
 
     @staticmethod
     def _to_relative_path(url):
@@ -131,28 +118,7 @@ class ManifestDataType(BaseDataType):
 
     @staticmethod
     def is_iiif_manifest(manifest_json):
-        if not isinstance(manifest_json, dict):
-            raise FailParsingManifestIIIF("Manifest JSON is not a dict")
-
-        context = manifest_json.get("@context")
-
-        if context and "iiif.io/api/presentation/2/context.json" in context:
-            if manifest_json.get("@type") == "sc:Manifest":
-                return True
-            raise FailParsingManifestIIIF(
-                "Missing or invalid @type for IIIF v2 manifest"
-            )
-
-        if context and "iiif.io/api/presentation/3/context.json" in context:
-            if manifest_json.get("type") == "Manifest":
-                return True
-            raise FailParsingManifestIIIF(
-                "Missing or invalid type for IIIF v3 manifest"
-            )
-
-        raise FailParsingManifestIIIF(
-            "Not a recognized IIIF manifest (no valid @context)"
-        )
+        return manifest_registry.is_iiif_manifest(manifest_json)
 
     def validate(self, value, **kwargs):
         """Validate the manifest value without creating any DB records.
@@ -243,7 +209,11 @@ class ManifestDataType(BaseDataType):
         relative_path = self._to_relative_path(manifest_url)
         manifest = IIIFManifest.objects.filter(url=relative_path).first()
         if manifest:
-            tile.data[str(nodeid)] = manifest.url
+            tile.data[str(nodeid)] = (
+                manifest.url
+                if manifest.url.startswith("/")
+                else f"/manifest/{manifest.globalid}"
+            )
             return
 
         # 2. External manifest already imported (stored by absolute URL).
@@ -252,45 +222,11 @@ class ManifestDataType(BaseDataType):
             tile.data[str(nodeid)] = f"/manifest/{manifest.globalid}"
             return
 
-        # 3. New external manifest: format gate -> SSRF guard -> throttled fetch
-        #    -> IIIF compliance -> import. Hard failures RAISE so the enclosing
+        # 3. New external manifest: every failure RAISES so the enclosing
         #    transaction.atomic() rolls back instead of committing a tile that
-        #    points at an un-imported manifest (raw URL / dangling /manifest/uuid).
-        try:
-            _validate_url_format(manifest_url)
-        except ValidationError as exc:
-            raise FailParsingManifestIIIF(
-                f"Not a valid manifest URL: {manifest_url}"
-            ) from exc
-
-        # SSRF guard: reject URLs resolving to non-public addresses (loopback /
-        # private / link-local / cloud-metadata) before anything else happens.
-        # The fetch re-runs it on the URL and on every redirect hop; running it
-        # here too is what makes the failure a rejected WRITE, named as such,
-        # rather than a fetch that did not happen.
-        assert_url_is_safe(manifest_url)
-
-        # Resilient session (retry/backoff + Retry-After + our User-Agent) and
-        # per-host rate limit (e.g. 1 req / 3 s for *.bnf.fr) so a bulk import
-        # does not get the server's IP blocked. Redirects are followed only
-        # through the guard, and the body is read under a size cap.
-        resp = fetch_iiif_manifest(manifest_url)
-        resp.raise_for_status()
-        manifest_json = resp.json()
-        self.is_iiif_manifest(manifest_json)
-
-        label = self._extract_manifest_label(manifest_json)
-        desc = self._extract_manifest_description(manifest_json)
-
-        new_globalid = uuid.uuid4()
-        manifest = IIIFManifest.objects.create(
-            globalid=new_globalid,
-            url=manifest_url,
-            label=label or "IIIF Manifest",
-            description=desc or "",
-            manifest=manifest_json,
-        )
-        tile.data[str(nodeid)] = f"/manifest/{new_globalid}"
+        #    points at an un-imported manifest.
+        manifest, _created = manifest_registry.import_manifest(manifest_url)
+        tile.data[str(nodeid)] = f"/manifest/{manifest.globalid}"
 
     def transform_value_for_tile(self, value, **kwargs):
         """Transform input value for tile storage. Returns a URL string."""
@@ -333,28 +269,10 @@ class ManifestDataType(BaseDataType):
             tile.data[str(nodeid)] = None
 
     def _extract_manifest_label(self, manifest_json):
-        if not manifest_json:
-            return None
-        label = manifest_json.get("label")
-        if isinstance(label, dict):
-            val = (
-                label.get("en") or label.get("none") or next(iter(label.values()), None)
-            )
-            return val[0] if isinstance(val, list) and val else val
-        if isinstance(label, list) and label:
-            return label[0].get("@value") if isinstance(label[0], dict) else label[0]
-        return str(label) if label else None
+        return manifest_registry.extract_label(manifest_json)
 
     def _extract_manifest_description(self, manifest_json):
-        if not manifest_json:
-            return None
-        desc = manifest_json.get("description") or manifest_json.get("summary")
-        if isinstance(desc, dict):
-            val = desc.get("en") or desc.get("none") or next(iter(desc.values()), None)
-            return val[0] if isinstance(val, list) and val else val
-        if isinstance(desc, list) and desc:
-            return desc[0].get("@value") if isinstance(desc[0], dict) else desc[0]
-        return str(desc) if desc else None
+        return manifest_registry.extract_description(manifest_json)
 
     @classmethod
     def get_pref_label(cls):

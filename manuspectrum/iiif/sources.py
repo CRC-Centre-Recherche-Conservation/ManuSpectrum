@@ -25,7 +25,7 @@ _LEVEL = re.compile(r"level([0-2])")
 _LOCAL_MANIFEST = re.compile(r"/manifest/(?P<uuid>[0-9a-fA-F-]{36})/?$")
 
 
-def _local_uuid(url):
+def local_manifest_uuid(url):
     """The uuid a local ``/manifest/<uuid>`` URL (legacy host already rewritten) names, else None."""
     match = _LOCAL_MANIFEST.search(urlsplit(url).path)
     if match and (
@@ -33,6 +33,9 @@ def _local_uuid(url):
     ):
         return match["uuid"]
     return None
+
+
+_local_uuid = local_manifest_uuid
 
 
 def manifest_json(url):
@@ -43,7 +46,7 @@ def manifest_json(url):
     url = rewrite_legacy_url(url or "")
     if not url:
         return None
-    local = _local_uuid(url)
+    local = local_manifest_uuid(url)
     if local:
         stored = (
             IIIFManifest.objects.filter(globalid=local)
@@ -61,7 +64,7 @@ def local_manifests(urls):
     """
     wanted = {}
     for url in urls:
-        local = _local_uuid(rewrite_legacy_url(url or "")) if url else None
+        local = local_manifest_uuid(rewrite_legacy_url(url or "")) if url else None
         try:
             wanted[url] = uuid.UUID(local) if local else None
         except ValueError:
