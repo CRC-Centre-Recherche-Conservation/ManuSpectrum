@@ -624,6 +624,25 @@ class TestManifestValidation(TestCase):
             globalid="ceaf19e3-e1c5-4638-af81-b79562d33787"
         )
 
+    @override_settings(
+        PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/",
+        ALLOWED_HOSTS=["manuspectrum.example", "internal.example"],
+    )
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
+    def test_validate_allowed_host_route_resolves_by_globalid(
+        self, mock_manifest_model
+    ):
+        mock_manifest_model.objects.filter.return_value.first.return_value = None
+
+        errors = self.datatype.validate(
+            "http://internal.example:8000/iiif/manifest/ceaf19e3-e1c5-4638-af81-b79562d33787"
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("not found", errors[0]["message"].lower())
+        mock_manifest_model.objects.filter.assert_called_once_with(
+            globalid="ceaf19e3-e1c5-4638-af81-b79562d33787"
+        )
+
     @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_validate_local_path_fails_when_not_found(self, mock_manifest_model):
         """Local path should fail if the manifest globalid is not in DB."""
@@ -901,7 +920,7 @@ class TestLocalManifestMatch(TestCase):
     @override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
     def test_userinfo_trick_does_not_bypass(self):
         self.assertFalse(
-            self.is_local(f"http://manuspectrum.example@evil.com/manifest/{self.UUID}")
+            self.is_local(f"https://manuspectrum.example@evil.com/manifest/{self.UUID}")
         )
 
     def test_non_manifest_url_is_not_local(self):

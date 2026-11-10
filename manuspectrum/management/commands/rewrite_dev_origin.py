@@ -5,7 +5,7 @@ host, into the data it creates: concept ``legacyoid`` and ``identifier``
 values (``ARCHES_NAMESPACE_FOR_DATA_EXPORT``), controlled list item URIs and
 their copies in tiles (``PUBLIC_SERVER_ADDRESS``), IIIF manifests and the
 canvases they mint (``manifest_manager.py``: image URLs from the request,
-canvas and sequence ids from ``CANTALOUPE_HTTP_ENDPOINT``). Run this once on
+canvas, sequence and annotation ids from ``CANTALOUPE_HTTP_ENDPOINT``). Run this once on
 a database taken from a development host, before it serves a public address.
 
 Each ``--from`` is an origin (``http://host:port``); ``--to`` is the new base

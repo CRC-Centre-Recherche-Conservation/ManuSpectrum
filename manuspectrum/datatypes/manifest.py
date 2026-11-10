@@ -70,10 +70,12 @@ class ManifestDataType(BaseDataType):
         return url
 
     def validate(self, value, **kwargs):
-        """Validate the manifest value without creating any DB records.
+        """Validate the manifest value without creating any DB records or fetching anything.
 
-        Only checks format, URL reachability, and IIIF compliance.
-        Creation is handled exclusively in pre_tile_save().
+        A local reference (``manifest_registry.local_row`` after
+        ``_to_relative_path``, the rule ``pre_tile_save`` applies) must name a
+        stored globalid; any other URL is format-checked only. Creation is
+        handled exclusively in pre_tile_save().
         """
         errors = []
 
@@ -111,10 +113,7 @@ class ManifestDataType(BaseDataType):
             elif manifest_url:
                 manifest_url = self._normalize_url(manifest_url)
 
-                # Case 1: local manifest reference, by the rule pre_tile_save
-                # applies (manifest_registry.local_row): /manifest/{uuid},
-                # a language-prefixed copy or /iiif/manifest/{uuid}, relative
-                # or on our host.
+                # Case 1: local manifest reference.
                 lookup = self._to_relative_path(manifest_url) or manifest_url
                 is_local, row = manifest_registry.local_row(lookup)
                 if is_local:
