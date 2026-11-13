@@ -1,0 +1,6 @@
+// Arches search results: core bounds a thumbnail's width only, so a tall
+// image (a binding spine, a narrow zone) stretches its row.
+.search-thumbnail-image {
+    max-height: 100px;
+    object-fit: contain;
+}
