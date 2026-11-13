@@ -1714,6 +1714,18 @@ msgstr ""
 "The data come from the datasets below; cite and reuse them by their "
 "identifier."
 
+#: templates/explorer/export_readme.md
+msgid "Source manifests"
+msgstr "Source manifests"
+
+#: templates/explorer/export_readme.md
+msgid ""
+"The documents are described on these IIIF manifests; a manifest imported from "
+"another institution is listed at its publisher."
+msgstr ""
+"The documents are described on these IIIF manifests; a manifest imported from "
+"another institution is listed at its publisher."
+
 #: templates/explorer/export_readme.md:31
 #: templates/explorer/export_readme.md:33 views/explorer/export.py:508
 #: views/explorer/export.py:509
