@@ -119,6 +119,7 @@ BARE = [
         "api-spectrum-preview",
     ),
     ("snippets/edge-rules.conf", f"/iiif/data/{UUID}/raw", "iiif-data-raw"),
+    ("snippets/edge-rules.conf", f"/iiif/manifest/{UUID}", "iiif-manifest"),
     ("snippets/edge-rules.conf", "/api/site-notice", "site-notice"),
     ("snippets/edge-rules.conf", "/api/csp-report", "csp-report"),
 ]
@@ -128,7 +129,7 @@ def token_for(path):
     """A literal fragment the dedicated location must contain (None: the generic
     ``/iiif/`` location is the intended rule)."""
     segments = [part for part in path.strip("/").split("/") if part != UUID]
-    if segments[:2] == ["iiif", "data"]:
+    if segments[:2] in (["iiif", "data"], ["iiif", "manifest"]):
         return None
     if segments[:2] == ["iiif", "v3"]:
         return "/".join(segments[:3])

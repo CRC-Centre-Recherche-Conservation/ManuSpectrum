@@ -12,6 +12,7 @@ import re
 import zipfile
 from unittest import mock
 
+from arches.app.models.models import IIIFManifest
 from django.http import QueryDict
 
 from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
@@ -89,6 +90,25 @@ class PackageCase(CorpusCase):
 
     def data_members(self, members):
         return {name: m for name, m in members.items() if m.source is not None}
+
+    def manifested_document(self, name, publisher=None, analysed=True):
+        """A document on a stored manifest (imported when *publisher* is given) and the query of its scope; with *analysed* False only an identified material observes it."""
+        stored = IIIFManifest.objects.create(
+            label=f"{name} manifest",
+            url=publisher or "",
+            manifest={"id": "x", "type": "Manifest", "items": []},
+        )
+        document = self.new_resource("document", name)
+        self.tile(document, "facsimiles", f"/manifest/{stored.globalid}")
+        if analysed:
+            analysis = self.new_resource("analysis", f"{name} XRF")
+            self.tile(analysis, "component_observed", self.refs(document))
+        else:
+            material = self.new_resource("characterization", f"{name} ochre")
+            self.tile(material, "object_observed", self.refs(document))
+            self.tile(material, "evidence_analyses", self.refs(self.analyses["open"]))
+            return document, f"ids=ch:{material.pk}:-"
+        return document, f"document={document.pk}"
 
     def locate_elsewhere(self, name):
         analysis = self.new_resource("analysis", name)
@@ -321,7 +341,7 @@ class TablesTests(PackageCase):
         scope = self.scope(self.document_query())
 
         with mock.patch(FETCH, side_effect=fetch) as fetched:
-            members, _ = _assemble(scope, EXPORTED)
+            members, _, _ = _assemble(scope, EXPORTED)
 
         self.assertIn("manifest.json", {m.arcname for m in members})
         urls = [call.args[0] for call in fetched.call_args_list]
@@ -566,6 +586,58 @@ class RoCrateTests(PackageCase):
         readme = self.text(members["README.md"])
         self.assertIn(DOI, readme)
         self.assertNotIn("deposit", readme.lower())
+
+
+class SourceManifestTests(PackageCase):
+    PUBLISHER = "https://library.example/iiif/ms-7/manifest"
+
+    def test_the_readme_lists_the_publisher_of_an_imported_manifest(self):
+        document, query = self.manifested_document("Ms 7", self.PUBLISHER)
+
+        readme = self.text(self.members(query)["README.md"])
+
+        self.assertIn("## Source manifests", readme)
+        self.assertIn(f"- Ms 7: <{self.PUBLISHER}>", readme)
+
+    def test_the_readme_lists_the_iiif_url_of_a_manifest_created_here(self):
+        document, query = self.manifested_document("Ms 8")
+        stored = IIIFManifest.objects.get(label="Ms 8 manifest")
+
+        readme = self.text(self.members(query, "fr")["README.md"])
+
+        self.assertIn("## Manifestes source", readme)
+        self.assertIn(f"- Ms 8: <http://", readme)
+        self.assertIn(f"/iiif/manifest/{stored.globalid}>", readme)
+
+    def test_the_readme_has_no_section_without_a_manifest(self):
+        document = self.new_resource("document", "Ms 9")
+        analysis = self.new_resource("analysis", "Ms 9 XRF")
+        self.tile(analysis, "component_observed", self.refs(document))
+
+        readme = self.text(self.members(f"document={document.pk}")["README.md"])
+
+        self.assertNotIn("Source manifests", readme)
+
+    def test_a_document_is_described_with_its_manifest_in_the_crate(self):
+        document, query = self.manifested_document("Ms 7", self.PUBLISHER)
+
+        graph = self.crate(query)
+
+        entity = graph[permalink(document.pk)]
+        self.assertEqual(entity["@type"], "CreativeWork")
+        self.assertEqual(entity["subjectOf"], [{"@id": self.PUBLISHER}])
+        manifest = graph[self.PUBLISHER]
+        self.assertEqual(manifest["@type"], "CreativeWork")
+        self.assertEqual(manifest["name"], "Ms 7 manifest")
+        self.assertEqual(manifest["encodingFormat"], "application/ld+json")
+
+    def test_a_document_that_is_the_object_of_no_analysis_hangs_from_the_root(self):
+        document, query = self.manifested_document("Ms 6", analysed=False)
+
+        graph = self.crate(query)
+
+        self.assertIn({"@id": permalink(document.pk)}, graph["./"]["mentions"])
+        self.assertIn("subjectOf", graph[permalink(document.pk)])
 
 
 class ReadmeTests(PackageCase):

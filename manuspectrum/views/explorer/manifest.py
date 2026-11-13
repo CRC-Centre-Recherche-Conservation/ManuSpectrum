@@ -50,9 +50,9 @@ from manuspectrum.iiif.manifest import (
 )
 from manuspectrum.iiif.pages import with_context
 from manuspectrum.iiif.sources import (
-    absolute_url,
     canvases_of,
     layer_canvas,
+    manifest_id,
     manifest_json,
     v3_canvas,
 )
@@ -98,7 +98,7 @@ def _layers(entry, folio_label, mint_id, read=manifest_json):
     """Layer canvases of one kept imaging entry, labelled « <folio> — <layer> »; *read* reads its manifest."""
     url = entry.get("downloadUrl") or ""
     imaging = read(url) or {}
-    part_of = absolute_url(url) or url
+    part_of = manifest_id(url)
     layers = []
     for canvas, raw in zip(canvases_of(imaging), _source_canvases(imaging).values()):
         label = " — ".join(t for t in (folio_label, canvas["label"]) if t)
@@ -110,11 +110,11 @@ def _layers(entry, folio_label, mint_id, read=manifest_json):
 class _Placement:
     """Where the elements of a scope fall on one document's manifest (``_placements``).
 
-    ``url`` is the source manifest's absolute URL (a site path is prefixed
-    with ``PUBLIC_SERVER_ADDRESS``). ``number`` gives each listed canvas its
-    page number. ``analyses`` and ``materials`` map a canvas id to the kept
-    analysis and material ids placed on it; ``whole`` says the scope keeps
-    the whole document.
+    ``url`` is the source manifest's id (``sources.manifest_id``: a stored
+    manifest's IIIF route, else its absolute URL). ``number`` gives each
+    listed canvas its page number. ``analyses`` and ``materials`` map a
+    canvas id to the kept analysis and material ids placed on it; ``whole``
+    says the scope keeps the whole document.
     """
 
     document: str
@@ -213,7 +213,7 @@ def _placements(scope, bounded=True):
             raise ManifestTooLarge()
         yield _Placement(
             document=document,
-            url=absolute_url(url) or url,
+            url=manifest_id(url),
             source=source,
             raw=raw,
             position=position,

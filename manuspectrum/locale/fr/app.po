@@ -4072,6 +4072,10 @@ msgstr ""
 "ouverte. Vos modifications ne sont pas enregistrées : rechargez-la pour voir "
 "la version enregistrée."
 
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1138
+msgid "Source IIIF manifest"
+msgstr "Manifeste IIIF source"
+
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1901
 msgid "Source: ManuSpectrum, %{url}, %{date}"
 msgstr "Source : ManuSpectrum, %{url}, %{date}"

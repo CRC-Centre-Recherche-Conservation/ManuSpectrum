@@ -1,5 +1,4 @@
 import uuid
-import re
 from urllib.parse import urlparse
 
 from django.conf import settings as django_settings
@@ -8,6 +7,8 @@ from arches.app.datatypes.base import BaseDataType
 from arches.app.models.models import IIIFManifest, Widget
 from django.utils.translation import gettext_lazy as _
 
+from manuspectrum.iiif import ids
+from manuspectrum.iiif.sources import original_url
 from manuspectrum.utils import manifest_registry
 from manuspectrum.utils.manifest_registry import FailParsingManifestIIIF
 
@@ -27,22 +28,6 @@ details: dict[str, str | Widget | bool | None] = {
 }
 
 
-# Local IIIF manifest reference: /manifest/{uuid4}, optionally absolute and
-# optionally language-prefixed. Tiles store the bare path, but every Arches
-# route lives under a language prefix, so /en/manifest/{uuid} is the URL a
-# curator copies out of the address bar and pastes back in.
-_LANGUAGE_PREFIX_RE = "|".join(
-    re.escape(code) for code, _label in django_settings.LANGUAGES
-)
-_LOCAL_MANIFEST_RE = re.compile(
-    r"^(?:https?://[^/]+)?"
-    r"(?:/(?:" + _LANGUAGE_PREFIX_RE + r"))?"
-    r"/manifest/"
-    r"(?P<uuid>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$",
-    re.IGNORECASE,
-)
-
-
 def get_local_hosts():
     """Hostnames that identify THIS server, for local-manifest detection.
 
@@ -60,28 +45,6 @@ def get_local_hosts():
         if host and host != "*":
             hosts.add(host.lower())
     return hosts
-
-
-def _match_local_manifest(url):
-    """Return the local manifest UUID iff ``url`` points at THIS server.
-
-    Accepts a relative ``/manifest/{uuid}`` path or an absolute URL whose host
-    is in ``get_local_hosts()``. Returns ``None`` for any other host (e.g.
-    ``http://evil.com/manifest/{uuid}``) so it is handled as an external URL.
-    The authority is ``urlparse(url).hostname`` (NOT the regex host group), so
-    userinfo tricks like ``http://localhost@evil.com/...`` cannot bypass it.
-
-    Does NO network I/O — a false-positive "local" is only origin confusion
-    (still gated by the UUID-existence check), never SSRF. Never add a fetch
-    into this path.
-    """
-    match = _LOCAL_MANIFEST_RE.match(url or "")
-    if not match:
-        return None
-    hostname = urlparse(url).hostname
-    if hostname and hostname.lower() not in get_local_hosts():
-        return None
-    return match.group("uuid")
 
 
 class ManifestDataType(BaseDataType):
@@ -109,10 +72,12 @@ class ManifestDataType(BaseDataType):
         return url
 
     def validate(self, value, **kwargs):
-        """Validate the manifest value without creating any DB records.
+        """Validate the manifest value without creating any DB records or fetching anything.
 
-        Only checks format, URL reachability, and IIIF compliance.
-        Creation is handled exclusively in pre_tile_save().
+        A local reference (``manifest_registry.local_row`` after
+        ``_to_relative_path``, the rule ``pre_tile_save`` applies) must name a
+        stored globalid; any other URL is format-checked only. Creation is
+        handled exclusively in pre_tile_save().
         """
         errors = []
 
@@ -150,10 +115,11 @@ class ManifestDataType(BaseDataType):
             elif manifest_url:
                 manifest_url = self._normalize_url(manifest_url)
 
-                # Case 1: local manifest reference (/manifest/{uuid} on our host)
-                local_uuid = _match_local_manifest(manifest_url)
-                if local_uuid is not None:
-                    if not IIIFManifest.objects.filter(globalid=local_uuid).exists():
+                # Case 1: local manifest reference.
+                lookup = self._to_relative_path(manifest_url) or manifest_url
+                is_local, row = manifest_registry.local_row(lookup)
+                if is_local:
+                    if row is None:
                         errors.append(
                             {
                                 "type": "ERROR",
@@ -233,16 +199,32 @@ class ManifestDataType(BaseDataType):
             value = data[str(node.nodeid)]
             if not value:
                 return None
-            try:
-                db_url = self._to_relative_path(value)
-                manifest = IIIFManifest.objects.get(url=db_url)
-                result = f"{manifest.label}"
-                if manifest.url:
-                    result += f" ({manifest.url})"
-                return result
-            except (IIIFManifest.DoesNotExist, ValueError):
-                return str(value)
+            return self._display(value)
         return None
+
+    def _display(self, value):
+        """``"<label> (<link>)"`` of the manifest *value* names, else ``str(value)``.
+
+        A local reference is resolved by globalid; any other value by a row
+        whose ``url`` equals it. The link is the publisher's URL of an
+        imported manifest, else the public IIIF URL of a manifest created
+        here; a row without a label or a link shows what it has.
+        """
+        if not isinstance(value, str):
+            return str(value)
+        is_local, row = manifest_registry.local_row(
+            self._to_relative_path(value) or value
+        )
+        if not is_local:
+            row = IIIFManifest.objects.filter(url=value).first()
+        if row is None:
+            return str(value)
+        link = original_url(row.url)
+        if link is None and is_local:
+            link = ids.stored_manifest(row.globalid)
+        elif link is None:
+            link = row.url
+        return f"{row.label} ({link})" if link else f"{row.label}"
 
     def clean(self, tile, nodeid):
         value = tile.data.get(str(nodeid))

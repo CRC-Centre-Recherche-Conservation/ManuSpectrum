@@ -3,18 +3,27 @@
 A local manifest (``/manifest/<uuid>``) is read from the database, never over
 HTTP; any other is fetched through ``CanvasIIIF``. Legacy hosts
 (``EXPLORER_LEGACY_HOSTS``) are rewritten in every id read.
+
+The IIIF output names a local manifest at ``ids.stored_manifest`` (see
+``manifest_id``), the route serving ``published_manifest``. A manifest
+imported from another institution keeps its publisher's URL in
+``IIIFManifest.url``: ``manifest_source`` gives it wherever the output links
+to the source; the server never fetches it.
 """
 
 import hashlib
 import re
 import uuid
+from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 from django.conf import settings
+from django.db.models import Q
 
 from arches.app.models.models import IIIFManifest
 
 from manuspectrum.constants.licenses import iiif_rights
+from manuspectrum.iiif import ids
 from manuspectrum.iiif import language as lang
 from manuspectrum.utils.iiif_tools import CanvasIIIF
 from manuspectrum.views.explorer.values import rewrite_legacy_url
@@ -33,6 +42,141 @@ def local_manifest_uuid(url):
     ):
         return match["uuid"]
     return None
+
+
+def local_manifest_id(url):
+    """The canonical ``globalid`` of the stored manifest a local *url* names (``local_manifest_uuid`` after ``rewrite_legacy_url``), else None."""
+    local = local_manifest_uuid(rewrite_legacy_url(url)) if url else None
+    try:
+        return str(uuid.UUID(local)) if local else None
+    except ValueError:
+        return None
+
+
+def manifest_id(url):
+    """The id the IIIF output gives the manifest a tile names by *url*.
+
+    A local ``/manifest/<uuid>`` is ``ids.stored_manifest``, which serves the
+    stored JSON under that id (``published_manifest``), readable cross-origin
+    whatever its publisher's CORS; any other site path is made absolute; an
+    external URL is unchanged.
+    """
+    globalid = local_manifest_id(url)
+    if globalid:
+        return ids.stored_manifest(globalid)
+    return absolute_url(url) or url
+
+
+@dataclass(frozen=True)
+class ManifestSource:
+    """Where a manifest reference comes from: the publisher's URL (None for a manifest created here) and the stored label."""
+
+    original: str | None
+    label: str | None
+
+
+def _is_external(url):
+    """Whether *url* is an absolute http(s) URL that is not a local manifest."""
+    return (
+        isinstance(url, str)
+        and url.startswith(("http://", "https://"))
+        and local_manifest_uuid(rewrite_legacy_url(url)) is None
+    )
+
+
+def original_url(row_url):
+    """The publisher's URL an ``IIIFManifest.url`` holds (an imported manifest), else None."""
+    return row_url if _is_external(row_url) else None
+
+
+def manifest_sources(urls):
+    """``{url: ManifestSource}`` of the manifest references among *urls*, read in one query.
+
+    A local reference (``local_manifest_id``) takes its row's label; its
+    ``original`` is the row's ``url`` when that is an absolute http(s) URL
+    that is not itself local (an imported manifest), else None (a manifest
+    created here). A raw external http(s) URL is its own ``original``, with
+    the label of a row carrying that url when there is one. An empty URL, an
+    unknown local id and anything else are left out. Nothing is fetched.
+    """
+    local, external = {}, set()
+    for url in set(urls):
+        if not url:
+            continue
+        globalid = local_manifest_id(url)
+        if globalid:
+            local[url] = uuid.UUID(globalid)
+        elif _is_external(url):
+            external.add(url)
+    if not local and not external:
+        return {}
+    rows = IIIFManifest.objects.filter(
+        Q(globalid__in=set(local.values())) | Q(url__in=external)
+    ).values_list("globalid", "url", "label")
+    by_id, by_url = {}, {}
+    for globalid, row_url, label in rows:
+        by_id[globalid] = (row_url, label)
+        by_url.setdefault(row_url, label)
+    found = {}
+    for url, globalid in local.items():
+        if globalid in by_id:
+            row_url, label = by_id[globalid]
+            found[url] = ManifestSource(original_url(row_url), label)
+    for url in external:
+        found[url] = ManifestSource(url, by_url.get(url))
+    return found
+
+
+def manifest_source(url):
+    """The ``ManifestSource`` of one reference (``manifest_sources``), or None."""
+    return manifest_sources([url]).get(url)
+
+
+def published_manifest(manifest, globalid, original=None):
+    """The stored *manifest* of *globalid* as ``ids.stored_manifest`` serves it.
+
+    Legacy hosts are rewritten in every id, as everywhere a manifest is read
+    here, so its canvases keep the ids the annotations target. Its own ``id``
+    (``@id`` in Presentation 2) is always ``ids.stored_manifest``: a
+    manifest's id is the URL it is published at. *original*, the publisher's
+    URL of an imported manifest, is added to ``seeAlso`` beside any entry the
+    manifest already has, unless one already names it.
+    """
+    published = _rewritten(manifest)
+    for key in ("id", "@id"):
+        if isinstance(published.get(key), str):
+            published[key] = ids.stored_manifest(globalid)
+    if original:
+        _link_original(published, original)
+    return published
+
+
+def _link_original(published, original):
+    """Add *original* to ``published["seeAlso"]`` in the form of the manifest's Presentation version."""
+    if CanvasIIIF.detect_version(published) == 3:
+        entry = {
+            "id": original,
+            "type": "Dataset",
+            "format": "application/ld+json",
+            "profile": "http://iiif.io/api/presentation/3/context.json",
+        }
+    else:
+        entry = {
+            "@id": original,
+            "format": "application/ld+json",
+            "profile": "http://iiif.io/api/presentation/2/context.json",
+        }
+    existing = published.get("seeAlso")
+    if existing is None:
+        existing = []
+    elif not isinstance(existing, list):
+        existing = [existing]
+    for item in existing:
+        named = item.get("id") or item.get("@id") if isinstance(item, dict) else item
+        if named == original:
+            published["seeAlso"] = existing
+            return
+    published["seeAlso"] = [*existing, entry]
 
 
 def manifest_json(url):
@@ -61,11 +205,8 @@ def local_manifests(urls):
     """
     wanted = {}
     for url in urls:
-        local = local_manifest_uuid(rewrite_legacy_url(url or "")) if url else None
-        try:
-            wanted[url] = uuid.UUID(local) if local else None
-        except ValueError:
-            wanted[url] = None
+        key = local_manifest_id(url) if url else None
+        wanted[url] = uuid.UUID(key) if key else None
     wanted = {url: key for url, key in wanted.items() if key}
     if not wanted:
         return {}

@@ -8,6 +8,9 @@ import uuid
 
 from django.test import Client, override_settings
 
+from arches.app.models.models import IIIFManifest
+
+from manuspectrum.iiif.constants import PRESENTATION_2
 from tests.explorer_fixtures import FEATURES, IIIFCase
 from tests.iiif_auth import DEMO, signed_in
 
@@ -19,6 +22,14 @@ class CorsCase(IIIFCase):
         super().setUp()
         self.file_id = self.stored_file(self.analyses["open"], "a.csv", b"1,2\n3,4\n")
         analysis = self.analyses["open"].pk
+        imaging = IIIFManifest.objects.create(
+            label="maXRF", url="", manifest={"@context": PRESENTATION_2}
+        )
+        self.tile(
+            self.analyses["open"],
+            "chemical_imaging_manifest",
+            f"/manifest/{imaging.globalid}",
+        )
         self.read_urls = [
             f"/iiif/v3/annotation-collection/{self.documents['open'].pk}/page-1",
             f"/iiif/v3/annotation/{analysis}",
@@ -27,6 +38,7 @@ class CorsCase(IIIFCase):
             f"/iiif/data/{self.file_id}/series.csv",
             f"/iiif/auth/2/probe/{self.file_id}",
             f"/iiif/v3/explorer-manifest?document={self.documents['open'].pk}",
+            f"/iiif/manifest/{imaging.globalid}",
         ]
 
     def assert_cors(self, response):
@@ -79,6 +91,7 @@ class PreflightTests(CorsCase):
             f"/iiif/data/{uuid.uuid4()}/raw",
             f"/iiif/v3/annotation/{uuid.uuid4()}",
             f"/iiif/v3/annotation-collection/{uuid.uuid4()}/page-1",
+            f"/iiif/manifest/{uuid.uuid4()}",
         ):
             with self.subTest(url=url):
                 response = Client().get(url, HTTP_ORIGIN=VIEWER)

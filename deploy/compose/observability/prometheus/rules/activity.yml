@@ -86,7 +86,7 @@ groups:
           kind: iiif_annotations
       - record: manuspectrum:consultations:total
         expr: |
-          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"manifest"})
+          sum by (job, instance) (django_http_responses_total_by_status_view_method_total{method="GET",status=~"2..|304",view=~"manifest|iiif-manifest"})
         labels:
           kind: iiif_manifest
       - record: manuspectrum:consultations:total

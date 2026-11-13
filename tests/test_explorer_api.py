@@ -19,7 +19,7 @@ from django.http import QueryDict
 from django.test import SimpleTestCase
 from django.test.utils import CaptureQueriesContext
 
-from arches.app.models.models import NodeGroup, TileModel
+from arches.app.models.models import IIIFManifest, NodeGroup, TileModel
 from arches.app.utils.permission_backend import assign_perm
 
 from tests.explorer_contract import assert_shape
@@ -462,6 +462,39 @@ class DocumentRouteTests(CorpusCase):
             assert_shape(self, summary, "CharacterizationSummary")
             for evidence in summary["evidence"]:
                 assert_shape(self, evidence, "NamedRef")
+
+    def stored_manifest_document(self, name, url):
+        stored = IIIFManifest.objects.create(
+            label=name, url=url, manifest={"id": url, "type": "Manifest", "items": []}
+        )
+        document = self.new_resource("document", name)
+        self.tile(document, "facsimiles", f"/manifest/{stored.globalid}")
+        return document
+
+    def test_an_imported_manifest_is_linked_at_its_publisher(self):
+        publisher = "https://library.example/iiif/ms-7/manifest"
+        document = self.stored_manifest_document("Ms 7", publisher)
+
+        payload = self.get(document.pk).json()
+
+        self.assertEqual(payload["manifestSource"], publisher)
+        self.assertIn("/manifest/", payload["manifest"])
+
+    def test_a_manifest_created_here_has_no_source(self):
+        document = self.stored_manifest_document("Ms 8", "")
+
+        payload = self.get(document.pk).json()
+
+        self.assertIsNone(payload["manifestSource"])
+        self.assertIn("/manifest/", payload["manifest"])
+
+    def test_a_document_without_a_manifest_has_no_source(self):
+        document = self.new_resource("document", "Ms 9")
+
+        payload = self.get(document.pk).json()
+
+        self.assertIsNone(payload["manifest"])
+        self.assertIsNone(payload["manifestSource"])
 
     def test_each_analysis_names_its_technique_and_its_zones_by_canvas_position(self):
         payload = self.get(self.documents["open"].pk).json()

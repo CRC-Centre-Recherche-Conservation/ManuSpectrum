@@ -186,6 +186,17 @@ const data = computed(() =>
         ? documentView(payload.data.value, currentMatch.value)
         : null,
 );
+/** The publisher's manifest URL, only when it is an http(s) address. */
+const manifestSourceHref = computed(() => {
+    const source = data.value?.manifestSource;
+    if (!source) return null;
+    try {
+        const { protocol } = new URL(source);
+        return protocol === "http:" || protocol === "https:" ? source : null;
+    } catch {
+        return null;
+    }
+});
 const busy = computed(
     () =>
         payload.status.value === "loading" || match.status.value === "loading",
@@ -1115,6 +1126,22 @@ function goHome(): void {
                 >
                     <span>{{ data.holding.value }}</span>
                 </p>
+                <p
+                    v-if="manifestSourceHref"
+                    class="manifest-source"
+                >
+                    <a
+                        rel="noopener"
+                        target="_blank"
+                        :href="manifestSourceHref"
+                    >
+                        <span>{{ $gettext("Source IIIF manifest") }}</span>
+                        <span class="visually-hidden">
+                            {{ $gettext("(new tab)") }}
+                        </span>
+                        <span aria-hidden="true">↗</span>
+                    </a>
+                </p>
                 <p class="chips">
                     <span class="chip counts">{{ counts }}</span>
                     <span
@@ -1431,6 +1458,19 @@ function goHome(): void {
 
 .corpus-document .document-bar .holding {
     color: var(--ink-muted);
+}
+
+.corpus-document .document-bar .manifest-source {
+    font-size: 0.875rem;
+}
+
+.corpus-document .document-bar .manifest-source .visually-hidden {
+    position: absolute;
+    inline-size: 0.0625rem;
+    block-size: 0.0625rem;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 
 .corpus-document .document-bar .chips {

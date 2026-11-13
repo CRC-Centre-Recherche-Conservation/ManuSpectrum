@@ -598,12 +598,10 @@ class TestManifestValidation(TestCase):
         )
         self.assertEqual(errors, [])
 
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_validate_local_path_passes_when_exists(self, mock_manifest_model):
         """Local path /manifest/{uuid} should pass if manifest exists by globalid."""
-        mock_filter = MagicMock()
-        mock_filter.exists.return_value = True
-        mock_manifest_model.objects.filter.return_value = mock_filter
+        mock_manifest_model.objects.filter.return_value.first.return_value = MagicMock()
 
         errors = self.datatype.validate(
             "/manifest/ceaf19e3-e1c5-4638-af81-b79562d33787"
@@ -613,12 +611,10 @@ class TestManifestValidation(TestCase):
             globalid="ceaf19e3-e1c5-4638-af81-b79562d33787"
         )
 
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_validate_local_path_with_host_passes(self, mock_manifest_model):
         """Full local URL http://host/manifest/{uuid} should also validate by globalid."""
-        mock_filter = MagicMock()
-        mock_filter.exists.return_value = True
-        mock_manifest_model.objects.filter.return_value = mock_filter
+        mock_manifest_model.objects.filter.return_value.first.return_value = MagicMock()
 
         errors = self.datatype.validate(
             "http://localhost:8000/manifest/ceaf19e3-e1c5-4638-af81-b79562d33787"
@@ -628,12 +624,29 @@ class TestManifestValidation(TestCase):
             globalid="ceaf19e3-e1c5-4638-af81-b79562d33787"
         )
 
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
+    @override_settings(
+        PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/",
+        ALLOWED_HOSTS=["manuspectrum.example", "internal.example"],
+    )
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
+    def test_validate_allowed_host_route_resolves_by_globalid(
+        self, mock_manifest_model
+    ):
+        mock_manifest_model.objects.filter.return_value.first.return_value = None
+
+        errors = self.datatype.validate(
+            "http://internal.example:8000/iiif/manifest/ceaf19e3-e1c5-4638-af81-b79562d33787"
+        )
+        self.assertEqual(len(errors), 1)
+        self.assertIn("not found", errors[0]["message"].lower())
+        mock_manifest_model.objects.filter.assert_called_once_with(
+            globalid="ceaf19e3-e1c5-4638-af81-b79562d33787"
+        )
+
+    @patch("manuspectrum.utils.manifest_registry.IIIFManifest")
     def test_validate_local_path_fails_when_not_found(self, mock_manifest_model):
         """Local path should fail if the manifest globalid is not in DB."""
-        mock_filter = MagicMock()
-        mock_filter.exists.return_value = False
-        mock_manifest_model.objects.filter.return_value = mock_filter
+        mock_manifest_model.objects.filter.return_value.first.return_value = None
 
         errors = self.datatype.validate(
             "/manifest/ceaf19e3-e1c5-4638-af81-b79562d33787"
@@ -698,60 +711,65 @@ class TestGetDisplayValue(TestCase):
 
             self.datatype = ManifestDataType()
 
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_get_display_value_with_url(self, mock_manifest_model):
-        """Display value should include label and URL from DB record."""
-        mock_manifest = MagicMock()
-        mock_manifest.label = "Book 1"
-        mock_manifest.url = "/iiif/book1/manifest"
-        mock_manifest_model.objects.get.return_value = mock_manifest
-        mock_manifest_model.DoesNotExist = Exception
-
+    def display(self, value):
         node = MagicMock()
         node.nodeid = uuid.uuid4()
         tile = MagicMock()
-        # Absolute URL on OUR canonical host (localhost) → collapsed to path.
-        tile.data = {str(node.nodeid): "http://localhost:8000/iiif/book1/manifest"}
+        tile.data = {str(node.nodeid): value}
+        return self.datatype.get_display_value(tile, node)
 
-        result = self.datatype.get_display_value(tile, node)
-        self.assertIn("Book 1", result)
-        self.assertIn("/iiif/book1/manifest", result)
-        # Verify lookup uses the relative path extracted from a canonical-host URL
-        mock_manifest_model.objects.get.assert_called_once_with(
-            url="/iiif/book1/manifest"
+    def stored(self, label, url=None):
+        from arches.app.models.models import IIIFManifest
+
+        globalid = uuid.uuid4()
+        return IIIFManifest.objects.create(
+            globalid=globalid,
+            label=label,
+            url=url or f"/manifest/{globalid}",
+            manifest={},
         )
 
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_get_display_value_without_url(self, mock_manifest_model):
-        """Display value without URL on DB record should show label only."""
-        mock_manifest = MagicMock()
-        mock_manifest.label = "Book 1"
-        mock_manifest.url = None
-        mock_manifest_model.objects.get.return_value = mock_manifest
-        mock_manifest_model.DoesNotExist = Exception
+    def test_an_imported_manifest_shows_its_publisher_url(self):
+        original = "https://emmsm.unicaen.fr/manifests/Avranches_BM_59.json"
+        row = self.stored("Avranches 59", original)
 
-        node = MagicMock()
-        node.nodeid = uuid.uuid4()
-        tile = MagicMock()
-        tile.data = {str(node.nodeid): "https://example.org/iiif/book1/manifest"}
+        self.assertEqual(
+            self.display(f"/manifest/{row.globalid}"),
+            f"Avranches 59 ({original})",
+        )
 
-        result = self.datatype.get_display_value(tile, node)
-        self.assertEqual(result, "Book 1")
+    def test_a_manifest_created_here_shows_its_public_iiif_url(self):
+        from manuspectrum.iiif import ids
 
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_get_display_value_manifest_not_found(self, mock_manifest_model):
-        """Display value should fallback to raw URL when manifest not in DB."""
-        mock_manifest_model.DoesNotExist = Exception
-        mock_manifest_model.objects.get.side_effect = mock_manifest_model.DoesNotExist
+        row = self.stored("Imaging")
 
-        node = MagicMock()
-        node.nodeid = uuid.uuid4()
+        self.assertEqual(
+            self.display(f"/manifest/{row.globalid}"),
+            f"Imaging ({ids.stored_manifest(row.globalid)})",
+        )
+
+    def test_an_absolute_local_url_is_resolved_by_globalid(self):
+        from django.conf import settings
+
+        original = "https://example.org/iiif/book1/manifest"
+        row = self.stored("Book 1", original)
+
+        self.assertEqual(
+            self.display(f"{settings.PUBLIC_SERVER_ADDRESS}manifest/{row.globalid}"),
+            f"Book 1 ({original})",
+        )
+
+    def test_a_raw_external_url_with_a_row_shows_the_row(self):
         url = "https://example.org/iiif/book1/manifest"
-        tile = MagicMock()
-        tile.data = {str(node.nodeid): url}
+        self.stored("Book 1", url)
 
-        result = self.datatype.get_display_value(tile, node)
-        self.assertEqual(result, url)
+        self.assertEqual(self.display(url), f"Book 1 ({url})")
+
+    def test_an_unknown_value_is_shown_as_is(self):
+        url = "https://example.org/iiif/unknown/manifest"
+        self.assertEqual(self.display(url), url)
+        missing = f"/manifest/{uuid.uuid4()}"
+        self.assertEqual(self.display(missing), missing)
 
     def test_get_display_value_no_data_returns_none(self):
         """Display value with no tile data should return None."""
@@ -773,25 +791,20 @@ class TestGetDisplayValue(TestCase):
         result = self.datatype.get_display_value(tile, node)
         self.assertIsNone(result)
 
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_get_display_value_with_dict_tile(self, mock_manifest_model):
+    def test_get_display_value_with_dict_tile(self):
         """Search export passes tiles as dicts (ES _source), not Tile objects."""
-        mock_manifest = MagicMock()
-        mock_manifest.label = "Book 1"
-        mock_manifest.url = "/iiif/book1/manifest"
-        mock_manifest_model.objects.get.return_value = mock_manifest
-        mock_manifest_model.DoesNotExist = Exception
-
+        original = "https://example.org/iiif/book1/manifest"
+        row = self.stored("Book 1", original)
         node = MagicMock()
         node.nodeid = uuid.uuid4()
         tile = {
-            "data": {str(node.nodeid): "/iiif/book1/manifest"},
+            "data": {str(node.nodeid): f"/manifest/{row.globalid}"},
             "provisionaledits": None,
         }
 
-        result = self.datatype.get_display_value(tile, node)
-        self.assertIn("Book 1", result)
-        self.assertIn("/iiif/book1/manifest", result)
+        self.assertEqual(
+            self.datatype.get_display_value(tile, node), f"Book 1 ({original})"
+        )
 
     def test_get_display_value_dict_tile_missing_node_returns_none(self):
         """Dict tile without the node in its data should return None."""
@@ -882,50 +895,49 @@ class TestURLFormatGate(TestCase):
 
 
 class TestLocalManifestMatch(TestCase):
-    """Host-aware detection of local /manifest/{uuid} references."""
+    """Host-aware detection of local manifest references (``manifest_registry.local_row``)."""
 
     UUID = "ceaf19e3-e1c5-4638-af81-b79562d33787"
 
-    def setUp(self):
-        with patch("arches.app.models.models.Widget") as mock_widget:
-            mock_widget.objects.get.return_value = MagicMock()
-            from manuspectrum.datatypes import manifest
+    def is_local(self, url):
+        from manuspectrum.utils.manifest_registry import local_row
 
-            self.manifest = manifest
+        return local_row(url)[0]
 
     def test_relative_path_is_local(self):
-        self.assertEqual(
-            self.manifest._match_local_manifest(f"/manifest/{self.UUID}"), self.UUID
-        )
+        self.assertTrue(self.is_local(f"/manifest/{self.UUID}"))
 
     @override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
     def test_canonical_host_is_local(self):
-        self.assertEqual(
-            self.manifest._match_local_manifest(
-                f"https://manuspectrum.example/manifest/{self.UUID}"
-            ),
-            self.UUID,
+        self.assertTrue(
+            self.is_local(f"https://manuspectrum.example/manifest/{self.UUID}")
         )
 
     @override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
     def test_foreign_host_is_not_local(self):
-        self.assertIsNone(
-            self.manifest._match_local_manifest(f"http://evil.com/manifest/{self.UUID}")
-        )
+        self.assertFalse(self.is_local(f"http://evil.com/manifest/{self.UUID}"))
 
     @override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
     def test_userinfo_trick_does_not_bypass(self):
-        # urlparse().hostname == 'evil.com', not the userinfo 'manuspectrum.example'.
-        self.assertIsNone(
-            self.manifest._match_local_manifest(
-                f"http://manuspectrum.example@evil.com/manifest/{self.UUID}"
-            )
+        self.assertFalse(
+            self.is_local(f"https://manuspectrum.example@evil.com/manifest/{self.UUID}")
         )
 
-    def test_non_manifest_url_is_none(self):
-        self.assertIsNone(
-            self.manifest._match_local_manifest("https://example.org/iiif/manifest")
+    def test_non_manifest_url_is_not_local(self):
+        self.assertFalse(self.is_local("https://example.org/iiif/manifest"))
+
+    def test_relative_iiif_route_is_local(self):
+        self.assertTrue(self.is_local(f"/iiif/manifest/{self.UUID}"))
+
+    @override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
+    def test_iiif_route_on_canonical_host_is_local(self):
+        self.assertTrue(
+            self.is_local(f"https://manuspectrum.example/iiif/manifest/{self.UUID}")
         )
+
+    @override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
+    def test_iiif_route_on_foreign_host_is_not_local(self):
+        self.assertFalse(self.is_local(f"https://evil.com/iiif/manifest/{self.UUID}"))
 
 
 class TestGetPrefLabel(TestCase):
@@ -1145,6 +1157,123 @@ class TestPreTileSave(TestCase):
         create_kwargs = mock_manifest_model.objects.create.call_args[1]
         self.assertEqual(create_kwargs["label"], "Book 1")
         self.assertEqual(tile.data[nodeid], f"/manifest/{created_globalid}")
+
+
+@override_settings(PUBLIC_SERVER_ADDRESS="https://manuspectrum.example/")
+class TestLocalReferenceToStoredManifest(TestCase):
+    """A URL the IIIF output publishes resolves to the stored row, never fetched.
+
+    The IIIF output names a stored manifest /iiif/manifest/{uuid} (imaging
+    Manifest bodies, target partOf/within). A curator who pastes that URL
+    into a manifest widget must get the existing IIIFManifest back: fetching
+    it from our own site would import a duplicate. The canonical host is a
+    public name here (it resolves publicly in production), so without the
+    local resolution the datatype would go on to fetch it.
+    """
+
+    def setUp(self):
+        translation.activate("en")
+        self.addCleanup(translation.deactivate)
+        with patch("arches.app.models.models.Widget") as mock_widget:
+            mock_widget.objects.get.return_value = MagicMock()
+            from manuspectrum.datatypes.manifest import ManifestDataType
+
+            self.datatype = ManifestDataType()
+        from arches.app.models.models import IIIFManifest
+        from manuspectrum.iiif import ids
+
+        self.IIIFManifest = IIIFManifest
+        self.ids = ids
+        # Created with Arches' Image Service Manager: its url is the local path.
+        globalid = uuid.uuid4()
+        self.created = IIIFManifest.objects.create(
+            globalid=globalid,
+            url=f"/manifest/{globalid}",
+            label="Imaging",
+            manifest=ManifestTestData.VALID_V3,
+        )
+        # Imported from another site: its url is the publisher's URL, while
+        # tiles (and so the IIIF output) name it by its globalid.
+        self.imported = IIIFManifest.objects.create(
+            globalid=uuid.uuid4(),
+            url="https://example.org/iiif/book1/manifest",
+            label="Book 1",
+            manifest=ManifestTestData.VALID_V3,
+        )
+
+        # Were the URL fetched, it would answer the stored JSON, as our own
+        # site does: the datatype would then import it as a new manifest.
+        resolver = resolves_publicly()
+        resolver.start()
+        self.addCleanup(resolver.stop)
+        response = MagicMock()
+        response.json.return_value = ManifestTestData.VALID_V3
+        fetcher = patch(
+            "manuspectrum.utils.manifest_registry.fetch_iiif_manifest",
+            return_value=response,
+        )
+        self.fetch = fetcher.start()
+        self.addCleanup(fetcher.stop)
+
+    def _pre_tile_save(self, value):
+        nodeid = str(uuid.uuid4())
+        tile = MagicMock()
+        tile.data = {nodeid: value}
+        self.datatype.pre_tile_save(tile, nodeid)
+        return tile.data[nodeid]
+
+    def _assert_resolves(self, value, manifest):
+        before = self.IIIFManifest.objects.count()
+        stored = self._pre_tile_save(value)
+        self.fetch.assert_not_called()
+        self.assertEqual(self.IIIFManifest.objects.count(), before)
+        self.assertEqual(stored, f"/manifest/{manifest.globalid}")
+
+    def test_the_published_url_resolves_to_the_stored_manifest(self):
+        url = self.ids.stored_manifest(self.created.globalid)
+        self.assertTrue(url.startswith("https://manuspectrum.example/iiif/manifest/"))
+        self._assert_resolves(url, self.created)
+
+    def test_the_relative_route_resolves_to_the_stored_manifest(self):
+        self._assert_resolves(f"/iiif/manifest/{self.created.globalid}", self.created)
+
+    def test_an_imported_manifest_named_by_the_route_is_not_imported_again(self):
+        self._assert_resolves(
+            self.ids.stored_manifest(self.imported.globalid), self.imported
+        )
+
+    def test_every_local_form_resolves_by_globalid(self):
+        # The row's url is no key: an imported manifest keeps its
+        # publisher's URL there, while its tiles store /manifest/{globalid}.
+        for value, manifest in (
+            (f"/manifest/{self.imported.globalid}", self.imported),
+            (f"/en/manifest/{self.created.globalid}", self.created),
+            (
+                f"https://manuspectrum.example/fr/manifest/{self.imported.globalid}",
+                self.imported,
+            ),
+        ):
+            with self.subTest(value=value):
+                self._assert_resolves(value, manifest)
+
+    def test_an_unknown_manifest_on_the_route_is_an_error_not_a_fetch(self):
+        from manuspectrum.datatypes.manifest import FailParsingManifestIIIF
+
+        before = self.IIIFManifest.objects.count()
+        with self.assertRaisesMessage(FailParsingManifestIIIF, "Manifest not found"):
+            self._pre_tile_save(self.ids.stored_manifest(uuid.uuid4()))
+        self.fetch.assert_not_called()
+        self.assertEqual(self.IIIFManifest.objects.count(), before)
+
+    def test_validate_accepts_the_relative_route(self):
+        self.assertEqual(
+            self.datatype.validate(f"/iiif/manifest/{self.created.globalid}"), []
+        )
+
+    def test_validate_reports_an_unknown_manifest_on_the_route(self):
+        errors = self.datatype.validate(self.ids.stored_manifest(uuid.uuid4()))
+        self.assertEqual(len(errors), 1)
+        self.assertIn("not found", str(errors[0]["message"]).lower())
 
 
 # ======================================================================
