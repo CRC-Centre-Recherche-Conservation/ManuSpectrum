@@ -464,7 +464,7 @@ class DocumentRouteTests(CorpusCase):
                 assert_shape(self, evidence, "NamedRef")
 
     def stored_manifest_document(self, name, url):
-        stored = IIIFManifest.objects.create(
+        stored = self.stored = IIIFManifest.objects.create(
             label=name, url=url, manifest={"id": url, "type": "Manifest", "items": []}
         )
         document = self.new_resource("document", name)
@@ -478,7 +478,22 @@ class DocumentRouteTests(CorpusCase):
         payload = self.get(document.pk).json()
 
         self.assertEqual(payload["manifestSource"], publisher)
-        self.assertIn("/manifest/", payload["manifest"])
+        self.assertEqual(payload["manifest"], self.stored_id())
+
+    def stored_id(self):
+        return f"{settings.PUBLIC_SERVER_ADDRESS}iiif/manifest/{self.stored.globalid}"
+
+    def test_an_external_document_manifest_is_unchanged(self):
+        url = "https://library.example/iiif/ms-1/manifest"
+        document = self.new_resource("document", "Ms 1")
+        self.tile(document, "facsimiles", url)
+
+        with mock.patch(
+            "manuspectrum.views.explorer.service.manifest_json", return_value=None
+        ):
+            payload = self.get(document.pk).json()
+
+        self.assertEqual(payload["manifest"], url)
 
     def test_a_manifest_created_here_has_no_source(self):
         document = self.stored_manifest_document("Ms 8", "")
@@ -486,7 +501,7 @@ class DocumentRouteTests(CorpusCase):
         payload = self.get(document.pk).json()
 
         self.assertIsNone(payload["manifestSource"])
-        self.assertIn("/manifest/", payload["manifest"])
+        self.assertEqual(payload["manifest"], self.stored_id())
 
     def test_a_document_without_a_manifest_has_no_source(self):
         document = self.new_resource("document", "Ms 9")
@@ -1325,6 +1340,37 @@ class ItemsRouteTests(CorpusCase):
 
         self.assertEqual(payload["missing"], [])
         self.assertEqual(payload["items"][0]["files"], [])
+
+    def test_a_stored_imaging_manifest_is_named_at_its_iiif_route(self):
+        stored = IIIFManifest.objects.create(
+            label="Imaging", url="", manifest=self.IMAGING_MANIFEST
+        )
+        self.tile(
+            self.analyses["open"],
+            "chemical_imaging_manifest",
+            f"/manifest/{stored.globalid}",
+        )
+
+        payload = self.get([f"an:{self.analyses['open'].pk}:-"]).json()
+
+        imaging = payload["items"][0]["files"][1]
+        self.assertEqual(
+            imaging["downloadUrl"],
+            f"{settings.PUBLIC_SERVER_ADDRESS}iiif/manifest/{stored.globalid}",
+        )
+        self.assertEqual([layer["label"] for layer in imaging["layers"]], ["Pb"])
+
+    def test_an_external_imaging_manifest_keeps_its_url(self):
+        url = "https://example.org/iiif/imaging/x"
+        self.tile(self.analyses["open"], "chemical_imaging_manifest", url)
+
+        with mock.patch(
+            "manuspectrum.views.explorer.service.manifest_json",
+            return_value=self.IMAGING_MANIFEST,
+        ):
+            payload = self.get([f"an:{self.analyses['open'].pk}:-"]).json()
+
+        self.assertEqual(payload["items"][0]["files"][1]["downloadUrl"], url)
 
     def test_an_imaging_manifest_comes_with_its_layers_in_the_analysis_item(self):
         self.tile(

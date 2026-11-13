@@ -42,6 +42,7 @@ from manuspectrum.iiif.sources import (
     canvas_index,
     canvas_label,
     canvases_of,
+    manifest_id,
     manifest_json,
     manifest_source,
 )
@@ -2703,7 +2704,7 @@ def document_payload(document_id, user, language, ticket=None):
         "id": document_id,
         "name": label_of[document_id],
         "holding": label_of[owners[0]] if owners else None,
-        "manifest": manifest_url,
+        "manifest": manifest_id(manifest_url) if manifest_url else None,
         "manifestSource": source.original if source else None,
         "canvases": [
             {
@@ -2840,7 +2841,8 @@ def imaging_entries(
 
     *read* reads a manifest by URL: a caller's memoised reader, else
     ``manifest_json``. *layer_tiles* is ``_layer_tiles`` of the analysis; a
-    canvas without a tile is an unclassified layer.
+    canvas without a tile is an unclassified layer. ``downloadUrl`` is the
+    manifest's IIIF id (``manifest_id``); *read* is still given the stored URL.
     """
     read = read or manifest_json
     layer_tiles = layer_tiles or {}
@@ -2886,7 +2888,7 @@ def imaging_entries(
                 },
                 "layers": layers,
                 "license": effective_license({}, language),
-                "downloadUrl": url,
+                "downloadUrl": manifest_id(url),
                 "previewUrl": None,
                 "zone": None,
             }

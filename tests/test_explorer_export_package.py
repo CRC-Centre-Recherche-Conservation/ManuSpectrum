@@ -336,6 +336,22 @@ class TablesTests(PackageCase):
         self.assertEqual(member.size, len(member.data))
         self.assertIn("IIIF", self.text(members["README.md"]))
 
+    def test_a_stored_imaging_manifest_is_exported_without_a_fetch(self):
+        stored = IIIFManifest.objects.create(
+            label="Imaging", url="", manifest=IMAGING_SOURCE
+        )
+        self.tile(
+            self.analyses["open"],
+            "chemical_imaging_manifest",
+            f"/manifest/{stored.globalid}",
+        )
+
+        with mock.patch(FETCH, side_effect=AssertionError("fetched")):
+            members = self.members(f"ids=an:{self.pk('open')}:-")
+
+        (name,) = [n for n in members if n.endswith("imaging-1.json")]
+        self.assertEqual(json.loads(members[name].data), IMAGING_SOURCE)
+
     def test_each_manifest_is_read_once_per_package(self):
         self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)
         scope = self.scope(self.document_query())
