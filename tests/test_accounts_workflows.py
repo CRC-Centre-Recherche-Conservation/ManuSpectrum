@@ -500,6 +500,7 @@ class ActivityTests(PassCase):
         self.made(workflow, self.creator)
         self.go(NOW)
         self.go(NOW + timedelta(days=7))
+        EditLog.objects.filter(edittype="delete").update(timestamp=NOW)
         counts = self.counts()
         self.assertEqual((counts["cleaned"], counts["deleted"]), (1, 0))
 
