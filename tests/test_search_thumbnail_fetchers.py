@@ -29,6 +29,7 @@ from arches.app.utils.search_thumbnail_fetcher_factory import (
     SearchThumbnailFetcherFactory,
 )
 
+from manuspectrum.utils.cache import get_or_build, stable_cache_key
 from manuspectrum.utils.search_thumbnail_fetchers import (
     _region_size,
     _sniff_image_type,
@@ -1111,6 +1112,7 @@ class ZoneChoiceTests(FetcherTestCase):
 
         for fetcher in (ComponentThumbnailFetcher, AnalysisThumbnailFetcher):
             with self.subTest(fetcher=fetcher.__name__):
+                cache.clear()
                 safe_fetch.reset_mock()
                 with mock.patch(TILE_MODEL) as tile_model:
                     tile_model.objects.filter.return_value = queryset([])
@@ -1183,6 +1185,7 @@ class ZoneChoiceTests(FetcherTestCase):
         safe_fetch.return_value = response(content=REGION_BYTES)
         for label, geometry in zones.items():
             with self.subTest(zone=label):
+                cache.clear()
                 safe_fetch.reset_mock()
                 vw_annotation.objects.filter.return_value = queryset(
                     [annotation(geometry=geometry), annotation()]
@@ -1402,6 +1405,7 @@ class MissMemoryTests(FetcherTestCase):
             fake_cache.set.side_effect = ConnectionError("down")
             self.assertTrue(DocumentThumbnailFetcher(RESOURCE).get_thumbnail(True))
             self.assertIs(DocumentThumbnailFetcher(RESOURCE).get_thumbnail(), True)
+            cache.clear()
             safe_fetch.return_value = response(status=500)
             self.assertIsNone(DocumentThumbnailFetcher(RESOURCE).get_thumbnail(True))
 
@@ -1423,6 +1427,108 @@ class MissMemoryTests(FetcherTestCase):
         self.assertTrue(fetcher.get_thumbnail(retrieve=True))
         fetch_manifest.assert_called_once_with(TILE_MANIFEST_URL)
         vw_annotation.objects.filter.assert_not_called()
+
+
+@mock.patch(SAFE_FETCH)
+@mock.patch(FETCH_MANIFEST)
+@mock.patch(ANNOTATION_MODEL)
+@mock.patch(TILE_MODEL)
+class ImageCacheTests(FetcherTestCase):
+    def zone_setup(self, vw_annotation, fetch_manifest, geometry=None):
+        vw_annotation.objects.filter.return_value = queryset(
+            [annotation(geometry=geometry)]
+        )
+        fetch_manifest.return_value = v2_manifest()
+
+    def test_a_zone_image_is_fetched_upstream_once(
+        self, tile_model, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        self.zone_setup(vw_annotation, fetch_manifest)
+        safe_fetch.return_value = response(content=REGION_BYTES)
+        fetcher = ComponentThumbnailFetcher(RESOURCE)
+
+        first = fetcher.get_thumbnail(retrieve=True)
+        second = fetcher.get_thumbnail(retrieve=True)
+
+        self.assertEqual(first, (REGION_BYTES, "image/jpeg"))
+        self.assertEqual(second, first)
+        safe_fetch.assert_called_once()
+
+    def test_a_changed_zone_is_fetched_again(
+        self, tile_model, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        safe_fetch.return_value = response(content=REGION_BYTES)
+        fetcher = ComponentThumbnailFetcher(RESOURCE)
+        self.zone_setup(vw_annotation, fetch_manifest)
+        fetcher.get_thumbnail(retrieve=True)
+
+        self.zone_setup(
+            vw_annotation,
+            fetch_manifest,
+            geometry={"type": "Polygon", "coordinates": FAR_POLYGON},
+        )
+        fetcher.get_thumbnail(retrieve=True)
+
+        self.assertEqual(safe_fetch.call_count, 2)
+
+    def test_a_failed_fetch_stores_nothing(
+        self, tile_model, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        self.zone_setup(vw_annotation, fetch_manifest)
+        safe_fetch.return_value = response(status=403)
+        fetcher = ComponentThumbnailFetcher(RESOURCE)
+        self.assertIsNone(fetcher.get_thumbnail(retrieve=True))
+
+        cache.clear()
+        safe_fetch.return_value = response(
+            content=b"<html>", headers={"Content-Type": "text/html"}
+        )
+        self.assertIsNone(fetcher.get_thumbnail(retrieve=True))
+
+        safe_fetch.return_value = response(content=REGION_BYTES)
+        cache.delete(
+            stable_cache_key("search-thumbnail-miss", RESOURCE.resourceinstanceid)
+        )
+        self.assertEqual(
+            fetcher.get_thumbnail(retrieve=True), (REGION_BYTES, "image/jpeg")
+        )
+        self.assertEqual(safe_fetch.call_count, 3)
+
+    def test_a_manifest_thumbnail_is_fetched_upstream_once(
+        self, tile_model, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        tile_model.objects.filter.return_value = queryset(
+            [tile(**{MANIFEST_NODE: TILE_MANIFEST_URL})]
+        )
+        fetch_manifest.return_value = v2_manifest(
+            thumbnail="https://img.example.org/thumb.png"
+        )
+        safe_fetch.return_value = response(content=PNG_BYTES)
+        fetcher = DocumentThumbnailFetcher(RESOURCE)
+
+        first = fetcher.get_thumbnail(retrieve=True)
+        second = fetcher.get_thumbnail(retrieve=True)
+
+        self.assertEqual(first, (PNG_BYTES, "image/png"))
+        self.assertEqual(second, first)
+        safe_fetch.assert_called_once()
+
+    @override_settings(SEARCH_THUMBNAIL_CACHE_TTL=1234)
+    def test_the_image_is_stored_for_the_configured_ttl(
+        self, tile_model, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        self.zone_setup(vw_annotation, fetch_manifest)
+        safe_fetch.return_value = response(content=REGION_BYTES)
+
+        with mock.patch(f"{FETCHERS}.get_or_build", wraps=get_or_build) as build:
+            ComponentThumbnailFetcher(RESOURCE).get_thumbnail(retrieve=True)
+
+        self.assertEqual(build.call_args.args[2], 1234)
+
+    def test_the_default_ttl_is_a_week(
+        self, tile_model, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        self.assertEqual(settings.SEARCH_THUMBNAIL_CACHE_TTL, 7 * 24 * 60 * 60)
 
 
 class RegistryTests(FetcherTestCase):

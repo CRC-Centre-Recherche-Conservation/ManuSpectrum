@@ -1,3 +1,13 @@
+"""Search-thumbnail fetchers: the thumbnail of a Document, Component or Analysis.
+
+The image bytes are cached, keyed by the upstream URL actually fetched
+(``search-thumbnail``) for ``SEARCH_THUMBNAIL_CACHE_TTL``: a zone or a
+manifest that changes gives another URL, so nothing is invalidated. A failed
+fetch stores nothing. The stored value, ``(bytes, content_type)``, is shaped by
+this module and this file is not in ``CACHE_SHAPE_MODULES``: a change to what
+it stores changes the key prefix string ``search-thumbnail``.
+"""
+
 import logging
 import sys
 
@@ -15,7 +25,7 @@ from manuspectrum.utils.iiif_tools import (
     BBoxCalculator,
     own_cantaloupe_target,
 )
-from manuspectrum.utils.cache import stable_cache_key
+from manuspectrum.utils.cache import get_or_build, stable_cache_key
 from manuspectrum.utils.manifest_values import first_manifest_url
 from manuspectrum.views.explorer.values import rewrite_legacy_url
 
@@ -43,6 +53,15 @@ def _fetch_thumbnail(url):
     """Guarded GET of a thumbnail; this server's own image service is read internally."""
     target, extra = own_cantaloupe_target(url)
     return safe_fetch(target, headers=_IMAGE_HEADERS, purpose="thumbnail", **extra)
+
+
+def _cached_image(url):
+    """``(bytes, content_type)`` of the image at *url*, or None; fetched upstream once per ``SEARCH_THUMBNAIL_CACHE_TTL``."""
+    return get_or_build(
+        stable_cache_key("search-thumbnail", url),
+        lambda: _image_payload(_fetch_thumbnail(url)),
+        settings.SEARCH_THUMBNAIL_CACHE_TTL,
+    )
 
 
 # Leading bytes of the formats a IIIF Image API server answers with. WebP is
@@ -242,7 +261,7 @@ def _zone_payload(resource):
     ):
         url = _zone_region_url(annotation, manifests)
         if url:
-            return _image_payload(_fetch_thumbnail(url))
+            return _cached_image(url)
         if manifests.unreadable:
             return None
     return None
@@ -271,7 +290,7 @@ def _manifest_payload(manifest_url):
     thumbnail_url = CanvasIIIF.get_thumbnail_url(manifest)
     if not thumbnail_url:
         return None
-    return _image_payload(_fetch_thumbnail(thumbnail_url))
+    return _cached_image(thumbnail_url)
 
 
 class _SourceFetcher(SearchThumbnailFetcher):
@@ -285,6 +304,11 @@ class _SourceFetcher(SearchThumbnailFetcher):
     ``SEARCH_THUMBNAIL_MISS_TTL`` seconds, and both modes answer ``None`` from
     that memory without reading anything else. A resource fixed within that
     time keeps answering no thumbnail until the flag expires.
+
+    The image itself is cached by upstream URL (``_cached_image``), so a
+    retrieval repeated after the miss flag expires, or by another resource
+    showing the same image, reads the cache; an error of the cache backend
+    ends the retrieval as any other failure.
 
     A subclass defines ``_has_source()`` and ``_payload()``: the image, None
     when a source gave none, ``_NO_SOURCE`` when there is no source.
