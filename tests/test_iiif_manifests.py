@@ -13,15 +13,19 @@ Usage:
 
 import copy
 import uuid
+from unittest.mock import patch
 
 from django.conf import settings
 from django.core.cache import cache
+from django.db import connection
 from django.test import Client
+from django.test.utils import CaptureQueriesContext
 from django.urls import resolve, reverse
 
 from arches.app.models.models import IIIFManifest, TileModel
 
 from manuspectrum.iiif import ids
+from manuspectrum.iiif.sources import ManifestSource, manifest_source, manifest_sources
 from manuspectrum.iiif.constants import IIIF_MEDIA_TYPE, IIIF_V2_MEDIA_TYPE
 from tests.explorer_fixtures import FEATURES, SOURCE_MANIFEST, IIIFCase
 from tests.iiif_auth import DEMO, bearer, token_for
@@ -197,12 +201,10 @@ class SourceManifestTests(StoredManifestCase):
             self.assert_dereferences(within["@id"])["Content-Type"], IIIF_MEDIA_TYPE
         )
 
-    def test_an_imported_manifest_keeps_the_id_of_its_publisher(self):
+    def test_an_imported_manifest_is_served_under_our_id(self):
         url = ids.stored_manifest(self.source.globalid)
 
-        self.assertEqual(
-            self.assert_dereferences(url).json()["id"], SOURCE_MANIFEST["id"]
-        )
+        self.assertEqual(self.assert_dereferences(url).json()["id"], url)
 
 
 class AccessTests(StoredManifestCase):
@@ -426,3 +428,141 @@ class PublishedJsonTests(StoredManifestCase):
 
         self.imaging.refresh_from_db()
         self.assertEqual(self.imaging.manifest, before)
+
+
+ORIGINAL = "https://emmsm.unicaen.fr/manifests/Avranches_BM_59.json"
+V3_PROFILE = "http://iiif.io/api/presentation/3/context.json"
+V2_PROFILE = "http://iiif.io/api/presentation/2/context.json"
+
+
+class OriginalLinkTests(StoredManifestCase):
+    """An imported manifest is served under our id and links to its publisher's URL."""
+
+    def imported(self, manifest):
+        row = self.stored("Ms 59", manifest)
+        IIIFManifest.objects.filter(pk=row.pk).update(url=ORIGINAL)
+        self.tile(
+            self.analyses["on_document"],
+            "chemical_imaging_manifest",
+            f"/manifest/{row.globalid}",
+        )
+        cache.clear()
+        return row
+
+    def served(self, row):
+        with (
+            patch(
+                "manuspectrum.utils.iiif_tools.CanvasIIIF.fetch_manifest",
+                side_effect=AssertionError("network"),
+            ),
+            patch(
+                "manuspectrum.utils.http.get_iiif_session",
+                side_effect=AssertionError("network"),
+            ),
+        ):
+            response = self.visitor.get(path_of(ids.stored_manifest(row.globalid)))
+        self.assertEqual(response.status_code, 200)
+        return response.json()
+
+    def test_a_v3_imported_manifest_links_its_original(self):
+        row = self.imported(copy.deepcopy(SOURCE_MANIFEST))
+
+        body = self.served(row)
+
+        self.assertEqual(body["id"], ids.stored_manifest(row.globalid))
+        self.assertEqual(
+            body["seeAlso"],
+            [
+                {
+                    "id": ORIGINAL,
+                    "type": "Dataset",
+                    "format": "application/ld+json",
+                    "profile": V3_PROFILE,
+                }
+            ],
+        )
+        self.assertEqual(body["items"], SOURCE_MANIFEST["items"])
+
+    def test_a_v2_imported_manifest_links_its_original(self):
+        row = self.imported(arches_manifest(uuid.uuid4(), host="https://emmsm.example"))
+
+        body = self.served(row)
+
+        self.assertEqual(body["@id"], ids.stored_manifest(row.globalid))
+        self.assertEqual(
+            body["seeAlso"],
+            [{"@id": ORIGINAL, "format": "application/ld+json", "profile": V2_PROFILE}],
+        )
+
+    def test_an_existing_see_also_is_kept(self):
+        manifest = copy.deepcopy(SOURCE_MANIFEST)
+        manifest["seeAlso"] = {"id": "https://example.org/other", "type": "Text"}
+        row = self.imported(manifest)
+
+        ids_seen = [entry["id"] for entry in self.served(row)["seeAlso"]]
+
+        self.assertEqual(ids_seen, ["https://example.org/other", ORIGINAL])
+
+    def test_a_string_see_also_is_kept_and_not_duplicated(self):
+        manifest = arches_manifest(uuid.uuid4())
+        manifest["seeAlso"] = ORIGINAL
+        row = self.imported(manifest)
+
+        self.assertEqual(self.served(row)["seeAlso"], [ORIGINAL])
+
+    def test_a_manifest_created_here_has_no_see_also(self):
+        body = self.served(self.imaging)
+
+        self.assertNotIn("seeAlso", body)
+        self.assertEqual(body["@id"], ids.stored_manifest(self.imaging.globalid))
+
+    def test_the_legacy_host_rewrite_still_applies(self):
+        row = self.imported(arches_manifest(uuid.uuid4(), host="https://old.example"))
+
+        with self.settings(EXPLORER_LEGACY_HOSTS=("old.example",)):
+            canvas = self.served(row)["sequences"][0]["canvases"][0]
+
+        self.assertEqual(
+            canvas["@id"], f"{BASE}iiifserver/iiif/manifest/canvas/pb.json"
+        )
+
+
+class ManifestSourceTests(StoredManifestCase):
+    def test_the_four_kinds_of_reference(self):
+        imported = self.stored("Imported")
+        IIIFManifest.objects.filter(pk=imported.pk).update(url=ORIGINAL)
+        legacy = "https://example.org/iiif/legacy.json"
+        IIIFManifest.objects.create(
+            globalid=uuid.uuid4(), label="Legacy", url=legacy, manifest={}
+        )
+        refs = [
+            f"/manifest/{imported.globalid}",
+            f"/manifest/{self.imaging.globalid}",
+            legacy,
+            "https://example.org/never-stored.json",
+            f"/manifest/{uuid.uuid4()}",
+            "",
+        ]
+
+        with CaptureQueriesContext(connection) as queries:
+            found = manifest_sources(refs)
+        selects = [q for q in queries if q["sql"].startswith("SELECT")]
+        self.assertEqual(len(selects), 1)
+
+        self.assertEqual(
+            found,
+            {
+                refs[0]: ManifestSource(ORIGINAL, "Imported"),
+                refs[1]: ManifestSource(None, "maXRF_map1 - illumination - f1v"),
+                legacy: ManifestSource(legacy, "Legacy"),
+                refs[3]: ManifestSource(refs[3], None),
+            },
+        )
+
+    def test_the_wrapper_returns_one_source_or_none(self):
+        self.assertEqual(
+            manifest_source(f"/manifest/{self.imaging.globalid}"),
+            ManifestSource(None, "maXRF_map1 - illumination - f1v"),
+        )
+        self.assertIsNone(manifest_source(f"/manifest/{uuid.uuid4()}"))
+        self.assertIsNone(manifest_source(""))

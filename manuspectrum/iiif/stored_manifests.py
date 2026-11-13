@@ -15,7 +15,7 @@ the reader may not see.
 
 from arches.app.models.models import IIIFManifest, TileModel
 
-from manuspectrum.iiif.sources import local_manifest_id
+from manuspectrum.iiif.sources import local_manifest_id, original_url
 from manuspectrum.utils.public_visibility import readable_nodegroup_ids, visible_set
 from manuspectrum.utils.role_links import role_node
 from manuspectrum.utils.roles import ROLES
@@ -62,12 +62,18 @@ def named_for(globalid, reader, version=None):
 
 
 def readable_manifest(globalid, reader, version=None):
-    """The stored JSON of the manifest *globalid* for *reader*; None when it is unknown, not a JSON object, or not ``named_for`` the reader."""
+    """``(stored JSON, original URL)`` of the manifest *globalid* for *reader*; None when it is unknown, not a JSON object, or not ``named_for`` the reader.
+
+    The original URL is the publisher's (``sources.original_url`` of the row's
+    ``url``), None for a manifest created here. The row is read once.
+    """
     if not named_for(globalid, reader, version):
         return None
-    stored = (
+    row = (
         IIIFManifest.objects.filter(globalid=globalid)
-        .values_list("manifest", flat=True)
+        .values_list("manifest", "url")
         .first()
     )
-    return stored if isinstance(stored, dict) else None
+    if row is None or not isinstance(row[0], dict):
+        return None
+    return row[0], original_url(row[1])

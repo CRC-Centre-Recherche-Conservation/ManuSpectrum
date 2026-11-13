@@ -8,7 +8,8 @@ the IIIF CORS headers on every answer (``IIIFView``).
 The guard is ``iiif.stored_manifests.readable_manifest``: a manifest no
 resource the reader may see names, and an unknown id, are a bodyless 404; a
 Bearer credential that is not a valid IIIF token is a 401. The body is
-``sources.published_manifest`` of the stored JSON, with the media type of its
+``sources.published_manifest`` of the stored JSON (our id, and the publisher's
+URL in ``seeAlso`` for an imported manifest), with the media type of its
 Presentation version. A reader whose view is the visitor's (never a token
 reader) gets ``public, no-cache`` and a strong ETag (the digest of the body)
 that an ``If-None-Match`` answers with a 304; any other reader ``private,
@@ -37,12 +38,13 @@ class StoredManifestView(IIIFView):
 
     def answer(self, request, globalid):
         version = data_version()
-        stored = stored_manifests.readable_manifest(
+        found = stored_manifests.readable_manifest(
             globalid, reader_of(request), version
         )
-        if stored is None:
+        if found is None:
             raise Missing()
-        body = orjson.dumps(published_manifest(stored, globalid))
+        stored, original = found
+        body = orjson.dumps(published_manifest(stored, globalid, original))
         shared = gate_of(request, version).shared and not renews_csrf_cookie(request)
         etag = f'"{hashlib.sha1(body, usedforsecurity=False).hexdigest()}"'
         if shared and etag_already_held(request, etag):
