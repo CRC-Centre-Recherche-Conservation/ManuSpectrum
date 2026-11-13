@@ -64,6 +64,14 @@ CACHES = {
         "LOCATION": "iiif-auth-cache",
         "KEY_PREFIX": "ms-iiif-auth",
     },
+    "querysets_concepts": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "querysets-concepts-cache",
+    },
+    "querysets_resource_instances": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "querysets-resource-instances-cache",
+    },
 }
 
 LOGGING["loggers"]["arches"]["level"] = "ERROR"
