@@ -485,7 +485,8 @@ class ManifestRouteTests(CorpusCase):
         self.assertEqual(
             unlocated["value"]["en"],
             [
-                f"X02 — f. 3r — {settings.PUBLIC_SERVER_ADDRESS}report/{self.pk('embargoed')}"
+                f'<span><a href="{settings.PUBLIC_SERVER_ADDRESS}report/{self.pk("embargoed")}">'
+                "X02 — f. 3r</a></span>"
             ],
         )
         self.assertEqual(
