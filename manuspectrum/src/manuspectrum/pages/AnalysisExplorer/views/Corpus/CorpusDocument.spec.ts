@@ -342,17 +342,17 @@ describe("CorpusDocument", () => {
         );
     });
 
-    it("shows no manifest source link for a URL that is not http(s)", async () => {
-        stubFetch({
-            manifestSource: "javascript:alert(1)",
-            annotations: [annotation(1)],
-        });
-        const { wrapper } = mountScreen();
-        await flushPromises();
-        expect(wrapper.find(".document-bar .manifest-source").exists()).toBe(
-            false,
-        );
-    });
+    it.each(["javascript:alert(1)", "not a url"])(
+        "shows no manifest source link for %s",
+        async (manifestSource) => {
+            stubFetch({ manifestSource, annotations: [annotation(1)] });
+            const { wrapper } = mountScreen();
+            await flushPromises();
+            expect(
+                wrapper.find(".document-bar .manifest-source").exists(),
+            ).toBe(false);
+        },
+    );
 
     it("shows the production date and places of the document in its header", async () => {
         stubFetch({
