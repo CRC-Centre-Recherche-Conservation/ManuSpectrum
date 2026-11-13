@@ -24,6 +24,7 @@ updates:
       - dependency-name: "leaflet-iiif"
       - dependency-name: "primeicons"
       - dependency-name: "primevue"
+      - dependency-name: "typescript"
       # Major only: the expression evaluator the map tests use must stay on
       # the style-spec major that maplibre-gl bundles (20 for maplibre-gl 4).
       - dependency-name: "@maplibre/maplibre-gl-style-spec"

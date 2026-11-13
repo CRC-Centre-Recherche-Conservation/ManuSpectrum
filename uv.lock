@@ -29,7 +29,7 @@ wheels = [
 
 [[package]]
 name = "arches"
-version = "8.1.5"
+version = "8.1.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "arcgis2geojson" },
@@ -71,9 +71,9 @@ dependencies = [
     { name = "sparqlwrapper" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7b/f2/48641c9e360f91451234749a01e9b2fcd423b7e8246150f23a6c95786a7d/arches-8.1.5.tar.gz", hash = "sha256:2060be779e09310907a8d0c524850d4f19aeba753e9ee5d901eac0b0e6ff06b5", size = 28604137, upload-time = "2026-09-11T21:33:25.541Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9b/e1/0b6c437b8e276bcbac206c92831efdc889e9a31322dfd9eafd0f9bfe3c78/arches-8.1.6.tar.gz", hash = "sha256:0c0c5b5969dce55e559af7715a2775ae414b6763e1697358896e46ea0225bc4b", size = 28602185, upload-time = "2026-10-28T20:38:24.747Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f3/fa/614d7b9dd450ad69dc32e24fa21dae20992563c0e2a9493ea36fbd1141b5/arches-8.1.5-py3-none-any.whl", hash = "sha256:5818cca8656ea6e3f141709f2352c8b66f6b0ecb96ed55c3e063d872ebd8cdda", size = 29180837, upload-time = "2026-09-11T21:33:17.517Z" },
+    { url = "https://files.pythonhosted.org/packages/03/75/f1dfaff2da5387a2111f0a63a95d4728db3a525456b93b22201bd89d0788/arches-8.1.6-py3-none-any.whl", hash = "sha256:8237f38f117d05978faaa60ee329196ce720e9f5b63370e3ac7858223ca25dbb", size = 29181361, upload-time = "2026-10-28T20:38:19.34Z" },
 ]
 
 [[package]]
@@ -91,14 +91,14 @@ wheels = [
 
 [[package]]
 name = "arches-querysets"
-version = "1.1.1"
+version = "1.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "arches" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a4/e7/b0e2a3df79044a8b121a75ace15b45b140fe15eaf96cdd72ec8682a82b71/arches_querysets-1.1.1.tar.gz", hash = "sha256:7937a2990d923e7426afa9ab84d21f27629630a55e32a1dae7009d02940371f3", size = 282187, upload-time = "2026-03-26T21:31:30.543Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7c/cb/364a49b2a257623776eecf76eec44f49128ca6fb769e4feb46b68828fa4e/arches_querysets-1.2.0.tar.gz", hash = "sha256:e956c915130468595d9168458f0f375b53d8fe3f0dd502fc487b57a871a5c2a6", size = 295643, upload-time = "2026-05-28T21:26:17.883Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/49/87/2e9cc82ff32eb00eafa1d7c0fbf015ce86c3d953d61f880db65aab8083b7/arches_querysets-1.1.1-py3-none-any.whl", hash = "sha256:404eeea7e9b3d675a22af72456f32a8e5f183ed51b364e3f8cc5f09b45e27445", size = 87769, upload-time = "2026-03-26T21:31:28.627Z" },
+    { url = "https://files.pythonhosted.org/packages/67/4b/23cc1c7344b97df877d1758da6b0f0e82187e4fe6e0fb1ab3a3474b56ca1/arches_querysets-1.2.0-py3-none-any.whl", hash = "sha256:deb07d28bdba4294b0785f876a3c78d0c76454333eb80f1362e4ea85f608a9e4", size = 94043, upload-time = "2026-05-28T21:26:16.774Z" },
 ]
 
 [package.optional-dependencies]
@@ -1365,9 +1365,9 @@ prod = [
 
 [package.metadata]
 requires-dist = [
-    { name = "arches", specifier = ">=8.1.4,<8.2.0" },
+    { name = "arches", specifier = ">=8.1.6,<8.2.0" },
     { name = "arches-controlled-lists", specifier = ">=1.2.0,<1.3.0" },
-    { name = "arches-querysets", extras = ["drf"], specifier = ">=1.1.1,<1.2.0" },
+    { name = "arches-querysets", extras = ["drf"], specifier = ">=1.2.0,<1.3.0" },
     { name = "arches-vue-components", specifier = ">=2.0.3,<3.0.0" },
     { name = "argon2-cffi", specifier = ">=25.1,<26" },
     { name = "bibtexparser", specifier = ">=2.0.1,<3" },

@@ -38,8 +38,6 @@ ARCHES_REF = re.compile(r"#stable/(\d+\.\d+\.\d+)$")
 # Names Arches pins exactly that the project declares at another version.
 DIVERGENCES = {
     "vue": "Security fix: 3.5.44, same minor as Arches' 3.5.20 (b870ea7e).",
-    "typescript": "The project type-checks with 5.6.2; arches-dev-dependencies "
-    "pins 5.4.5 and keeps its own nested copy.",
     "webpack": "Dependabot keeps webpack current (5.110.x); "
     "arches-dev-dependencies keeps its own nested 5.105.4.",
     "webpack-dev-server": "Override 5.2.7 clears an advisory present in 5.2.5.",
