@@ -197,6 +197,7 @@ export function documentPayload(
         name: label("Manuscript 1"),
         holding: label("Avranches, BM"),
         manifest: null,
+        manifestSource: null,
         canvases: [
             {
                 id: "https://iiif.example/c1",

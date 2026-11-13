@@ -345,6 +345,8 @@ export interface DocumentPayload {
     name: Label;
     holding: Label | null;
     manifest: string | null;
+    /** The publisher's URL of a manifest imported from another institution; null for one created here. */
+    manifestSource: string | null;
     canvases: DocumentCanvas[];
     /** Each technique of the document's analyses, by uri. */
     techniques: Record<string, Technique>;
@@ -915,6 +917,7 @@ export const SHAPE_KEYS = {
         name: true,
         holding: true,
         manifest: true,
+        manifestSource: true,
         canvases: true,
         techniques: true,
         analyses: true,
