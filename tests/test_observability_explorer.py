@@ -142,7 +142,7 @@ class ExportBytesTests(TestCase):
         with (
             patch.object(export, "export_language", return_value="en"),
             patch.object(export, "resolve_scope", return_value=scope),
-            patch.object(export, "_assemble", return_value=([], {})),
+            patch.object(export, "_assemble", return_value=([], {}, [])),
             patch.object(export, "ro_crate", return_value={}),
             patch.object(export, "stream", return_value=(3 * 1024 * 1024, iter([b""]))),
             delta("manuspectrum_explorer_export_bytes_count") as exports,
