@@ -711,60 +711,65 @@ class TestGetDisplayValue(TestCase):
 
             self.datatype = ManifestDataType()
 
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_get_display_value_with_url(self, mock_manifest_model):
-        """Display value should include label and URL from DB record."""
-        mock_manifest = MagicMock()
-        mock_manifest.label = "Book 1"
-        mock_manifest.url = "/iiif/book1/manifest"
-        mock_manifest_model.objects.get.return_value = mock_manifest
-        mock_manifest_model.DoesNotExist = Exception
-
+    def display(self, value):
         node = MagicMock()
         node.nodeid = uuid.uuid4()
         tile = MagicMock()
-        # Absolute URL on OUR canonical host (localhost) → collapsed to path.
-        tile.data = {str(node.nodeid): "http://localhost:8000/iiif/book1/manifest"}
+        tile.data = {str(node.nodeid): value}
+        return self.datatype.get_display_value(tile, node)
 
-        result = self.datatype.get_display_value(tile, node)
-        self.assertIn("Book 1", result)
-        self.assertIn("/iiif/book1/manifest", result)
-        # Verify lookup uses the relative path extracted from a canonical-host URL
-        mock_manifest_model.objects.get.assert_called_once_with(
-            url="/iiif/book1/manifest"
+    def stored(self, label, url=None):
+        from arches.app.models.models import IIIFManifest
+
+        globalid = uuid.uuid4()
+        return IIIFManifest.objects.create(
+            globalid=globalid,
+            label=label,
+            url=url or f"/manifest/{globalid}",
+            manifest={},
         )
 
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_get_display_value_without_url(self, mock_manifest_model):
-        """Display value without URL on DB record should show label only."""
-        mock_manifest = MagicMock()
-        mock_manifest.label = "Book 1"
-        mock_manifest.url = None
-        mock_manifest_model.objects.get.return_value = mock_manifest
-        mock_manifest_model.DoesNotExist = Exception
+    def test_an_imported_manifest_shows_its_publisher_url(self):
+        original = "https://emmsm.unicaen.fr/manifests/Avranches_BM_59.json"
+        row = self.stored("Avranches 59", original)
 
-        node = MagicMock()
-        node.nodeid = uuid.uuid4()
-        tile = MagicMock()
-        tile.data = {str(node.nodeid): "https://example.org/iiif/book1/manifest"}
+        self.assertEqual(
+            self.display(f"/manifest/{row.globalid}"),
+            f"Avranches 59 ({original})",
+        )
 
-        result = self.datatype.get_display_value(tile, node)
-        self.assertEqual(result, "Book 1")
+    def test_a_manifest_created_here_shows_its_public_iiif_url(self):
+        from manuspectrum.iiif import ids
 
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_get_display_value_manifest_not_found(self, mock_manifest_model):
-        """Display value should fallback to raw URL when manifest not in DB."""
-        mock_manifest_model.DoesNotExist = Exception
-        mock_manifest_model.objects.get.side_effect = mock_manifest_model.DoesNotExist
+        row = self.stored("Imaging")
 
-        node = MagicMock()
-        node.nodeid = uuid.uuid4()
+        self.assertEqual(
+            self.display(f"/manifest/{row.globalid}"),
+            f"Imaging ({ids.stored_manifest(row.globalid)})",
+        )
+
+    def test_an_absolute_local_url_is_resolved_by_globalid(self):
+        from django.conf import settings
+
+        original = "https://example.org/iiif/book1/manifest"
+        row = self.stored("Book 1", original)
+
+        self.assertEqual(
+            self.display(f"{settings.PUBLIC_SERVER_ADDRESS}manifest/{row.globalid}"),
+            f"Book 1 ({original})",
+        )
+
+    def test_a_raw_external_url_with_a_row_shows_the_row(self):
         url = "https://example.org/iiif/book1/manifest"
-        tile = MagicMock()
-        tile.data = {str(node.nodeid): url}
+        self.stored("Book 1", url)
 
-        result = self.datatype.get_display_value(tile, node)
-        self.assertEqual(result, url)
+        self.assertEqual(self.display(url), f"Book 1 ({url})")
+
+    def test_an_unknown_value_is_shown_as_is(self):
+        url = "https://example.org/iiif/unknown/manifest"
+        self.assertEqual(self.display(url), url)
+        missing = f"/manifest/{uuid.uuid4()}"
+        self.assertEqual(self.display(missing), missing)
 
     def test_get_display_value_no_data_returns_none(self):
         """Display value with no tile data should return None."""
@@ -786,25 +791,20 @@ class TestGetDisplayValue(TestCase):
         result = self.datatype.get_display_value(tile, node)
         self.assertIsNone(result)
 
-    @patch("manuspectrum.datatypes.manifest.IIIFManifest")
-    def test_get_display_value_with_dict_tile(self, mock_manifest_model):
+    def test_get_display_value_with_dict_tile(self):
         """Search export passes tiles as dicts (ES _source), not Tile objects."""
-        mock_manifest = MagicMock()
-        mock_manifest.label = "Book 1"
-        mock_manifest.url = "/iiif/book1/manifest"
-        mock_manifest_model.objects.get.return_value = mock_manifest
-        mock_manifest_model.DoesNotExist = Exception
-
+        original = "https://example.org/iiif/book1/manifest"
+        row = self.stored("Book 1", original)
         node = MagicMock()
         node.nodeid = uuid.uuid4()
         tile = {
-            "data": {str(node.nodeid): "/iiif/book1/manifest"},
+            "data": {str(node.nodeid): f"/manifest/{row.globalid}"},
             "provisionaledits": None,
         }
 
-        result = self.datatype.get_display_value(tile, node)
-        self.assertIn("Book 1", result)
-        self.assertIn("/iiif/book1/manifest", result)
+        self.assertEqual(
+            self.datatype.get_display_value(tile, node), f"Book 1 ({original})"
+        )
 
     def test_get_display_value_dict_tile_missing_node_returns_none(self):
         """Dict tile without the node in its data should return None."""

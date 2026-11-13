@@ -7,6 +7,8 @@ from arches.app.datatypes.base import BaseDataType
 from arches.app.models.models import IIIFManifest, Widget
 from django.utils.translation import gettext_lazy as _
 
+from manuspectrum.iiif import ids
+from manuspectrum.iiif.sources import original_url
 from manuspectrum.utils import manifest_registry
 from manuspectrum.utils.manifest_registry import FailParsingManifestIIIF
 
@@ -197,16 +199,32 @@ class ManifestDataType(BaseDataType):
             value = data[str(node.nodeid)]
             if not value:
                 return None
-            try:
-                db_url = self._to_relative_path(value)
-                manifest = IIIFManifest.objects.get(url=db_url)
-                result = f"{manifest.label}"
-                if manifest.url:
-                    result += f" ({manifest.url})"
-                return result
-            except (IIIFManifest.DoesNotExist, ValueError):
-                return str(value)
+            return self._display(value)
         return None
+
+    def _display(self, value):
+        """``"<label> (<link>)"`` of the manifest *value* names, else ``str(value)``.
+
+        A local reference is resolved by globalid; any other value by a row
+        whose ``url`` equals it. The link is the publisher's URL of an
+        imported manifest, else the public IIIF URL of a manifest created
+        here; a row without a label or a link shows what it has.
+        """
+        if not isinstance(value, str):
+            return str(value)
+        is_local, row = manifest_registry.local_row(
+            self._to_relative_path(value) or value
+        )
+        if not is_local:
+            row = IIIFManifest.objects.filter(url=value).first()
+        if row is None:
+            return str(value)
+        link = original_url(row.url)
+        if link is None and is_local:
+            link = ids.stored_manifest(row.globalid)
+        elif link is None:
+            link = row.url
+        return f"{row.label} ({link})" if link else f"{row.label}"
 
     def clean(self, tile, nodeid):
         value = tile.data.get(str(nodeid))
