@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 
 const calls = [];
 let navShouldThrow = false;
@@ -22,6 +22,10 @@ vi.mock("../utils/homepage/analysis-viewer", () => ({ default: () => calls.push(
 vi.mock("../utils/homepage/spectral-logo", () => ({ default: () => calls.push("logo") }));
 
 describe("homepage entry", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
     it("starts every block even when one throws", async () => {
         const error = vi.spyOn(console, "error").mockImplementation(() => {});
         await import("./index");

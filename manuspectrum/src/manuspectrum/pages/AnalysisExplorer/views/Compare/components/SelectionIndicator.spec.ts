@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Mock } from "vitest";
 import { computed, effectScope, ref, shallowRef } from "vue";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -36,7 +37,7 @@ const OTHER = uuid(2);
 
 let pinia: Pinia;
 let scope: EffectScope;
-let announce: ReturnType<typeof vi.fn>;
+let announce: Mock<(message: string) => void>;
 let wrapper: VueWrapper | null = null;
 
 function linkedOf(synthesis: SynthesisResponse): LinkedSelection {

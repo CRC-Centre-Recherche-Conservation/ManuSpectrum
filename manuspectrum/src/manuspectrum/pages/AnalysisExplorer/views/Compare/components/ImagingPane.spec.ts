@@ -30,6 +30,7 @@ import { NEUTRAL_FILTERS } from "@/manuspectrum/pages/AnalysisExplorer/views/Com
 import { analysisNode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 import type { VueWrapper } from "@vue/test-utils";
+import type { ScaleNote } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/scale-notes.ts";
 import type { FileLayer } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { NormalisedView } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/pane-sync.ts";
 import type { MapLine } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/windows.ts";
@@ -125,7 +126,7 @@ interface Options {
     canvas?: string | null;
     maps?: MapLine[];
     view?: NormalisedView | null;
-    scaleNote?: object | null;
+    scaleNote?: ScaleNote | null;
     filters?: typeof NEUTRAL_FILTERS;
     provide?: Record<symbol, unknown>;
 }
