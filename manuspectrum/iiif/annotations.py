@@ -6,7 +6,8 @@ is the zone on its canvas, part of the Document's source manifest
 (``selectors.target``). ``metadata`` holds, when present, the technique,
 dates, operators, instrument, conditions, projects, Document, Component and
 « Status: Draft » for an unpublished analysis; every label and value is a
-language map. ``homepage`` lists the report and the published dataset (its
+language map, a value naming a concept or a resource being an HTML link
+(Presentation 3 §4.5). ``homepage`` lists the report and the published dataset (its
 web address as ``id``, its stored label under ``none``), the pages about the
 analysis for people; ``rendering`` lists each measurement file as stored, with
 the services protecting it.
