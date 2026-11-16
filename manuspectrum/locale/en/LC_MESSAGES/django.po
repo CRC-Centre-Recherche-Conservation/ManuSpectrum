@@ -2391,10 +2391,6 @@ msgstr "Search the database"
 msgid "Learn more"
 msgstr "Learn more"
 
-#: templates/index.htm:248 templates/index.htm:250
-msgid "scroll"
-msgstr "scroll"
-
 #: templates/index.htm:262 templates/index.htm:264
 msgid "Thinking and modeling written cultural heritage materials"
 msgstr "Thinking and modeling written cultural heritage materials"
@@ -7672,20 +7668,20 @@ msgid "Overview"
 msgstr "Overview"
 
 #: templates/index.htm
-msgid "Every record, advanced filters and the map."
-msgstr "Every record, advanced filters and the map."
+msgid "Advanced search across every resource."
+msgstr "Advanced search across every resource."
 
 #: templates/index.htm
-msgid "Browse the documents, compare spectra and images."
-msgstr "Browse the documents, compare spectra and images."
+msgid "Analyses on the page, to compare and export."
+msgstr "Analyses on the page, to compare and export."
 
 #: templates/views/pages/analysis-explorer.htm
 msgid "ManuSpectrum Data Lab"
 msgstr "ManuSpectrum Data Lab"
 
 #: templates/index.htm
-msgid "One search, two tools"
-msgstr "One search, two tools"
+msgid "Two ways to search"
+msgstr "Two ways to search"
 
 #: templates/index.htm
 msgid "Search terms"
@@ -7696,9 +7692,25 @@ msgid "Search the Data Lab"
 msgstr "Search the Data Lab"
 
 #: templates/index.htm
-msgid "The database finds every record that matches: documents, analyses, samples, people, places, with advanced filters and a map."
-msgstr "The database finds every record that matches: documents, analyses, samples, people, places, with advanced filters and a map."
+msgid "Every resource in the database — documents, components, analyses, samples, people, places… — with filters to combine on any field, the map and dates."
+msgstr "Every resource in the database — documents, components, analyses, samples, people, places… — with filters to combine on any field, the map and dates."
 
 #: templates/index.htm
-msgid "The Data Lab finds the documents whose analyses match, to see on the page and compare."
-msgstr "The Data Lab finds the documents whose analyses match, to see on the page and compare."
+msgid "Analysed documents open on their folios, each measurement where it was taken; compare spectra and elemental maps, then export."
+msgstr "Analysed documents open on their folios, each measurement where it was taken; compare spectra and elemental maps, then export."
+
+#: templates/index.htm
+msgid "Advanced search"
+msgstr "Advanced search"
+
+#: templates/index.htm
+msgid "Through the analyses"
+msgstr "Through the analyses"
+
+#: templates/index.htm
+msgid "Advanced search: MS 59 resources (folios, a place, the manuscript) beside a map of the Bay of Mont-Saint-Michel."
+msgstr "Advanced search: MS 59 resources (folios, a place, the manuscript) beside a map of the Bay of Mont-Saint-Michel."
+
+#: templates/index.htm
+msgid "Data Lab: folio 1v of MS 59 with its analysis zones drawn over the illumination, and the details of a FORS analysis with its reflectance spectrum."
+msgstr "Data Lab: folio 1v of MS 59 with its analysis zones drawn over the illumination, and the details of a FORS analysis with its reflectance spectrum."

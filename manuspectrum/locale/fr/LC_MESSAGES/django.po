@@ -2444,10 +2444,6 @@ msgstr "Rechercher dans la base"
 msgid "Learn more"
 msgstr "En savoir plus"
 
-#: templates/index.htm:248 templates/index.htm:250
-msgid "scroll"
-msgstr "défiler"
-
 #: templates/index.htm:262 templates/index.htm:264
 msgid "Thinking and modeling written cultural heritage materials"
 msgstr "Penser et modéliser les matériaux du patrimoine culturel écrit"
@@ -7837,20 +7833,20 @@ msgid "Overview"
 msgstr "Aperçu"
 
 #: templates/index.htm
-msgid "Every record, advanced filters and the map."
-msgstr "Toutes les fiches, les filtres avancés et la carte."
+msgid "Advanced search across every resource."
+msgstr "Recherche avancée dans toutes les ressources."
 
 #: templates/index.htm
-msgid "Browse the documents, compare spectra and images."
-msgstr "Feuilleter les documents, comparer spectres et images."
+msgid "Analyses on the page, to compare and export."
+msgstr "Les analyses sur la page, à comparer et à exporter."
 
 #: templates/views/pages/analysis-explorer.htm
 msgid "ManuSpectrum Data Lab"
 msgstr "Laboratoire des données de ManuSpectrum"
 
 #: templates/index.htm
-msgid "One search, two tools"
-msgstr "Une recherche, deux outils"
+msgid "Two ways to search"
+msgstr "Deux façons de chercher"
 
 #: templates/index.htm
 msgid "Search terms"
@@ -7861,9 +7857,25 @@ msgid "Search the Data Lab"
 msgstr "Rechercher dans le Laboratoire des données"
 
 #: templates/index.htm
-msgid "The database finds every record that matches: documents, analyses, samples, people, places, with advanced filters and a map."
-msgstr "La base trouve toutes les fiches qui correspondent : documents, analyses, échantillons, personnes, lieux, avec filtres avancés et carte."
+msgid "Every resource in the database — documents, components, analyses, samples, people, places… — with filters to combine on any field, the map and dates."
+msgstr "Toutes les ressources de la base — documents, composants, analyses, échantillons, personnes, lieux… — et des filtres à combiner sur chaque champ, la carte et les dates."
 
 #: templates/index.htm
-msgid "The Data Lab finds the documents whose analyses match, to see on the page and compare."
-msgstr "Le Laboratoire des données trouve les documents dont les analyses correspondent, à voir sur la page et à comparer."
+msgid "Analysed documents open on their folios, each measurement where it was taken; compare spectra and elemental maps, then export."
+msgstr "Les documents analysés s'ouvrent sur leurs folios, chaque mesure à l'endroit où elle a été prise ; on compare spectres et cartes élémentaires, puis on exporte."
+
+#: templates/index.htm
+msgid "Advanced search"
+msgstr "Recherche avancée"
+
+#: templates/index.htm
+msgid "Through the analyses"
+msgstr "Par les analyses"
+
+#: templates/index.htm
+msgid "Advanced search: MS 59 resources (folios, a place, the manuscript) beside a map of the Bay of Mont-Saint-Michel."
+msgstr "Recherche avancée : ressources du MS 59 d'Avranches (folios, lieu, manuscrit) à côté de la carte de la baie du Mont-Saint-Michel."
+
+#: templates/index.htm
+msgid "Data Lab: folio 1v of MS 59 with its analysis zones drawn over the illumination, and the details of a FORS analysis with its reflectance spectrum."
+msgstr "Laboratoire des données : le folio 1v du MS 59, ses zones d'analyse dessinées sur l'enluminure, et le détail d'une analyse FORS avec son spectre de réflectance."

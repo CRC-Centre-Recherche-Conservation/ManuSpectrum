@@ -411,20 +411,6 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
     transform: translateY(-2px);
 }
 
-.ms-hero-more {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    min-height: 44px;
-    font-size: 0.85rem;
-    color: var(--ink-muted);
-}
-
-.ms-hero-more:hover {
-    color: var(--ink);
-    text-decoration: underline;
-}
-
 // Scroll indicator
 .ms-hero-scroll {
     position: absolute;
@@ -446,9 +432,12 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
     letter-spacing: 0.15em;
     text-transform: uppercase;
     font-family: var(--font-mono);
+    min-height: 44px;
+    padding: 0.5rem;
 }
 
 .ms-hero-scroll-line {
+    display: block;
     width: 1px;
     height: 40px;
     background: linear-gradient(to bottom, var(--spectral-5), transparent);
@@ -458,6 +447,14 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
 @keyframes scroll-pulse {
     0%, 100% { opacity: 0.3; transform: scaleY(1); }
     50% { opacity: 0.8; transform: scaleY(1.2); transform-origin: top; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ms-hero-scroll-line { animation: none; }
+}
+
+@media (max-height: 760px) {
+    .ms-hero-scroll { display: none; }
 }
 
 
@@ -1469,15 +1466,23 @@ a.ms-search-chip {
 
 .ms-search-ways {
     display: grid;
-    gap: 0.5rem;
-    max-width: 40rem;
-    margin: 0 auto 2rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
     text-align: left;
 }
 
 .ms-search-way {
     margin: 0;
-    padding: 0.3rem 0 0.3rem 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    transition: opacity 0.25s;
+}
+
+.ms-search-way figcaption {
+    margin-bottom: auto;
+    padding-left: 0.9rem;
     border-left: 2px solid var(--border);
     font-size: 0.85rem;
     font-weight: 300;
@@ -1486,10 +1491,41 @@ a.ms-search-chip {
     transition: color 0.25s, border-color 0.25s;
 }
 
-.ms-search-box:has(.ms-search-db:is(:hover, :focus-visible)) #ms-way-db,
-.ms-search-box:has(.ms-search-lab:is(:hover, :focus-visible)) #ms-way-lab {
+.ms-search-way-kicker {
+    display: block;
+    margin-bottom: 0.2rem;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink);
+}
+
+.ms-search-way img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.3s, transform 0.3s var(--ease-out-expo);
+}
+
+.ms-search-box:has(.ms-search-db:is(:hover, :focus-visible)) .ms-search-way--db figcaption,
+.ms-search-box:has(.ms-search-lab:is(:hover, :focus-visible)) .ms-search-way--lab figcaption {
     color: var(--ink);
     border-left-color: var(--blue-text);
+}
+
+.ms-search-box:has(.ms-search-db:is(:hover, :focus-visible)) .ms-search-way--db img,
+.ms-search-box:has(.ms-search-lab:is(:hover, :focus-visible)) .ms-search-way--lab img {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-3px);
+}
+
+.ms-search-box:has(.ms-search-db:is(:hover, :focus-visible)) .ms-search-way--lab,
+.ms-search-box:has(.ms-search-lab:is(:hover, :focus-visible)) .ms-search-way--db {
+    opacity: 0.55;
 }
 
 .ms-search-actions .ms-btn:focus-visible {
@@ -1498,7 +1534,8 @@ a.ms-search-chip {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .ms-search-way { transition: none; }
+    .ms-search-way, .ms-search-way figcaption, .ms-search-way img { transition: none; }
+    .ms-search-box :is(.ms-search-way--db, .ms-search-way--lab) img { transform: none !important; }
 }
 
 
@@ -1539,6 +1576,7 @@ a.ms-search-chip {
 @media (max-width: 640px) {
     #ms-search-form { flex-direction: column; }
     .ms-search-actions { flex-direction: column; }
+    .ms-search-ways { grid-template-columns: 1fr; }
     .ms-search-actions .ms-btn {
         width: 100%;
         max-width: none;

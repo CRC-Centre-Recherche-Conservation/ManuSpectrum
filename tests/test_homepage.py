@@ -99,7 +99,7 @@ class DiscoverEntryTests(TestCase):
         self.assertIn('formaction="/en/discover"', buttons[1])
         self.assertIn('aria-describedby="ms-way-lab"', buttons[1])
         for described in ("ms-way-db", "ms-way-lab"):
-            self.assertIn(f'id="{described}"', html)
+            self.assertIn(f'<figcaption id="{described}">', html)
         self.assertIn('<label class="ms-visually-hidden" for="ms-search-input">', html)
         self.assertNotIn("ms-search-cta", html)
         self.assertNotIn("ms-search-discover", html)
@@ -199,3 +199,43 @@ class AboutPagePayloadTests(TestCase):
                 any("<style" in block for block in noscript_blocks(html)), path
             )
             self.assertNotIn("ms-nav-dropdown:hover", html, path)
+
+
+class ToolCardsTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def _ways(self, html):
+        start = html.index('class="ms-search-ways"')
+        return html[start : html.index("</figure>\n                </div>", start)]
+
+    def test_each_tool_card_carries_a_localised_screenshot(self):
+        for lang in ("en", "fr"):
+            ways = self._ways(self.client.get(f"/{lang}/").content.decode())
+            imgs = re.findall(r"<img\b[^>]*>", ways)
+            self.assertEqual(len(imgs), 2, lang)
+            for img, tool in zip(imgs, ("search", "lab")):
+                self.assertIn(f"tool-{tool}-{lang}-800.webp", img, lang)
+                self.assertIn(f"tool-{tool}-{lang}.webp", img, lang)
+                self.assertRegex(img, r'alt="[^"]+"')
+                self.assertRegex(img, r'width="\d+"')
+                self.assertRegex(img, r'height="\d+"')
+                self.assertIn('loading="lazy"', img)
+
+    def test_section_title_names_the_two_ways(self):
+        for lang, title in (
+            ("en", "Two ways to search"),
+            ("fr", "Deux façons de chercher"),
+        ):
+            html = self.client.get(f"/{lang}/").content.decode()
+            self.assertIn(f'<h2 class="ms-section-title">{title}</h2>', html)
+
+    def test_hero_has_one_learn_more_cue_to_the_project(self):
+        for lang, label in (("en", "Learn more"), ("fr", "En savoir plus")):
+            html = self.client.get(f"/{lang}/").content.decode()
+            self.assertNotIn("ms-hero-more", html)
+            start = html.index('class="ms-hero-scroll"')
+            cue = html[start : html.index("</div>", start)]
+            self.assertIn('href="#project"', cue)
+            self.assertIn(f"<span>{label}</span>", cue)
+            self.assertEqual(html.count(f">{label}<"), 1, lang)

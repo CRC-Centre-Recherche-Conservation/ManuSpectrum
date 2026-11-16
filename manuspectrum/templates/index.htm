@@ -241,23 +241,22 @@ Homepage — Prismatic Luminescence aesthetic
                         <a href="{% url 'search_home' %}" class="ms-btn ms-btn-outline" aria-describedby="ms-hero-tool-search">
                             <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> {% trans "Search the database" %}
                         </a>
-                        <p class="ms-hero-tool-note" id="ms-hero-tool-search">{% trans "Every record, advanced filters and the map." %}</p>
+                        <p class="ms-hero-tool-note" id="ms-hero-tool-search">{% trans "Advanced search across every resource." %}</p>
                     </div>
                     <div class="ms-hero-tool">
                         <a href="{% url 'analysis-explorer' %}" class="ms-btn ms-btn-primary" aria-describedby="ms-hero-tool-lab">
                             <i class="fa-solid fa-flask" aria-hidden="true"></i> {% trans "Data Lab" %}
                         </a>
-                        <p class="ms-hero-tool-note" id="ms-hero-tool-lab">{% trans "Browse the documents, compare spectra and images." %}</p>
+                        <p class="ms-hero-tool-note" id="ms-hero-tool-lab">{% trans "Analyses on the page, to compare and export." %}</p>
                     </div>
                 </div>
-                <a href="#project" class="ms-hero-more">{% trans "Learn more" %} <i class="fa-solid fa-arrow-down" aria-hidden="true"></i></a>
             </div>
         </div>
 
         <div class="ms-hero-scroll">
             <a href="#project">
-                <span>{% trans "scroll" %}</span>
-                <div class="ms-hero-scroll-line"></div>
+                <span>{% trans "Learn more" %}</span>
+                <span class="ms-hero-scroll-line" aria-hidden="true"></span>
             </a>
         </div>
     </section>
@@ -597,7 +596,7 @@ Homepage — Prismatic Luminescence aesthetic
         <div class="ms-container">
             <div class="reveal">
                 <div class="ms-section-label">{% trans "Search" %}</div>
-                <h2 class="ms-section-title">{% trans "One search, two tools" %}</h2>
+                <h2 class="ms-section-title">{% trans "Two ways to search" %}</h2>
             </div>
 
             <div class="ms-search-box reveal reveal-d1">
@@ -620,11 +619,6 @@ Homepage — Prismatic Luminescence aesthetic
                     </div>
                 </form>
 
-                <div class="ms-search-ways">
-                    <p class="ms-search-way" id="ms-way-db">{% trans "The database finds every record that matches: documents, analyses, samples, people, places, with advanced filters and a map." %}</p>
-                    <p class="ms-search-way" id="ms-way-lab">{% trans "The Data Lab finds the documents whose analyses match, to see on the page and compare." %}</p>
-                </div>
-
                 <div class="ms-search-chips">
                     <button type="button" class="ms-search-chip" data-term="{% trans 'Vermilion' %}">{% trans "Vermilion" %}</button>
                     <button type="button" class="ms-search-chip" data-term="FORS">FORS</button>
@@ -632,6 +626,25 @@ Homepage — Prismatic Luminescence aesthetic
                     <button type="button" class="ms-search-chip" data-term="{% trans 'parchment' %}">{% trans "Parchment" %}</button>
                     <button type="button" class="ms-search-chip" data-term="{% trans 'illumination' %}">{% trans "Illuminations" %}</button>
                 </div>
+
+                {% with lang=LANGUAGE_CODE|slice:":2" %}
+                <div class="ms-search-ways">
+                    <figure class="ms-search-way ms-search-way--db">
+                        <figcaption id="ms-way-db"><span class="ms-search-way-kicker">{% trans "Advanced search" %}</span>{% trans "Every resource in the database — documents, components, analyses, samples, people, places… — with filters to combine on any field, the map and dates." %}</figcaption>
+                        <img src="{% static 'img/landing/tool-search-'|add:lang|add:'-800.webp' %}"
+                             srcset="{% static 'img/landing/tool-search-'|add:lang|add:'-800.webp' %} 800w, {% static 'img/landing/tool-search-'|add:lang|add:'.webp' %} 1600w"
+                             sizes="(max-width: 640px) calc(100vw - 2.4rem), 410px"
+                             width="1600" height="1000" loading="lazy" decoding="async" alt="{% trans 'Advanced search: MS 59 resources (folios, a place, the manuscript) beside a map of the Bay of Mont-Saint-Michel.' %}">
+                    </figure>
+                    <figure class="ms-search-way ms-search-way--lab">
+                        <figcaption id="ms-way-lab"><span class="ms-search-way-kicker">{% trans "Through the analyses" %}</span>{% trans "Analysed documents open on their folios, each measurement where it was taken; compare spectra and elemental maps, then export." %}</figcaption>
+                        <img src="{% static 'img/landing/tool-lab-'|add:lang|add:'-800.webp' %}"
+                             srcset="{% static 'img/landing/tool-lab-'|add:lang|add:'-800.webp' %} 800w, {% static 'img/landing/tool-lab-'|add:lang|add:'.webp' %} 1600w"
+                             sizes="(max-width: 640px) calc(100vw - 2.4rem), 410px"
+                             width="1600" height="1000" loading="lazy" decoding="async" alt="{% trans 'Data Lab: folio 1v of MS 59 with its analysis zones drawn over the illumination, and the details of a FORS analysis with its reflectance spectrum.' %}">
+                    </figure>
+                </div>
+                {% endwith %}
             </div>
         </div>
     </section>
