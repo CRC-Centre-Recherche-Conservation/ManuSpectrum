@@ -86,17 +86,36 @@ class DiscoverEntryTests(TestCase):
     def setUp(self):
         cache.clear()
 
-    def test_search_form_has_one_submit_and_no_discover_button(self):
+    def _form(self, html):
+        start = html.index('id="ms-search-form"')
+        return html[start : html.index("</form>", start)]
+
+    def test_search_form_offers_the_database_and_the_data_lab(self):
         html = self.client.get("/en/").content.decode()
-        form = html[
-            html.index('id="ms-search-form"') : html.index(
-                "</form>", html.index('id="ms-search-form"')
-            )
-        ]
-        buttons = re.findall(r"<button[^>]*>", form)
-        self.assertEqual(len(buttons), 1)
+        buttons = re.findall(r"<button[^>]*>", self._form(html))
+        self.assertEqual(len(buttons), 2)
         self.assertNotIn("formaction", buttons[0])
+        self.assertIn('aria-describedby="ms-way-db"', buttons[0])
+        self.assertIn('formaction="/en/discover"', buttons[1])
+        self.assertIn('aria-describedby="ms-way-lab"', buttons[1])
+        for described in ("ms-way-db", "ms-way-lab"):
+            self.assertIn(f'id="{described}"', html)
+        self.assertIn('<label class="ms-visually-hidden" for="ms-search-input">', html)
+        self.assertNotIn("ms-search-cta", html)
         self.assertNotIn("ms-search-discover", html)
+
+    def test_search_form_buttons_are_labelled_in_both_languages(self):
+        for lang, db_label, lab_label in (
+            ("en", "Search the database", "Search the Data Lab"),
+            (
+                "fr",
+                "Rechercher dans la base",
+                "Rechercher dans le Laboratoire des données",
+            ),
+        ):
+            form = self._form(self.client.get(f"/{lang}/").content.decode())
+            self.assertRegex(form, rf">\s*{db_label}\s*</button>")
+            self.assertRegex(form, rf">\s*{lab_label}\s*</button>")
 
     def test_hero_offers_the_search_and_the_data_lab(self):
         for lang, search_label, lab_label in (

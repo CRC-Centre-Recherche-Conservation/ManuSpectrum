@@ -597,16 +597,14 @@ Homepage — Prismatic Luminescence aesthetic
         <div class="ms-container">
             <div class="reveal">
                 <div class="ms-section-label">{% trans "Search" %}</div>
-                <h2 class="ms-section-title">{% trans "Search the database" %}</h2>
-                <p class="ms-section-subtitle">
-                    {% trans "Search by material — a pigment, an ink, a support —, analysis technique, written cultural heritage object, or chemical element. Advanced filters available in the search interface." %}
-                </p>
+                <h2 class="ms-section-title">{% trans "One search, two tools" %}</h2>
             </div>
 
             <div class="ms-search-box reveal reveal-d1">
-                <form id="ms-search-form" action="{% url 'search-term' %}" method="get">
+                <form id="ms-search-form" action="{% url 'search-term' %}" method="get" role="search">
+                    <label class="ms-visually-hidden" for="ms-search-input">{% trans "Search terms" %}</label>
                     <div class="ms-search-input-wrapper">
-                        <i class="fa-solid fa-magnifying-glass ms-search-icon"></i>
+                        <i class="fa-solid fa-magnifying-glass ms-search-icon" aria-hidden="true"></i>
                         <input
                             type="text"
                             class="ms-search-input"
@@ -617,9 +615,15 @@ Homepage — Prismatic Luminescence aesthetic
                         >
                     </div>
                     <div class="ms-search-actions">
-                        <button type="submit" class="ms-btn ms-btn-primary ms-search-submit">{% trans "Search" %}</button>
+                        <button type="submit" class="ms-btn ms-btn-outline ms-search-db" aria-describedby="ms-way-db">{% trans "Search the database" %}</button>
+                        <button type="submit" class="ms-btn ms-btn-primary ms-search-lab" formaction="{% url 'analysis-explorer' %}" aria-describedby="ms-way-lab">{% trans "Search the Data Lab" %}</button>
                     </div>
                 </form>
+
+                <div class="ms-search-ways">
+                    <p class="ms-search-way" id="ms-way-db">{% trans "The database finds every record that matches: documents, analyses, samples, people, places, with advanced filters and a map." %}</p>
+                    <p class="ms-search-way" id="ms-way-lab">{% trans "The Data Lab finds the documents whose analyses match, to see on the page and compare." %}</p>
+                </div>
 
                 <div class="ms-search-chips">
                     <button type="button" class="ms-search-chip" data-term="{% trans 'Vermilion' %}">{% trans "Vermilion" %}</button>
@@ -627,12 +631,6 @@ Homepage — Prismatic Luminescence aesthetic
                     <button type="button" class="ms-search-chip" data-term="{% trans 'manuscript' %}">{% trans "Manuscripts" %}</button>
                     <button type="button" class="ms-search-chip" data-term="{% trans 'parchment' %}">{% trans "Parchment" %}</button>
                     <button type="button" class="ms-search-chip" data-term="{% trans 'illumination' %}">{% trans "Illuminations" %}</button>
-                </div>
-
-                <div class="ms-search-cta">
-                    <a href="{% url 'search_home' %}" class="ms-btn ms-btn-primary">
-                        <i class="fa-solid fa-arrow-right"></i> {% trans "Access advanced search" %}
-                    </a>
                 </div>
             </div>
         </div>

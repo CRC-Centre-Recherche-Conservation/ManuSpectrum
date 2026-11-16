@@ -1365,11 +1365,6 @@ a.ms-feature-tag--link i {
 .ms-search .ms-section-title {
     margin-left: auto;
     margin-right: auto;
-}
-
-.ms-search .ms-section-subtitle {
-    margin-left: auto;
-    margin-right: auto;
     margin-bottom: 3rem;
 }
 
@@ -1381,6 +1376,7 @@ a.ms-feature-tag--link i {
 
 #ms-search-form {
     display: flex;
+    flex-wrap: wrap;
     align-items: stretch;
     gap: 0.6rem;
     margin-bottom: 1.5rem;
@@ -1388,12 +1384,14 @@ a.ms-feature-tag--link i {
 
 .ms-search-input-wrapper {
     position: relative;
-    flex: 1;
+    flex: 1 1 100%;
     min-width: 0;
 }
 
 .ms-search-actions {
     display: flex;
+    flex: 1 1 100%;
+    justify-content: center;
     gap: 0.6rem;
 }
 
@@ -1469,8 +1467,38 @@ a.ms-search-chip {
     box-shadow: 0 2px 12px rgba(59,130,246,0.1);
 }
 
-.ms-search-cta {
-    margin-top: 1rem;
+.ms-search-ways {
+    display: grid;
+    gap: 0.5rem;
+    max-width: 40rem;
+    margin: 0 auto 2rem;
+    text-align: left;
+}
+
+.ms-search-way {
+    margin: 0;
+    padding: 0.3rem 0 0.3rem 0.9rem;
+    border-left: 2px solid var(--border);
+    font-size: 0.85rem;
+    font-weight: 300;
+    line-height: 1.6;
+    color: var(--ink-muted);
+    transition: color 0.25s, border-color 0.25s;
+}
+
+.ms-search-box:has(.ms-search-db:is(:hover, :focus-visible)) #ms-way-db,
+.ms-search-box:has(.ms-search-lab:is(:hover, :focus-visible)) #ms-way-lab {
+    color: var(--ink);
+    border-left-color: var(--blue-text);
+}
+
+.ms-search-actions .ms-btn:focus-visible {
+    outline: 2px solid var(--blue-text);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ms-search-way { transition: none; }
 }
 
 
@@ -1510,7 +1538,14 @@ a.ms-search-chip {
 
 @media (max-width: 640px) {
     #ms-search-form { flex-direction: column; }
-    .ms-search-actions { justify-content: center; flex-wrap: wrap; }
+    .ms-search-actions { flex-direction: column; }
+    .ms-search-actions .ms-btn {
+        width: 100%;
+        max-width: none;
+        white-space: normal;
+        text-align: center;
+        justify-content: center;
+    }
 }
 
 @media (max-width: 480px) {

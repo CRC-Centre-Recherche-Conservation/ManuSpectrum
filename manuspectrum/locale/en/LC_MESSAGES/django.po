@@ -2816,16 +2816,6 @@ msgstr "Multispectral"
 msgid "Spectral band scanning and false-color composites via IIIF"
 msgstr "Spectral band scanning and false-color composites via IIIF"
 
-#: templates/index.htm:591 templates/index.htm:593
-msgid ""
-"Search by material — a pigment, an ink, a support —, analysis technique, "
-"written cultural heritage object, or chemical element. Advanced filters "
-"available in the search interface."
-msgstr ""
-"Search by material — a pigment, an ink, a support —, analysis technique, "
-"written cultural heritage object, or chemical element. Advanced filters "
-"available in the search interface."
-
 #: templates/index.htm:604 templates/index.htm:606
 msgid "Search materials, techniques, objects..."
 msgstr "Search materials, techniques, objects..."
@@ -2857,10 +2847,6 @@ msgstr "illumination"
 #: templates/index.htm:619 templates/index.htm:620
 msgid "Illuminations"
 msgstr "Illuminations"
-
-#: templates/index.htm:624 templates/index.htm:635
-msgid "Access advanced search"
-msgstr "Access advanced search"
 
 #: templates/index.htm:637 templates/index.htm:648
 #: templates/views/pages/team.htm:190
@@ -7696,3 +7682,23 @@ msgstr "Browse the documents, compare spectra and images."
 #: templates/views/pages/analysis-explorer.htm
 msgid "ManuSpectrum Data Lab"
 msgstr "ManuSpectrum Data Lab"
+
+#: templates/index.htm
+msgid "One search, two tools"
+msgstr "One search, two tools"
+
+#: templates/index.htm
+msgid "Search terms"
+msgstr "Search terms"
+
+#: templates/index.htm
+msgid "Search the Data Lab"
+msgstr "Search the Data Lab"
+
+#: templates/index.htm
+msgid "The database finds every record that matches: documents, analyses, samples, people, places, with advanced filters and a map."
+msgstr "The database finds every record that matches: documents, analyses, samples, people, places, with advanced filters and a map."
+
+#: templates/index.htm
+msgid "The Data Lab finds the documents whose analyses match, to see on the page and compare."
+msgstr "The Data Lab finds the documents whose analyses match, to see on the page and compare."

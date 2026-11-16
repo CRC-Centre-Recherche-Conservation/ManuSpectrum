@@ -2878,16 +2878,6 @@ msgstr "Multispectral"
 msgid "Spectral band scanning and false-color composites via IIIF"
 msgstr "Balayage de bandes spectrales et composites fausses couleurs via IIIF"
 
-#: templates/index.htm:591 templates/index.htm:593
-msgid ""
-"Search by material — a pigment, an ink, a support —, analysis technique, "
-"written cultural heritage object, or chemical element. Advanced filters "
-"available in the search interface."
-msgstr ""
-"Recherchez par matériau — un pigment, une encre, un support —, technique "
-"d'analyse, objet du patrimoine culturel écrit ou élément chimique. Filtres "
-"avancés disponibles dans l'interface de recherche."
-
 #: templates/index.htm:604 templates/index.htm:606
 msgid "Search materials, techniques, objects..."
 msgstr "Rechercher des matériaux, techniques, objets..."
@@ -2919,10 +2909,6 @@ msgstr "enluminure"
 #: templates/index.htm:619 templates/index.htm:620
 msgid "Illuminations"
 msgstr "Enluminures"
-
-#: templates/index.htm:624 templates/index.htm:635
-msgid "Access advanced search"
-msgstr "Accéder à la recherche avancée"
 
 #: templates/index.htm:637 templates/index.htm:648
 #: templates/views/pages/team.htm:190
@@ -7861,3 +7847,23 @@ msgstr "Feuilleter les documents, comparer spectres et images."
 #: templates/views/pages/analysis-explorer.htm
 msgid "ManuSpectrum Data Lab"
 msgstr "Laboratoire des données de ManuSpectrum"
+
+#: templates/index.htm
+msgid "One search, two tools"
+msgstr "Une recherche, deux outils"
+
+#: templates/index.htm
+msgid "Search terms"
+msgstr "Termes recherchés"
+
+#: templates/index.htm
+msgid "Search the Data Lab"
+msgstr "Rechercher dans le Laboratoire des données"
+
+#: templates/index.htm
+msgid "The database finds every record that matches: documents, analyses, samples, people, places, with advanced filters and a map."
+msgstr "La base trouve toutes les fiches qui correspondent : documents, analyses, échantillons, personnes, lieux, avec filtres avancés et carte."
+
+#: templates/index.htm
+msgid "The Data Lab finds the documents whose analyses match, to see on the page and compare."
+msgstr "Le Laboratoire des données trouve les documents dont les analyses correspondent, à voir sur la page et à comparer."
