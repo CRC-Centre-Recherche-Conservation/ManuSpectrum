@@ -105,7 +105,9 @@ def code_matches(secret, code):
 
 def qr_data_uri(secret, account):
     """A PNG data URI of the provisioning QR code of *secret*."""
-    uri = pyotp.TOTP(secret).provisioning_uri(account, issuer_name=settings.APP_TITLE)
+    uri = pyotp.TOTP(secret).provisioning_uri(
+        name=account, issuer_name=settings.APP_TITLE
+    )
     buffer = io.BytesIO()
     qrcode.make(uri).save(buffer)
     return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
