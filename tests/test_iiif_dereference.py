@@ -21,6 +21,8 @@ A viewer never fetches some of them, each left out for its reason
   never fetches it;
 - the image server (``/iiifserver/``), served by the edge, not by Django
   (``deploy/compose/nginx/tests/test_edge.sh`` checks its CORS);
+- a Data Lab download (``/api/explorer/``: the data package, the series
+  CSV), offered as a link and not served with the IIIF CORS;
 - a page for people (``format`` ``text/html``: the report, the Explorer page)
   and the xyReading documentation (``conformsTo``): a browser navigates to
   them, and the report sits under the language prefix;
@@ -99,6 +101,8 @@ def exempt(url, holder, key):
         return "an embedded resource of the document manifest"
     if holder.get("type") == "Agent":
         return "an agent's id names it; a viewer never fetches it"
+    if url.startswith(f"{BASE}api/explorer/"):
+        return "a Data Lab download (data package, series CSV), offered as a link"
     if holder.get("type") == "Canvas" or holder.get("@type") == "sc:Canvas":
         return "a canvas, embedded in its manifest"
     if url.startswith(f"{BASE}iiifserver/"):
