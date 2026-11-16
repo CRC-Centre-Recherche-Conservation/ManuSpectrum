@@ -119,9 +119,17 @@ class ManifestRouteTests(CorpusCase):
             return self.client.get(f"/iiif/v3/explorer-manifest?{query}", **headers)
 
     def manifest(self, query):
+        if query.count("=") == 1 and query.startswith("document="):
+            return self.built(query)
         response = self.get(query)
         self.assertEqual(response.status_code, 200, query)
         return json.loads(response.content)
+
+    def built(self, query):
+        """The Explorer manifest of the document scope *query*, built in process: its route answers a 301 to the document's own manifest."""
+        scope = resolve_scope(QueryDict(query), "en")
+        with mock.patch(FETCH, side_effect=fetched):
+            return json.loads(json.dumps(build_manifest(scope)))
 
     def pk(self, key):
         return str(self.analyses[key].pk)
@@ -470,13 +478,13 @@ class ManifestRouteTests(CorpusCase):
 
         with mock.patch(FETCH, side_effect=fetched) as fetch:
             response = self.client.get(
-                f"/iiif/v3/explorer-manifest?{self.document_query()}"
+                f"/iiif/v3/explorer-manifest?{self.document_query()}&canvases=all"
             )
             manifest = response.json()
             annotations = self.annotations(manifest)
 
         fetch.assert_not_called()
-        self.assertEqual([c["id"] for c in manifest["items"]], [CANVAS])
+        self.assertEqual(manifest["items"][0]["id"], CANVAS)
         assert_valid_manifest(self, manifest)
         absolute = ids.stored_manifest(stored.globalid)
         self.assertEqual(manifest["items"][0]["partOf"][0]["id"], absolute)
@@ -689,7 +697,6 @@ class ManifestRouteTests(CorpusCase):
     def test_lang_redirects_to_the_canonical_url(self):
         doc = self.documents["open"].pk
         for query, canonical in (
-            (f"document={doc}&lang=fr", f"document={doc}"),
             (f"lang=en&canvases=all&document={doc}", f"document={doc}&canvases=all"),
             (f"lang=xx&ids=an:{self.pk('open')}:-", f"ids=an:{self.pk('open')}:-"),
         ):
@@ -701,6 +708,30 @@ class ManifestRouteTests(CorpusCase):
                     response["Location"], f"/iiif/v3/explorer-manifest?{canonical}"
                 )
 
+    def test_document_query_redirects_301_to_manifest_route(self):
+        doc = self.documents["open"].pk
+
+        response = self.get(self.document_query())
+
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response["Location"], ids.manifest(doc))
+
+    def test_document_with_canvases_all_not_redirected(self):
+        response = self.get(f"{self.document_query()}&canvases=all")
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_lang_and_document_redirects_once(self):
+        doc = self.documents["open"].pk
+
+        response = self.get(f"lang=fr&document={doc}")
+
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response["Location"], ids.manifest(doc))
+
+    def test_a_malformed_document_stays_a_400(self):
+        self.assertEqual(self.get("document=nope").status_code, 400)
+
     def test_lang_redirects_without_resolving_the_scope(self):
         self.embargo(self.documents["embargoed"])
         for subject in (UNKNOWN, self.documents["embargoed"].pk):
@@ -711,10 +742,7 @@ class ManifestRouteTests(CorpusCase):
                     response = self.get(f"lang=fr&document={subject}")
 
                 self.assertEqual(response.status_code, 301)
-                self.assertEqual(
-                    response["Location"],
-                    f"/iiif/v3/explorer-manifest?document={subject}",
-                )
+                self.assertEqual(response["Location"], ids.manifest(subject))
                 bundle.assert_not_called()
 
     def test_several_documents_are_named_by_their_count(self):
@@ -744,8 +772,8 @@ class ManifestRouteTests(CorpusCase):
         self.embargo(self.documents["embargoed"])
 
         responses = (
-            self.get(f"document={UNKNOWN}"),
-            self.get(f"document={self.documents['embargoed'].pk}"),
+            self.get(f"document={UNKNOWN}&canvases=all"),
+            self.get(f"document={self.documents['embargoed'].pk}&canvases=all"),
             self.get(f"ids=an:{self.pk('embargoed')}:-"),
         )
 
@@ -772,16 +800,17 @@ class ManifestRouteTests(CorpusCase):
                     self.assertNotIn("11111111-1111-4111-8111-111111111111", text)
 
     def test_a_visitor_gets_public_no_cache_and_a_304_on_revalidation(self):
-        response = self.get(self.document_query())
+        query = f"{self.document_query()}&canvases=all"
+        response = self.get(query)
 
         self.assertEqual(response["Cache-Control"], "public, no-cache")
-        again = self.get(self.document_query(), HTTP_IF_NONE_MATCH=response["ETag"])
+        again = self.get(query, HTTP_IF_NONE_MATCH=response["ETag"])
         self.assertEqual(again.status_code, 304)
 
     def test_a_connected_readers_manifest_is_private(self):
         self.client.force_login(self.editor)
 
-        response = self.get(self.document_query())
+        response = self.get(f"{self.document_query()}&canvases=all")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Cache-Control"], "private, no-store")
@@ -808,13 +837,11 @@ class ManifestRouteTests(CorpusCase):
 
     @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=0)
     def test_over_the_canvas_bound_answers_413_without_body(self):
-        for query in (self.document_query(), f"{self.document_query()}&canvases=all"):
-            with self.subTest(query=query):
-                response = self.get(query)
+        response = self.get(f"{self.document_query()}&canvases=all")
 
-                self.assertEqual(response.status_code, 413)
-                self.assertEqual(response.content, b"")
-                self.assertEqual(response["Cache-Control"], "private, no-store")
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(response.content, b"")
+        self.assertEqual(response["Cache-Control"], "private, no-store")
 
     def refused_early(self, query, *builders):
         patches = [
@@ -834,7 +861,7 @@ class ManifestRouteTests(CorpusCase):
     @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=0)
     def test_too_many_folios_are_refused_before_names_and_pages_are_built(self):
         self.refused_early(
-            self.document_query(),
+            f"{self.document_query()}&canvases=all",
             "names_of",
             "v3_canvas",
             "canvas_annotations",
@@ -849,6 +876,6 @@ class ManifestRouteTests(CorpusCase):
         self.assertEqual([c["id"] for c in manifest["items"]], [CANVAS])
 
     def test_the_media_type_is_the_iiif_presentation_3_profile(self):
-        response = self.get(self.document_query())
+        response = self.get(f"{self.document_query()}&canvases=all")
 
         self.assertEqual(response["Content-Type"], PROFILE)

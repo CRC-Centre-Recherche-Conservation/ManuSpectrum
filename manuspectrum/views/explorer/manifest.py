@@ -41,6 +41,7 @@ from manuspectrum.iiif.facts import (
     CharacterizationZones,
     aggregate_metadata,
     analysis_aggregate,
+    document_facts,
     listed_source,
     names_of,
 )
@@ -243,13 +244,35 @@ def manifest_offer(scope):
     """What the manifest of *scope* answers: ``"manifest"`` when it holds a folio, ``"tooLarge"`` over
     ``EXPLORER_MANIFEST_MAX_CANVASES`` folios (its route answers 413), None when it holds none.
 
-    Every folio is placed (``canvas_plan``): the bound needs the whole count.
+    A document scope without ``canvases=all`` is the document's own manifest
+    (``iiif.document_manifest``): its pages are the union of the pages that
+    carry a visible analysis zone or identified-material zone, counted from
+    the visitor's facts without building them. Any other scope places every
+    folio (``canvas_plan``): the bound needs the whole count.
     """
+    if scope.kind == "document" and not scope.canvases_all:
+        return _document_offer(scope.subject)
     try:
         plan = canvas_plan(scope)
     except ManifestTooLarge:
         return "tooLarge"
     return "manifest" if plan.canvases else None
+
+
+def _document_offer(subject):
+    pages = set()
+    for kind in ("analysis", "characterization"):
+        found = document_facts(
+            subject, anonymous_user(), kind=kind, positions=frozenset()
+        )
+        if found is None:
+            return None
+        pages |= set(found.page_counts(kind))
+    if not pages:
+        return None
+    if len(pages) > settings.EXPLORER_MANIFEST_MAX_CANVASES:
+        return "tooLarge"
+    return "manifest"
 
 
 def _imaging(scope):

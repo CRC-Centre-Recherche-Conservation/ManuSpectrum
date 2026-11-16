@@ -19,6 +19,7 @@ follow: their ETag is the digest of the body.
 
 import datetime
 import hashlib
+from uuid import UUID
 
 import orjson
 from django.conf import settings
@@ -35,6 +36,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.gzip import gzip_page
 
+from manuspectrum.iiif import ids
 from manuspectrum.iiif.constants import IIIF_MEDIA_TYPE
 from manuspectrum.utils.cache import etag_already_held, renews_csrf_cookie
 from manuspectrum.utils.public_visibility import anonymous_user, is_connected
@@ -342,12 +344,23 @@ class ExplorerShareView(View):
         return _answer(request, lambda: share_payload(scope, datetime.date.today()))
 
 
+def _document_only(query):
+    """The ``document`` value of a query made of that one parameter and optionally ``lang``; None otherwise."""
+    if set(query) - {"lang"} != {"document"} or len(query.getlist("document")) != 1:
+        return None
+    return query["document"]
+
+
 @method_decorator(iiif_cors, name="dispatch")
 @method_decorator(gzip_page, name="dispatch")
 class ExplorerManifestView(View):
     """``GET /iiif/v3/explorer-manifest?ids=|document=|project=[&canvases=all]``: the IIIF v3 manifest of a scope, in every language.
 
-    A ``lang`` parameter answers a 301 to the canonical URL of the scope
+    A query made of one ``document`` (and optionally ``lang``) answers a 301 to
+    the document's own manifest (``ids.manifest``, ``/iiif/v3/manifest/<uuid>``)
+    before anything is resolved; a malformed uuid answers a bodyless 400. Any
+    other query, ``canvases``, ``project`` and ``ids`` included, is the scope's
+    manifest. A ``lang`` parameter answers a 301 to the canonical URL of the scope
     (``canonical_query``, without it) before anything is resolved: the
     target then answers for the scope. Malformed scope parameters answer a
     bodyless 400, a scope with nothing visible or placing no canvas the
@@ -358,6 +371,12 @@ class ExplorerManifestView(View):
 
     def get(self, request):
         language = settings.LANGUAGE_CODE
+        document = _document_only(request.GET)
+        if document is not None:
+            try:
+                return HttpResponsePermanentRedirect(ids.manifest(UUID(document)))
+            except ValueError:
+                return HttpResponseBadRequest()
         try:
             if "lang" in request.GET:
                 return HttpResponsePermanentRedirect(

@@ -32,6 +32,9 @@ from django.utils.translation import ngettext
 from django.views import View
 from zipstream import ZIP_STORED, ZipStream
 
+from manuspectrum.iiif import document_manifest, facts
+from manuspectrum.utils.data_version import data_version
+from manuspectrum.utils.public_visibility import anonymous_user
 from manuspectrum.iiif.sources import (
     canvas_index,
     canvases_of,
@@ -161,6 +164,27 @@ def csv_bytes(columns, rows):
 
 def _json_bytes(value):
     return orjson.dumps(value, option=orjson.OPT_INDENT_2)
+
+
+def _manifest_of(scope):
+    """The ``manifest.json`` of *scope*, pages embedded; None when it holds no canvas.
+
+    A document scope without ``canvases=all`` ships the document's own
+    manifest (``iiif.document_manifest``), built for the visitor; any other
+    scope ships ``build_manifest``. Raises ``ManifestTooLarge`` over the
+    canvas bound.
+    """
+    if scope.kind != "document" or scope.canvases_all:
+        return build_manifest(scope, embed=True)
+    reader, version = anonymous_user(), data_version()
+    return document_manifest.build(
+        scope.subject,
+        reader,
+        version=version,
+        subject=facts.subject_of(scope.subject, reader, version),
+        embed=True,
+        read=scope.read_manifest,
+    )
 
 
 def analysis_zones(scope):
@@ -866,7 +890,7 @@ def _assemble(scope, exported_at):
     notes = []
     with translation.override(language):
         try:
-            manifest = build_manifest(scope, embed=True)
+            manifest = _manifest_of(scope)
             if manifest is not None:
                 built.append(
                     _built(

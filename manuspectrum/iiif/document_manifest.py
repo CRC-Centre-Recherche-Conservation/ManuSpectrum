@@ -1,6 +1,6 @@
 """The Presentation 3 manifest of a Document or Component, built from the facts of its annotation collections.
 
-- One ``ManifestReader`` serves the build: it is passed as ``read=`` to both
+- One ``ManifestReader`` serves the build (the caller's, else a new one): it is passed as ``read=`` to both
   ``document_facts(…, positions=frozenset())`` calls (kinds ``analysis`` and
   ``characterization``), so the source manifest is read once.
 - The kept pages are the union of both ``page_counts``, ascending. None, or
@@ -88,14 +88,15 @@ def _explorer_links(resource_id, subject, version):
     return homepage, rendering
 
 
-def build(resource_id, reader, *, version, subject, embed=False, api=3):
+def build(resource_id, reader, *, version, subject, embed=False, api=3, read=None):
     """The manifest of *resource_id* for *reader*; None without a readable source manifest or kept page.
 
     *api* 2 answers the same manifest as Presentation 2.1 (``v2.manifest``).
+    *read* is the caller's ``ManifestReader``, else a new one for this build.
     Raises ``ManifestTooLarge`` over ``EXPLORER_MANIFEST_MAX_CANVASES`` pages.
     """
     resource_id = str(resource_id)
-    read = sources.ManifestReader()
+    read = read or sources.ManifestReader()
     built = {
         kind: facts.document_facts(
             resource_id,
