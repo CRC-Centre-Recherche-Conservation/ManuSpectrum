@@ -151,6 +151,10 @@ class DiscoverEntryTests(TestCase):
             if path != "/en/discover":
                 self.assertNotIn('href="/en/discover" aria-current="page"', html, path)
 
+    def test_header_search_link_scrolls_to_the_homepage_section(self):
+        html = self.client.get("/en/about/team").content.decode()
+        self.assertEqual(html.count('<a href="/en/#search"'), 2)
+
 
 class AboutPagePayloadTests(TestCase):
     """The About pages render their own script strings, not the Arches ``javascript.htm`` payload."""
