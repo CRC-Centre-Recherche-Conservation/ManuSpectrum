@@ -5,6 +5,7 @@ Usage:
 """
 
 import copy
+import functools
 import json
 from unittest import mock
 from urllib.parse import parse_qs, quote, urlsplit
@@ -18,6 +19,8 @@ from django.test.utils import CaptureQueriesContext
 from arches.app.models.models import IIIFManifest, TileModel
 
 from manuspectrum.iiif import facts, ids
+from manuspectrum.iiif.manifest import canvas_annotations, page_filter
+from manuspectrum.iiif.sources import v3_canvas as source_v3_canvas
 from manuspectrum.views.explorer.manifest import (
     build_manifest,
     canvas_plan,
@@ -96,6 +99,14 @@ IMAGING_SOURCE = {
         v3_canvas(LAYERS[1], "Cu", "https://example.org/iiif/image/cu"),
     ],
 }
+
+
+def resolve_digest(case, query):
+    return resolve_scope(QueryDict(query), "en").digest
+
+
+def v3_source_canvas(mint_id):
+    return source_v3_canvas(SOURCE["items"][0], SOURCE, MANIFEST, mint_id)
 
 
 def fetched(url):
@@ -480,7 +491,11 @@ class ManifestRouteTests(CorpusCase):
             f"ids=an:{self.pk('open')}:-,an:{self.pk('embargoed')}:-"
         )
 
-        (unlocated,) = manifest["metadata"]
+        (unlocated,) = [
+            m
+            for m in manifest["metadata"]
+            if m["label"]["en"] == ["Without a position on the image"]
+        ]
         self.assertEqual(unlocated["label"]["fr"], ["Sans position sur l'image"])
         self.assertEqual(
             unlocated["value"]["en"],
@@ -499,7 +514,7 @@ class ManifestRouteTests(CorpusCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.content, b"")
 
-    def test_the_layers_of_a_stored_imaging_manifest_are_part_of_its_iiif_route(self):
+    def test_a_stored_imaging_manifest_is_referenced_by_its_iiif_route(self):
         stored = IIIFManifest.objects.create(
             label="maXRF X01", url="", manifest=copy.deepcopy(IMAGING_SOURCE)
         )
@@ -512,9 +527,8 @@ class ManifestRouteTests(CorpusCase):
         manifest = self.manifest(self.document_query())
 
         part_of = ids.stored_manifest(stored.globalid)
-        self.assertEqual([c["id"] for c in manifest["items"][1:]], list(LAYERS))
-        for layer in manifest["items"][1:]:
-            self.assertEqual(layer["partOf"], [{"id": part_of, "type": "Manifest"}])
+        self.assertEqual([c["id"] for c in manifest["items"]], [CANVAS])
+        self.assertIn(f'href="{part_of}"', self.imaging_value(manifest))
         response = Client().get(
             part_of[len(settings.PUBLIC_SERVER_ADDRESS) - 1 :],
             HTTP_ORIGIN="https://viewer.example",
@@ -522,24 +536,95 @@ class ManifestRouteTests(CorpusCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Access-Control-Allow-Origin"], "*")
 
-    def test_imaging_layers_are_canvases_with_one_range_per_analysis(self):
+    def imaging_value(self, manifest):
+        (entry,) = [
+            m for m in manifest["metadata"] if m["label"]["en"] == ["Chemical imaging"]
+        ]
+        return entry["value"]["none"][0]
+
+    def test_no_layer_canvas_and_no_analysis_range(self):
         self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)
 
         manifest = self.manifest(self.document_query())
 
-        self.assertEqual([c["id"] for c in manifest["items"]], [CANVAS, *LAYERS])
+        self.assertEqual([c["id"] for c in manifest["items"]], [CANVAS])
         self.assertEqual(
-            [c["label"] for c in manifest["items"][1:]],
-            [{"none": ["f. 1v — Pb"]}, {"none": ["f. 1v — Cu"]}],
+            [r["id"] for r in manifest["structures"]],
+            [
+                ids.explorer_part(
+                    resolve_digest(self, self.document_query()),
+                    "range",
+                    str(self.documents["open"].pk),
+                )
+            ],
         )
-        for layer in manifest["items"][1:]:
-            self.assertEqual(layer["partOf"], [{"id": IMAGING, "type": "Manifest"}])
-        ranges = {r["label"]["en"][0]: r for r in manifest["structures"]}
-        self.assertEqual(ranges["X01 — f. 1v"]["label"], {"en": ["X01 — f. 1v"]})
-        self.assertEqual(
-            [i["id"] for i in ranges["X01 — f. 1v"]["items"]], list(LAYERS)
-        )
+        self.assertIn(f'href="{IMAGING}"', self.imaging_value(manifest))
         assert_valid_manifest(self, manifest)
+
+    def test_narrowed_layer_selection_lists_imaging_manifest(self):
+        self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)
+
+        manifest = self.manifest(f"ids=im:{self.pk('open')}:0")
+
+        self.assertEqual(self.imaging_value(manifest).count(IMAGING), 1)
+        self.assertEqual([c["id"] for c in manifest["items"]], [CANVAS])
+
+    def test_selection_label_counts_analyses_and_pages(self):
+        manifest = self.manifest(
+            f"ids=an:{self.pk('open')}:-,an:{self.pk('on_document')}:-"
+        )
+
+        self.assertEqual(
+            manifest["label"]["en"], ["Selection of 2 analyses on 1 page of Ms 59"]
+        )
+
+    def test_header_has_provider_required_statement_rendering(self):
+        query = f"ids=an:{self.pk('open')}:-"
+
+        manifest = self.manifest(query)
+
+        self.assertEqual(manifest["requiredStatement"]["label"]["en"], ["Attribution"])
+        (provider,) = manifest["provider"]
+        self.assertEqual(provider["type"], "Agent")
+        self.assertEqual(
+            [(r["id"], r["format"]) for r in manifest["rendering"]],
+            [
+                (ids.explorer_export(query), "application/zip"),
+                (ids.explorer_series(query), "text/csv"),
+            ],
+        )
+        self.assertEqual(manifest["summary"]["en"], ["1 analysis on 1 page of Ms 59"])
+        techniques = [m["label"]["en"] for m in manifest.get("metadata", [])]
+        self.assertNotIn(["Chemical imaging"], techniques)
+        self.assertEqual(
+            manifest["thumbnail"][0]["id"],
+            "https://example.org/iiif/image/f1v/full/!300,300/0/default.jpg",
+        )
+
+    def test_a_document_scope_offers_no_series_rendering(self):
+        manifest = self.manifest(self.document_query())
+
+        self.assertEqual(
+            [r["format"] for r in manifest["rendering"]], ["application/zip"]
+        )
+
+    def test_folio_canvases_byte_identical(self):
+        query = f"ids=an:{self.pk('open')}:-"
+        scope = resolve_scope(QueryDict(query), "en")
+        mint_id = functools.partial(ids.explorer_part, scope.digest)
+        document = str(self.documents["open"].pk)
+
+        manifest = self.manifest(query)
+
+        expected = v3_source_canvas(mint_id)
+        expected["annotations"] = canvas_annotations(
+            document,
+            "Ms 59",
+            1,
+            "f. 1v",
+            [("analysis", page_filter([self.pk("open")], False))],
+        )
+        self.assertEqual(manifest["items"], [expected])
 
     def test_one_range_per_document(self):
         manifest = self.manifest(self.document_query())
@@ -595,12 +680,9 @@ class ManifestRouteTests(CorpusCase):
         manifest = self.manifest(f"ids=an:{self.pk('open')}:-")
 
         self.assertEqual(
-            manifest["label"],
-            {
-                "en": ["Selection of 1 page of Ms 59"],
-                "fr": ["Sélection de 1 folio de Ms 59"],
-            },
+            manifest["label"]["en"], ["Selection of 1 analysis on 1 page of Ms 59"]
         )
+        self.assertEqual(set(manifest["label"]), {"en", "fr"})
         (reference,) = manifest["items"][0]["annotations"]
         self.assertEqual(set(reference["label"]), {"en", "fr"})
 
@@ -641,7 +723,8 @@ class ManifestRouteTests(CorpusCase):
         )
 
         self.assertEqual(
-            manifest["label"]["en"], ["Selection of 1 page of 2 documents"]
+            manifest["label"]["en"],
+            ["Selection of 2 analyses on 1 page of 2 documents"],
         )
 
     def test_a_project_manifest_is_named_by_its_project(self):
@@ -711,15 +794,17 @@ class ManifestRouteTests(CorpusCase):
         default = self.manifest(self.document_query())
         open_only = self.manifest(f"ids=an:{self.pk('on_document')}:-")
 
-        self.assertEqual(default["summary"]["en"], ["Contains drafts"])
-        self.assertEqual(default["summary"]["fr"], ["Contient des brouillons"])
+        self.assertTrue(default["summary"]["en"][0].endswith(". Contains drafts"))
+        self.assertTrue(
+            default["summary"]["fr"][0].endswith(". Contient des brouillons")
+        )
         self.assertNotIn("X01 — f. 1v", json.dumps(default, ensure_ascii=False))
         labels = [
             a["label"]["en"][0] for a in self.annotations(default, client=Client())
         ]
         self.assertNotIn("X01 — f. 1v", labels)
         self.assertIn("X03 — draft", labels)
-        self.assertNotIn("summary", open_only)
+        self.assertNotIn("Contains drafts", json.dumps(open_only["summary"]))
 
     @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=0)
     def test_over_the_canvas_bound_answers_413_without_body(self):
@@ -755,24 +840,13 @@ class ManifestRouteTests(CorpusCase):
             "canvas_annotations",
         )
 
-    @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=2)
-    def test_too_many_layers_are_refused_before_any_canvas_is_built(self):
-        self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)
-
-        self.refused_early(
-            self.document_query(),
-            "names_of",
-            "v3_canvas",
-            "canvas_annotations",
-        )
-
-    @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=3)
-    def test_folios_and_layers_at_the_bound_are_served(self):
+    @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=1)
+    def test_imaging_layers_do_not_count_against_the_canvas_bound(self):
         self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)
 
         manifest = self.manifest(self.document_query())
 
-        self.assertEqual([c["id"] for c in manifest["items"]], [CANVAS, *LAYERS])
+        self.assertEqual([c["id"] for c in manifest["items"]], [CANVAS])
 
     def test_the_media_type_is_the_iiif_presentation_3_profile(self):
         response = self.get(self.document_query())

@@ -426,13 +426,6 @@ def v3_canvas(source_canvas, source_manifest, manifest_url, mint_id):
     return canvas
 
 
-def layer_canvas(source_canvas, imaging_manifest, imaging_url, label, mint_id):
-    """One image layer of an imaging manifest as a v3 canvas: its source id, the lngString *label*, part of *imaging_url*."""
-    canvas = v3_canvas(source_canvas, imaging_manifest, imaging_url, mint_id)
-    canvas["label"] = label
-    return canvas
-
-
 def absolute_url(url):
     """*url* as an absolute URL: a site path is prefixed with ``PUBLIC_SERVER_ADDRESS``; None when it is neither."""
     url = str(url or "")

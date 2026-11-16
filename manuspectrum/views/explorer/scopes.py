@@ -513,6 +513,16 @@ def citation_home(scope, analysis_id, projects, label_of):
     return Home(home, label_of[home]["value"], permalink(home))
 
 
+def spectra_count(content):
+    """The readable spectra (``xy`` files) of the analyses of *content*."""
+    return sum(
+        1
+        for row in content.rows
+        for e in content.files[row["id"]]
+        if e.get("dataKind") == "xy" and e.get("role") == "readable"
+    )
+
+
 def scope_content(scope, keys=()):
     """``ScopeContent`` of *scope*; *keys* are further ``ROLES`` read with the content keys."""
     bundle, language = scope.bundle, scope.language
@@ -651,12 +661,7 @@ def share_payload(scope, accessed):
     content = scope_content(scope)
     rows = content.rows
     files_count, bytes_count, over = export_size(stored_sizes(scope, content))
-    spectra = sum(
-        1
-        for row in rows
-        for e in content.files[row["id"]]
-        if e.get("dataKind") == "xy" and e.get("role") == "readable"
-    )
+    spectra = spectra_count(content)
     split = _per_document(scope) if over else {}
     offer = manifest_offer(scope)
     documents = []

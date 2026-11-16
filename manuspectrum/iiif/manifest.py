@@ -121,24 +121,70 @@ def canvas_annotations(document_id, name, n, canvas_label, references, embedded=
     return found
 
 
-def manifest_label(kind, folios, documents, subject_name, document_name):
-    """The project's name for a project scope, else « Selection of n pages of <document> » or « … of k documents »."""
+def _counted(analyses, materials):
+    """« 81 analyses and 3 identified materials »; a zero count is left out, None when both are zero."""
+    parts = []
+    if analyses:
+        parts.append(
+            lang.ngettext_map(
+                "%(count)d analysis",
+                "%(count)d analyses",
+                analyses,
+                count=analyses,
+            )
+        )
+    if materials:
+        parts.append(
+            lang.ngettext_map(
+                "%(count)d identified material",
+                "%(count)d identified materials",
+                materials,
+                count=materials,
+            )
+        )
+    if len(parts) == 2:
+        return lang.gettext_map(
+            "%(first)s and %(second)s", first=parts[0], second=parts[1]
+        )
+    return parts[0] if parts else None
+
+
+def manifest_label(
+    kind,
+    folios,
+    documents,
+    subject_name,
+    document_name,
+    analyses=0,
+    materials=0,
+):
+    """The project's name for a project scope, else « Selection of 2 analyses on 10 pages of <document> » or « … of k documents ».
+
+    The counts are those of ``summary_counts``; without an analysis or an
+    identified material the analyses count is written as zero.
+    """
     if kind == "project":
         return subject_name
+    what = _counted(analyses, materials) or lang.ngettext_map(
+        "%(count)d analysis", "%(count)d analyses", 0, count=0
+    )
+    pages_map = lang.ngettext_map(
+        "%(count)d page", "%(count)d pages", folios, count=folios
+    )
     if documents == 1:
-        return lang.ngettext_map(
-            "Selection of %(count)d page of %(document)s",
-            "Selection of %(count)d pages of %(document)s",
-            folios,
-            count=folios,
+        return lang.gettext_map(
+            "Selection of %(what)s on %(pages)s of %(document)s",
+            what=what,
+            pages=pages_map,
             document=document_name,
         )
-    return lang.ngettext_map(
-        "Selection of %(count)d page of %(documents)d documents",
-        "Selection of %(count)d pages of %(documents)d documents",
-        folios,
-        count=folios,
-        documents=documents,
+    return lang.gettext_map(
+        "Selection of %(what)s on %(pages)s of %(documents)s",
+        what=what,
+        pages=pages_map,
+        documents=lang.ngettext_map(
+            "%(count)d document", "%(count)d documents", documents, count=documents
+        ),
     )
 
 
@@ -253,25 +299,7 @@ def summary_counts(analyses, materials, pages_count, document_name, documents):
 
     *document_name* names the one document; with several, « k documents ».
     """
-    parts = []
-    if analyses:
-        parts.append(
-            lang.ngettext_map(
-                "%(count)d analysis",
-                "%(count)d analyses",
-                analyses,
-                count=analyses,
-            )
-        )
-    if materials:
-        parts.append(
-            lang.ngettext_map(
-                "%(count)d identified material",
-                "%(count)d identified materials",
-                materials,
-                count=materials,
-            )
-        )
+    what = _counted(analyses, materials)
     pages_map = lang.ngettext_map(
         "%(count)d page", "%(count)d pages", pages_count, count=pages_count
     )
@@ -281,13 +309,8 @@ def summary_counts(analyses, materials, pages_count, document_name, documents):
         document = lang.ngettext_map(
             "%(count)d document", "%(count)d documents", documents, count=documents
         )
-    if not parts:
+    if not what:
         return pages_map
-    what = parts[0]
-    if len(parts) == 2:
-        what = lang.gettext_map(
-            "%(first)s and %(second)s", first=parts[0], second=parts[1]
-        )
     return lang.gettext_map(
         "%(what)s on %(pages)s of %(document)s",
         what=what,

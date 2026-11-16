@@ -22,7 +22,7 @@ from manuspectrum.iiif.manifest import (
     required_statement,
     summary_counts,
 )
-from manuspectrum.iiif.sources import canvas_thumbnail, layer_canvas, v3_canvas
+from manuspectrum.iiif.sources import canvas_thumbnail, v3_canvas
 from tests.iiif_schema import assert_valid_manifest
 
 SOURCE_V3 = "https://example.org/iiif/ms59/manifest"
@@ -30,8 +30,6 @@ CANVAS_V3 = "https://example.org/iiif/ms59/canvas/f1v"
 SOURCE_V2 = "https://example.org/iiif/ms60/manifest.json"
 CANVAS_V2 = "https://example.org/iiif/ms60/canvas/p1"
 SERVICE_V2 = "https://example.org/iiif/image/ms60-p1"
-IMAGING = "https://example.org/iiif/maxrf/manifest"
-LAYER = "https://example.org/iiif/maxrf/canvas/pb"
 DIGEST = "0123456789ab"
 
 CANVAS_3 = {
@@ -234,17 +232,6 @@ class ManifestPartsTests(SimpleTestCase):
         ):
             with self.subTest(source=source):
                 self.assertEqual(canvas["partOf"], [{"id": source, "type": "Manifest"}])
-
-    def test_a_layer_canvas_keeps_its_source_id_and_takes_the_folio_label(self):
-        layer = dict(CANVAS_3, id=LAYER, label={"none": ["Pb"]})
-        imaging = dict(MANIFEST_3, id=IMAGING, items=[layer])
-
-        canvas = layer_canvas(layer, imaging, IMAGING, {"en": ["f. 1v — Pb"]}, mint_id)
-
-        self.assertEqual(canvas["id"], LAYER)
-        self.assertEqual(canvas["label"], {"en": ["f. 1v — Pb"]})
-        self.assertEqual(canvas["partOf"], [{"id": IMAGING, "type": "Manifest"}])
-        self.assert_valid([canvas])
 
     def test_minted_ids_live_under_the_explorer_manifest_path(self):
         self.assertEqual(

@@ -789,19 +789,15 @@ msgstr "Éléments : %(elements)s"
 msgid "%(name)s (%(qualifier)s)"
 msgstr "%(name)s (%(qualifier)s)"
 
-#: iiif/manifest.py:128
+#: iiif/manifest.py:210
 #, python-format
-msgid "Selection of %(count)d page of %(document)s"
-msgid_plural "Selection of %(count)d pages of %(document)s"
-msgstr[0] "Sélection de %(count)d folio de %(document)s"
-msgstr[1] "Sélection de %(count)d folios de %(document)s"
+msgid "Selection of %(what)s on %(pages)s of %(document)s"
+msgstr "Sélection de %(what)s sur %(pages)s de %(document)s"
 
-#: iiif/manifest.py:135
+#: iiif/manifest.py:218
 #, python-format
-msgid "Selection of %(count)d page of %(documents)d documents"
-msgid_plural "Selection of %(count)d pages of %(documents)d documents"
-msgstr[0] "Sélection de %(count)d folio de %(documents)d documents"
-msgstr[1] "Sélection de %(count)d folios de %(documents)d documents"
+msgid "Selection of %(what)s on %(pages)s of %(documents)s"
+msgstr "Sélection de %(what)s sur %(pages)s de %(documents)s"
 
 #: iiif/manifest.py:172
 msgid "Without a position on the image"
