@@ -1,15 +1,11 @@
 import { parseNodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
+import type { DocumentTarget } from "@/manuspectrum/pages/AnalysisExplorer/selection/place.ts";
 import type { LinkedGraph } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/graph.ts";
 import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 import type { RelationLevel } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/related.ts";
 
-/** A document screen to open: its folio and the record it focuses. */
-export interface DocumentTarget {
-    document: string;
-    canvas: string | null;
-    focus: { kind: "analysis" | "characterization"; id: string };
-}
+export type { DocumentTarget } from "@/manuspectrum/pages/AnalysisExplorer/selection/place.ts";
 
 const FOCUS_KIND = {
     an: "analysis",

@@ -1,4 +1,8 @@
 import {
+    analysisPlace,
+    materialPlaces,
+} from "@/manuspectrum/pages/AnalysisExplorer/selection/place.ts";
+import {
     analysisNode,
     canvasNode,
     cellNode,
@@ -167,10 +171,7 @@ function addAnalysis(builder: GraphBuilder, hit: AnalysisHit): NodeId {
     for (const material of hit.materials) {
         builder.link(record, materialValueNode(material.id), material.label);
     }
-    builder.place(builder.itemPlaces, record, {
-        document: hit.document.id,
-        canvas: hit.canvas,
-    });
+    builder.place(builder.itemPlaces, record, analysisPlace(hit));
     return record;
 }
 
@@ -208,13 +209,8 @@ function addCharacterization(
     }
     const canvas = summary.zone?.canvas ?? null;
     if (canvas) builder.link(record, canvasNode(canvas));
-    for (const object of summary.objects) {
-        if (object.model !== "component") {
-            builder.place(builder.itemPlaces, record, {
-                document: object.id,
-                canvas,
-            });
-        }
+    for (const place of materialPlaces(summary)) {
+        builder.place(builder.itemPlaces, record, place);
     }
     return record;
 }
