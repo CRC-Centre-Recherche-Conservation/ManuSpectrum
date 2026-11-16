@@ -427,7 +427,7 @@ describe("AnalysisExplorer", () => {
         useExplorerStore().openDocument(uuid(1));
         await flushPromises();
         expect(bar.querySelector(".return-pill")?.textContent).toContain(
-            "Explorer home",
+            "Data Lab home",
         );
         expect(wrapper.find(".corpus-document .return-pill").exists()).toBe(
             false,

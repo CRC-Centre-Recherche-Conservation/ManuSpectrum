@@ -9,10 +9,10 @@
         <nav class="ms-nav" aria-label="{% trans 'Main Navigation' %}">
             <ul class="ms-nav-links">
                 <li><a href="{% url 'root' %}#project">{% trans "The Project" %}</a></li>
-                <li><a href="{% url 'root' %}#explore">{% trans "Explore" %}</a></li>
+                <li><a href="{% url 'root' %}#explore">{% trans "Overview" %}</a></li>
                 <li><a href="{% url 'root' %}#analyses">{% trans "Analyses" %}</a></li>
                 <li><a href="{% url 'root' %}#search">{% trans "Search" %}</a></li>
-                <li><a href="{% url 'analysis-explorer' %}"{% if request.resolver_match.url_name == 'analysis-explorer' %} aria-current="page"{% endif %}>{% trans "Discover the data" %}</a></li>
+                <li><a href="{% url 'analysis-explorer' %}"{% if request.resolver_match.url_name == 'analysis-explorer' %} aria-current="page"{% endif %}>{% trans "Data Lab" %}</a></li>
 
                 <li class="ms-nav-dropdown" id="ms-about-dropdown">
                     <button type="button" class="ms-nav-dropdown-toggle" aria-haspopup="true" aria-expanded="false" aria-controls="ms-about-menu">
@@ -85,10 +85,10 @@
 
 <div class="ms-mobile-nav" id="ms-mobile-nav">
     <a href="{% url 'root' %}#project" class="ms-mobile-nav-link">{% trans "The Project" %}</a>
-    <a href="{% url 'root' %}#explore" class="ms-mobile-nav-link">{% trans "Explore" %}</a>
+    <a href="{% url 'root' %}#explore" class="ms-mobile-nav-link">{% trans "Overview" %}</a>
     <a href="{% url 'root' %}#analyses" class="ms-mobile-nav-link">{% trans "Analyses" %}</a>
     <a href="{% url 'root' %}#search" class="ms-mobile-nav-link">{% trans "Search" %}</a>
-    <a href="{% url 'analysis-explorer' %}" class="ms-mobile-nav-link"{% if request.resolver_match.url_name == 'analysis-explorer' %} aria-current="page"{% endif %}>{% trans "Discover the data" %}</a>
+    <a href="{% url 'analysis-explorer' %}" class="ms-mobile-nav-link"{% if request.resolver_match.url_name == 'analysis-explorer' %} aria-current="page"{% endif %}>{% trans "Data Lab" %}</a>
 
     <button type="button" class="ms-mobile-nav-group-toggle" aria-expanded="false" aria-controls="ms-mobile-about">
         {% trans "About" %} <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>

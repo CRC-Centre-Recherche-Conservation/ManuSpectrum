@@ -236,19 +236,27 @@ Homepage — Prismatic Luminescence aesthetic
             </p>
 
             <div class="ms-hero-actions">
-                <a href="{% url 'search_home' %}" class="ms-btn ms-btn-primary">
-                    <i class="fa-solid fa-magnifying-glass"></i> {% trans "Explore the database" %}
-                </a>
-                <a href="#project" class="ms-btn ms-btn-ghost">
-                    {% trans "Learn more" %} <i class="fa-solid fa-arrow-down"></i>
-                </a>
+                <div class="ms-hero-tools">
+                    <div class="ms-hero-tool">
+                        <a href="{% url 'search_home' %}" class="ms-btn ms-btn-outline" aria-describedby="ms-hero-tool-search">
+                            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> {% trans "Search the database" %}
+                        </a>
+                        <p class="ms-hero-tool-note" id="ms-hero-tool-search">{% trans "Advanced search across every resource." %}</p>
+                    </div>
+                    <div class="ms-hero-tool">
+                        <a href="{% url 'analysis-explorer' %}" class="ms-btn ms-btn-primary" aria-describedby="ms-hero-tool-lab">
+                            <i class="fa-solid fa-flask" aria-hidden="true"></i> {% trans "Data Lab" %}
+                        </a>
+                        <p class="ms-hero-tool-note" id="ms-hero-tool-lab">{% trans "Analyses on the folio, to compare and export." %}</p>
+                    </div>
+                </div>
             </div>
         </div>
 
         <div class="ms-hero-scroll">
             <a href="#project">
-                <span>{% trans "scroll" %}</span>
-                <div class="ms-hero-scroll-line"></div>
+                <span>{% trans "Learn more" %}</span>
+                <span class="ms-hero-scroll-line" aria-hidden="true"></span>
             </a>
         </div>
     </section>
@@ -285,12 +293,6 @@ Homepage — Prismatic Luminescence aesthetic
                     <p>
                         {% trans "ManuSpectrum is part of the Biblissima+ programme, an observatory of ancient written cultures. Within Cluster 2, the objective is to archive, share and enable searching of materials analysis data from the community, ensuring interoperability with the Biblissima portal and written cultural heritage standards." %}
                     </p>
-                    <div class="ms-feature-tags">
-                        <span class="ms-feature-tag">CIDOC-CRM</span>
-                        <span class="ms-feature-tag">IIIF</span>
-                        <span class="ms-feature-tag">CRMsci</span>
-                        <span class="ms-feature-tag">AAT Getty</span>
-                    </div>
                 </div>
             </div>
 
@@ -337,11 +339,11 @@ Homepage — Prismatic Luminescence aesthetic
                     <div class="ms-stat-value">MALDI</div>
                     <div class="ms-stat-label">{% trans "Proteomics (MALDI-TOF)" %}</div>
                 </div>
-                <div class="ms-stat reveal reveal-d9">
-                    <div class="ms-stat-icon"><i class="fa-solid fa-ellipsis"></i></div>
-                    <div class="ms-stat-value">+</div>
-                    <div class="ms-stat-label">{% trans "And many more" %}</div>
-                </div>
+                <a class="ms-stat ms-stat--more reveal reveal-d9" href="{% url 'analysis-explorer' %}?screen=results">
+                    <span class="ms-stat-more-sign" aria-hidden="true">+</span>
+                    <span class="ms-stat-label">{% trans "And many more" %}</span>
+                    <span class="ms-stat-more-link">{% trans "Browse the corpus" %} <span aria-hidden="true">→</span></span>
+                </a>
             </div>
 
             <!-- Showcase carousel -->
@@ -403,7 +405,7 @@ Homepage — Prismatic Luminescence aesthetic
     <section class="ms-section ms-features" id="explore">
         <div class="ms-container">
             <div class="reveal">
-                <div class="ms-section-label">{% trans "Explore" %}</div>
+                <div class="ms-section-label">{% trans "Overview" %}</div>
                 <h2 class="ms-section-title">{% trans "What you can discover" %}</h2>
                 <p class="ms-section-subtitle">
                     {% trans "A platform designed to explore physicochemical analyses on historical documents, correlating data with their written cultural heritage context." %}
@@ -483,6 +485,7 @@ Homepage — Prismatic Luminescence aesthetic
                     <div class="ms-compare-divider" aria-hidden="true"></div>
                     <input type="range" class="ms-compare-range ms-visually-hidden" min="0" max="100" value="100"
                            aria-label="{% trans 'Position of the divide between the mercury map and the calcium map' %}">
+                    <div class="ms-compare-hint" aria-hidden="true"><span aria-hidden="true">↔</span> {% trans "Drag to compare Hg / Ca" %}</div>
                     <div class="ms-gallery-overlay">
                         <div class="ms-gallery-tag">{% trans "X-ray Fluorescence" %}</div>
                         <h4>{% trans "Macro-XRF mapping" %}</h4>
@@ -499,7 +502,7 @@ Homepage — Prismatic Luminescence aesthetic
                         <button type="button" class="ms-analysis-point ms-apoint-4" aria-controls="ms-analysis-popup-4" aria-expanded="false" aria-label="{% blocktrans with n=4 %}Analysis point {{ n }}{% endblocktrans %}"></button>
                     </div>
                     <div class="ms-analysis-popup ms-analysis-popup--blue" id="ms-analysis-popup-1" hidden>
-                        <div class="ms-popup-header"><span class="ms-popup-technique">XRF</span><span class="ms-popup-id">P-01</span></div>
+                        <div class="ms-popup-header"><span class="ms-popup-technique">XRF</span><span class="ms-popup-example">{% trans "Example" %}</span><span class="ms-popup-id">P-01</span></div>
                         <div class="ms-popup-spectrum"><svg viewBox="0 0 232 46" preserveAspectRatio="none" aria-hidden="true">
                             <path class="ms-popup-area" d="M0,42 8,41 18,39 25,34 30,38 38,36 45,10 50,32 55,38 62,35 70,39 80,18 88,36 95,34 105,38 115,40 130,39 150,40 175,39 200,40 232,41 L232,44 0,44Z"/>
                             <path class="ms-popup-line" d="M0,42 8,41 18,39 25,34 30,38 38,36 45,10 50,32 55,38 62,35 70,39 80,18 88,36 95,34 105,38 115,40 130,39 150,40 175,39 200,40 232,41"/>
@@ -512,7 +515,7 @@ Homepage — Prismatic Luminescence aesthetic
                         <div class="ms-popup-elements"><span class="ms-popup-element ms-popup-element--primary">Cu</span><span class="ms-popup-element ms-popup-element--primary">S</span><span class="ms-popup-element">Ca</span><span class="ms-popup-element">Si</span><span class="ms-popup-element">Fe</span></div>
                     </div>
                     <div class="ms-analysis-popup ms-analysis-popup--red" id="ms-analysis-popup-2" hidden>
-                        <div class="ms-popup-header"><span class="ms-popup-technique">Raman</span><span class="ms-popup-id">P-02</span></div>
+                        <div class="ms-popup-header"><span class="ms-popup-technique">Raman</span><span class="ms-popup-example">{% trans "Example" %}</span><span class="ms-popup-id">P-02</span></div>
                         <div class="ms-popup-spectrum"><svg viewBox="0 0 232 46" preserveAspectRatio="none" aria-hidden="true">
                             <path class="ms-popup-area" d="M0,40 15,39 30,40 42,38 47,6 51,38 60,40 75,39 85,40 91,24 96,40 110,39 125,40 140,39 165,30 172,39 195,40 220,39 232,40 L232,44 0,44Z"/>
                             <path class="ms-popup-line" d="M0,40 15,39 30,40 42,38 47,6 51,38 60,40 75,39 85,40 91,24 96,40 110,39 125,40 140,39 165,30 172,39 195,40 220,39 232,40"/>
@@ -525,7 +528,7 @@ Homepage — Prismatic Luminescence aesthetic
                         <div class="ms-popup-elements"><span class="ms-popup-element ms-popup-element--primary">Hg</span><span class="ms-popup-element ms-popup-element--primary">S</span><span class="ms-popup-element">Pb</span></div>
                     </div>
                     <div class="ms-analysis-popup ms-analysis-popup--green" id="ms-analysis-popup-3" hidden>
-                        <div class="ms-popup-header"><span class="ms-popup-technique">FORS</span><span class="ms-popup-id">P-03</span></div>
+                        <div class="ms-popup-header"><span class="ms-popup-technique">FORS</span><span class="ms-popup-example">{% trans "Example" %}</span><span class="ms-popup-id">P-03</span></div>
                         <div class="ms-popup-spectrum"><svg viewBox="0 0 232 46" preserveAspectRatio="none" aria-hidden="true">
                             <path class="ms-popup-area" d="M0,40 20,39 40,38 60,34 80,26 100,16 120,10 140,8 160,10 180,13 200,15 220,16 232,17 L232,44 0,44Z"/>
                             <path class="ms-popup-line" d="M0,40 20,39 40,38 60,34 80,26 100,16 120,10 140,8 160,10 180,13 200,15 220,16 232,17"/>
@@ -538,7 +541,7 @@ Homepage — Prismatic Luminescence aesthetic
                         <div class="ms-popup-elements"><span class="ms-popup-element ms-popup-element--primary">Au</span><span class="ms-popup-element">Ag</span><span class="ms-popup-element">Cu</span></div>
                     </div>
                     <div class="ms-analysis-popup ms-analysis-popup--purple" id="ms-analysis-popup-4" hidden>
-                        <div class="ms-popup-header"><span class="ms-popup-technique">XRF</span><span class="ms-popup-id">P-04</span></div>
+                        <div class="ms-popup-header"><span class="ms-popup-technique">XRF</span><span class="ms-popup-example">{% trans "Example" %}</span><span class="ms-popup-id">P-04</span></div>
                         <div class="ms-popup-spectrum"><svg viewBox="0 0 232 46" preserveAspectRatio="none" aria-hidden="true">
                             <path class="ms-popup-area" d="M0,40 12,39 22,38 30,34 38,10 43,34 52,38 62,36 70,20 76,35 85,38 100,39 120,38 140,39 160,26 168,38 185,39 210,40 232,40 L232,44 0,44Z"/>
                             <path class="ms-popup-line" d="M0,40 12,39 22,38 30,34 38,10 43,34 52,38 62,36 70,20 76,35 85,38 100,39 120,38 140,39 160,26 168,38 185,39 210,40 232,40"/>
@@ -588,28 +591,22 @@ Homepage — Prismatic Luminescence aesthetic
         <div class="ms-container">
             <div class="reveal">
                 <div class="ms-section-label">{% trans "Search" %}</div>
-                <h2 class="ms-section-title">{% trans "Explore the database" %}</h2>
-                <p class="ms-section-subtitle">
-                    {% trans "Search by material — a pigment, an ink, a support —, analysis technique, written cultural heritage object, or chemical element. Advanced filters available in the search interface." %}
-                </p>
+                <h2 class="ms-section-title">{% trans "Two ways to search" %}</h2>
             </div>
 
             <div class="ms-search-box reveal reveal-d1">
-                <form id="ms-search-form" action="{% url 'search-term' %}" method="get">
+                <form id="ms-search-form" action="{% url 'search-term' %}" method="get" role="search">
+                    <label class="ms-visually-hidden" for="ms-search-input">{% trans "Search terms" %}</label>
                     <div class="ms-search-input-wrapper">
-                        <i class="fa-solid fa-magnifying-glass ms-search-icon"></i>
+                        <i class="fa-solid fa-magnifying-glass ms-search-icon" aria-hidden="true"></i>
                         <input
                             type="text"
                             class="ms-search-input"
                             id="ms-search-input"
                             name="q"
-                            placeholder="{% trans "Search materials, techniques, objects..." %}"
+                            placeholder="{% trans "Material, technique, object…" %}"
                             autocomplete="off"
                         >
-                    </div>
-                    <div class="ms-search-actions">
-                        <button type="submit" class="ms-btn ms-btn-primary ms-search-submit">{% trans "Search" %}</button>
-                        <button type="submit" class="ms-btn ms-search-discover" formaction="{% url 'analysis-explorer' %}">{% trans "Discover the data" %}</button>
                     </div>
                 </form>
 
@@ -621,11 +618,30 @@ Homepage — Prismatic Luminescence aesthetic
                     <button type="button" class="ms-search-chip" data-term="{% trans 'illumination' %}">{% trans "Illuminations" %}</button>
                 </div>
 
-                <div class="ms-search-cta">
-                    <a href="{% url 'search_home' %}" class="ms-btn ms-btn-primary">
-                        <i class="fa-solid fa-arrow-right"></i> {% trans "Access advanced search" %}
-                    </a>
+                {% with lang=LANGUAGE_CODE|slice:":2" %}
+                <div class="ms-search-ways">
+                    <figure class="ms-search-way ms-search-way--db">
+                        <button type="submit" form="ms-search-form" class="ms-btn ms-btn-outline ms-search-db" aria-describedby="ms-way-db">{% trans "Search the database" %}</button>
+                        <figcaption id="ms-way-db"><span class="ms-search-way-kicker">{% trans "Advanced search" %}</span>{% trans "Every resource in the database — documents, components, analyses, samples, people, places… — with filters to combine on any field, the map and dates." %}</figcaption>
+                        <a class="ms-search-way-shot" href="{% url 'search_home' %}">
+                            <img src="{% static 'img/landing/tool-search-'|add:lang|add:'-800.webp' %}"
+                                 srcset="{% static 'img/landing/tool-search-'|add:lang|add:'-800.webp' %} 800w, {% static 'img/landing/tool-search-'|add:lang|add:'.webp' %} 1600w"
+                                 sizes="(max-width: 640px) calc(100vw - 2.4rem), 410px"
+                                 width="1600" height="1000" loading="lazy" decoding="async" alt="{% trans 'Advanced search: MS 59 resources (folios, a place, the manuscript) beside a map of the Bay of Mont-Saint-Michel.' %}">
+                        </a>
+                    </figure>
+                    <figure class="ms-search-way ms-search-way--lab">
+                        <button type="submit" form="ms-search-form" class="ms-btn ms-btn-primary ms-search-lab" formaction="{% url 'analysis-explorer' %}" aria-describedby="ms-way-lab">{% trans "Search the Data Lab" %}</button>
+                        <figcaption id="ms-way-lab"><span class="ms-search-way-kicker">{% trans "Through the analyses" %}</span>{% trans "Analysed documents open on their folios, each measurement where it was taken; compare spectra and elemental maps, then export." %}</figcaption>
+                        <a class="ms-search-way-shot" href="{% url 'analysis-explorer' %}">
+                            <img src="{% static 'img/landing/tool-lab-'|add:lang|add:'-800.webp' %}"
+                                 srcset="{% static 'img/landing/tool-lab-'|add:lang|add:'-800.webp' %} 800w, {% static 'img/landing/tool-lab-'|add:lang|add:'.webp' %} 1600w"
+                                 sizes="(max-width: 640px) calc(100vw - 2.4rem), 410px"
+                                 width="1600" height="1000" loading="lazy" decoding="async" alt="{% trans 'Data Lab: folio 1v of MS 59 with its analysis zones drawn over the illumination, and the details of a FORS analysis with its reflectance spectrum.' %}">
+                        </a>
+                    </figure>
                 </div>
+                {% endwith %}
             </div>
         </div>
     </section>

@@ -1174,9 +1174,9 @@ describe("CorpusDocument", () => {
         await flushPromises();
         const homeLabels = wrapper
             .findAll("button")
-            .filter((button) => button.text() === "Explorer home");
+            .filter((button) => button.text() === "Data Lab home");
         expect(homeLabels).toHaveLength(1);
-        expect(wrapper.text()).not.toContain("Back to the explorer home");
+        expect(wrapper.text()).not.toContain("Back to the Data Lab home");
     });
 
     it("goes back to the results it was opened from", async () => {
@@ -1320,7 +1320,7 @@ describe("CorpusDocument", () => {
         const { wrapper, store } = mountScreen();
         await flushPromises();
         const back = wrapper.find(".return-pill");
-        expect(back.text()).toBe("Explorer home");
+        expect(back.text()).toBe("Data Lab home");
         await back.trigger("click");
         expect(store.corpusScreen).toBe("home");
     });

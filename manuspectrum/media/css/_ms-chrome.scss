@@ -46,6 +46,7 @@
     --ink: #1a1a2e;
     --ink-muted: #4a4a5e;
     --ink-dim: #8a8a9a;
+    --ink-soft: #6b6b7b;
 
     // Gold accent — adjusted for light background
     --accent: #a07d1c;
@@ -484,8 +485,9 @@ img { max-width: 100%; height: auto; display: block; }
 .ms-nav-auth a:hover { color: var(--accent); }
 
 .ms-nav-auth .ms-btn-signin {
-    background: var(--ink);
-    color: var(--bg);
+    background: transparent;
+    border: 1px solid var(--ink);
+    color: var(--ink);
     border-radius: 6px;
     padding: 0.5rem 1.3rem;
     font-weight: 500;
@@ -495,8 +497,8 @@ img { max-width: 100%; height: auto; display: block; }
 }
 
 .ms-nav-auth .ms-btn-signin:hover {
-    background: var(--spectral-5);
-    color: #fff;
+    background: var(--bg-warm);
+    color: var(--ink);
     transform: translateY(-1px);
 }
 
@@ -974,7 +976,7 @@ img { max-width: 100%; height: auto; display: block; }
     font-size: 0.72rem;
     letter-spacing: 0.2em;
     text-transform: uppercase;
-    color: var(--ink-dim);
+    color: var(--ink-soft);
     margin-bottom: 3rem;
 }
 
@@ -984,7 +986,7 @@ img { max-width: 100%; height: auto; display: block; }
     justify-content: center;
     flex-wrap: wrap;
     gap: 2.5rem 3rem;
-    max-width: 1100px;
+    max-width: 880px;
     margin: 0 auto;
 }
 
@@ -993,7 +995,7 @@ img { max-width: 100%; height: auto; display: block; }
     align-items: center;
     justify-content: center;
     transition: opacity 0.4s, filter 0.4s, transform 0.3s var(--ease-out-expo);
-    opacity: 0.4;
+    opacity: 0.7;
     filter: grayscale(100%);
 }
 
@@ -1010,6 +1012,7 @@ img { max-width: 100%; height: auto; display: block; }
 
 // Ministere de la Culture — white background mandatory (charte)
 .ms-partner-link--culture {
+    filter: none;
     background: #fff;
     border-radius: 6px;
     padding: 10px 14px;
@@ -1036,10 +1039,10 @@ img { max-width: 100%; height: auto; display: block; }
 .ms-partner-link--biblissima img { height: 50px; }
 
 // Huma-Num
-.ms-partner-link--humanum img { height: 45px; }
+.ms-partner-link--humanum img { height: 50px; }
 
 // Arches
-.ms-partner-link--arches img { height: 45px; }
+.ms-partner-link--arches img { height: 38px; }
 
 
 // ============================================================
@@ -1092,7 +1095,7 @@ img { max-width: 100%; height: auto; display: block; }
     }
     .ms-header .ms-nav { margin-right: 0.25rem; flex-shrink: 0; }
     .ms-lang-switch { font-size: 11px; }
-    .ms-lang-switch a { padding: 0.3rem 0.35rem; }
+    .ms-lang-switch a { padding: 0.6rem 0.5rem; }
     .ms-hamburger {
         box-sizing: border-box;
         width: 44px;

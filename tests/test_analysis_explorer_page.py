@@ -11,13 +11,15 @@ DOCUMENT_ID = "5fbfe388-8acc-4da8-8f8a-382bd2b6ad17"
 class AnalysisExplorerPageTests(TestCase):
     def test_page_renders_in_both_languages_with_both_labels(self):
         for lang, title in (
-            ("en", "Analysis explorer"),
-            ("fr", "Explorateur d'analyses"),
+            ("en", "Data Lab"),
+            ("fr", "Laboratoire des données"),
         ):
             response = self.client.get(f"/{lang}/discover")
             self.assertEqual(response.status_code, 200, lang)
             html = response.content.decode()
-            self.assertIn(title, html, lang)
+            self.assertIn(
+                f'<h1 class="ms-explorer-intro__title">{title}</h1>', html, lang
+            )
             self.assertIn('id="ms-explorer-app"', html, lang)
 
     def test_bare_path_redirects_to_a_language(self):
@@ -155,7 +157,7 @@ class AnalysisExplorerPageTests(TestCase):
             reverse("analysis-explorer") + "?view=compare"
         ).content.decode()
         self.assertIn(
-            '<p class="ms-explorer-loading__status" role="status" aria-live="polite">Loading the explorer…</p>',
+            '<p class="ms-explorer-loading__status" role="status" aria-live="polite">Loading the Data Lab…</p>',
             home,
         )
         self.assertIn("ms-explorer-loading--home", home)
