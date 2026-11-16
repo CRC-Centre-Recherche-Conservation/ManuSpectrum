@@ -285,3 +285,105 @@ class SubjectTests(FactsCase):
             doc.manifest_url,
             f"{settings.PUBLIC_SERVER_ADDRESS}iiif/manifest/{stored.globalid}",
         )
+
+
+XRF = "https://example.org/concepts/xrf"
+
+
+class AggregateTests(FactsCase):
+    def setUp(self):
+        super().setUp()
+        for key in ("open", "on_document"):
+            self.tile(
+                self.analyses[key],
+                "analysis_technique_used",
+                self.reference_value(XRF, "XRF", "FRX"),
+            )
+        self.tile_values(
+            self.analyses["open"],
+            "analysis",
+            analysis_start_date="2024-03-05",
+            analysis_end_date="2024-03-06",
+        )
+        self.tile_values(
+            self.analyses["on_document"],
+            "analysis",
+            analysis_start_date="2024-02-01",
+            analysis_end_date="2024-02-02",
+        )
+
+    def aggregate(self, reader=None, *keys):
+        keys = keys or ("open", "on_document")
+        return facts.analysis_aggregate(
+            [str(self.analyses[k].pk) for k in keys], fresh(reader or self.anonymous)
+        )
+
+    def test_aggregate_dedupes_techniques_without_uri(self):
+        for key in ("open", "on_document"):
+            value = self.reference_value("urn:x", "Raman", "Raman")
+            value[0]["uri"] = ""
+            self.tile(self.analyses[key], "analysis_technique_used", value)
+
+        found = self.aggregate()
+
+        self.assertEqual(
+            [c.labels.get("en") for c in found.techniques if c.uri is None],
+            [["Raman"]],
+        )
+
+    def test_aggregate_distinct_techniques_projects_dates(self):
+        found = self.aggregate()
+
+        self.assertEqual(len(found.techniques), 1)
+        self.assertEqual(found.techniques[0].uri, XRF)
+        self.assertEqual(found.dates, ("2024-02-01", "2024-03-06"))
+        self.assertEqual(
+            set(found.projects),
+            {str(self.projects["main"].pk), str(self.projects["side"].pk)},
+        )
+        self.assertEqual(
+            found.projects[0], str(self.projects["main"].pk), "sorted by name"
+        )
+
+    def test_aggregate_follows_reader_nodegroups(self):
+        node = self.nodes[("analysis", "analysis_technique_used")]
+        self.restrict_nodegroup(node.nodegroup_id, self.editor)
+
+        self.assertEqual(self.aggregate().techniques, ())
+        self.assertEqual(len(self.aggregate(self.editor).techniques), 1)
+
+    def test_aggregate_drops_hidden_project(self):
+        self.hide_project(self.projects["side"])
+
+        self.assertEqual(
+            self.aggregate().projects,
+            (str(self.projects["main"].pk),),
+        )
+
+    def test_aggregate_metadata_links_concept_uri(self):
+        entries = facts.aggregate_metadata(self.aggregate())
+        by_label = {e["label"]["en"][0]: e["value"] for e in entries}
+
+        self.assertIn(f'href="{XRF}"', by_label["Techniques"]["en"][0])
+        self.assertEqual(by_label["Dates"], {"none": ["2024-02-01 – 2024-03-06"]})
+        self.assertEqual(len(by_label["Projects"]["en"]), 2)
+        self.assertIn(
+            f"/report/{self.projects['main'].pk}", by_label["Projects"]["en"][0]
+        )
+
+    def test_aggregate_metadata_leaves_out_empty_entries(self):
+        self.assertEqual(
+            facts.aggregate_metadata(facts.Aggregate((), (), None, ())), []
+        )
+
+    def test_document_facts_found_lists_unlocated_analyses(self):
+        doc = facts.document_facts(
+            str(self.documents["open"].pk), fresh(self.anonymous), positions=frozenset()
+        )
+
+        self.assertEqual(doc.analyses, ())
+        self.assertIn(str(self.analyses["open"].pk), doc.found)
+        self.assertIn(str(self.analyses["on_document"].pk), doc.found)
+
+    def test_document_facts_source_url(self):
+        self.assertEqual(self.facts().source_url, MANIFEST)
