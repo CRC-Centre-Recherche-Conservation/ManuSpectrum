@@ -7831,3 +7831,59 @@ msgstr ""
 "Si vous estimez que vos droits Informatique et Libertés ne sont pas "
 "respectés, vous avez la possibilité d'introduire une réclamation en "
 "ligne auprès de la CNIL,"
+
+#: iiif/document_manifest.py
+msgid "Data package (ZIP)"
+msgstr "Paquet de données (ZIP)"
+
+#: iiif/facts.py
+msgid "Techniques"
+msgstr "Techniques"
+
+#: iiif/facts.py
+msgid "Projects"
+msgstr "Projets"
+
+#: iiif/manifest.py
+#, python-format
+msgid "%(count)d identified material"
+msgid_plural "%(count)d identified materials"
+msgstr[0] "%(count)d matériau identifié"
+msgstr[1] "%(count)d matériaux identifiés"
+
+#: iiif/manifest.py
+#, python-format
+msgid "%(first)s and %(second)s"
+msgstr "%(first)s et %(second)s"
+
+#: iiif/manifest.py
+#, python-format
+msgid "%(count)d page"
+msgid_plural "%(count)d pages"
+msgstr[0] "%(count)d folio"
+msgstr[1] "%(count)d folios"
+
+#: iiif/manifest.py
+#, python-format
+msgid "%(count)d document"
+msgid_plural "%(count)d documents"
+msgstr[0] "%(count)d document"
+msgstr[1] "%(count)d documents"
+
+#: iiif/manifest.py
+#, python-format
+msgid "Data published by %(name)s; the rights of each image are stated on its canvas."
+msgstr "Données publiées par %(name)s ; les droits de chaque image sont indiqués sur son canevas."
+
+#: iiif/manifest.py
+#, python-format
+msgid "%(what)s on %(pages)s of %(document)s"
+msgstr "%(what)s sur %(pages)s de %(document)s"
+
+#: iiif/manifest.py
+msgid "Chemical imaging"
+msgstr "Imagerie chimique"
+
+#: views/explorer/manifest.py
+msgid "Series (CSV)"
+msgstr "Séries (CSV)"

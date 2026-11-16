@@ -7666,3 +7666,59 @@ msgstr ""
 "If you consider that your rights under the French Data Protection Act "
 "(Informatique et Libertés) are not respected, you can lodge a complaint "
 "online with the CNIL,"
+
+#: iiif/document_manifest.py
+msgid "Data package (ZIP)"
+msgstr "Data package (ZIP)"
+
+#: iiif/facts.py
+msgid "Techniques"
+msgstr "Techniques"
+
+#: iiif/facts.py
+msgid "Projects"
+msgstr "Projects"
+
+#: iiif/manifest.py
+#, python-format
+msgid "%(count)d identified material"
+msgid_plural "%(count)d identified materials"
+msgstr[0] "%(count)d identified material"
+msgstr[1] "%(count)d identified materials"
+
+#: iiif/manifest.py
+#, python-format
+msgid "%(first)s and %(second)s"
+msgstr "%(first)s and %(second)s"
+
+#: iiif/manifest.py
+#, python-format
+msgid "%(count)d page"
+msgid_plural "%(count)d pages"
+msgstr[0] "%(count)d page"
+msgstr[1] "%(count)d pages"
+
+#: iiif/manifest.py
+#, python-format
+msgid "%(count)d document"
+msgid_plural "%(count)d documents"
+msgstr[0] "%(count)d document"
+msgstr[1] "%(count)d documents"
+
+#: iiif/manifest.py
+#, python-format
+msgid "Data published by %(name)s; the rights of each image are stated on its canvas."
+msgstr "Data published by %(name)s; the rights of each image are stated on its canvas."
+
+#: iiif/manifest.py
+#, python-format
+msgid "%(what)s on %(pages)s of %(document)s"
+msgstr "%(what)s on %(pages)s of %(document)s"
+
+#: iiif/manifest.py
+msgid "Chemical imaging"
+msgstr "Chemical imaging"
+
+#: views/explorer/manifest.py
+msgid "Series (CSV)"
+msgstr "Series (CSV)"
