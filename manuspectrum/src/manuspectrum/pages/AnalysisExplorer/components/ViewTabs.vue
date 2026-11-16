@@ -36,7 +36,7 @@ function select(view: ExplorerView): void {
     <nav
         v-if="views.length > 1"
         class="view-tabs"
-        :aria-label="$gettext('Explorer views')"
+        :aria-label="$gettext('Data Lab views')"
     >
         <ul class="list">
             <li

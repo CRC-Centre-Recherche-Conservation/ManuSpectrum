@@ -58,7 +58,7 @@ function goHome(): void {
             class="home"
             @click="goHome"
         >
-            <span>{{ $gettext("Back to the explorer home") }}</span>
+            <span>{{ $gettext("Back to the Data Lab home") }}</span>
         </button>
     </div>
 </template>

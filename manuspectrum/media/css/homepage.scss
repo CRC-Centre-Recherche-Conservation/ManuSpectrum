@@ -367,18 +367,6 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
 }
 
 // Buttons
-.ms-btn-ghost {
-    background: transparent;
-    color: var(--ink-muted);
-    border: 1px solid var(--border-hover);
-}
-
-.ms-btn-ghost:hover {
-    color: var(--ink);
-    border-color: var(--ink-dim);
-    transform: translateY(-2px);
-}
-
 .ms-hero-tools {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 18rem));
@@ -397,6 +385,10 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
     justify-content: center;
     padding: 0.85rem 1.5rem;
     text-align: center;
+}
+
+.ms-hero-tool .ms-btn-primary {
+    border: 1px solid transparent;
 }
 
 .ms-hero-tool-note {

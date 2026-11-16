@@ -1958,11 +1958,11 @@ msgstr ""
 msgid ""
 "The Dataset is never decimated, whatever its size. mirador-xyviewer does not"
 " plot a Dataset larger than 5 MB; such a file still plots in the "
-"ManuSpectrum Explorer."
+"ManuSpectrum Data Lab."
 msgstr ""
 "The Dataset is never decimated, whatever its size. mirador-xyviewer does not"
 " plot a Dataset larger than 5 MB; such a file still plots in the "
-"ManuSpectrum Explorer."
+"ManuSpectrum Data Lab."
 
 #: templates/iiif/xy_reading_1.htm:51
 msgid "Restricted data (IIIF Authorization)"
@@ -6293,14 +6293,14 @@ msgstr "Every visitor"
 msgid ""
 "Image servers of the institutions that hold the manuscripts (IIIF). When the"
 " images of a document are not hosted by ManuSpectrum, your browser loads "
-"them from the IIIF server of the holding institution, in the Explorer and on"
+"them from the IIIF server of the holding institution, in the Data Lab and on"
 " resource pages: for example the Bibliothèque nationale de France (Gallica),"
 " the Université de Caen Normandie, e-codices, the Vatican Library or the "
 "BVMM of the IRHT. The list depends on the documents described."
 msgstr ""
 "Image servers of the institutions that hold the manuscripts (IIIF). When the"
 " images of a document are not hosted by ManuSpectrum, your browser loads "
-"them from the IIIF server of the holding institution, in the Explorer and on"
+"them from the IIIF server of the holding institution, in the Data Lab and on"
 " resource pages: for example the Bibliothèque nationale de France (Gallica),"
 " the Université de Caen Normandie, e-codices, the Vatican Library or the "
 "BVMM of the IRHT. The list depends on the documents described."
@@ -6316,13 +6316,13 @@ msgstr ""
 #: templates/views/pages/privacy.htm:94
 msgid ""
 "OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
-"the base map, loaded whenever a map is shown: the Map view of the Explorer, "
+"the base map, loaded whenever a map is shown: the Map view of the Data Lab, "
 "the search map, the maps of the resource reports and the map widgets of the "
 "editing tools. OpenFreeMap is served through Cloudflare (United States). "
 "Data © OpenMapTiles, © OpenStreetMap contributors."
 msgstr ""
 "OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
-"the base map, loaded whenever a map is shown: the Map view of the Explorer, "
+"the base map, loaded whenever a map is shown: the Map view of the Data Lab, "
 "the search map, the maps of the resource reports and the map widgets of the "
 "editing tools. OpenFreeMap is served through Cloudflare (United States). "
 "Data © OpenMapTiles, © OpenStreetMap contributors."
@@ -7604,8 +7604,8 @@ msgid "an RO-Crate with the series, the metadata and the citations of a project,
 msgstr "an RO-Crate with the series, the metadata and the citations of a project, a document or a selection."
 
 #: templates/views/pages/data.htm
-msgid "the Explorer manifest of a scope, to open in Mirador or any IIIF viewer."
-msgstr "the Explorer manifest of a scope, to open in Mirador or any IIIF viewer."
+msgid "the Data Lab manifest of a scope, to open in Mirador or any IIIF viewer."
+msgstr "the Data Lab manifest of a scope, to open in Mirador or any IIIF viewer."
 
 #: templates/views/pages/data.htm
 msgid "Annotations and content states"
@@ -7640,8 +7640,8 @@ msgid "the JSON-LD context and the documentation of the reading of an XY series.
 msgstr "the JSON-LD context and the documentation of the reading of an XY series."
 
 #: templates/views/pages/data.htm
-msgid "A machine API with personal read-only access tokens (OAuth, MCP) is planned. Until then, the addresses under /{lang}/api/explorer/ (for example /en/api/explorer/search) and /api/spectrum-preview/ serve the Explorer page only; they are not a contract and answer other requests with a 403."
-msgstr "A machine API with personal read-only access tokens (OAuth, MCP) is planned. Until then, the addresses under /{lang}/api/explorer/ (for example /en/api/explorer/search) and /api/spectrum-preview/ serve the Explorer page only; they are not a contract and answer other requests with a 403."
+msgid "A machine API with personal read-only access tokens (OAuth, MCP) is planned. Until then, the addresses under /{lang}/api/explorer/ (for example /en/api/explorer/search) and /api/spectrum-preview/ serve the Data Lab page only; they are not a contract and answer other requests with a 403."
+msgstr "A machine API with personal read-only access tokens (OAuth, MCP) is planned. Until then, the addresses under /{lang}/api/explorer/ (for example /en/api/explorer/search) and /api/spectrum-preview/ serve the Data Lab page only; they are not a contract and answer other requests with a 403."
 
 #: templates/views/pages/data.htm
 msgid ""

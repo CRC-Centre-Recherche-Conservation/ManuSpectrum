@@ -17,7 +17,9 @@ class AnalysisExplorerPageTests(TestCase):
             response = self.client.get(f"/{lang}/discover")
             self.assertEqual(response.status_code, 200, lang)
             html = response.content.decode()
-            self.assertIn(title, html, lang)
+            self.assertIn(
+                f'<h1 class="ms-explorer-intro__title">{title}</h1>', html, lang
+            )
             self.assertIn('id="ms-explorer-app"', html, lang)
 
     def test_bare_path_redirects_to_a_language(self):

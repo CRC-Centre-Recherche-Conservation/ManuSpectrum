@@ -659,7 +659,7 @@ const resultsLabel = computed(() => {
 const backLabel = computed(() =>
     store.documentOrigin === "results"
         ? resultsLabel.value
-        : $gettext("Explorer home"),
+        : $gettext("Data Lab home"),
 );
 const drawerVisible = computed({
     get: () => narrow.value && cardOpen.value,
