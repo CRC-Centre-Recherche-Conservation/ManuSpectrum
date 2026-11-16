@@ -2,9 +2,9 @@
 {% load i18n %}
 {% load render_bundle from webpack_loader %}
 {% block page_title %}{% trans "Reuse the data" %} — ManuSpectrum{% endblock %}
-{% block page_description %}{% trans "The public products of the Analysis Explorer, meant to be downloaded, cited and opened in other tools." %}{% endblock %}
+{% block page_description %}{% trans "The public products of the Data Lab, meant to be downloaded, cited and opened in other tools." %}{% endblock %}
 {% block og_title %}{% trans "Reuse the data" %} — ManuSpectrum{% endblock %}
-{% block og_description %}{% trans "The public products of the Analysis Explorer, meant to be downloaded, cited and opened in other tools." %}{% endblock %}
+{% block og_description %}{% trans "The public products of the Data Lab, meant to be downloaded, cited and opened in other tools." %}{% endblock %}
 {% block structured_data %}
 <script type="application/ld+json">
 {
@@ -28,7 +28,7 @@
 <div class="ms-section-rule"><div class="spectral-line-thin"></div></div>
 
 <section class="ms-ge-reuse" id="reuse">
-    <p class="ms-ge-reuse-lead">{% trans "The Analysis Explorer is built on public products meant to be downloaded, cited and opened in other tools. Use these; they are stable and documented." %}</p>
+    <p class="ms-ge-reuse-lead">{% trans "The Data Lab is built on public products meant to be downloaded, cited and opened in other tools. Use these; they are stable and documented." %}</p>
     <ul class="ms-ge-reuse-list">
         <li><strong>{% trans "Data package" %}</strong> — {% trans "an RO-Crate with the series, the metadata and the citations of a project, a document or a selection." %} <code>{% url 'explorer-export' %}?project=&lt;uuid&gt;</code> <code>?document=&lt;uuid&gt;</code> <code>?ids=&lt;key&gt;,&lt;key&gt;</code></li>
         <li><strong>{% trans "IIIF manifest" %}</strong> — {% trans "the Explorer manifest of a scope, to open in Mirador or any IIIF viewer." %} <code>{% url 'iiif-v3-explorer-manifest' %}?document=&lt;uuid&gt;</code></li>

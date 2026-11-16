@@ -236,12 +236,21 @@ Homepage — Prismatic Luminescence aesthetic
             </p>
 
             <div class="ms-hero-actions">
-                <a href="{% url 'search_home' %}" class="ms-btn ms-btn-primary">
-                    <i class="fa-solid fa-magnifying-glass"></i> {% trans "Explore the database" %}
-                </a>
-                <a href="#project" class="ms-btn ms-btn-ghost">
-                    {% trans "Learn more" %} <i class="fa-solid fa-arrow-down"></i>
-                </a>
+                <div class="ms-hero-tools">
+                    <div class="ms-hero-tool">
+                        <a href="{% url 'search_home' %}" class="ms-btn ms-btn-outline" aria-describedby="ms-hero-tool-search">
+                            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> {% trans "Search the database" %}
+                        </a>
+                        <p class="ms-hero-tool-note" id="ms-hero-tool-search">{% trans "Every record, advanced filters and the map." %}</p>
+                    </div>
+                    <div class="ms-hero-tool">
+                        <a href="{% url 'analysis-explorer' %}" class="ms-btn ms-btn-primary" aria-describedby="ms-hero-tool-lab">
+                            <i class="fa-solid fa-flask" aria-hidden="true"></i> {% trans "Data Lab" %}
+                        </a>
+                        <p class="ms-hero-tool-note" id="ms-hero-tool-lab">{% trans "Browse the documents, compare spectra and images." %}</p>
+                    </div>
+                </div>
+                <a href="#project" class="ms-hero-more">{% trans "Learn more" %} <i class="fa-solid fa-arrow-down" aria-hidden="true"></i></a>
             </div>
         </div>
 
@@ -588,7 +597,7 @@ Homepage — Prismatic Luminescence aesthetic
         <div class="ms-container">
             <div class="reveal">
                 <div class="ms-section-label">{% trans "Search" %}</div>
-                <h2 class="ms-section-title">{% trans "Explore the database" %}</h2>
+                <h2 class="ms-section-title">{% trans "Search the database" %}</h2>
                 <p class="ms-section-subtitle">
                     {% trans "Search by material — a pigment, an ink, a support —, analysis technique, written cultural heritage object, or chemical element. Advanced filters available in the search interface." %}
                 </p>
@@ -609,7 +618,6 @@ Homepage — Prismatic Luminescence aesthetic
                     </div>
                     <div class="ms-search-actions">
                         <button type="submit" class="ms-btn ms-btn-primary ms-search-submit">{% trans "Search" %}</button>
-                        <button type="submit" class="ms-btn ms-search-discover" formaction="{% url 'analysis-explorer' %}">{% trans "Discover the data" %}</button>
                     </div>
                 </form>
 

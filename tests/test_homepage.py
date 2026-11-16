@@ -2,6 +2,8 @@ import re
 
 from django.core.cache import cache
 from django.test import TestCase, override_settings
+from django.urls import reverse
+from django.utils import translation
 
 NOSCRIPT = re.compile(r"<noscript>(.*?)</noscript>", re.S)
 
@@ -84,7 +86,7 @@ class DiscoverEntryTests(TestCase):
     def setUp(self):
         cache.clear()
 
-    def test_search_form_has_a_default_submit_then_the_discover_button(self):
+    def test_search_form_has_one_submit_and_no_discover_button(self):
         html = self.client.get("/en/").content.decode()
         form = html[
             html.index('id="ms-search-form"') : html.index(
@@ -92,9 +94,24 @@ class DiscoverEntryTests(TestCase):
             )
         ]
         buttons = re.findall(r"<button[^>]*>", form)
-        self.assertEqual(len(buttons), 2)
+        self.assertEqual(len(buttons), 1)
         self.assertNotIn("formaction", buttons[0])
-        self.assertIn('formaction="/en/discover"', buttons[1])
+        self.assertNotIn("ms-search-discover", html)
+
+    def test_hero_offers_the_search_and_the_data_lab(self):
+        for lang, search_label, lab_label in (
+            ("en", "Search the database", "Data Lab"),
+            ("fr", "Rechercher dans la base", "Laboratoire des données"),
+        ):
+            html = self.client.get(f"/{lang}/").content.decode()
+            start = html.index('class="ms-hero-actions"')
+            hero = html[start : html.index("ms-hero-scroll", start)]
+            with translation.override(lang):
+                search_url = reverse("search_home")
+            self.assertIn(f'href="{search_url}"', hero, lang)
+            self.assertIn(f'href="/{lang}/discover"', hero, lang)
+            self.assertIn(search_label, hero, lang)
+            self.assertIn(lab_label, hero, lang)
 
     def test_search_chips_offer_fors_after_vermilion(self):
         html = self.client.get("/en/").content.decode()
@@ -111,6 +128,7 @@ class DiscoverEntryTests(TestCase):
         for path in ("/en/", "/en/about/team", "/en/discover"):
             html = self.client.get(path).content.decode()
             self.assertIn('href="/en/discover"', html, path)
+            self.assertIn(">Data Lab</a>", html, path)
             if path != "/en/discover":
                 self.assertNotIn('href="/en/discover" aria-current="page"', html, path)
 

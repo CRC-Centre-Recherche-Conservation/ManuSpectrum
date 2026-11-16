@@ -2320,8 +2320,8 @@ msgstr "Analyses"
 #: templates/views/pages/analysis-explorer.htm:31
 #: templates/views/pages/analysis-explorer.htm:4
 #: templates/views/pages/analysis-explorer.htm:6
-msgid "Discover the data"
-msgstr "Découvrir les données"
+msgid "Data Lab"
+msgstr "Laboratoire des données"
 
 #: templates/includes/ms_header.htm:29 templates/includes/ms_header.htm:33
 msgid "The data model behind ManuSpectrum"
@@ -2437,8 +2437,8 @@ msgstr ""
 
 #: templates/index.htm:238 templates/index.htm:240 templates/index.htm:589
 #: templates/index.htm:591
-msgid "Explore the database"
-msgstr "Explorer la base de données"
+msgid "Search the database"
+msgstr "Rechercher dans la base"
 
 #: templates/index.htm:241 templates/index.htm:243
 msgid "Learn more"
@@ -5327,18 +5327,19 @@ msgstr "Ouvrir le projet"
 #: templates/views/pages/analysis-explorer.htm:30
 #: templates/views/pages/analysis-explorer.htm:4
 #: templates/views/pages/analysis-explorer.htm:6
-msgid "Analysis explorer"
-msgstr "Explorateur d'analyses"
+msgid "Analyses, spectra and images"
+msgstr "Analyses, spectres et images"
 
 #: templates/views/pages/analysis-explorer.htm:5
 #: templates/views/pages/analysis-explorer.htm:7
 msgid ""
-"Browse the physicochemical analyses of manuscripts: search by technique, "
-"material, project or year, and open each document where it was analysed."
+"Browse the physicochemical analyses of written heritage by technique, "
+"material, project or year, compare spectra and images, and open each "
+"document where it was analysed."
 msgstr ""
-"Parcourez les analyses physico-chimiques des manuscrits : cherchez par "
-"technique, matériau, projet ou année, et ouvrez chaque document là où il a "
-"été analysé."
+"Parcourez les analyses physico-chimiques du patrimoine écrit par technique, "
+"matériau, projet ou année, comparez spectres et images, et ouvrez chaque "
+"document là où il a été analysé."
 
 #: templates/views/pages/analysis-explorer.htm:33
 #: templates/views/pages/analysis-explorer.htm:34
@@ -5352,13 +5353,13 @@ msgstr ""
 
 #: templates/views/pages/analysis-explorer.htm:41
 #: templates/views/pages/analysis-explorer.htm:48
-msgid "Loading the explorer…"
-msgstr "Chargement de l'explorateur…"
+msgid "Loading the Data Lab…"
+msgstr "Chargement du Laboratoire des données…"
 
 #: templates/views/pages/analysis-explorer.htm:44
 #: templates/views/pages/analysis-explorer.htm:71
-msgid "The explorer could not start in this browser."
-msgstr "L'explorateur n'a pas pu démarrer dans ce navigateur."
+msgid "The Data Lab could not start in this browser."
+msgstr "Le Laboratoire des données n'a pas pu démarrer dans ce navigateur."
 
 #: templates/views/pages/analysis-explorer.htm:45
 #: templates/views/pages/analysis-explorer.htm:50
@@ -5369,8 +5370,8 @@ msgstr "Utiliser plutôt la recherche avancée"
 
 #: templates/views/pages/analysis-explorer.htm:49
 #: templates/views/pages/analysis-explorer.htm:76
-msgid "The explorer needs JavaScript."
-msgstr "L'explorateur a besoin de JavaScript."
+msgid "The Data Lab needs JavaScript."
+msgstr "Le Laboratoire des données a besoin de JavaScript."
 
 #: templates/views/pages/conceptual-model.htm:5
 #: templates/views/pages/conceptual-model.htm:7
@@ -6588,11 +6589,11 @@ msgstr "Mémorise la langue que vous avez choisie."
 #: templates/views/pages/privacy.htm:132
 msgid ""
 "There is no tracker, no analytics service and no advertising cookie. The "
-"Analysis Explorer keeps your selection and layout in your browser's local "
-"storage; they are never sent to the server."
+"Data Lab keeps your selection and layout in your browser's local storage; "
+"they are never sent to the server."
 msgstr ""
 "Il n'y a ni traceur, ni service d'analyse d'audience, ni cookie "
-"publicitaire. L'Explorateur d'analyses garde votre sélection et votre "
+"publicitaire. Le Laboratoire des données garde votre sélection et votre "
 "disposition dans le stockage local de votre navigateur ; elles ne sont "
 "jamais envoyées au serveur."
 
@@ -7749,8 +7750,13 @@ msgid "Reuse the data"
 msgstr "Réutiliser les données"
 
 #: templates/views/pages/data.htm
-msgid "The Analysis Explorer is built on public products meant to be downloaded, cited and opened in other tools. Use these; they are stable and documented."
-msgstr "L'Explorateur d'analyses repose sur des produits publics faits pour être téléchargés, cités et ouverts dans d'autres outils. Utilisez-les : ils sont stables et documentés."
+msgid ""
+"The Data Lab is built on public products meant to be downloaded, cited and "
+"opened in other tools. Use these; they are stable and documented."
+msgstr ""
+"Le Laboratoire des données repose sur des produits publics faits pour être "
+"téléchargés, cités et ouverts dans d'autres outils. Utilisez-les : ils sont "
+"stables et documentés."
 
 #: templates/views/pages/data.htm
 msgid "Data package"
@@ -7801,8 +7807,12 @@ msgid "A machine API with personal read-only access tokens (OAuth, MCP) is plann
 msgstr "Une API pour les machines, avec des jetons d'accès personnels en lecture seule (OAuth, MCP), est prévue. D'ici là, les adresses sous /{lang}/api/explorer/ (par exemple /en/api/explorer/search) et /api/spectrum-preview/ servent uniquement la page de l'Explorateur ; elles ne sont pas un contrat et répondent par un 403 aux autres requêtes."
 
 #: templates/views/pages/data.htm
-msgid "The public products of the Analysis Explorer, meant to be downloaded, cited and opened in other tools."
-msgstr "Les produits publics de l'Explorateur d'analyses, faits pour être téléchargés, cités et ouverts dans d'autres outils."
+msgid ""
+"The public products of the Data Lab, meant to be downloaded, cited and "
+"opened in other tools."
+msgstr ""
+"Les produits publics du Laboratoire des données, faits pour être "
+"téléchargés, cités et ouverts dans d'autres outils."
 
 #: templates/views/pages/privacy.htm
 msgid ""
@@ -7835,3 +7845,19 @@ msgstr ""
 "Si vous estimez que vos droits Informatique et Libertés ne sont pas "
 "respectés, vous avez la possibilité d'introduire une réclamation en "
 "ligne auprès de la CNIL,"
+
+#: templates/includes/ms_header.htm
+msgid "Overview"
+msgstr "Aperçu"
+
+#: templates/index.htm
+msgid "Every record, advanced filters and the map."
+msgstr "Toutes les fiches, filtres avancés et carte."
+
+#: templates/index.htm
+msgid "Browse the documents, compare spectra and images."
+msgstr "Feuilleter les documents, comparer spectres et images."
+
+#: templates/views/pages/analysis-explorer.htm
+msgid "ManuSpectrum Data Lab"
+msgstr "Laboratoire des données de ManuSpectrum"

@@ -354,9 +354,9 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
 
 .ms-hero-actions {
     display: flex;
-    gap: 1rem;
-    justify-content: center;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.25rem;
     opacity: 0;
     transform: translateY(20px);
     animation: hero-fade-in 1.2s var(--ease-out-expo) 1.1s forwards;
@@ -377,6 +377,60 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
     color: var(--ink);
     border-color: var(--ink-dim);
     transform: translateY(-2px);
+}
+
+.ms-hero-tools {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 18rem));
+    gap: 1rem 1.5rem;
+    justify-content: center;
+}
+
+.ms-hero-tool {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+}
+
+.ms-hero-tool .ms-btn {
+    justify-content: center;
+    padding: 0.85rem 1.5rem;
+    text-align: center;
+}
+
+.ms-hero-tool-note {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 300;
+    line-height: 1.5;
+    color: var(--ink-muted);
+}
+
+.ms-btn-outline {
+    border: 1px solid var(--ink);
+    background: var(--surface);
+    color: var(--ink);
+}
+
+.ms-btn-outline:hover {
+    background: var(--ink);
+    color: var(--surface);
+    transform: translateY(-2px);
+}
+
+.ms-hero-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 44px;
+    font-size: 0.85rem;
+    color: var(--ink-muted);
+}
+
+.ms-hero-more:hover {
+    color: var(--ink);
+    text-decoration: underline;
 }
 
 // Scroll indicator
@@ -1356,17 +1410,6 @@ a.ms-feature-tag--link i {
     border-radius: 12px;
 }
 
-.ms-search-discover {
-    border: 1px solid var(--ink);
-    background: var(--surface);
-    color: var(--ink);
-}
-
-.ms-search-discover:hover {
-    background: var(--ink);
-    color: var(--surface);
-}
-
 a.ms-search-chip {
     display: inline-block;
     text-decoration: none;
@@ -1465,6 +1508,10 @@ a.ms-search-chip {
 @media (max-width: 768px) {
     .ms-section { padding: 4.5rem 0; }
     .ms-hero-logo { width: clamp(200px, 65vw, 320px); }
+    .ms-hero { padding: 5.5rem 0 3rem; }
+    .ms-hero-content { padding: 0 var(--ms-gutter); }
+    .ms-hero-tools { grid-template-columns: minmax(0, 22rem); }
+    .ms-hero-scroll { display: none; }
 
     .ms-stats { grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
 }
@@ -1475,7 +1522,6 @@ a.ms-search-chip {
 }
 
 @media (max-width: 480px) {
-    .ms-hero-actions { flex-direction: column; align-items: center; }
     .ms-search-chips { gap: 0.4rem; }
     .ms-search-chip { font-size: 0.75rem; padding: 0.4rem 0.9rem; }
     .ms-stats { grid-template-columns: repeat(2, 1fr); }

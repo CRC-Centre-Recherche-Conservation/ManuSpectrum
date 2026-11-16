@@ -6,9 +6,8 @@ import listen, { stopAll } from "./listen";
  * The search form submits natively to the project route in its `action`
  * (`{% url 'search-term' %}`), which redirects to the Arches search page with
  * one string term filter: that redirect is the only place the filter is
- * shaped. A chip button navigates to the same route with its term. A submit
- * button carrying `formaction` (« Discover the data ») submits natively to its
- * own page with `q`; chips that are links are left to the browser.
+ * shaped. A chip button navigates to the same route with its term. Chips that
+ * are links are left to the browser.
  */
 
 /**
