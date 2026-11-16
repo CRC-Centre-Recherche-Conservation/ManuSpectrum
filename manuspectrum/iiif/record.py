@@ -15,22 +15,18 @@ public « fiche essentielle »), in configuration order.
   (``facts.plain_text``: rich text loses its markup); ``date`` and ``chip``
   values are its strings as given; ``number`` values are ``str()`` of the number; a ``link`` value is
   one ``lang.linked`` HTML link to ``ids.report`` per resource the reader may
-  see (not hidden, readable model: the ``shown`` rule of ``facts._build``),
+  see (``facts.shown_ids``),
   named in the languages of its name map; an ``image`` field yields no entry.
 - A model without configuration, or an unknown one, gives ``[]``. Values
   beyond ``max_values`` are not counted.
 """
 
-from arches.app.models.models import ResourceInstance, TileModel
+from arches.app.models.models import TileModel
 
 from manuspectrum.iiif import ids
 from manuspectrum.iiif import language as lang
-from manuspectrum.iiif.facts import names_of, plain_text
-from manuspectrum.utils.public_visibility import (
-    hidden_resource_ids,
-    readable_graph_ids,
-    readable_nodegroup_ids,
-)
+from manuspectrum.iiif.facts import names_of, plain_text, shown_ids
+from manuspectrum.utils.public_visibility import readable_nodegroup_ids
 from manuspectrum.views.summary_service import (
     GraphIndex,
     extract_fields,
@@ -51,18 +47,6 @@ def _document(resource_id, readable):
             {"nodegroup_id": str(group), "sortorder": order, "data": data or {}}
             for group, order, data in rows
         ]
-    }
-
-
-def _shown(link_ids, reader):
-    hidden = hidden_resource_ids(reader)
-    graphs = readable_graph_ids(reader)
-    return {
-        str(rid)
-        for rid, graph_id in ResourceInstance.objects.filter(
-            pk__in=list(link_ids)
-        ).values_list("resourceinstanceid", "graph_id")
-        if str(rid) not in hidden and str(graph_id) in graphs
     }
 
 
@@ -89,7 +73,7 @@ def record_metadata(resource_id, graph_id, reader):
     link_ids = []
     for _, found, _ in per_language.values():
         link_ids.extend(i for i in found if i not in link_ids)
-    shown = _shown(link_ids, reader) if link_ids else set()
+    shown = shown_ids(link_ids, reader) if link_ids else set()
     names = names_of(shown, readable) if shown else {}
 
     merged = {}

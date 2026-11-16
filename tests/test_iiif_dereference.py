@@ -14,8 +14,11 @@ A viewer never fetches some of them, each left out for its reason
 (``exempt``):
 
 - an id the Explorer manifest mints for what it embeds (``ids.explorer_part``:
-  painting pages, ranges) and a canvas, embedded in its manifest: IIIF
+  painting pages, ranges), an id the document manifest mints
+  (``ids.manifest_part``) and a canvas, embedded in its manifest: IIIF
   requires no dereference of an embedded resource;
+- an agent's id (the manifest's ``provider``): it names the agent, a viewer
+  never fetches it;
 - the image server (``/iiifserver/``), served by the edge, not by Django
   (``deploy/compose/nginx/tests/test_edge.sh`` checks its CORS);
 - a page for people (``format`` ``text/html``: the report, the Explorer page)
@@ -34,6 +37,7 @@ Usage:
 
 import copy
 import json
+import re
 import uuid
 from urllib.parse import urldefrag
 
@@ -91,6 +95,10 @@ def exempt(url, holder, key):
     """Why a viewer never fetches *url*, None when it does."""
     if url.startswith(ids.explorer_manifest() + "/"):
         return "an embedded resource of the Explorer manifest"
+    if re.match(rf"{re.escape(BASE)}iiif/v[23]/manifest/[^/?#]+/", url):
+        return "an embedded resource of the document manifest"
+    if holder.get("type") == "Agent":
+        return "an agent's id names it; a viewer never fetches it"
     if holder.get("type") == "Canvas" or holder.get("@type") == "sc:Canvas":
         return "a canvas, embedded in its manifest"
     if url.startswith(f"{BASE}iiifserver/"):
@@ -134,7 +142,12 @@ class DereferenceTests(StoredManifestCase):
             for version in (3, 2)
         ]
         found.append(ids.content_state(self.analyses["open"].pk, FEATURES["open"]))
-        found.append(ids.explorer_manifest(f"document={document}"))
+        found += [
+            ids.manifest(document),
+            ids.manifest(document, 2),
+            ids.manifest(component),
+            ids.selection_manifest("analysis", self.analyses["open"].pk),
+        ]
         return found
 
     def walk(self):
@@ -194,6 +207,8 @@ class DereferenceTests(StoredManifestCase):
             "iiif-v2-characterization-page",
             "iiif-v3-content-state",
             "iiif-v3-explorer-manifest",
+            "iiif-v3-manifest",
+            "iiif-v2-manifest",
             "iiif-manifest",
             "iiif-data-series",
             "iiif-auth-probe",

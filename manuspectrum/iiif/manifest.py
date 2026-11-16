@@ -1,4 +1,7 @@
-"""The IIIF-shaped parts of the Explorer's Presentation 3 manifest (spec §11.1).
+"""The IIIF-shaped parts of the Presentation 3 manifests of the Explorer and of a Document.
+
+The header shared by both (``Header``, ``manifest_header``, ``provider``,
+``required_statement``) lives here.
 
 A canvas of the manifest does not carry its annotations: it references the
 pages of its Document's collections (``pages.page_reference``), the analyses
@@ -320,14 +323,18 @@ def summary_counts(analyses, materials, pages_count, document_name, documents):
 
 
 def imaging_metadata(entries):
-    """The « Chemical imaging » ``metadata`` entry: one link per ``(manifest id, label map)`` of *entries*; None without any."""
-    if not entries:
+    """The « Chemical imaging » ``metadata`` entry: one link per ``(manifest id, label map)`` of *entries*, labelled by the stored label, else by the manifest id; None without a link."""
+    maps = [
+        lang.linked(label or lang.none(href), href, markup=True)
+        for href, label in entries
+    ]
+    joined = lang.joined(maps, sep="; ")
+    if not any(joined.values()):
         return None
-    maps = [lang.linked(label, href, markup=True) for href, label in entries]
     return {
         "label": lang.gettext_map("Chemical imaging"),
         "value": {
             code: [f"<span>{text}</span>" for text in texts]
-            for code, texts in lang.joined(maps, sep="; ").items()
+            for code, texts in joined.items()
         },
     }

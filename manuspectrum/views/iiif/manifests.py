@@ -17,9 +17,11 @@ reader) gets ``public, no-cache`` and a strong ETag (the digest of the body)
 that an ``If-None-Match`` answers with a 304; any other reader ``private,
 no-store``. Nothing is memoised: the manifest is one row.
 
-``/iiif/v3/manifest/<uuid>`` is the manifest of a Document or Component built
-by ``iiif.document_manifest`` (it differs from the stored manifest above). It
-is memoised like the annotation collection (``iiif.memo``): a Document or
+``/iiif/v3/manifest/<uuid>`` and ``/iiif/v2/manifest/<uuid>`` (Presentation
+3 and 2.1) answer the manifest of a Document or Component built by
+``iiif.document_manifest`` (it differs from the stored manifest above). It
+is memoised like the annotation collection (``iiif.memo``), under the
+summary-configuration stamp too (``resource_summary.config_stamp``): a Document or
 Component the reader may not read, an unknown id, and one without a readable
 source manifest or placed zone, are a bodyless 404; more canvases than
 ``EXPLORER_MANIFEST_MAX_CANVASES`` is a bodyless 413, ``private, no-store``,
@@ -31,6 +33,7 @@ import hashlib
 import orjson
 from django.http import HttpResponse, HttpResponseNotModified
 
+from manuspectrum.functions.resource_summary import config_stamp
 from manuspectrum.iiif import document_manifest, facts, memo, stored_manifests
 from manuspectrum.iiif.constants import IIIF_MEDIA_TYPE, IIIF_V2_MEDIA_TYPE
 from manuspectrum.iiif.manifest import ManifestTooLarge
@@ -106,7 +109,7 @@ class DocumentManifestView(IIIFView):
                 request,
                 gate_of(request, version),
                 f"manifest-v{self.version}",
-                (resource_id,),
+                (resource_id, config_stamp()),
                 build,
                 content_type=self.content_type,
             )

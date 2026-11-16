@@ -13,9 +13,10 @@
   identified materials page when it holds materials; embedded, the visitor's
   pages are inlined (``EmbeddedPages``). No ``structures``.
 - ``label`` is « Analyses of <name> »; ``summary`` counts every kept analysis
-  and material of the subject (« Contains drafts » added when an analysis is
-  unpublished); ``metadata`` is the record's summary fields, then the
-  analyses' techniques, projects and dates, then the chemical imaging.
+  and material of the subject (« Contains drafts » added when an analysis or
+  material is unpublished); ``metadata`` is a link to the Document,
+  a link to the Component (a Component manifest), the record's summary fields,
+  then the analyses' techniques, projects and dates, then the chemical imaging.
 - ``homepage`` starts with the report of the subject. A Document the visitor
   sees also gets the Explorer page of the Document and a ``rendering`` of its
   data package; a Component, or a Document hidden from the visitor, none.
@@ -31,7 +32,11 @@ from manuspectrum.iiif import language as lang
 from manuspectrum.iiif import manifest, sources, v2
 from manuspectrum.iiif.manifest import ManifestTooLarge
 from manuspectrum.utils import role_links
-from manuspectrum.utils.public_visibility import anonymous_user, visible_set
+from manuspectrum.utils.public_visibility import (
+    anonymous_user,
+    readable_nodegroup_ids,
+    visible_set,
+)
 
 KINDS = ("analysis", "characterization")
 
@@ -44,22 +49,50 @@ def _kept_pages(analysis_facts, material_facts):
     return sorted(counts["analysis"] | counts["characterization"]), counts
 
 
-def _summary(reader, version, analysis_facts, material_facts, kept):
+def _summary(reader, version, analysis_facts, material_facts, kept, name):
     summary = manifest.summary_counts(
         len(analysis_facts.found),
         len(material_facts.found),
         len(kept),
-        analysis_facts.name,
+        name,
         1,
     )
     unpublished = visible_set(reader, version).unpublished
-    if any(str(found) in unpublished for found in analysis_facts.found):
+    if any(
+        str(found) in unpublished
+        for found in (*analysis_facts.found, *material_facts.found)
+    ):
         summary = lang.joined([summary, manifest.drafts_summary()], sep=". ")
     return summary
 
 
+def _named_links(resource_id, subject, reader):
+    """The « Document » entry, and the « Component » one on a Component manifest: links to their reports."""
+    slug, document = subject
+    targets = [("Document", document)]
+    if slug == "component":
+        targets.append(("Component", resource_id))
+    names = facts.names_of({rid for _, rid in targets}, readable_nodegroup_ids(reader))
+
+    def link(rid):
+        return lang.linked(names.get(rid) or lang.none(rid), ids.report(rid))
+
+    return [
+        {
+            "label": (
+                lang.gettext_map("Document")
+                if label == "Document"
+                else lang.gettext_map("Component")
+            ),
+            "value": link(rid),
+        }
+        for label, rid in targets
+    ]
+
+
 def _metadata(resource_id, subject, reader, version, analysis_facts):
-    metadata = record.record_metadata(
+    metadata = _named_links(resource_id, subject, reader)
+    metadata += record.record_metadata(
         resource_id, role_links.graph_id_of(subject[0]), reader
     )
     aggregate = facts.analysis_aggregate(analysis_facts.found, reader, version)
@@ -121,7 +154,7 @@ def build(resource_id, reader, *, version, subject, embed=False, api=3, read=Non
     source = read(analysis_facts.source_url)
     raw = sources.raw_canvases(source)
     mint_id = functools.partial(ids.manifest_part, resource_id)
-    name = analysis_facts.name
+    name = analysis_facts.name or lang.none(resource_id)
     references = {n: [kind for kind in KINDS if n in counts[kind]] for n in kept}
     embedded = (
         manifest.EmbeddedPages(
@@ -156,7 +189,7 @@ def build(resource_id, reader, *, version, subject, embed=False, api=3, read=Non
     homepage, rendering = _explorer_links(resource_id, subject, version)
     header = manifest.Header(
         label=pages.named_collection_label(name),
-        summary=_summary(reader, version, analysis_facts, material_facts, kept),
+        summary=_summary(reader, version, analysis_facts, material_facts, kept, name),
         metadata=tuple(
             _metadata(resource_id, subject, reader, version, analysis_facts)
         ),

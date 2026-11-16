@@ -19,9 +19,11 @@ box (``default``) and the SVG (``item``) for a point or a polygon, which
 Mirador 4 reads (``AnnotationResource.js``).
 """
 
+import re
+
 from django.conf import settings
 
-from manuspectrum.iiif import ids, services
+from manuspectrum.iiif import ids, services, sources
 from manuspectrum.iiif.constants import PRESENTATION_2, PRESENTATION_3
 from manuspectrum.iiif.language import to_v2
 
@@ -222,21 +224,37 @@ def layer(v3_collection, page_ids):
     return converted
 
 
+def _v2_service(service, service_id):
+    """The image service of a v2 image resource: its Image API version and level follow the v3 *service*."""
+    level = re.search(r"level([0-2])", str(service.get("profile") or ""))
+    level = level[1] if level else "2"
+    if "3" in str(service.get("type") or ""):
+        return {
+            "@context": "http://iiif.io/api/image/3/context.json",
+            "@id": service_id,
+            "profile": f"level{level}",
+        }
+    return {
+        "@context": "http://iiif.io/api/image/2/context.json",
+        "@id": service_id,
+        "profile": f"http://iiif.io/api/image/2/level{level}.json",
+    }
+
+
 def _v2_image(painting, canvas_id):
     """The ``oa:Annotation`` painting an image on *canvas_id*, from one v3 painting annotation."""
-    body = painting.get("body") or {}
+    body = painting.get("body")
+    if isinstance(body, list):
+        body = body[0] if body else None
+    body = body if isinstance(body, dict) else {}
     resource = {"@id": body.get("id"), "@type": "dctypes:Image"}
     for key in ("format", "width", "height"):
         if body.get(key):
             resource[key] = body[key]
-    for service in body.get("service") or []:
+    for service in sources.painting_services(painting):
         service_id = service.get("id") or service.get("@id")
-        if service_id:
-            resource["service"] = {
-                "@context": "http://iiif.io/api/image/2/context.json",
-                "@id": service_id,
-                "profile": "http://iiif.io/api/image/2/level2.json",
-            }
+        if isinstance(service_id, str) and service_id:
+            resource["service"] = _v2_service(service, service_id)
             break
     return {
         "@type": "oa:Annotation",
@@ -253,8 +271,12 @@ def _canvas(v3_canvas, source_canvas):
     """
     canvas_id = v3_canvas["id"]
     if isinstance(source_canvas, dict) and "@id" in source_canvas:
-        canvas = dict(source_canvas)
+        canvas = dict(sources._rewritten(source_canvas))
         canvas["@id"] = canvas_id
+        canvas["images"] = [
+            {**image, "on": canvas_id} if isinstance(image, dict) else image
+            for image in canvas.get("images") or []
+        ]
     else:
         canvas = {"@id": canvas_id, "@type": "sc:Canvas"}
         _labelled(canvas, v3_canvas)
@@ -265,6 +287,14 @@ def _canvas(v3_canvas, source_canvas):
             for page in v3_canvas.get("items") or []
             for painting in page.get("items") or []
         ]
+    if v3_canvas.get("rights") and "license" not in canvas:
+        canvas["license"] = v3_canvas["rights"]
+    statement = v3_canvas.get("requiredStatement")
+    if statement and "attribution" not in canvas:
+        canvas["attribution"] = to_v2(statement["value"])
+    part_of = (v3_canvas.get("partOf") or [{}])[0]
+    if part_of.get("id") and "within" not in canvas:
+        canvas["within"] = ids.as_version(part_of["id"], 2)
     if v3_canvas.get("annotations"):
         canvas["otherContent"] = [
             {"@id": ids.as_version(ref["id"], 2), "@type": "sc:AnnotationList"}

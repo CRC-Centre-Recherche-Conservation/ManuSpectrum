@@ -4,7 +4,10 @@ Usage:
     python manage.py test tests.test_iiif_document_manifest --settings=tests.test_settings
 """
 
+import copy
+import json
 import time
+import uuid
 from unittest import mock
 from urllib.parse import urlencode
 
@@ -12,6 +15,9 @@ from django.conf import settings
 from django.core.cache import cache
 from django.test import Client, override_settings
 
+from arches.app.models.models import IIIFManifest, ResourceInstance
+
+from manuspectrum.functions.resource_summary import bump_config_stamp
 from manuspectrum.iiif import document_manifest, ids
 from manuspectrum.iiif.facts import subject_of
 from manuspectrum.iiif.manifest import ManifestTooLarge
@@ -19,14 +25,18 @@ from tests.explorer_fixtures import (
     CANVAS,
     CANVAS_2,
     CANVAS_3,
+    DRAFT,
+    ACTIVE,
     MANIFEST,
     POINT,
+    SOURCE_MANIFEST,
     IIIFCase,
 )
 from tests.iiif_auth import bearer, signed_in, token_for
 from tests.iiif_schema import assert_valid_manifest
 from tests.test_iiif_memo import memo_keys
 from tests.test_iiif_routes import UNKNOWN, RouteCase
+from tests.test_iiif_v2 import V2_SOURCE
 
 CONFIG = "manuspectrum.iiif.record.load_summary_config"
 IMAGING = "https://example.org/iiif/maxrf/manifest"
@@ -84,8 +94,165 @@ class DocumentManifestTests(IIIFCase):
         with mock.patch(CONFIG, return_value={"fields": fields}):
             built = self.build(self.documents["open"])
         labels = [entry["label"]["en"][0] for entry in built["metadata"]]
-        self.assertEqual(labels[1:], ["Projects", "Dates", "Chemical imaging"])
-        self.assertEqual(built["metadata"][0]["value"], {"none": ["1401-01"]})
+        self.assertEqual(labels[0], "Document")
+        self.assertEqual(labels[2:], ["Projects", "Dates", "Chemical imaging"])
+        self.assertIn(ids.report(self.doc()), built["metadata"][0]["value"]["en"][0])
+        self.assertEqual(built["metadata"][1]["value"], {"none": ["1401-01"]})
+
+    def test_component_metadata_starts_with_its_document_then_itself(self):
+        component = self.components["open"]
+        with mock.patch(CONFIG, return_value=None):
+            built = self.build(component)
+        first, second = built["metadata"][:2]
+        self.assertEqual(first["label"]["en"], ["Document"])
+        self.assertIn(ids.report(self.doc()), first["value"]["en"][0])
+        self.assertEqual(second["label"]["en"], ["Component"])
+        self.assertIn(ids.report(str(component.pk)), second["value"]["en"][0])
+
+    def imaging_value(self, built):
+        (entry,) = [
+            m for m in built["metadata"] if m["label"]["en"] == ["Chemical imaging"]
+        ]
+        return entry["value"]
+
+    def test_imaging_value_names_an_external_manifest_by_its_url(self):
+        self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)
+        value = self.imaging_value(self.build(self.documents["open"]))
+        self.assertIn(f'<a href=\\"{IMAGING}\\">{IMAGING}</a>', json.dumps(value))
+        self.assertTrue(all(value.values()))
+
+    def test_imaging_value_names_a_stored_manifest_by_its_label(self):
+        stored = IIIFManifest.objects.create(
+            globalid=uuid.uuid4(), label="maXRF map", url="", manifest={}
+        )
+        stored.url = f"/manifest/{stored.globalid}"
+        stored.save()
+        self.tile(self.analyses["open"], "chemical_imaging_manifest", stored.url)
+        self.tile(self.analyses["on_document"], "chemical_imaging_manifest", IMAGING)
+        value = json.dumps(self.imaging_value(self.build(self.documents["open"])))
+        self.assertIn("maXRF map", value)
+        self.assertIn(ids.stored_manifest(stored.globalid), value)
+        self.assertIn(IMAGING, value)
+
+    def with_source(self, source):
+        self.fetch.side_effect = lambda url: source if url == MANIFEST else None
+
+    def painted(self, body):
+        """The v3 source manifest whose canvases each carry one painting with *body*."""
+        source = copy.deepcopy(SOURCE_MANIFEST)
+        for canvas in source["items"]:
+            canvas["items"] = [
+                {
+                    "id": f"{canvas['id']}/page",
+                    "type": "AnnotationPage",
+                    "items": [
+                        {
+                            "id": f"{canvas['id']}/painting",
+                            "type": "Annotation",
+                            "motivation": "painting",
+                            "target": canvas["id"],
+                            "body": body,
+                        }
+                    ],
+                }
+            ]
+        return source
+
+    def test_a_single_object_service_gives_the_thumbnail_and_a_v2_image_service(self):
+        image = {"id": "https://img.example/i1/full/max/0/default.jpg", "type": "Image"}
+        self.with_source(
+            self.painted(
+                {
+                    **image,
+                    "service": {
+                        "id": "https://img.example/i1",
+                        "type": "ImageService3",
+                    },
+                }
+            )
+        )
+        thumbnail = self.build(self.documents["open"])["thumbnail"]
+        self.assertEqual(
+            thumbnail[0]["id"], "https://img.example/i1/full/!300,300/0/default.jpg"
+        )
+        v2 = self.build(self.documents["open"], api=2)
+        resource = v2["sequences"][0]["canvases"][0]["images"][0]["resource"]
+        self.assertEqual(resource["service"]["@id"], "https://img.example/i1")
+
+    def test_a_painting_body_given_as_a_list_gives_the_thumbnail(self):
+        self.with_source(
+            self.painted(
+                [
+                    {
+                        "id": "https://img.example/i2/full/max/0/default.jpg",
+                        "type": "Image",
+                        "service": [{"@id": "https://img.example/i2"}],
+                    }
+                ]
+            )
+        )
+        built = self.build(self.documents["open"])
+        self.assertEqual(
+            built["thumbnail"][0]["id"],
+            "https://img.example/i2/full/!300,300/0/default.jpg",
+        )
+        self.assertTrue(self.build(self.documents["open"], api=2))
+
+    def test_v2_canvases_of_a_v3_source_carry_rights_and_attribution(self):
+        source = self.painted({"id": "https://img.example/i/full/max/0/default.jpg"})
+        source["rights"] = "http://creativecommons.org/licenses/by/4.0/"
+        source["requiredStatement"] = {
+            "label": {"en": ["Attribution"]},
+            "value": {"en": ["Bibliothèque"]},
+        }
+        self.with_source(source)
+        canvas = self.build(self.documents["open"], api=2)["sequences"][0]["canvases"][
+            0
+        ]
+        self.assertEqual(canvas["license"], source["rights"])
+        self.assertIn(
+            {"@value": "Bibliothèque", "@language": "en"}, canvas["attribution"]
+        )
+        self.assertEqual(canvas["within"], MANIFEST)
+
+    def test_v2_canvases_of_a_v2_source_carry_the_manifests_rights(self):
+        source = copy.deepcopy(V2_SOURCE)
+        source["license"] = "http://creativecommons.org/licenses/by/4.0/"
+        source["attribution"] = "Bibliothèque"
+        self.with_source(source)
+        canvas = self.build(self.documents["open"], api=2)["sequences"][0]["canvases"][
+            0
+        ]
+        self.assertEqual(canvas["license"], source["license"])
+        self.assertEqual(canvas["attribution"][0]["@value"], "Bibliothèque")
+        self.assertEqual(canvas["within"], MANIFEST)
+
+    def test_a_document_without_a_name_is_named_by_its_id(self):
+        document = ResourceInstance.objects.create(
+            graph=self.graphs["document"], resource_instance_lifecycle_state_id=ACTIVE
+        )
+        self.tile(document, "facsimiles", MANIFEST)
+        component = self.new_resource("component", "f. 2r — ground")
+        self.tile(component, "item_visual_is_part_of_document", self.refs(document))
+        self.zone(component, [(ZONE, CANVAS_2, POINT)], alias="location_in_document")
+        material = self.new_resource("characterization", "Lead white")
+        self.tile(material, "object_observed", self.refs(component))
+        self.tile(material, "evidence_analyses", self.refs(self.analyses["embargoed"]))
+        built = self.build(document)
+        self.assertEqual(built["label"]["en"], [f"Analyses of {document.pk}"])
+        self.assertEqual(built["homepage"][0]["label"], {"none": [str(document.pk)]})
+
+    def test_a_draft_identified_material_adds_the_drafts_note(self):
+        document = self.new_resource("document", "Ms 302")
+        self.tile(document, "facsimiles", MANIFEST)
+        component = self.new_resource("component", "f. 2r — ground")
+        self.tile(component, "item_visual_is_part_of_document", self.refs(document))
+        self.zone(component, [(ZONE, CANVAS_2, POINT)], alias="location_in_document")
+        material = self.new_resource("characterization", "Lead white", state=DRAFT)
+        self.tile(material, "object_observed", self.refs(component))
+        self.tile(material, "evidence_analyses", self.refs(self.analyses["embargoed"]))
+        built = self.build(document)
+        self.assertIn("Contains drafts", built["summary"]["en"][0])
 
     def test_no_explorer_links_when_visitor_cannot_see_document(self):
         self.embargo(self.documents["open"])
@@ -178,6 +345,20 @@ class ManifestRouteTests(RouteCase):
         self.assertNotIn("Techniques", visitor.content.decode())
         self.assertIn("Techniques", reader.content.decode())
         self.assertEqual(reader["Cache-Control"], "private, no-store")
+
+    def test_a_summary_configuration_save_changes_the_etag(self):
+        before = self.get(self.url())["ETag"]
+        self.assertEqual(self.get(self.url())["ETag"], before)
+        bump_config_stamp()
+        self.assertNotEqual(self.get(self.url())["ETag"], before)
+
+    def test_a_component_manifest_answers_over_http(self):
+        component = self.components["open"]
+        response = self.get(self.url(component.pk))
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["id"], ids.manifest(str(component.pk)))
+        self.assertEqual(body["homepage"][0]["id"], ids.report(str(component.pk)))
 
     def test_token_reader_is_private(self):
         token = token_for(self.editor)

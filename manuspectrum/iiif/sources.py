@@ -32,13 +32,17 @@ _LEVEL = re.compile(r"level([0-2])")
 
 
 _LOCAL_MANIFEST = re.compile(r"/manifest/(?P<uuid>[0-9a-fA-F-]{36})/?$")
+_DOCUMENT_MANIFEST = re.compile(r"/iiif/v[23]/manifest/")
 
 
 def local_manifest_uuid(url):
-    """The uuid a local ``/manifest/<uuid>`` URL (legacy host already rewritten) names, else None."""
-    match = _LOCAL_MANIFEST.search(urlsplit(url).path)
-    if match and (
-        url.startswith("/") or url.startswith(settings.PUBLIC_SERVER_ADDRESS)
+    """The uuid a local ``/manifest/<uuid>`` URL (legacy host already rewritten) names, else None; a document manifest (``/iiif/v3|v2/manifest/<uuid>``) is not a stored manifest."""
+    path = urlsplit(url).path
+    match = _LOCAL_MANIFEST.search(path)
+    if (
+        match
+        and not _DOCUMENT_MANIFEST.search(path)
+        and (url.startswith("/") or url.startswith(settings.PUBLIC_SERVER_ADDRESS))
     ):
         return match["uuid"]
     return None
@@ -452,14 +456,28 @@ def raw_canvases(manifest):
     return found
 
 
+def painting_services(painting):
+    """The image services of one v3 painting annotation: a ``body`` given as a list counts as its first entry, a single ``service`` object as a list; non-objects are skipped."""
+    body = painting.get("body") if isinstance(painting, dict) else None
+    if isinstance(body, list):
+        body = body[0] if body else None
+    if not isinstance(body, dict):
+        return []
+    service = body.get("service") or []
+    if isinstance(service, dict):
+        service = [service]
+    return (
+        [s for s in service if isinstance(s, dict)] if isinstance(service, list) else []
+    )
+
+
 def canvas_thumbnail(v3_canvas):
     """The ``thumbnail`` of a v3 canvas: its first painting body's first image service at ``!300,300``; None without a service."""
     for page in v3_canvas.get("items") or []:
         for painting in page.get("items") or []:
-            body = painting.get("body") or {}
-            for service in body.get("service") or []:
+            for service in painting_services(painting):
                 service_id = service.get("id") or service.get("@id")
-                if service_id:
+                if isinstance(service_id, str) and service_id:
                     return [
                         {
                             "id": f"{service_id.rstrip('/')}/full/!300,300/0/default.jpg",

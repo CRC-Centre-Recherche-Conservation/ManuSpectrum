@@ -271,6 +271,20 @@ class ManifestRouteTests(CorpusCase):
 
         zones.assert_not_called()
 
+    def test_a_document_offer_resolves_its_subject_and_reads_the_source_once(self):
+        with mock.patch(FETCH, side_effect=fetched) as fetch:
+            scope = resolve_scope(
+                QueryDict(f"document={self.documents['open'].pk}"), "en"
+            )
+            with mock.patch(
+                "manuspectrum.views.explorer.manifest.subject_of",
+                wraps=facts.subject_of,
+            ) as subject:
+                self.assertEqual(manifest_offer(scope), "manifest")
+
+        subject.assert_called_once()
+        self.assertEqual(fetch.call_count, 1)
+
     def add_documents(self, count):
         """*count* documents on local manifests, each with one zoned analysis and one zoned identified material; their Selection keys."""
         point = {"type": "Point", "coordinates": [5, -5]}

@@ -285,6 +285,19 @@ def _referencing(key, targets, readable):
     return node_links(node, targets)
 
 
+def shown_ids(resource_ids, reader):
+    """The existing resources among *resource_ids* that *reader* may see: not hidden, of a readable model."""
+    hidden = hidden_resource_ids(reader)
+    graphs = readable_graph_ids(reader)
+    return {
+        str(rid)
+        for rid, graph_id in ResourceInstance.objects.filter(
+            pk__in=[str(i) for i in resource_ids if i]
+        ).values_list("resourceinstanceid", "graph_id")
+        if str(rid) not in hidden and str(graph_id) in graphs
+    }
+
+
 def names_of(resource_ids, readable):
     """``{id: language map}`` of the existing resources among *resource_ids*.
 
@@ -956,8 +969,6 @@ def _build(
         ).values_list("configid", "config")
     }
 
-    hidden = hidden_resource_ids(reader)
-    graphs = readable_graph_ids(reader)
     people = set()
     for aid in analysis_ids:
         for key in (
@@ -968,13 +979,7 @@ def _build(
         ):
             for _, value, _ in values[aid].get(key, ()):
                 people.update(_refs(value))
-    shown = {
-        str(rid)
-        for rid, graph_id in ResourceInstance.objects.filter(
-            pk__in=list(people | {subject_id, document})
-        ).values_list("resourceinstanceid", "graph_id")
-        if str(rid) not in hidden and str(graph_id) in graphs
-    }
+    shown = shown_ids(people | {subject_id, document}, reader)
     cited = {a for c in characterization_ids for a in visible.evidence.get(c, ())}
     name_of = names_of(
         shown | set(analysis_ids) | set(characterization_ids) | cited, readable
@@ -1126,8 +1131,9 @@ def analysis_aggregate(analysis_ids, reader, version=None):
         for manifest, label in _imaging(v):
             imaging.setdefault(manifest, label)
     names = names_of(projects, readable)
-    first = min(starts or ends, default="")
-    last = max(ends or starts, default="")
+    dates = [d for d in starts + ends if d]
+    first = min(dates, default="")
+    last = max(dates, default="")
     return Aggregate(
         techniques=tuple(techniques.values()),
         projects=tuple(

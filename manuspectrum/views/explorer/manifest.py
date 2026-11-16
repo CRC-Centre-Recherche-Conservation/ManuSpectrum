@@ -44,6 +44,7 @@ from manuspectrum.iiif.facts import (
     document_facts,
     listed_source,
     names_of,
+    subject_of,
 )
 from manuspectrum.iiif.manifest import (
     Canvases,
@@ -69,6 +70,7 @@ from manuspectrum.iiif.sources import (
     v3_canvas,
 )
 from manuspectrum.iiif.zones import FeatureRows
+from manuspectrum.utils.data_version import data_version
 from manuspectrum.utils.role_links import role_node
 from manuspectrum.utils.public_visibility import anonymous_user
 from manuspectrum.utils.roles import ROLES
@@ -219,13 +221,11 @@ def _placements(scope, bounded=True):
 class CanvasPlan:
     """The canvases a scope's manifest holds, decided before anything else is built (``canvas_plan``).
 
-    ``placements`` are the ``_placements`` of the scope, ``imaging`` the kept
-    imaging entries of each analysis and ``canvases`` the ids of every folio
-    canvas.
+    ``placements`` are the ``_placements`` of the scope and ``canvases`` the
+    ids of every folio canvas.
     """
 
     placements: list
-    imaging: dict
     canvases: frozenset
 
 
@@ -237,7 +237,7 @@ def canvas_plan(scope):
     """
     plans = list(_placements(scope))
     planned = frozenset(c for plan in plans for c in plan.kept if c in plan.raw)
-    return CanvasPlan(plans, _imaging(scope), planned)
+    return CanvasPlan(plans, planned)
 
 
 def manifest_offer(scope):
@@ -251,7 +251,7 @@ def manifest_offer(scope):
     folio (``canvas_plan``): the bound needs the whole count.
     """
     if scope.kind == "document" and not scope.canvases_all:
-        return _document_offer(scope.subject)
+        return _document_offer(scope)
     try:
         plan = canvas_plan(scope)
     except ManifestTooLarge:
@@ -259,11 +259,21 @@ def manifest_offer(scope):
     return "manifest" if plan.canvases else None
 
 
-def _document_offer(subject):
+def _document_offer(scope):
+    reader, version = anonymous_user(), data_version()
+    subject = subject_of(scope.subject, reader, version)
+    if subject is None:
+        return None
     pages = set()
     for kind in ("analysis", "characterization"):
         found = document_facts(
-            subject, anonymous_user(), kind=kind, positions=frozenset()
+            scope.subject,
+            reader,
+            kind=kind,
+            read=scope.read_manifest,
+            version=version,
+            positions=frozenset(),
+            subject=subject,
         )
         if found is None:
             return None
@@ -327,7 +337,7 @@ def _embedded_pages(placements):
                     yield placement.document, kind, only, placement.number[canvas_id]
 
 
-def _header(scope, plan, folios, unlocated, name, name_of, canvases):
+def _header(scope, folios, unlocated, name, name_of, canvases):
     """The ``Header`` of the manifest of *scope* (``iiif.manifest.manifest_header``)."""
     documents = len(scope.documents)
     summary = summary_counts(
@@ -341,7 +351,11 @@ def _header(scope, plan, folios, unlocated, name, name_of, canvases):
         summary = lang.joined([summary, drafts_summary()], sep=". ")
     metadata = [
         {
-            "label": lang.gettext_map("Document" if documents == 1 else "Documents"),
+            "label": (
+                lang.gettext_map("Document")
+                if documents == 1
+                else lang.gettext_map("Documents")
+            ),
             "value": lang.listed(
                 lang.linked(name(d), ids.report(d)) for d in scope.documents
             ),
@@ -349,8 +363,9 @@ def _header(scope, plan, folios, unlocated, name, name_of, canvases):
     ]
     metadata += aggregate_metadata(analysis_aggregate(scope.analyses, anonymous_user()))
     imaging = {}
+    kept_imaging = _imaging(scope)
     for analysis_id in scope.analyses:
-        for entry in plan.imaging[analysis_id]:
+        for entry in kept_imaging[analysis_id]:
             imaging.setdefault(
                 manifest_id(entry["downloadUrl"]), lang.none(entry["name"])
             )
@@ -483,9 +498,7 @@ def build_manifest(scope, embed=False):
     manifest = {
         "id": product_url("iiif-v3-explorer-manifest", scope.query, scope.language),
         "type": "Manifest",
-        **manifest_header(
-            _header(scope, plan, folios, unlocated, name, name_of, canvases)
-        ),
+        **manifest_header(_header(scope, folios, unlocated, name, name_of, canvases)),
     }
     manifest["items"] = canvases.items
     if structures:

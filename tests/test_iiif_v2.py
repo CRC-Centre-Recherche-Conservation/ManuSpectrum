@@ -187,6 +187,50 @@ V2_SOURCE = {
 }
 
 
+V3_PAINTED = {
+    "@context": "http://iiif.io/api/presentation/3/context.json",
+    "id": MANIFEST,
+    "type": "Manifest",
+    "label": {"none": ["Ms 59"]},
+    "items": [
+        {
+            "id": canvas,
+            "type": "Canvas",
+            "label": {"none": [label]},
+            "width": 4000,
+            "height": 5000,
+            "items": [
+                {
+                    "id": f"{canvas}/page",
+                    "type": "AnnotationPage",
+                    "items": [
+                        {
+                            "id": f"{canvas}/painting",
+                            "type": "Annotation",
+                            "motivation": "painting",
+                            "target": canvas,
+                            "body": {
+                                "id": f"https://img.example/{label}/full/max/0/default.jpg",
+                                "type": "Image",
+                                "format": "image/jpeg",
+                                "service": [
+                                    {
+                                        "id": f"https://img.example/{label}",
+                                        "type": "ImageService2",
+                                        "profile": "level1",
+                                    }
+                                ],
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+        for canvas, label in ((CANVAS, "f1"), (CANVAS_3, "f3"))
+    ],
+}
+
+
 class V2ManifestTests(IIIFCase):
     def setUp(self):
         super().setUp()
@@ -218,6 +262,38 @@ class V2ManifestTests(IIIFCase):
         self.assertEqual(body["sequences"][0]["canvases"][0]["width"], 4000)
         self.assertIn("attribution", body)
         self.assertEqual(body["related"][0]["@id"], ids.report(self.doc))
+
+    def test_v2_invalid_bearer_is_401(self):
+        response = Client().get(self.url, HTTP_AUTHORIZATION="Bearer nope")
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response["Content-Type"], IIIF_V2_MEDIA_TYPE)
+
+    @override_settings(EXPLORER_MANIFEST_MAX_CANVASES=1)
+    def test_v2_over_max_canvases_is_a_bodyless_413(self):
+        response = Client().get(self.url)
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(response.content, b"")
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+
+    def test_v2_image_of_a_v3_source_names_its_service_and_level(self):
+        self.fetch.side_effect = lambda url: V3_PAINTED if url == MANIFEST else None
+        canvas = self.manifest().json()["sequences"][0]["canvases"][0]
+        (image,) = canvas["images"]
+
+        self.assertEqual(image["@type"], "oa:Annotation")
+        self.assertEqual(image["motivation"], "sc:painting")
+        self.assertEqual(image["on"], CANVAS)
+        self.assertEqual(
+            image["resource"]["@id"], "https://img.example/f1/full/max/0/default.jpg"
+        )
+        self.assertEqual(
+            image["resource"]["service"],
+            {
+                "@context": "http://iiif.io/api/image/2/context.json",
+                "@id": "https://img.example/f1",
+                "profile": "http://iiif.io/api/image/2/level1.json",
+            },
+        )
 
     def test_v2_other_content_names_v2_pages(self):
         canvases = self.manifest().json()["sequences"][0]["canvases"]

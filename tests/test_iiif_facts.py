@@ -345,6 +345,39 @@ class AggregateTests(FactsCase):
             found.projects[0], str(self.projects["main"].pk), "sorted by name"
         )
 
+    def dated(self, **values):
+        analysis = self.new_resource("analysis", "Dated")
+        self.tile_values(analysis, "analysis", **values)
+        return str(analysis.pk)
+
+    def test_aggregate_dates_span_starts_and_ends_of_different_analyses(self):
+        only_start = self.dated(analysis_start_date="2024-05-01")
+        only_end = self.dated(analysis_end_date="2023-02-01")
+
+        found = facts.analysis_aggregate([only_start, only_end], fresh(self.anonymous))
+
+        self.assertEqual(found.dates, ("2023-02-01", "2024-05-01"))
+
+    def test_aggregate_dates_keep_a_start_after_the_last_end(self):
+        late = self.dated(analysis_start_date="2024-05-01")
+        early = self.dated(
+            analysis_start_date="2023-01-01", analysis_end_date="2023-02-01"
+        )
+
+        found = facts.analysis_aggregate([late, early], fresh(self.anonymous))
+
+        self.assertEqual(found.dates, ("2023-01-01", "2024-05-01"))
+
+    def test_shown_ids_keeps_existing_visible_resources_only(self):
+        project = self.projects["side"]
+        self.hide_project(project)
+        found = facts.shown_ids(
+            [self.documents["open"].pk, project.pk, uuid.uuid4(), None],
+            fresh(self.anonymous),
+        )
+
+        self.assertEqual(found, {str(self.documents["open"].pk)})
+
     def test_aggregate_follows_reader_nodegroups(self):
         node = self.nodes[("analysis", "analysis_technique_used")]
         self.restrict_nodegroup(node.nodegroup_id, self.editor)

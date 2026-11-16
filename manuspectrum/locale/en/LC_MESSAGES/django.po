@@ -7722,3 +7722,7 @@ msgstr "Chemical imaging"
 #: views/explorer/manifest.py
 msgid "Series (CSV)"
 msgstr "Series (CSV)"
+
+#: templates/views/pages/data.htm
+msgid "the manifest of a document, and the Explorer manifest of a selection or a project, to open in Mirador or any IIIF viewer."
+msgstr "the manifest of a document, and the Explorer manifest of a selection or a project, to open in Mirador or any IIIF viewer."
