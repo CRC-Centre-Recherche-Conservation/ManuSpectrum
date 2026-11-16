@@ -167,9 +167,12 @@ function documentOf(item: Item): Label | null {
 }
 
 /** What the row says when its item cannot be placed exactly: no page, or no document. */
-function unplacedText(item: Item): string | null {
+function unplacedText(
+    item: Item,
+    target: DocumentTarget | null,
+): string | null {
     if (item.kind === "characterization") {
-        return placeOf(item) ? null : $gettext("not placed in a document");
+        return target ? null : $gettext("not placed in a document");
     }
     return item.analysis.canvas ? null : $gettext("not located on a page");
 }
@@ -309,10 +312,20 @@ function removeLabel(slot: number): string {
                             {{ documentOf(byKey.get(row.key)!)!.value }}
                         </span>
                         <span
-                            v-if="unplacedText(byKey.get(row.key)!)"
+                            v-if="
+                                unplacedText(
+                                    byKey.get(row.key)!,
+                                    targets.get(row.key) ?? null,
+                                )
+                            "
                             class="unplaced"
                         >
-                            {{ unplacedText(byKey.get(row.key)!) }}
+                            {{
+                                unplacedText(
+                                    byKey.get(row.key)!,
+                                    targets.get(row.key) ?? null,
+                                )
+                            }}
                         </span>
                     </template>
                     <span

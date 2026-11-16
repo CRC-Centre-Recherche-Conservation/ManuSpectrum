@@ -122,6 +122,50 @@ describe("useUrlState", () => {
         expect(push).not.toHaveBeenCalled();
     });
 
+    it("stores the entry state with each entry written and hands it back with the location", async () => {
+        const state = reactive({ screen: "home", q: "" });
+        const seen: unknown[] = [];
+        let mark = "a";
+        const binding = {
+            ...makeBinding(state),
+            apply: (query: URLSearchParams, entry: unknown) => {
+                seen.push(entry);
+                state.screen = query.get("screen") ?? "home";
+                state.q = query.get("q") ?? "";
+            },
+            entryState: () => ({ mark }),
+        };
+        window.history.replaceState({ mark: "stored" }, "", "/en/discover?q=x");
+        mountWith(binding);
+        expect(seen).toEqual([{ mark: "stored" }]);
+        mark = "b";
+        state.screen = "results";
+        await nextTick();
+        expect(window.history.state).toEqual({ mark: "b" });
+        mark = "c";
+        state.q = "y";
+        await nextTick();
+        expect(window.history.state).toEqual({ mark: "c" });
+        window.history.replaceState({ mark: "popped" }, "", "/en/discover?q=z");
+        window.dispatchEvent(new PopStateEvent("popstate"));
+        expect(seen.at(-1)).toEqual({ mark: "popped" });
+    });
+
+    it("writes a null state and applies null when the binding keeps none", async () => {
+        const state = reactive({ screen: "home", q: "" });
+        const seen: unknown[] = [];
+        mountWith({
+            ...makeBinding(state),
+            apply: (_query: URLSearchParams, entry: unknown) => {
+                seen.push(entry);
+            },
+        });
+        expect(seen).toEqual([null]);
+        state.q = "lead";
+        await nextTick();
+        expect(window.history.state).toBeNull();
+    });
+
     it("stops listening to popstate once unmounted", () => {
         const state = reactive({ screen: "home", q: "" });
         const wrapper = mountWith(makeBinding(state));

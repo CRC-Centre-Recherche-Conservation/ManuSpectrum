@@ -18,6 +18,7 @@ import { defaultMapState } from "@/manuspectrum/pages/AnalysisExplorer/views/Map
 import type { UrlSnapshot } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 
 const DOC = "0b3c6f4e-6a39-4e3c-9f7e-1d2c3b4a5f60";
+const OTHER = "1c4d7e5f-7b4a-4f4d-8a8f-2e3d4c5b6a71";
 const ANALYSIS = "7d1e2f3a-4b5c-4d6e-8f70-819203a4b5c6";
 
 function home(): UrlSnapshot {
@@ -384,6 +385,37 @@ describe("store round trip", () => {
         );
         applySnapshot(store, fromQuery(new URLSearchParams(`doc=${DOC}`)));
         expect(store.documentOrigin).toBe("results");
+    });
+
+    it("keeps the origin when Compare moves from one document to another", () => {
+        const store = useExplorerStore();
+        applySnapshot(store, fromQuery(new URLSearchParams("screen=results")));
+        applySnapshot(store, fromQuery(new URLSearchParams(`doc=${DOC}`)));
+        applySnapshot(
+            store,
+            fromQuery(new URLSearchParams(`view=compare&doc=${DOC}`)),
+        );
+        applySnapshot(
+            store,
+            fromQuery(new URLSearchParams(`view=compare&doc=${OTHER}`)),
+        );
+        expect(store.documentOrigin).toBe("results");
+    });
+
+    it("takes the origin from the history entry, valid values only", () => {
+        const store = useExplorerStore();
+        applySnapshot(store, fromQuery(new URLSearchParams(`doc=${DOC}`)), {
+            documentOrigin: "compare",
+        });
+        expect(store.documentOrigin).toBe("compare");
+        applySnapshot(store, fromQuery(new URLSearchParams("screen=results")));
+        applySnapshot(store, fromQuery(new URLSearchParams(`doc=${DOC}`)), {
+            documentOrigin: "elsewhere",
+        });
+        expect(store.documentOrigin).toBe("results");
+        applySnapshot(store, fromQuery(new URLSearchParams("")));
+        applySnapshot(store, fromQuery(new URLSearchParams(`doc=${DOC}`)), 7);
+        expect(store.documentOrigin).toBe("home");
     });
 
     it("opens the folio view of a focused sample or identified material when the address names none", () => {

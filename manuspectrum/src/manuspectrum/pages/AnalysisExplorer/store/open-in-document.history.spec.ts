@@ -20,13 +20,31 @@ const TARGET = {
     focus: { kind: "analysis", id: uuid(101) },
 } as const;
 
+const OTHER = {
+    document: uuid(2),
+    canvas: null,
+    focus: { kind: "analysis", id: uuid(102) },
+} as const;
+
+/** The wiring of `AnalysisExplorer.vue`; `keepOrigin` off leaves the entry state out. */
+const wiring = { keepOrigin: true };
+
 const Harness = defineComponent({
     setup() {
         const store = useExplorerStore();
         useUrlState({
             snapshot: () => snapshotOf(store),
             toQuery,
-            apply: (query) => applySnapshot(store, fromQuery(query)),
+            apply: (query, entry) =>
+                applySnapshot(
+                    store,
+                    fromQuery(query),
+                    wiring.keepOrigin ? entry : undefined,
+                ),
+            entryState: () =>
+                wiring.keepOrigin
+                    ? { documentOrigin: store.documentOrigin }
+                    : null,
             historyMode,
         });
         return () => null;
@@ -49,6 +67,7 @@ async function back(): Promise<void> {
 let wrapper: ReturnType<typeof mount>;
 
 beforeEach(() => {
+    wiring.keepOrigin = true;
     window.history.replaceState(null, "", "/en/discover?view=compare");
     setActivePinia(createPinia());
     wrapper = mount(Harness);
@@ -111,5 +130,60 @@ describe("opening a Selection item in its document", () => {
         await nextTick();
         expect(store.document?.id).toBe(TARGET.document);
         expect(store.documentOrigin).toBe("compare");
+    });
+
+    describe.each([
+        ["the same document", TARGET],
+        ["another document", OTHER],
+    ])(
+        "opened from Compare over a document of the results (%s)",
+        (_name, to) => {
+            async function walk() {
+                window.history.replaceState(null, "", "/en/discover?q=x");
+                wrapper.unmount();
+                wrapper = mount(Harness);
+                const store = useExplorerStore();
+                store.openDocument(TARGET.document);
+                await nextTick();
+                store.setView("compare");
+                await nextTick();
+                store.openInDocument(to);
+                await nextTick();
+                expect(store.documentOrigin).toBe("compare");
+                await back();
+                expect(store.view).toBe("compare");
+                await back();
+                return store;
+            }
+
+            it("gives the document its own origin again after two Backs", async () => {
+                const store = await walk();
+                expect(store.document?.id).toBe(TARGET.document);
+                expect(store.documentOrigin).toBe("results");
+            });
+
+            it("loses it without the entry state", async () => {
+                wiring.keepOrigin = false;
+                const store = await walk();
+                expect(store.documentOrigin).toBe("compare");
+            });
+        },
+    );
+
+    it("restores the origin a reloaded document entry carries, and ignores an invalid one", () => {
+        for (const [stored, expected] of [
+            ["compare", "compare"],
+            ["nowhere", "home"],
+        ]) {
+            wrapper.unmount();
+            window.history.replaceState(
+                { documentOrigin: stored },
+                "",
+                `/en/discover?doc=${TARGET.document}`,
+            );
+            setActivePinia(createPinia());
+            wrapper = mount(Harness);
+            expect(useExplorerStore().documentOrigin).toBe(expected);
+        }
     });
 });

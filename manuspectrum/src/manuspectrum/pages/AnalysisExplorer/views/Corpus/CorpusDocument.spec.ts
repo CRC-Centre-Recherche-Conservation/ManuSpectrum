@@ -26,6 +26,7 @@ import {
     toQuery,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 import { sizedContainer } from "@/manuspectrum/pages/AnalysisExplorer/testing/leaflet.ts";
+import { EXPLORER_VIEWS } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 import {
     analysisPayload,
     annotation,
@@ -1341,6 +1342,31 @@ describe("CorpusDocument", () => {
         await back.trigger("click");
         expect(store.view).toBe("compare");
         expect(store.document).toBeNull();
+    });
+
+    it("does not offer Compare when that view is unavailable, and leads to the Corpus screen back() falls back to", async () => {
+        const entry = EXPLORER_VIEWS.find((view) => view.id === "compare")!;
+        (entry as { available: boolean }).available = false;
+        try {
+            stubFetch();
+            const { wrapper, store } = mountScreen((store) => {
+                store.setView("compare");
+                store.openInDocument({
+                    document: uuid(1),
+                    canvas: null,
+                    focus: { kind: "analysis", id: uuid(101) },
+                });
+                store.documentOrigin = "compare";
+            });
+            await flushPromises();
+            const back = wrapper.find(".return-pill");
+            expect(back.text()).toBe("Data Lab home");
+            await back.trigger("click");
+            expect(store.view).toBe("corpus");
+            expect(store.corpusScreen).toBe("home");
+        } finally {
+            (entry as { available: boolean }).available = true;
+        }
     });
 
     it("keeps the document when the card opened from Compare closes, without stepping back in the history", async () => {

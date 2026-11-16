@@ -22,6 +22,7 @@ import type { MapState } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/m
 import type { ExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import type {
     CorpusScreen,
+    DocumentOrigin,
     DocumentState,
     ExplorerView,
     Filters,
@@ -257,13 +258,31 @@ export function historyMode(
 }
 
 /**
- * Applies a URL snapshot; entering the document screen records the screen
- * left as its origin (Compare when that view was shown). The map legend's
- * open state is not in the address: the reader's current one is kept.
+ * The origin a history entry carries (`history.state`), when it is one of the
+ * screens a document can be entered from; anything else is ignored.
+ */
+function originOf(entry: unknown): DocumentOrigin | null {
+    const origin = (entry as { documentOrigin?: unknown } | null)
+        ?.documentOrigin;
+    return origin === "home" || origin === "results" || origin === "compare"
+        ? origin
+        : null;
+}
+
+/**
+ * Applies a URL snapshot. The map legend's open state is not in the address:
+ * the reader's current one is kept. For a snapshot that is a document screen,
+ * the origin (the screen the document was entered from) is, in order:
+ * - the one `entry` (the history entry's state) carries, when valid;
+ * - Compare, when Compare was shown, the snapshot is not the Compare view and
+ *   its document differs from the current one;
+ * - the Corpus screen being left, when the current screen is not a document;
+ * - otherwise the current origin, unchanged.
  */
 export function applySnapshot(
     store: ExplorerStore,
     snapshot: UrlSnapshot,
+    entry?: unknown,
 ): void {
     store.$patch((state) => {
         const previousView = state.view;
@@ -273,7 +292,10 @@ export function applySnapshot(
                 previousView === "compare" &&
                 state.view !== "compare" &&
                 snapshot.document?.id !== state.document?.id;
-            if (fromCompare) {
+            const stored = originOf(entry);
+            if (stored) {
+                state.documentOrigin = stored;
+            } else if (fromCompare) {
                 state.documentOrigin = "compare";
             } else if (state.corpusScreen !== "document") {
                 state.documentOrigin = state.corpusScreen;

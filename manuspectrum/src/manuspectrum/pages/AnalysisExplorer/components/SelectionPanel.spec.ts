@@ -539,7 +539,7 @@ describe("SelectionPanel, links to the document", () => {
         expect(wrapper.emitted("navigate")).toBeUndefined();
     });
 
-    it("has no link for an item no longer available, a loading row or a material with no document", async () => {
+    it("has no link for a loading row or a material with no document", async () => {
         const onlyComponent = characterization(2, {
             objects: [{ ...DOCUMENT, model: "component" }],
         });
