@@ -96,7 +96,7 @@ flowchart LR
     %% Core
     subgraph CORE["🧠 ManuSpectrum on Arches"]
         direction TB
-        MODEL["<b>CIDOC-CRM / CRMsci graphs</b><br/>Project · Document · Component<br/>Analysis · Characterization · Sample …"]
+        MODEL["<b>CIDOC-CRM / CRMsci graphs</b><br/>Project · Document · Component<br/>Analysis · Interpretation · Sample …"]
         VOC["<b>SKOS vocabularies</b><br/>techniques, materials,<br/>colours, places"]
         RULES["<b>Rules on the server</b><br/>permissions · embargoes<br/>XY configuration triggers"]
         DB[("PostgreSQL / PostGIS")]
