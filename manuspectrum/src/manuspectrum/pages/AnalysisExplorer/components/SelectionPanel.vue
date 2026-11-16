@@ -5,6 +5,7 @@ import {
     nextTick,
     onBeforeUnmount,
     ref,
+    useId,
     useTemplateRef,
 } from "vue";
 import { useGettext } from "vue3-gettext";
@@ -13,6 +14,7 @@ import BulkStatusLine from "@/manuspectrum/pages/AnalysisExplorer/components/Bul
 import TechniqueTag from "@/manuspectrum/pages/AnalysisExplorer/components/TechniqueTag.vue";
 import UnavailableState from "@/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue";
 
+import { useOpenInDocument } from "@/manuspectrum/pages/AnalysisExplorer/composables/useOpenInDocument.ts";
 import { useSelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 import { useSelectionToggle } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionToggle.ts";
 import {
@@ -21,6 +23,10 @@ import {
     SELECTION_ITEMS_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { holdingsOf } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
+import {
+    materialDocuments,
+    placeOf,
+} from "@/manuspectrum/pages/AnalysisExplorer/selection/place.ts";
 import { useVocabulary } from "@/manuspectrum/pages/AnalysisExplorer/composables/useVocabulary.ts";
 import {
     BASKET_LIMIT,
@@ -35,6 +41,7 @@ import type {
     Label,
     Technique,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type { DocumentTarget } from "@/manuspectrum/pages/AnalysisExplorer/selection/place.ts";
 import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
 /**
@@ -42,13 +49,21 @@ import type { SelectionHint } from "@/manuspectrum/pages/AnalysisExplorer/inject
  * what the card that added it knew (`SELECTION_HINTS_KEY`). « Compare »
  * opens the Compare view, asks for its heading to take the focus
  * (`SCREEN_FOCUS_KEY`) and emits `compare`, so a drawer holding the panel
- * closes. The panel is a column filling its container: the heading on top,
- * the list as the only scrolling region, the footer (actions, undo line)
- * pinned below it. « Empty… » empties the Selection at once and leaves a status
- * line with « Undo » that puts every item back at its slot. When the reading of the Selection fails, the rows not read lose
- * their placeholder and the panel offers Retry.
+ * closes. The title of an item that has a place is a link to its document
+ * (`placeOf`), described by one hidden « Open in the document »; a plain
+ * click opens it in the application and emits `navigate` (the drawer closes),
+ * any other click is the browser's. An analysis without a page says so; a
+ * material with no document has no link and says so. The panel is a column
+ * filling its container: the heading on top, the list as the only scrolling
+ * region, the footer (actions, undo line) pinned below it. « Empty… » empties
+ * the Selection at once and leaves a status line with « Undo » that puts
+ * every item back at its slot. When the reading of the Selection fails, the
+ * rows not read lose their placeholder and the panel offers Retry.
  */
-const emit = defineEmits<{ (event: "compare"): void }>();
+const emit = defineEmits<{
+    (event: "compare"): void;
+    (event: "navigate"): void;
+}>();
 
 const hints = inject(
     SELECTION_HINTS_KEY,
@@ -65,8 +80,19 @@ const { dataKindBadge } = useVocabulary();
 const { byKey, missing, status, retry } = selectionItems();
 const { clearAll, lastBulk, undo, dismiss } = useSelectionToggle();
 const panel = useTemplateRef<HTMLElement>("panel");
+const opener = useOpenInDocument();
+const openHintId = useId();
 
 const rows = computed(() => [...store.basket].sort((a, b) => a.slot - b.slot));
+const targets = computed(
+    () =>
+        new Map<string, DocumentTarget | null>(
+            rows.value.map((row) => {
+                const item = byKey.value.get(row.key);
+                return [row.key, item ? placeOf(item) : null];
+            }),
+        ),
+);
 const failed = computed(
     () => status.value === "error" || status.value === "unavailable",
 );
@@ -136,9 +162,31 @@ function layerOf(item: Item): string | null {
 }
 
 function documentOf(item: Item): Label | null {
-    return item.kind === "characterization"
-        ? null
-        : item.analysis.document.name;
+    if (item.kind !== "characterization") return item.analysis.document.name;
+    return materialDocuments(item.characterization)[0]?.name ?? null;
+}
+
+/** What the row says when its item cannot be placed exactly: no page, or no document. */
+function unplacedText(item: Item): string | null {
+    if (item.kind === "characterization") {
+        return placeOf(item) ? null : $gettext("not placed in a document");
+    }
+    return item.analysis.canvas ? null : $gettext("not located on a page");
+}
+
+function isOpen(target: DocumentTarget | null): boolean {
+    return (
+        target !== null &&
+        store.corpusScreen === "document" &&
+        store.view === "corpus" &&
+        store.document?.id === target.document &&
+        store.focus?.kind === target.focus.kind &&
+        store.focus.id === target.focus.id
+    );
+}
+
+function openItem(target: DocumentTarget, event: MouseEvent): void {
+    if (opener.open(target, event)) emit("navigate");
 }
 
 function compare(): void {
@@ -198,6 +246,11 @@ function removeLabel(slot: number): string {
             :hide-home="true"
             @retry="retry"
         />
+        <span
+            :id="openHintId"
+            hidden
+            >{{ $gettext("Open in the document") }}</span
+        >
         <ol v-if="store.basket.length > 0">
             <li
                 v-for="row in rows"
@@ -218,7 +271,29 @@ function removeLabel(slot: number): string {
                         <span class="kind">{{
                             kindText(byKey.get(row.key)!)
                         }}</span>
-                        <span class="title">
+                        <a
+                            v-if="targets.get(row.key)"
+                            class="title link"
+                            :href="opener.hrefOf(targets.get(row.key)!)"
+                            :aria-describedby="openHintId"
+                            :aria-current="
+                                isOpen(targets.get(row.key) ?? null)
+                                    ? 'location'
+                                    : undefined
+                            "
+                            @click="openItem(targets.get(row.key)!, $event)"
+                        >
+                            <span :lang="titleOf(byKey.get(row.key)!).lang">{{
+                                titleOf(byKey.get(row.key)!).value
+                            }}</span>
+                            <span v-if="layerOf(byKey.get(row.key)!)">
+                                · {{ layerOf(byKey.get(row.key)!) }}
+                            </span>
+                        </a>
+                        <span
+                            v-else
+                            class="title"
+                        >
                             <span :lang="titleOf(byKey.get(row.key)!).lang">{{
                                 titleOf(byKey.get(row.key)!).value
                             }}</span>
@@ -232,6 +307,12 @@ function removeLabel(slot: number): string {
                             :lang="documentOf(byKey.get(row.key)!)!.lang"
                         >
                             {{ documentOf(byKey.get(row.key)!)!.value }}
+                        </span>
+                        <span
+                            v-if="unplacedText(byKey.get(row.key)!)"
+                            class="unplaced"
+                        >
+                            {{ unplacedText(byKey.get(row.key)!) }}
                         </span>
                     </template>
                     <span
@@ -400,8 +481,19 @@ function removeLabel(slot: number): string {
     font-weight: 500;
 }
 
+.selection-panel .link {
+    color: var(--blue-text);
+    text-decoration: underline;
+}
+
+.selection-panel .link:focus-visible {
+    outline: 0.125rem solid var(--blue-text);
+    outline-offset: 0.125rem;
+}
+
 .selection-panel .kind,
 .selection-panel .document,
+.selection-panel .unplaced,
 .selection-panel .gone {
     color: var(--ink-muted);
     font-size: 0.6875rem;

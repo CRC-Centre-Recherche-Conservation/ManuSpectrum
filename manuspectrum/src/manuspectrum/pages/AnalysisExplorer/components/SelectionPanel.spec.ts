@@ -12,7 +12,12 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import {
+    documentHref,
+    snapshotOf,
+} from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
+import {
     analysisHit,
+    characterization,
     fileEntry,
     imagingEntry,
     label,
@@ -383,5 +388,263 @@ describe("SelectionPanel", () => {
         expect(title.find('[lang="fr"]').text()).toBe("Analyse maXRF");
         expect(title.text()).toContain("Hg");
         expect(title.find('[lang="fr"]').text()).not.toContain("Hg");
+    });
+});
+
+const CANVAS = "https://example.org/canvas/3";
+const DOCUMENT = {
+    id: uuid(1),
+    model: "document",
+    name: label("Manuscript 1"),
+};
+
+function itemsOf(...items: Item[]): SelectionItems {
+    return {
+        byKey: ref(new Map<string, Item>(items.map((i) => [i.key, i]))),
+        missing: ref(new Set<string>()),
+        settled: computed(() => true),
+        status: ref<RequestStatus>("ready"),
+        retry: () => undefined,
+    };
+}
+
+function mountItems(...items: Item[]) {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useExplorerStore();
+    store.addManyToBasket(items.map((item) => item.key));
+    const shared = itemsOf(...items);
+    const wrapper = mount(SelectionPanel, {
+        attachTo: document.body,
+        global: {
+            plugins: [pinia],
+            provide: { [SELECTION_ITEMS_KEY as symbol]: () => shared },
+        },
+    });
+    return { wrapper, store };
+}
+
+const HIT = analysisHit(1, { canvas: CANVAS });
+const ANALYSIS_KEY = `an:${HIT.id}:-`;
+const FILE_KEY = `af:${HIT.id}:${uuid(700)}`;
+const IMAGING_KEY = `im:${HIT.id}:1`;
+const MATERIAL = characterization(1, {
+    objects: [DOCUMENT],
+    zone: { canvas: CANVAS, shape: {}, source: "own" } as never,
+});
+const MATERIAL_KEY = `ch:${MATERIAL.id}:-`;
+
+const ALL_KINDS: Item[] = [
+    {
+        key: ANALYSIS_KEY,
+        kind: "analysis",
+        analysis: HIT,
+        excitation: null,
+        files: [],
+    },
+    {
+        key: FILE_KEY,
+        kind: "analysis-file",
+        analysis: HIT,
+        excitation: null,
+        file: fileEntry(),
+    },
+    { key: IMAGING_KEY, kind: "imaging", analysis: HIT, file: imagingEntry() },
+    { key: MATERIAL_KEY, kind: "characterization", characterization: MATERIAL },
+];
+
+describe("SelectionPanel, links to the document", () => {
+    it("links the title of every kind to the address of its document", () => {
+        const { wrapper, store } = mountItems(...ALL_KINDS);
+        const expected = {
+            [ANALYSIS_KEY]: documentHref(
+                snapshotOf(store),
+                DOCUMENT.id,
+                CANVAS,
+                {
+                    kind: "analysis",
+                    id: HIT.id,
+                },
+            ),
+            [MATERIAL_KEY]: documentHref(
+                snapshotOf(store),
+                DOCUMENT.id,
+                CANVAS,
+                {
+                    kind: "characterization",
+                    id: MATERIAL.id,
+                },
+            ),
+        };
+        expected[FILE_KEY] = expected[ANALYSIS_KEY];
+        expected[IMAGING_KEY] = expected[ANALYSIS_KEY];
+        for (const [key, href] of Object.entries(expected)) {
+            const link = wrapper.get(`[data-key="${key}"] a.title`);
+            expect(link.attributes("href")).toBe(href);
+        }
+    });
+
+    it("names the link by its title and describes it by one hidden « Open in the document »", () => {
+        const { wrapper } = mountItems(...ALL_KINDS);
+        const links = wrapper.findAll("a.title");
+        const hint = wrapper.findAll("[hidden]");
+        expect(hint).toHaveLength(1);
+        expect(hint[0].text()).toBe("Open in the document");
+        for (const link of links) {
+            expect(link.attributes("aria-describedby")).toBe(
+                hint[0].attributes("id"),
+            );
+        }
+        expect(links[0].text()).toContain("MS1_f12_XRF_03");
+    });
+
+    it("opens the document on its page with the item focused, and says so for a drawer to close", async () => {
+        const { wrapper, store } = mountItems(...ALL_KINDS);
+        await wrapper
+            .get(`[data-key="${MATERIAL_KEY}"] a.title`)
+            .trigger("click");
+        expect(store.corpusScreen).toBe("document");
+        expect(store.document).toEqual({ id: DOCUMENT.id, canvas: CANVAS });
+        expect(store.focus).toEqual({
+            kind: "characterization",
+            id: MATERIAL.id,
+        });
+        expect(store.folioView).toBe("characterizations");
+        expect(wrapper.emitted("navigate")).toHaveLength(1);
+    });
+
+    it.each([
+        ["Ctrl", { ctrlKey: true }],
+        ["Cmd", { metaKey: true }],
+        ["Shift", { shiftKey: true }],
+        ["Alt", { altKey: true }],
+        ["middle", { button: 1 }],
+    ])("leaves a %s click to the browser", async (_name, init) => {
+        const { wrapper, store } = mountItems(...ALL_KINDS);
+        const link = wrapper.get(`[data-key="${ANALYSIS_KEY}"] a.title`);
+        let handled = true;
+        link.element.addEventListener("click", (event) => {
+            handled = event.defaultPrevented;
+            event.preventDefault();
+        });
+        link.element.dispatchEvent(
+            new MouseEvent("click", {
+                bubbles: true,
+                cancelable: true,
+                ...init,
+            }),
+        );
+        expect(handled).toBe(false);
+        expect(store.corpusScreen).toBe("home");
+        expect(wrapper.emitted("navigate")).toBeUndefined();
+    });
+
+    it("has no link for an item no longer available, a loading row or a material with no document", async () => {
+        const onlyComponent = characterization(2, {
+            objects: [{ ...DOCUMENT, model: "component" }],
+        });
+        const { wrapper, store } = mountItems({
+            key: `ch:${onlyComponent.id}:-`,
+            kind: "characterization",
+            characterization: onlyComponent,
+        });
+        store.addToBasket(`an:${uuid(999)}:-`);
+        await nextTick();
+        expect(wrapper.find("a").exists()).toBe(false);
+        const row = wrapper.get(`[data-key="ch:${onlyComponent.id}:-"]`);
+        expect(row.text()).toContain("not placed in a document");
+        expect(wrapper.findAll(".pending")).toHaveLength(1);
+    });
+
+    it("has no link for a missing item or a row held only by its hint", async () => {
+        const pinia = createPinia();
+        setActivePinia(pinia);
+        const store = useExplorerStore();
+        const gone = `an:${uuid(990)}:-`;
+        const hinted = `an:${uuid(991)}:-`;
+        store.addManyToBasket([gone, hinted]);
+        const shared = itemsOf();
+        shared.missing.value = new Set([gone]);
+        const hints = ref(
+            new Map([
+                [hinted, { title: label("Zone bleue"), kind: "spectrum" }],
+            ]),
+        );
+        const wrapper = mount(SelectionPanel, {
+            global: {
+                plugins: [pinia],
+                provide: {
+                    [SELECTION_ITEMS_KEY as symbol]: () => shared,
+                    [SELECTION_HINTS_KEY as symbol]: hints,
+                },
+            },
+        });
+        await flushPromises();
+        expect(wrapper.find(`[data-key="${gone}"] .gone`).exists()).toBe(true);
+        expect(wrapper.find(`[data-key="${hinted}"]`).text()).toContain(
+            "Zone bleue",
+        );
+        expect(wrapper.find("a").exists()).toBe(false);
+    });
+
+    it("keeps an analysis with no page linked and says it is not located on a page", () => {
+        const unlocated = analysisHit(2);
+        const { wrapper } = mountItems({
+            key: `an:${unlocated.id}:-`,
+            kind: "analysis",
+            analysis: unlocated,
+            excitation: null,
+            files: [],
+        });
+        const row = wrapper.get(`[data-key="an:${unlocated.id}:-"]`);
+        expect(row.find("a.title").attributes("href")).toContain(
+            `doc=${uuid(1)}`,
+        );
+        expect(row.find("a.title").attributes("href")).not.toContain("canvas=");
+        expect(row.text()).toContain("not located on a page");
+    });
+
+    it("shows the document of a material like that of an analysis", () => {
+        const { wrapper } = mountItems(ALL_KINDS[3]);
+        expect(wrapper.get(".document").text()).toBe("Manuscript 1");
+    });
+
+    it("marks the row whose document and card are open", async () => {
+        const { wrapper, store } = mountItems(...ALL_KINDS);
+        expect(wrapper.find("[aria-current]").exists()).toBe(false);
+        store.openInDocument({
+            document: DOCUMENT.id,
+            canvas: CANVAS,
+            focus: { kind: "analysis", id: HIT.id },
+        });
+        await nextTick();
+        expect(
+            wrapper
+                .get(`[data-key="${ANALYSIS_KEY}"] a.title`)
+                .attributes("aria-current"),
+        ).toBe("location");
+        expect(
+            wrapper
+                .get(`[data-key="${MATERIAL_KEY}"] a.title`)
+                .attributes("aria-current"),
+        ).toBeUndefined();
+    });
+
+    it("puts the link before the remove button in the tab order, and the button does not navigate", async () => {
+        const { wrapper, store } = mountItems(ALL_KINDS[0]);
+        const focusable = [
+            ...wrapper
+                .get(`[data-key="${ANALYSIS_KEY}"]`)
+                .element.querySelectorAll<HTMLElement>("a[href], button"),
+        ];
+        expect(focusable.map((element) => element.tagName)).toEqual([
+            "A",
+            "BUTTON",
+        ]);
+        expect(focusable.every((element) => element.tabIndex === 0)).toBe(true);
+        await wrapper.get(".remove").trigger("click");
+        expect(store.corpusScreen).toBe("home");
+        expect(store.basket).toHaveLength(0);
+        expect(wrapper.emitted("navigate")).toBeUndefined();
     });
 });

@@ -364,6 +364,28 @@ describe("store round trip", () => {
         applySnapshot(store, fromQuery(new URLSearchParams(`doc=${DOC}`)));
         expect(store.documentOrigin).toBe("results");
     });
+    it("records Compare as the origin of a document screen reached from that view, through the history too", () => {
+        const store = useExplorerStore();
+        applySnapshot(store, fromQuery(new URLSearchParams("view=compare")));
+        applySnapshot(store, fromQuery(new URLSearchParams(`doc=${DOC}`)));
+        expect(store.documentOrigin).toBe("compare");
+        applySnapshot(store, fromQuery(new URLSearchParams("screen=results")));
+        applySnapshot(store, fromQuery(new URLSearchParams(`doc=${DOC}`)));
+        expect(store.documentOrigin).toBe("results");
+    });
+
+    it("keeps the origin of a document when Compare is shown over it and the history comes back to it", () => {
+        const store = useExplorerStore();
+        applySnapshot(store, fromQuery(new URLSearchParams("screen=results")));
+        applySnapshot(store, fromQuery(new URLSearchParams(`doc=${DOC}`)));
+        applySnapshot(
+            store,
+            fromQuery(new URLSearchParams(`view=compare&doc=${DOC}`)),
+        );
+        applySnapshot(store, fromQuery(new URLSearchParams(`doc=${DOC}`)));
+        expect(store.documentOrigin).toBe("results");
+    });
+
     it("opens the folio view of a focused sample or identified material when the address names none", () => {
         const sample = fromQuery(
             new URLSearchParams(`doc=${DOC}&focus=sample:${DOC}`),

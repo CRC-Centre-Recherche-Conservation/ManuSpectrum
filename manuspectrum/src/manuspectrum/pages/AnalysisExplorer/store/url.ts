@@ -258,20 +258,26 @@ export function historyMode(
 
 /**
  * Applies a URL snapshot; entering the document screen records the screen
- * left as its origin. The map legend's open state is not in the address:
- * the reader's current one is kept.
+ * left as its origin (Compare when that view was shown). The map legend's
+ * open state is not in the address: the reader's current one is kept.
  */
 export function applySnapshot(
     store: ExplorerStore,
     snapshot: UrlSnapshot,
 ): void {
     store.$patch((state) => {
+        const previousView = state.view;
         state.view = isViewAvailable(snapshot.view) ? snapshot.view : "corpus";
-        if (
-            snapshot.corpusScreen === "document" &&
-            state.corpusScreen !== "document"
-        ) {
-            state.documentOrigin = state.corpusScreen;
+        if (snapshot.corpusScreen === "document") {
+            const fromCompare =
+                previousView === "compare" &&
+                state.view !== "compare" &&
+                snapshot.document?.id !== state.document?.id;
+            if (fromCompare) {
+                state.documentOrigin = "compare";
+            } else if (state.corpusScreen !== "document") {
+                state.documentOrigin = state.corpusScreen;
+            }
         }
         state.corpusScreen = snapshot.corpusScreen;
         state.document = snapshot.document;

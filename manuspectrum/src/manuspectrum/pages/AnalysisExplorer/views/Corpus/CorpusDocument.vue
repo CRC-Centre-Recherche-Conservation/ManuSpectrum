@@ -656,11 +656,12 @@ const resultsLabel = computed(() => {
               );
     return interpolate(text, { n: shown.total }, true);
 });
-const backLabel = computed(() =>
-    store.documentOrigin === "results"
+const backLabel = computed(() => {
+    if (store.documentOrigin === "compare") return $gettext("Back to Compare");
+    return store.documentOrigin === "results"
         ? resultsLabel.value
-        : $gettext("Data Lab home"),
-);
+        : $gettext("Data Lab home");
+});
 const drawerVisible = computed({
     get: () => narrow.value && cardOpen.value,
     set: (visible: boolean) => {
@@ -1038,6 +1039,10 @@ function selectCanvas(canvasId: string): void {
 }
 
 function back(): void {
+    if (store.documentOrigin === "compare") {
+        store.backToCompare();
+        return;
+    }
     store.setCorpusScreen(store.documentOrigin);
 }
 
