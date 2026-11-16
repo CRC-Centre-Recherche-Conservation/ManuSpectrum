@@ -92,7 +92,8 @@ class DiscoverEntryTests(TestCase):
 
     def test_search_form_offers_the_database_and_the_data_lab(self):
         html = self.client.get("/en/").content.decode()
-        buttons = re.findall(r"<button[^>]*>", self._form(html))
+        self.assertNotIn("<button", self._form(html))
+        buttons = re.findall(r'<button type="submit" form="ms-search-form"[^>]*>', html)
         self.assertEqual(len(buttons), 2)
         self.assertNotIn("formaction", buttons[0])
         self.assertIn('aria-describedby="ms-way-db"', buttons[0])
@@ -113,9 +114,26 @@ class DiscoverEntryTests(TestCase):
                 "Rechercher dans le Laboratoire des données",
             ),
         ):
-            form = self._form(self.client.get(f"/{lang}/").content.decode())
-            self.assertRegex(form, rf">\s*{db_label}\s*</button>")
-            self.assertRegex(form, rf">\s*{lab_label}\s*</button>")
+            html = self.client.get(f"/{lang}/").content.decode()
+            self.assertRegex(
+                html, rf'form="ms-search-form"[^>]*>\s*{db_label}\s*</button>'
+            )
+            self.assertRegex(
+                html, rf'form="ms-search-form"[^>]*>\s*{lab_label}\s*</button>'
+            )
+
+    def test_each_screenshot_links_to_its_tool(self):
+        for lang in ("en", "fr"):
+            html = self.client.get(f"/{lang}/").content.decode()
+            with translation.override(lang):
+                search_url = reverse("search_home")
+            links = re.findall(r'<a class="ms-search-way-shot" href="([^"]*)">', html)
+            self.assertEqual(links, [search_url, f"/{lang}/discover"], lang)
+
+    def test_more_techniques_tile_links_to_the_corpus(self):
+        html = self.client.get("/en/").content.decode()
+        self.assertIn('<a class="ms-stat ms-stat--more', html)
+        self.assertIn('href="/en/discover?screen=results"', html)
 
     def test_hero_offers_the_search_and_the_data_lab(self):
         for lang, search_label, lab_label in (

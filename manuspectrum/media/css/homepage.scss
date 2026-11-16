@@ -394,7 +394,7 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
 .ms-hero-tool-note {
     margin: 0;
     font-size: 0.8rem;
-    font-weight: 300;
+    font-weight: 400;
     line-height: 1.5;
     color: var(--ink-muted);
 }
@@ -406,8 +406,8 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
 }
 
 .ms-btn-outline:hover {
-    background: var(--ink);
-    color: var(--surface);
+    background: var(--bg-warm);
+    color: var(--ink);
     transform: translateY(-2px);
 }
 
@@ -415,8 +415,10 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
 .ms-hero-scroll {
     position: absolute;
     bottom: 2.5rem;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
+    right: 0;
+    margin-inline: auto;
+    width: max-content;
     z-index: 2;
     opacity: 0;
     animation: hero-fade-in 1s var(--ease-out-expo) 1.8s forwards;
@@ -427,7 +429,7 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
     flex-direction: column;
     align-items: center;
     gap: 0.5rem;
-    color: var(--ink-dim);
+    color: var(--ink-soft);
     font-size: 0.68rem;
     letter-spacing: 0.15em;
     text-transform: uppercase;
@@ -549,29 +551,9 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
     border: 1px solid var(--border);
     border-radius: 12px;
     box-shadow: var(--shadow-sm);
-    transition: box-shadow 0.4s, transform 0.4s var(--ease-out-expo), border-color 0.4s;
     position: relative;
     overflow: hidden;
 }
-
-// Spectral top accent — appears on hover
-.ms-stat::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    opacity: 0;
-    transition: opacity 0.4s;
-}
-
-.ms-stat:hover {
-    box-shadow: var(--shadow-md);
-    transform: translateY(-3px);
-}
-
-.ms-stat:hover::before { opacity: 1; }
 
 .ms-stat-icon {
     font-size: 1.25rem;
@@ -580,38 +562,70 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
 
 // Spectral color cycling for each technique
 .ms-stat:nth-child(1) .ms-stat-icon { color: var(--spectral-1); }
-.ms-stat:nth-child(1)::before { background: var(--spectral-1); }
 
 .ms-stat:nth-child(2) .ms-stat-icon { color: var(--spectral-2); }
-.ms-stat:nth-child(2)::before { background: var(--spectral-2); }
 
 .ms-stat:nth-child(3) .ms-stat-icon { color: var(--spectral-3); }
-.ms-stat:nth-child(3)::before { background: var(--spectral-3); }
 
 .ms-stat:nth-child(4) .ms-stat-icon { color: var(--spectral-4); }
-.ms-stat:nth-child(4)::before { background: var(--spectral-4); }
 
 .ms-stat:nth-child(5) .ms-stat-icon { color: var(--teal); }
-.ms-stat:nth-child(5)::before { background: var(--teal); }
 
 .ms-stat:nth-child(6) .ms-stat-icon { color: var(--spectral-5); }
-.ms-stat:nth-child(6)::before { background: var(--spectral-5); }
 
 .ms-stat:nth-child(7) .ms-stat-icon { color: var(--spectral-6); }
-.ms-stat:nth-child(7)::before { background: var(--spectral-6); }
 
 .ms-stat:nth-child(8) .ms-stat-icon { color: var(--spectral-1); }
-.ms-stat:nth-child(8)::before { background: linear-gradient(90deg, var(--spectral-1), var(--spectral-2)); }
 
-// "And many more" — special dashed style
-.ms-stat:nth-child(9) {
+// "And many more": a link to the Data Lab corpus, centred in its tile.
+.ms-stat--more {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
     border-style: dashed;
-    border-color: rgba(26,26,46,0.12);
+    border-color: rgba(26,26,46,0.16);
     background: transparent;
+    box-shadow: none;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.3s, background 0.3s;
 }
-.ms-stat:nth-child(9) .ms-stat-icon { color: var(--ink-dim); }
-.ms-stat:nth-child(9)::before { background: linear-gradient(90deg, var(--spectral-1), var(--spectral-3), var(--spectral-5), var(--spectral-6)); }
-.ms-stat:nth-child(9):hover { background: var(--surface); }
+
+.ms-stat-more-sign {
+    display: grid;
+    place-items: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 50%;
+    font-family: var(--font-display);
+    font-size: 1.6rem;
+    line-height: 1;
+    color: var(--ink);
+    background:
+        linear-gradient(var(--bg), var(--bg)) padding-box,
+        conic-gradient(var(--spectral-1), var(--spectral-2), var(--spectral-3), var(--spectral-4), var(--spectral-5), var(--spectral-6), var(--spectral-1)) border-box;
+    border: 2px solid transparent;
+}
+
+.ms-stat-more-link {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--blue-text);
+}
+
+.ms-stat--more:hover {
+    border-color: var(--blue-text);
+    background: var(--surface);
+}
+
+.ms-stat--more:hover .ms-stat-more-link { text-decoration: underline; }
+
+.ms-stat--more:focus-visible {
+    outline: 2px solid var(--blue-text);
+    outline-offset: 2px;
+}
 
 .ms-stat-value {
     font-family: var(--font-display);
@@ -624,7 +638,7 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
 
 .ms-stat-label {
     font-size: 0.68rem;
-    color: var(--ink-dim);
+    color: var(--ink-soft);
     letter-spacing: 0.04em;
     text-transform: uppercase;
     font-family: var(--font-mono);
@@ -643,7 +657,8 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
     scroll-snap-type: x mandatory;
     scroll-behavior: smooth;
     gap: 1.5rem;
-    padding-bottom: 0.5rem;
+    padding: 0.5rem 0 1.75rem;
+    margin-bottom: -1.25rem;
     -ms-overflow-style: none;
     scrollbar-width: none;
 }
@@ -656,7 +671,7 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
     border-radius: 16px;
     overflow: hidden;
     position: relative;
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--shadow-md);
 }
 
 .ms-showcase-slide img {
@@ -703,27 +718,35 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
+    gap: 0;
     margin-top: 1.2rem;
 }
 
 .ms-showcase-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    border: 1.5px solid var(--ink-dim);
+    position: relative;
+    width: 24px;
+    height: 24px;
+    border: 0;
     background: transparent;
     cursor: pointer;
     padding: 0;
+}
+
+.ms-showcase-dot::before {
+    content: '';
+    position: absolute;
+    inset: 8px;
+    border-radius: 50%;
+    border: 1.5px solid var(--ink-dim);
     transition: background 0.3s, border-color 0.3s, transform 0.3s;
 }
 
-.ms-showcase-dot:hover {
+.ms-showcase-dot:hover::before {
     border-color: var(--spectral-5);
     transform: scale(1.2);
 }
 
-.ms-showcase-dot.active {
+.ms-showcase-dot.active::before {
     background: var(--spectral-5);
     border-color: var(--spectral-5);
 }
@@ -862,7 +885,7 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
     background: var(--bg-warm);
     border: 1px solid var(--border);
     border-radius: 4px;
-    color: var(--ink-dim);
+    color: var(--ink-soft);
 }
 
 a.ms-feature-tag--link {
@@ -907,7 +930,6 @@ a.ms-feature-tag--link i {
     overflow: hidden;
     position: relative;
     box-shadow: var(--shadow-md);
-    cursor: pointer;
     transition: box-shadow 0.4s, transform 0.4s var(--ease-out-expo);
 }
 
@@ -953,6 +975,10 @@ a.ms-feature-tag--link i {
     text-transform: uppercase;
     color: var(--spectral-3);
     margin-bottom: 0.5rem;
+    background: rgba(26,26,46,0.7);
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    width: max-content;
 }
 
 .ms-gallery-overlay h4 {
@@ -998,6 +1024,23 @@ a.ms-feature-tag--link i {
 }
 
 .ms-gallery-compare { touch-action: pan-y pinch-zoom; }
+
+.ms-compare-hint {
+    position: absolute;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 3;
+    padding: 0.25rem 0.65rem;
+    border-radius: 100px;
+    background: rgba(26,26,46,0.7);
+    color: #fff;
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+    transition: opacity 0.2s;
+}
+.ms-gallery-compare.is-comparing .ms-compare-hint { opacity: 0; }
 .ms-gallery-compare:focus-within { outline: 2px solid var(--blue-text); outline-offset: 3px; }
 
 .ms-compare-divider {
@@ -1040,6 +1083,14 @@ a.ms-feature-tag--link i {
     opacity: 0;
     transition: transform 0.5s var(--ease-out-expo), opacity 0.4s, box-shadow 0.3s;
 
+    // 26 px tap target around the 14 px dot
+    &::before {
+        content: '';
+        position: absolute;
+        inset: -6px;
+        border-radius: 50%;
+    }
+
     &::after {
         content: '';
         position: absolute;
@@ -1073,7 +1124,7 @@ a.ms-feature-tag--link i {
 .ms-apoint-1 { top: 30%; left: 38%; background: var(--spectral-5); transition-delay: 0.2s; }
 .ms-apoint-2 { top: 50%; left: 65%; background: var(--spectral-1); transition-delay: 0.4s; }
 .ms-apoint-3 { top: 40%; left: 22%; background: var(--spectral-4); transition-delay: 0.6s; }
-.ms-apoint-4 { top: 72%; left: 50%; background: var(--spectral-6); transition-delay: 0.8s; }
+.ms-apoint-4 { top: 58%; left: 50%; background: var(--spectral-6); transition-delay: 0.8s; }
 
 .ms-apoint-2::after { animation-delay: 0.6s; }
 .ms-apoint-3::after { animation-delay: 1.2s; }
@@ -1086,10 +1137,14 @@ a.ms-feature-tag--link i {
 }
 
 // Overlay: pointer-events none so points stay clickable
+.ms-gallery-analysis .ms-gallery-overlay,
+.ms-gallery-msi .ms-gallery-overlay {
+    background: linear-gradient(to top, rgba(26,26,46,0.9) 0%, rgba(26,26,46,0.55) 45%, transparent 75%);
+}
+
 .ms-gallery-analysis .ms-gallery-overlay {
     pointer-events: none;
     z-index: 4;
-    background: linear-gradient(to top, rgba(26,26,46,0.88) 0%, rgba(26,26,46,0.15) 35%, transparent 55%);
 }
 
 // Lift analysis item above siblings when popup is active
@@ -1143,6 +1198,17 @@ a.ms-feature-tag--link i {
     font-weight: 500;
     padding: 2px 8px;
     border-radius: 4px;
+}
+
+.ms-popup-example {
+    font-family: var(--font-mono);
+    font-size: 0.55rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: rgba(255,255,255,0.75);
+    border: 1px solid rgba(255,255,255,0.25);
 }
 
 .ms-popup-id {
@@ -1376,7 +1442,7 @@ a.ms-feature-tag--link i {
     flex-wrap: wrap;
     align-items: stretch;
     gap: 0.6rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
 }
 
 .ms-search-input-wrapper {
@@ -1385,17 +1451,15 @@ a.ms-feature-tag--link i {
     min-width: 0;
 }
 
-.ms-search-actions {
-    display: flex;
-    flex: 1 1 100%;
+.ms-search-way .ms-btn {
+    width: 100%;
+    max-width: none;
     justify-content: center;
-    gap: 0.6rem;
-}
-
-.ms-search-actions .ms-btn {
-    white-space: nowrap;
+    text-align: center;
     border-radius: 12px;
 }
+
+.ms-search-way .ms-btn-primary { border: 1px solid transparent; }
 
 a.ms-search-chip {
     display: inline-block;
@@ -1477,7 +1541,6 @@ a.ms-search-chip {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    transition: opacity 0.25s;
 }
 
 .ms-search-way--db {
@@ -1497,7 +1560,7 @@ a.ms-search-chip {
     margin-bottom: auto;
     padding-left: 1rem;
     font-size: 0.85rem;
-    font-weight: 300;
+    font-weight: 400;
     line-height: 1.6;
     color: var(--ink-muted);
     transition: color 0.25s;
@@ -1536,6 +1599,16 @@ a.ms-search-chip {
     background: linear-gradient(90deg, var(--way-from), var(--way-to));
 }
 
+.ms-search-way-shot {
+    display: block;
+    border-radius: 12px;
+}
+
+.ms-search-way-shot:focus-visible {
+    outline: 2px solid var(--blue-text);
+    outline-offset: 3px;
+}
+
 .ms-search-way img {
     display: block;
     width: 100%;
@@ -1557,24 +1630,21 @@ a.ms-search-chip {
 }
 
 .ms-search-box:has(.ms-search-db:is(:hover, :focus-visible)) .ms-search-way--db img,
-.ms-search-box:has(.ms-search-lab:is(:hover, :focus-visible)) .ms-search-way--lab img {
+.ms-search-box:has(.ms-search-lab:is(:hover, :focus-visible)) .ms-search-way--lab img,
+.ms-search-way-shot:hover img {
     box-shadow: 0 14px 34px var(--way-glow), var(--shadow-sm);
     transform: translateY(-3px);
 }
 
-.ms-search-box:has(.ms-search-db:is(:hover, :focus-visible)) .ms-search-way--lab,
-.ms-search-box:has(.ms-search-lab:is(:hover, :focus-visible)) .ms-search-way--db {
-    opacity: 0.55;
-}
-
-.ms-search-actions .ms-btn:focus-visible {
+.ms-search-way .ms-btn:focus-visible {
     outline: 2px solid var(--blue-text);
     outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
     .ms-search-way, .ms-search-way figcaption, .ms-search-way figcaption::before, .ms-search-way img { transition: none; }
-    .ms-search-box :is(.ms-search-way--db, .ms-search-way--lab) img { transform: none !important; }
+    .ms-search-box :is(.ms-search-way--db, .ms-search-way--lab) img,
+    .ms-search-way-shot:hover img { transform: none !important; }
 }
 
 
@@ -1596,7 +1666,8 @@ a.ms-search-chip {
 @media (max-width: 1024px) {
     .ms-project-grid { grid-template-columns: 1fr; gap: 2.5rem; }
     .ms-features-grid { grid-template-columns: 1fr; }
-    .ms-gallery-grid { grid-template-columns: 1fr; max-height: none; }
+    .ms-gallery-grid { grid-template-columns: 1fr; grid-template-rows: none; max-height: none; }
+    .ms-gallery-item { aspect-ratio: 4 / 3; }
     .ms-gallery-item:first-child { grid-row: auto; }
     .ms-stats { grid-template-columns: repeat(3, 1fr); }
 }
@@ -1606,28 +1677,25 @@ a.ms-search-chip {
     .ms-hero-logo { width: clamp(200px, 65vw, 320px); }
     .ms-hero { padding: 5.5rem 0 3rem; }
     .ms-hero-content { padding: 0 var(--ms-gutter); }
-    .ms-hero-tools { grid-template-columns: minmax(0, 22rem); }
+    .ms-hero-tools { grid-template-columns: 1fr; width: 100%; }
+    .ms-hero-tool .ms-btn { max-width: none; width: 100%; }
+    .ms-hero-tool-note { text-align: center; }
     .ms-hero-scroll { display: none; }
 
     .ms-stats { grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
 }
 
 @media (max-width: 640px) {
+    .ms-showcase-arrows { top: 1rem; transform: none; }
+    .ms-showcase-arrow { width: 44px; height: 44px; }
     #ms-search-form { flex-direction: column; }
-    .ms-search-actions { flex-direction: column; }
     .ms-search-ways { grid-template-columns: 1fr; }
-    .ms-search-actions .ms-btn {
-        width: 100%;
-        max-width: none;
-        white-space: normal;
-        text-align: center;
-        justify-content: center;
-    }
+    .ms-search-way .ms-btn { white-space: normal; }
 }
 
 @media (max-width: 480px) {
     .ms-search-chips { gap: 0.4rem; }
-    .ms-search-chip { font-size: 0.75rem; padding: 0.4rem 0.9rem; }
+    .ms-search-chip { font-size: 0.75rem; padding: 0.4rem 0.9rem; min-height: 44px; }
     .ms-stats { grid-template-columns: repeat(2, 1fr); }
     .ms-stat:nth-child(9) { grid-column: 1 / -1; }
     .ms-analysis-popup { width: 220px; }

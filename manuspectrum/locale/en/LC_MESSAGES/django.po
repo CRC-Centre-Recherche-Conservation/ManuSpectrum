@@ -2812,10 +2812,6 @@ msgstr "Multispectral"
 msgid "Spectral band scanning and false-color composites via IIIF"
 msgstr "Spectral band scanning and false-color composites via IIIF"
 
-#: templates/index.htm:604 templates/index.htm:606
-msgid "Search materials, techniques, objects..."
-msgstr "Search materials, techniques, objects..."
-
 #: templates/index.htm:615 templates/index.htm:617
 msgid "Vermilion"
 msgstr "Vermilion"
@@ -7667,14 +7663,6 @@ msgstr ""
 msgid "Overview"
 msgstr "Overview"
 
-#: templates/index.htm
-msgid "Advanced search across every resource."
-msgstr "Advanced search across every resource."
-
-#: templates/index.htm
-msgid "Analyses on the page, to compare and export."
-msgstr "Analyses on the page, to compare and export."
-
 #: templates/views/pages/analysis-explorer.htm
 msgid "ManuSpectrum Data Lab"
 msgstr "ManuSpectrum Data Lab"
@@ -7704,13 +7692,33 @@ msgid "Advanced search"
 msgstr "Advanced search"
 
 #: templates/index.htm
-msgid "Through the analyses"
-msgstr "Through the analyses"
-
-#: templates/index.htm
 msgid "Advanced search: MS 59 resources (folios, a place, the manuscript) beside a map of the Bay of Mont-Saint-Michel."
 msgstr "Advanced search: MS 59 resources (folios, a place, the manuscript) beside a map of the Bay of Mont-Saint-Michel."
 
 #: templates/index.htm
 msgid "Data Lab: folio 1v of MS 59 with its analysis zones drawn over the illumination, and the details of a FORS analysis with its reflectance spectrum."
 msgstr "Data Lab: folio 1v of MS 59 with its analysis zones drawn over the illumination, and the details of a FORS analysis with its reflectance spectrum."
+
+#: templates/index.htm
+msgid "Material, technique, object…"
+msgstr "Material, technique, object…"
+
+#: templates/index.htm
+msgid "Advanced search across every resource."
+msgstr "Advanced search across every resource."
+
+#: templates/index.htm
+msgid "Analyses on the folio, to compare and export."
+msgstr "Analyses on the folio, to compare and export."
+
+#: templates/index.htm
+msgid "Through the analyses"
+msgstr "Through the analyses"
+
+#: templates/index.htm
+msgid "Drag to compare Hg / Ca"
+msgstr "Drag to compare Hg / Ca"
+
+#: templates/index.htm
+msgid "Browse the corpus"
+msgstr "Browse the corpus"
