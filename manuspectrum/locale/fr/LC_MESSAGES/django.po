@@ -5505,8 +5505,8 @@ msgid "Observation · CRMsci"
 msgstr "Observation · CRMsci"
 
 #: templates/views/pages/conceptual-model.htm:109
-msgid "Analysis → Characterization"
-msgstr "Analyse → Caractérisation"
+msgid "Analysis → Interpretation"
+msgstr "Analyse → Interprétation"
 
 #: templates/views/pages/conceptual-model.htm:110
 msgid "Shared context"
@@ -5655,13 +5655,13 @@ msgstr "la mesure : instrument, opérateur, date"
 
 #: templates/views/pages/conceptual-model.htm:201
 #: templates/views/pages/conceptual-model.htm:203
-msgid "Characterization"
-msgstr "Caractérisation"
+msgid "Interpretation"
+msgstr "Interprétation"
 
 #: templates/views/pages/conceptual-model.htm:201
 #: templates/views/pages/conceptual-model.htm:203
-msgid "the interpretation — stored apart from the measurement"
-msgstr "l'interprétation — enregistrée à part de la mesure"
+msgid "the materials identified — stored apart from the measurement"
+msgstr "les matériaux identifiés — enregistrés à part de la mesure"
 
 #: templates/views/pages/conceptual-model.htm:210
 #: templates/views/pages/conceptual-model.htm:212
@@ -7751,8 +7751,8 @@ msgid "Annotations and content states"
 msgstr "Annotations et états de contenu"
 
 #: templates/views/pages/data.htm
-msgid "annotation collections, characterizations and the content state of a zone, for Mirador and mirador-xyviewer."
-msgstr "collections d'annotations, caractérisations et état de contenu d'une zone, pour Mirador et mirador-xyviewer."
+msgid "annotation collections, interpretations and the content state of a zone, for Mirador and mirador-xyviewer."
+msgstr "collections d'annotations, interprétations et état de contenu d'une zone, pour Mirador et mirador-xyviewer."
 
 #: templates/views/pages/data.htm
 msgid "Spectra"
