@@ -13,19 +13,25 @@ Usage:
 
 import copy
 import uuid
+from urllib.parse import urlsplit
 from unittest.mock import patch
 
 from django.conf import settings
 from django.core.cache import cache
 from django.db import connection
-from django.test import Client
+from django.test import Client, SimpleTestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import resolve, reverse
 
 from arches.app.models.models import IIIFManifest, TileModel
 
 from manuspectrum.iiif import ids
-from manuspectrum.iiif.sources import ManifestSource, manifest_source, manifest_sources
+from manuspectrum.iiif.sources import (
+    ManifestSource,
+    local_manifest_uuid,
+    manifest_source,
+    manifest_sources,
+)
 from manuspectrum.iiif.constants import IIIF_MEDIA_TYPE, IIIF_V2_MEDIA_TYPE
 from tests.explorer_fixtures import FEATURES, SOURCE_MANIFEST, IIIFCase
 from tests.iiif_auth import DEMO, bearer, token_for
@@ -566,3 +572,15 @@ class ManifestSourceTests(StoredManifestCase):
         )
         self.assertIsNone(manifest_source(f"/manifest/{uuid.uuid4()}"))
         self.assertIsNone(manifest_source(""))
+
+
+class LocalManifestUuidTests(SimpleTestCase):
+    def test_a_stored_manifest_url_names_its_uuid(self):
+        globalid = uuid.uuid4()
+        self.assertEqual(local_manifest_uuid(f"/manifest/{globalid}"), str(globalid))
+
+    def test_a_document_manifest_route_names_no_stored_manifest(self):
+        for version in (2, 3):
+            url = ids.manifest(str(uuid.uuid4()), version)
+            self.assertIsNone(local_manifest_uuid(url))
+            self.assertIsNone(local_manifest_uuid(urlsplit(url).path))

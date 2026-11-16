@@ -20,6 +20,7 @@ from django.test.utils import CaptureQueriesContext
 
 from arches.app.models.models import TileModel
 
+from manuspectrum.iiif import ids
 from manuspectrum.views.explorer.citations import Home
 from manuspectrum.views.explorer.scopes import (
     resolve_scope,
@@ -412,6 +413,32 @@ class ShareRouteTests(CorpusCase):
         self.assertEqual(reader, visitor)
         self.assertNotIn(self.pk("open"), str(reader))
         self.assertNotIn("restricted", json.dumps(reader))
+
+    def test_share_links_manifest_route_for_document(self):
+        document = self.documents["open"].pk
+
+        links = self.get(f"document={document}").json()["links"]
+        kept = self.get(f"document={document}&canvases=all").json()["links"]
+
+        self.assertEqual(
+            links["manifest"],
+            {
+                "path": f"/iiif/v3/manifest/{document}",
+                "url": ids.manifest(document),
+            },
+        )
+        self.assertIn("explorer-manifest", kept["manifest"]["path"])
+
+    def test_share_offer_counts_document_pages(self):
+        query = f"document={self.documents['open'].pk}"
+
+        links = self.get(query).json()["links"]
+        self.assertIsNotNone(links["manifest"])
+        self.assertFalse(links["manifestTooLarge"])
+        with override_settings(EXPLORER_MANIFEST_MAX_CANVASES=0):
+            links = self.get(query).json()["links"]
+        self.assertIsNone(links["manifest"])
+        self.assertTrue(links["manifestTooLarge"])
 
     def test_a_scope_placing_no_canvas_offers_no_manifest(self):
         placed = self.get(f"ids=an:{self.pk('open')}:-").json()

@@ -214,6 +214,8 @@ class DocumentFacts:
     ``{page number: zone count}`` of the zones placed on the Document by
     every resource of that kind ``document_facts``' *only* keeps, built as
     facts or not; a kind it does not name is counted off the facts.
+    ``found`` lists every resource id of that kind *only* keeps, located or
+    not; ``source_url`` is the URL the source manifest was read from.
     """
 
     document_id: str
@@ -225,6 +227,8 @@ class DocumentFacts:
     characterizations: tuple = ()
     names: dict = field(default_factory=dict)
     placed: dict = field(default_factory=dict)
+    found: tuple = ()
+    source_url: str = ""
 
     def page_counts(self, kind="analysis"):
         """``{page number: zone count}`` of the zones of *kind* placed on the Document."""
@@ -279,6 +283,19 @@ def _referencing(key, targets, readable):
     if node is None or node.nodegroup_id not in readable or not targets:
         return []
     return node_links(node, targets)
+
+
+def shown_ids(resource_ids, reader):
+    """The existing resources among *resource_ids* that *reader* may see: not hidden, of a readable model."""
+    hidden = hidden_resource_ids(reader)
+    graphs = readable_graph_ids(reader)
+    return {
+        str(rid)
+        for rid, graph_id in ResourceInstance.objects.filter(
+            pk__in=[str(i) for i in resource_ids if i]
+        ).values_list("resourceinstanceid", "graph_id")
+        if str(rid) not in hidden and str(graph_id) in graphs
+    }
 
 
 def names_of(resource_ids, readable):
@@ -523,6 +540,7 @@ def document_facts(
         source=source,
         zones={r: zones[r] for r in kept if r in zones},
         placed={kind: _counts(zones)},
+        found=tuple(found),
     )
 
 
@@ -915,12 +933,13 @@ def _build(
     source,
     zones,
     placed=None,
+    found=(),
 ):
     """``DocumentFacts`` of *analysis_ids* and *characterization_ids* on *document*.
 
     *source* is the Document's ``Source``, *zones* the ``{resource id:
     [Zone, …]}`` of every resource built; *placed* becomes
-    ``DocumentFacts.placed``.
+    ``DocumentFacts.placed``, *found* ``DocumentFacts.found``.
     """
     url, listed = source.url, source.listed
     materials = _materials(set(analysis_ids), visible, readable)
@@ -950,8 +969,6 @@ def _build(
         ).values_list("configid", "config")
     }
 
-    hidden = hidden_resource_ids(reader)
-    graphs = readable_graph_ids(reader)
     people = set()
     for aid in analysis_ids:
         for key in (
@@ -962,13 +979,7 @@ def _build(
         ):
             for _, value, _ in values[aid].get(key, ()):
                 people.update(_refs(value))
-    shown = {
-        str(rid)
-        for rid, graph_id in ResourceInstance.objects.filter(
-            pk__in=list(people | {subject_id, document})
-        ).values_list("resourceinstanceid", "graph_id")
-        if str(rid) not in hidden and str(graph_id) in graphs
-    }
+    shown = shown_ids(people | {subject_id, document}, reader)
     cited = {a for c in characterization_ids for a in visible.evidence.get(c, ())}
     name_of = names_of(
         shown | set(analysis_ids) | set(characterization_ids) | cited, readable
@@ -1066,4 +1077,100 @@ def _build(
         ),
         names={a: name_of.get(a, {}) for a in cited},
         placed=placed or {},
+        found=tuple(found),
+        source_url=url,
     )
+
+
+@dataclass(frozen=True)
+class Aggregate:
+    """What a set of analyses shares: distinct techniques, visible project ids, date span and imaging manifests.
+
+    ``projects`` are sorted by name, ``dates`` is ``(earliest start, latest
+    end)`` in ``_date`` form or None, ``imaging`` the distinct ``_imaging``
+    pairs; ``names`` maps each project id to its name (language map).
+    """
+
+    techniques: tuple
+    projects: tuple
+    dates: tuple | None
+    imaging: tuple
+    names: dict = field(default_factory=dict)
+
+
+def analysis_aggregate(analysis_ids, reader, version=None):
+    """``Aggregate`` of *analysis_ids* for *reader*, from one read of the readable nodegroups.
+
+    Projects are kept when visible to *reader* and not hidden; no file, zone
+    or name of an analysis is read.
+    """
+    readable = readable_nodegroup_ids(reader)
+    values = _tiles(
+        list(analysis_ids),
+        ("technique", "analysis_by_project", "start", "end", "imaging"),
+        readable,
+    )
+    visible = visible_set(reader, version)
+    hidden = hidden_resource_ids(reader)
+    techniques, projects, starts, ends, imaging = {}, set(), [], [], {}
+    for aid in analysis_ids:
+        v = values.get(str(aid), {})
+        for _, value, _ in v.get("technique", ()):
+            for concept in _concepts(value):
+                key = concept.uri or tuple(
+                    (code, tuple(texts))
+                    for code, texts in sorted(concept.labels.items())
+                )
+                techniques.setdefault(key, concept)
+        for _, value, _ in v.get("analysis_by_project", ()):
+            projects.update(
+                r for r in _refs(value) if r in visible.projects and r not in hidden
+            )
+        starts += [_date(x) for _, x, _ in v.get("start", ()) if isinstance(x, str)]
+        ends += [_date(x) for _, x, _ in v.get("end", ()) if isinstance(x, str)]
+        for manifest, label in _imaging(v):
+            imaging.setdefault(manifest, label)
+    names = names_of(projects, readable)
+    dates = [d for d in starts + ends if d]
+    first = min(dates, default="")
+    last = max(dates, default="")
+    return Aggregate(
+        techniques=tuple(techniques.values()),
+        projects=tuple(
+            sorted(projects, key=lambda r: (lang.first_text(names.get(r, {})), r))
+        ),
+        dates=(first, last) if first else None,
+        imaging=tuple(imaging.items()),
+        names={r: names.get(r, {}) for r in projects},
+    )
+
+
+def aggregate_metadata(aggregate):
+    """Metadata entries (« Techniques », « Projects », « Dates ») of *aggregate*; empty ones are left out."""
+    entries = []
+    if aggregate.techniques:
+        entries.append(
+            {
+                "label": lang.gettext_map("Techniques"),
+                "value": lang.listed(
+                    lang.linked(c.labels, c.href) for c in aggregate.techniques
+                ),
+            }
+        )
+    if aggregate.projects:
+        entries.append(
+            {
+                "label": lang.gettext_map("Projects"),
+                "value": lang.listed(
+                    lang.linked(aggregate.names.get(r, {}), report_url(r))
+                    for r in aggregate.projects
+                ),
+            }
+        )
+    if aggregate.dates:
+        span = " – ".join(dict.fromkeys(d for d in aggregate.dates if d))
+        if span:
+            entries.append(
+                {"label": lang.gettext_map("Dates"), "value": lang.none(span)}
+            )
+    return entries

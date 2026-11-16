@@ -65,6 +65,11 @@ CACHE_SHAPE_MODULES = (
     "iiif/memo.py",
     "iiif/services.py",
     "views/iiif/annotations.py",
+    # The memoised document manifest, its record metadata and its view.
+    "iiif/manifest.py",
+    "iiif/document_manifest.py",
+    "iiif/record.py",
+    "views/iiif/manifests.py",
     # The memoised Content State of one zone, and the view wrapping it.
     "iiif/content_state.py",
     "views/iiif/content_state.py",

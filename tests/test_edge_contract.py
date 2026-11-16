@@ -120,6 +120,8 @@ BARE = [
     ),
     ("snippets/edge-rules.conf", f"/iiif/data/{UUID}/raw", "iiif-data-raw"),
     ("snippets/edge-rules.conf", f"/iiif/manifest/{UUID}", "iiif-manifest"),
+    ("snippets/edge-rules.conf", f"/iiif/v3/manifest/{UUID}", "iiif-v3-manifest"),
+    ("snippets/edge-rules.conf", f"/iiif/v2/manifest/{UUID}", "iiif-v2-manifest"),
     ("snippets/edge-rules.conf", "/api/site-notice", "site-notice"),
     ("snippets/edge-rules.conf", "/api/csp-report", "csp-report"),
 ]
@@ -131,6 +133,8 @@ def token_for(path):
     segments = [part for part in path.strip("/").split("/") if part != UUID]
     if segments[:2] in (["iiif", "data"], ["iiif", "manifest"]):
         return None
+    if segments[0] == "iiif" and segments[2:3] == ["manifest"]:
+        return "v[23]/manifest/"
     if segments[:2] == ["iiif", "v3"]:
         return "/".join(segments[:3])
     if segments[0] in ("api", "iiif", "account"):
@@ -294,6 +298,13 @@ class EdgeContractTests(SimpleTestCase):
         for path in ("/api/explorer/export", "/api/explorer/events.csv"):
             body = self.location_body("snippets/edge-rules.conf", path)
             self.assertIn("limit_req zone=heavy", body)
+
+    def test_the_document_manifest_is_heavy(self):
+        body = self.location_body(
+            "snippets/edge-rules.conf", f"/iiif/v3/manifest/{UUID}"
+        )
+        self.assertIn("limit_req zone=heavy", body)
+        self.assertIn("limit_conn export_conn", body)
 
     def test_iiif_annotations_have_their_own_rate_and_connection_zones(self):
         for code, _ in settings.LANGUAGES:
