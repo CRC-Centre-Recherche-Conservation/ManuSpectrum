@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import initMsNav, { NAV_JS_CLASS } from "./ms-nav";
+import initMsNav, { MENU_OPEN_CLASS, NAV_JS_CLASS } from "./ms-nav";
 
 const NAV = `
 <header id="ms-header"></header>
@@ -45,6 +45,131 @@ describe("mobile drawer", () => {
         expect(burger.getAttribute("aria-expanded")).toBe("true");
         burger.click();
         expect(burger.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("moves focus into the drawer on open", () => {
+        boot();
+        document.getElementById("ms-hamburger").click();
+        expect(document.activeElement).toBe(
+            document.querySelector("#ms-mobile-nav a"),
+        );
+    });
+
+    it("Escape closes it and gives focus back to the menu button", () => {
+        boot();
+        const burger = document.getElementById("ms-hamburger");
+        burger.click();
+        document.activeElement.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+        );
+        expect(
+            document.getElementById("ms-mobile-nav").classList.contains("open"),
+        ).toBe(false);
+        expect(burger.getAttribute("aria-expanded")).toBe("false");
+        expect(document.activeElement).toBe(burger);
+        expect(document.body.style.overflow).toBe("");
+    });
+
+    it("raises the header and places the drawer under it while open", () => {
+        boot();
+        const header = document.getElementById("ms-header");
+        Object.defineProperty(header, "offsetHeight", {
+            value: 72,
+            configurable: true,
+        });
+        document.getElementById("ms-hamburger").click();
+        expect(header.classList.contains(MENU_OPEN_CLASS)).toBe(true);
+        expect(
+            document
+                .getElementById("ms-mobile-nav")
+                .style.getPropertyValue("--ms-header-h"),
+        ).toBe("72px");
+        Object.defineProperty(header, "offsetHeight", {
+            value: 57,
+            configurable: true,
+        });
+        header.dispatchEvent(new Event("transitionend"));
+        expect(
+            document
+                .getElementById("ms-mobile-nav")
+                .style.getPropertyValue("--ms-header-h"),
+        ).toBe("57px");
+        document.getElementById("ms-hamburger").click();
+        expect(header.classList.contains(MENU_OPEN_CLASS)).toBe(false);
+    });
+
+    it("closes and unlocks the page when a resize hides the menu button", () => {
+        boot();
+        const burger = document.getElementById("ms-hamburger");
+        burger.click();
+        burger.style.display = "none";
+        window.dispatchEvent(new Event("resize"));
+        expect(
+            document.getElementById("ms-mobile-nav").classList.contains("open"),
+        ).toBe(false);
+        expect(document.body.style.overflow).toBe("");
+    });
+
+    it("re-places the open drawer on a resize that keeps the menu button", () => {
+        boot();
+        const header = document.getElementById("ms-header");
+        const nav = document.getElementById("ms-mobile-nav");
+        document.getElementById("ms-hamburger").click();
+        Object.defineProperty(header, "offsetHeight", {
+            value: 90,
+            configurable: true,
+        });
+        window.dispatchEvent(new Event("resize"));
+        expect(nav.classList.contains("open")).toBe(true);
+        expect(nav.style.getPropertyValue("--ms-header-h")).toBe("90px");
+    });
+
+    it("ignores Escape, resizes and child transitions while closed", () => {
+        boot();
+        const header = document.getElementById("ms-header");
+        const nav = document.getElementById("ms-mobile-nav");
+        header.appendChild(document.createElement("span"));
+        document.body.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+        );
+        window.dispatchEvent(new Event("resize"));
+        header.firstChild.dispatchEvent(
+            new Event("transitionend", { bubbles: true }),
+        );
+        expect(nav.classList.contains("open")).toBe(false);
+        expect(nav.style.getPropertyValue("--ms-header-h")).toBe("");
+        expect(document.body.style.overflow).toBe("");
+    });
+
+    it("works without a header", () => {
+        document.body.innerHTML = NAV.replace(
+            '<header id="ms-header"></header>',
+            "",
+        );
+        window.matchMedia = vi.fn().mockReturnValue({ matches: false });
+        initMsNav();
+        const nav = document.getElementById("ms-mobile-nav");
+        document.getElementById("ms-hamburger").click();
+        expect(nav.classList.contains("open")).toBe(true);
+        expect(nav.style.getPropertyValue("--ms-header-h")).toBe("");
+        window.dispatchEvent(new Event("resize"));
+        expect(nav.classList.contains("open")).toBe(true);
+    });
+
+    it("toggles the About group and exposes aria-expanded", () => {
+        boot();
+        const groupToggle = document.querySelector(
+            ".ms-mobile-nav-group-toggle",
+        );
+        groupToggle.click();
+        expect(
+            document
+                .getElementById("ms-mobile-about")
+                .classList.contains("open"),
+        ).toBe(true);
+        expect(groupToggle.getAttribute("aria-expanded")).toBe("true");
+        groupToggle.click();
+        expect(groupToggle.getAttribute("aria-expanded")).toBe("false");
     });
 
     it("closes when a drawer link is followed", () => {

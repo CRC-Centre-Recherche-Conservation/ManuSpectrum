@@ -2,6 +2,8 @@
 // glass-scroll header, mobile drawer, and the About dropdown (hover + click + keyboard).
 /** Class on the header once this script runs: `_ms-chrome.scss` keys the About dropdown's CSS hover/focus default on its absence. */
 export const NAV_JS_CLASS = 'ms-nav--js';
+/** Class on the header while the mobile drawer is open: it raises the header above the drawer. */
+export const MENU_OPEN_CLASS = 'ms-header--menu-open';
 
 export default function initMsNav() {
     const header = document.getElementById('ms-header');
@@ -16,16 +18,52 @@ export default function initMsNav() {
     const hamburger = document.getElementById('ms-hamburger');
     const mobileNav = document.getElementById('ms-mobile-nav');
     if (hamburger && mobileNav) {
+        const isOpen = () => mobileNav.classList.contains('open');
+        // The drawer starts under the header (`--ms-header-h`), so the menu
+        // button stays visible and clickable above it.
+        const placeDrawer = () => {
+            if (header) mobileNav.style.setProperty('--ms-header-h', `${header.offsetHeight}px`);
+        };
         const setDrawer = (open) => {
+            if (open) placeDrawer();
             mobileNav.classList.toggle('open', open);
             hamburger.classList.toggle('active', open);
+            if (header) header.classList.toggle(MENU_OPEN_CLASS, open);
             // The hamburger is a disclosure button: its expanded state has to be
             // exposed, otherwise screen readers announce it as a plain button.
             hamburger.setAttribute('aria-expanded', String(open));
             document.body.style.overflow = open ? 'hidden' : '';
         };
-        hamburger.addEventListener('click', () => setDrawer(!mobileNav.classList.contains('open')));
+        hamburger.addEventListener('click', () => {
+            const open = !isOpen();
+            setDrawer(open);
+            if (open) {
+                mobileNav.scrollTop = 0;
+                const first = mobileNav.querySelector('a, button');
+                if (first) first.focus({ preventScroll: true });
+            }
+        });
         mobileNav.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => setDrawer(false)));
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && isOpen()) {
+                setDrawer(false);
+                hamburger.focus();
+            }
+        });
+        // A resize can widen the page past the breakpoint that hides the menu
+        // button (the drawer then hides too, with the page still locked) or
+        // change the header's height; so does the end of the header's
+        // padding transition when the drawer opened during it.
+        window.addEventListener('resize', () => {
+            if (!isOpen()) return;
+            if (getComputedStyle(hamburger).display === 'none') setDrawer(false);
+            else placeDrawer();
+        });
+        if (header) {
+            header.addEventListener('transitionend', (e) => {
+                if (e.target === header && isOpen()) placeDrawer();
+            });
+        }
         const mToggle = mobileNav.querySelector('.ms-mobile-nav-group-toggle');
         const mGroup = document.getElementById('ms-mobile-about');
         if (mToggle && mGroup) {
