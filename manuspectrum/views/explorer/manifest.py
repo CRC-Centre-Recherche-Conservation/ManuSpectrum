@@ -54,10 +54,10 @@ from manuspectrum.iiif.sources import (
     layer_canvas,
     manifest_id,
     manifest_json,
+    raw_canvases,
     v3_canvas,
 )
 from manuspectrum.iiif.zones import FeatureRows
-from manuspectrum.utils.iiif_tools import CanvasIIIF
 from manuspectrum.utils.role_links import role_node
 from manuspectrum.utils.roles import ROLES
 from manuspectrum.views.explorer.scopes import kept_files
@@ -78,29 +78,13 @@ __all__ = [
 ]
 
 
-def _source_canvases(manifest):
-    """``{canvas id: raw canvas}`` of a v2 or v3 manifest, in manifest order, ids with legacy hosts rewritten."""
-    if not isinstance(manifest, dict):
-        return {}
-    if CanvasIIIF.detect_version(manifest) == 3:
-        raw = manifest.get("items") or []
-    else:
-        raw = ((manifest.get("sequences") or [{}])[0] or {}).get("canvases") or []
-    found = {}
-    for canvas in raw:
-        canvas_id = canvas.get("id") or canvas.get("@id")
-        if canvas_id:
-            found.setdefault(rewrite_legacy_url(canvas_id), canvas)
-    return found
-
-
 def _layers(entry, folio_label, mint_id, read=manifest_json):
     """Layer canvases of one kept imaging entry, labelled « <folio> — <layer> »; *read* reads its manifest."""
     url = entry.get("downloadUrl") or ""
     imaging = read(url) or {}
     part_of = manifest_id(url)
     layers = []
-    for canvas, raw in zip(canvases_of(imaging), _source_canvases(imaging).values()):
+    for canvas, raw in zip(canvases_of(imaging), raw_canvases(imaging).values()):
         label = " — ".join(t for t in (folio_label, canvas["label"]) if t)
         layers.append(layer_canvas(raw, imaging, part_of, {"none": [label]}, mint_id))
     return layers
@@ -207,7 +191,7 @@ def _placements(scope, bounded=True):
             kept = [
                 c["id"] for c in listed if c["id"] in analyses or c["id"] in materials
             ]
-        raw = _source_canvases(source)
+        raw = raw_canvases(source)
         planned.update(c for c in kept if c in raw)
         if bounded and len(planned) > limit:
             raise ManifestTooLarge()
@@ -230,7 +214,7 @@ def _placements(scope, bounded=True):
 def _layer_ids(entry, read=manifest_json):
     """The canvas ids ``_layers`` gives one kept imaging entry; *read* reads its manifest."""
     imaging = read(entry.get("downloadUrl") or "") or {}
-    return list(_source_canvases(imaging))[: len(canvases_of(imaging))]
+    return list(raw_canvases(imaging))[: len(canvases_of(imaging))]
 
 
 @dataclass(frozen=True, eq=False)

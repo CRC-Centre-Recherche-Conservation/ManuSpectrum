@@ -441,3 +441,37 @@ def absolute_url(url):
     if url.startswith("/") and not url.startswith("//"):
         return f"{settings.PUBLIC_SERVER_ADDRESS}{url.lstrip('/')}"
     return None
+
+
+def raw_canvases(manifest):
+    """``{canvas id: raw canvas}`` of a v2 or v3 manifest, in manifest order, ids with legacy hosts rewritten."""
+    if not isinstance(manifest, dict):
+        return {}
+    if CanvasIIIF.detect_version(manifest) == 3:
+        raw = manifest.get("items") or []
+    else:
+        raw = ((manifest.get("sequences") or [{}])[0] or {}).get("canvases") or []
+    found = {}
+    for canvas in raw:
+        canvas_id = canvas.get("id") or canvas.get("@id")
+        if canvas_id:
+            found.setdefault(rewrite_legacy_url(canvas_id), canvas)
+    return found
+
+
+def canvas_thumbnail(v3_canvas):
+    """The ``thumbnail`` of a v3 canvas: its first painting body's first image service at ``!300,300``; None without a service."""
+    for page in v3_canvas.get("items") or []:
+        for painting in page.get("items") or []:
+            body = painting.get("body") or {}
+            for service in body.get("service") or []:
+                service_id = service.get("id") or service.get("@id")
+                if service_id:
+                    return [
+                        {
+                            "id": f"{service_id.rstrip('/')}/full/!300,300/0/default.jpg",
+                            "type": "Image",
+                            "format": "image/jpeg",
+                        }
+                    ]
+    return None

@@ -13,8 +13,16 @@ from django.utils import translation
 from manuspectrum.iiif import language as lang
 from manuspectrum.iiif.constants import PRESENTATION_3
 from manuspectrum.iiif.ids import explorer_part as mint
-from manuspectrum.iiif.manifest import page_filter
-from manuspectrum.iiif.sources import layer_canvas, v3_canvas
+from manuspectrum.iiif.manifest import (
+    Header,
+    imaging_metadata,
+    manifest_header,
+    page_filter,
+    provider,
+    required_statement,
+    summary_counts,
+)
+from manuspectrum.iiif.sources import canvas_thumbnail, layer_canvas, v3_canvas
 from tests.iiif_schema import assert_valid_manifest
 
 SOURCE_V3 = "https://example.org/iiif/ms59/manifest"
@@ -265,3 +273,90 @@ class ManifestPartsTests(SimpleTestCase):
         self.assertIsNone(page_filter(set()))
         with override_settings(IIIF_PAGE_FILTER_MAX=1):
             self.assertIsNone(page_filter({"a", "b"}))
+
+
+BASE = settings.PUBLIC_SERVER_ADDRESS
+
+
+class HeaderTests(SimpleTestCase):
+    def test_header_key_order_and_empty_parts_left_out(self):
+        out = manifest_header(
+            Header(label=lang.none("X"), summary=None, metadata=(), homepage=())
+        )
+        self.assertEqual(list(out), ["label", "requiredStatement", "provider"])
+
+    def test_header_full_key_order(self):
+        out = manifest_header(
+            Header(
+                label=lang.none("X"),
+                summary=lang.none("S"),
+                metadata=({"label": {}, "value": {}},),
+                homepage=({"id": "h"},),
+                rendering=({"id": "r"},),
+                thumbnail=[{"id": "t"}],
+            )
+        )
+        self.assertEqual(
+            list(out),
+            [
+                "label",
+                "summary",
+                "metadata",
+                "requiredStatement",
+                "provider",
+                "homepage",
+                "rendering",
+                "thumbnail",
+            ],
+        )
+
+    def test_required_statement_names_app_title_in_every_language(self):
+        st = required_statement()
+        self.assertEqual(set(st["label"]), set(lang.languages()))
+        self.assertTrue(all(settings.APP_TITLE in v[0] for v in st["value"].values()))
+
+    def test_provider_is_one_agent_on_public_address(self):
+        (agent,) = provider()
+        self.assertEqual(
+            (agent["id"], agent["type"]), (settings.PUBLIC_SERVER_ADDRESS, "Agent")
+        )
+        self.assertEqual(agent["label"], lang.none(settings.APP_TITLE))
+        self.assertEqual(
+            {h["language"][0] for h in agent["homepage"]}, set(lang.languages())
+        )
+
+    def test_summary_counts_english(self):
+        s = summary_counts(81, 3, 10, lang.none("Ms. 59"), 1)
+        self.assertEqual(
+            s["en"], ["81 analyses and 3 identified materials on 10 pages of Ms. 59"]
+        )
+
+    def test_summary_counts_leaves_out_zero_part(self):
+        s = summary_counts(0, 1, 1, lang.none("Ms. 59"), 1)
+        self.assertEqual(s["en"], ["1 identified material on 1 page of Ms. 59"])
+
+    def test_summary_counts_several_documents(self):
+        self.assertEqual(
+            summary_counts(2, 0, 3, None, 2)["en"],
+            ["2 analyses on 3 pages of 2 documents"],
+        )
+
+    def test_imaging_metadata_links_each_manifest(self):
+        e = imaging_metadata([(f"{BASE}iiif/manifest/abc", lang.none("maXRF map1"))])
+        self.assertEqual(e["label"]["en"], ["Chemical imaging"])
+        self.assertIn(f'href="{BASE}iiif/manifest/abc"', e["value"]["none"][0])
+
+    def test_imaging_metadata_none_without_entries(self):
+        self.assertIsNone(imaging_metadata([]))
+
+    def test_canvas_thumbnail_from_image_service(self):
+        canvas = {
+            "items": [{"items": [{"body": {"service": [{"id": "https://img/x/"}]}}]}]
+        }
+        self.assertEqual(
+            canvas_thumbnail(canvas)[0]["id"],
+            "https://img/x/full/!300,300/0/default.jpg",
+        )
+
+    def test_canvas_thumbnail_none_without_service(self):
+        self.assertIsNone(canvas_thumbnail({"items": []}))

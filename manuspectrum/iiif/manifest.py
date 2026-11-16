@@ -16,6 +16,8 @@ Explorer page of the scope once per configured language, each with its
 ``language``.
 """
 
+from dataclasses import dataclass
+
 from django.conf import settings
 from django.urls import reverse
 from django.utils import translation
@@ -178,3 +180,131 @@ def unlocated_metadata(entries):
 
 def drafts_summary():
     return lang.gettext_map("Contains drafts")
+
+
+@dataclass(frozen=True)
+class Header:
+    """The descriptive head of a manifest; empty parts are left out of its output."""
+
+    label: dict
+    summary: dict | None
+    metadata: tuple
+    homepage: tuple
+    rendering: tuple = ()
+    thumbnail: list | None = None
+
+
+def required_statement():
+    """The ``requiredStatement``: who publishes the data, in every language."""
+    return {
+        "label": lang.gettext_map("Attribution"),
+        "value": lang.gettext_map(
+            "Data published by %(name)s; the rights of each image are stated on its canvas.",
+            name=settings.APP_TITLE,
+        ),
+    }
+
+
+def provider():
+    """The ``provider``: the site, one Agent with its home page in each configured language."""
+    homes = []
+    for code in lang.languages():
+        with translation.override(code):
+            path = reverse("root").lstrip("/")
+        homes.append(
+            {
+                "id": f"{settings.PUBLIC_SERVER_ADDRESS}{path}",
+                "type": "Text",
+                "format": "text/html",
+                "label": lang.none(settings.APP_TITLE),
+                "language": [code],
+            }
+        )
+    return [
+        {
+            "id": settings.PUBLIC_SERVER_ADDRESS,
+            "type": "Agent",
+            "label": lang.none(settings.APP_TITLE),
+            "homepage": homes,
+        }
+    ]
+
+
+def manifest_header(header):
+    """The head properties of *header* in manifest order, each left out when empty."""
+    out = {"label": header.label}
+    if header.summary:
+        out["summary"] = header.summary
+    if header.metadata:
+        out["metadata"] = list(header.metadata)
+    out["requiredStatement"] = required_statement()
+    out["provider"] = provider()
+    if header.homepage:
+        out["homepage"] = list(header.homepage)
+    if header.rendering:
+        out["rendering"] = list(header.rendering)
+    if header.thumbnail:
+        out["thumbnail"] = header.thumbnail
+    return out
+
+
+def summary_counts(analyses, materials, pages_count, document_name, documents):
+    """« 81 analyses and 3 identified materials on 10 pages of <document> »; a zero count is left out.
+
+    *document_name* names the one document; with several, « k documents ».
+    """
+    parts = []
+    if analyses:
+        parts.append(
+            lang.ngettext_map(
+                "%(count)d analysis",
+                "%(count)d analyses",
+                analyses,
+                count=analyses,
+            )
+        )
+    if materials:
+        parts.append(
+            lang.ngettext_map(
+                "%(count)d identified material",
+                "%(count)d identified materials",
+                materials,
+                count=materials,
+            )
+        )
+    pages_map = lang.ngettext_map(
+        "%(count)d page", "%(count)d pages", pages_count, count=pages_count
+    )
+    if documents == 1 and document_name:
+        document = document_name
+    else:
+        document = lang.ngettext_map(
+            "%(count)d document", "%(count)d documents", documents, count=documents
+        )
+    if not parts:
+        return pages_map
+    what = parts[0]
+    if len(parts) == 2:
+        what = lang.gettext_map(
+            "%(first)s and %(second)s", first=parts[0], second=parts[1]
+        )
+    return lang.gettext_map(
+        "%(what)s on %(pages)s of %(document)s",
+        what=what,
+        pages=pages_map,
+        document=document,
+    )
+
+
+def imaging_metadata(entries):
+    """The « Chemical imaging » ``metadata`` entry: one link per ``(manifest id, label map)`` of *entries*; None without any."""
+    if not entries:
+        return None
+    maps = [lang.linked(label, href, markup=True) for href, label in entries]
+    return {
+        "label": lang.gettext_map("Chemical imaging"),
+        "value": {
+            code: [f"<span>{text}</span>" for text in texts]
+            for code, texts in lang.joined(maps, sep="; ").items()
+        },
+    }
