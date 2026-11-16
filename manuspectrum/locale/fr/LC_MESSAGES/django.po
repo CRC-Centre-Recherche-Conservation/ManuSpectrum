@@ -30,6 +30,14 @@ msgstr ""
 msgid "You must accept the terms of use to continue."
 msgstr "Vous devez accepter les conditions d'utilisation pour continuer."
 
+#: accounts/csrf_failure.py:48
+msgid "Request Failed"
+msgstr "Échec de la requête"
+
+#: accounts/csrf_failure.py:48
+msgid "Permission Denied"
+msgstr "Permission refusée"
+
 #: accounts/notices.py:83
 #, python-format
 msgid "in %(days)d day"
@@ -2299,12 +2307,6 @@ msgstr "Navigation principale"
 #: templates/index.htm:261 templates/index.htm:263
 msgid "The Project"
 msgstr "Le Projet"
-
-#: templates/includes/ms_header.htm:12 templates/includes/ms_header.htm:16
-#: templates/includes/ms_header.htm:88 templates/includes/ms_header.htm:92
-#: templates/index.htm:404 templates/index.htm:406
-msgid "Explore"
-msgstr "Explorer"
 
 #: templates/includes/ms_header.htm:13 templates/includes/ms_header.htm:17
 #: templates/includes/ms_header.htm:89 templates/includes/ms_header.htm:93
@@ -7428,10 +7430,6 @@ msgstr "Référence"
 #: views/model_graph_service.py:122
 msgid "IIIF Manifest"
 msgstr "Manifeste IIIF"
-
-#: views/renderer_config.py:51
-msgid "<h1>Renderers do not exist</h1>"
-msgstr "<h1>Les rendus n'existent pas</h1>"
 
 #: views/renderer_config.py:129
 msgid "<h1>Renderers config does not exist</h1>"
