@@ -45,6 +45,7 @@ from manuspectrum.views.iiif.content_state import ContentStateView
 from manuspectrum.views.iiif.data import RawDataView, SeriesDataView
 from manuspectrum.views.iiif.manifests import (
     DocumentManifestView,
+    DocumentManifestViewV2,
     StoredManifestView,
 )
 from manuspectrum.views.iiif.annotations import (
@@ -642,6 +643,13 @@ urlpatterns.append(
         "iiif/v3/manifest/<uuid:resource_id>",
         DocumentManifestView.as_view(),
         name="iiif-v3-manifest",
+    )
+)
+urlpatterns.append(
+    path(
+        "iiif/v2/manifest/<uuid:resource_id>",
+        DocumentManifestViewV2.as_view(),
+        name="iiif-v2-manifest",
     )
 )
 

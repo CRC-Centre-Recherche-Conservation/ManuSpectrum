@@ -1,4 +1,4 @@
-"""The manifest routes: ``/iiif/manifest/<uuid>`` (stored manifest) and ``/iiif/v3/manifest/<uuid>`` (document manifest).
+"""The manifest routes: ``/iiif/manifest/<uuid>`` (stored manifest) and ``/iiif/v3|v2/manifest/<uuid>`` (document manifest).
 
 ``/iiif/manifest/<uuid>`` is a manifest stored in Arches, as the IIIF output
 names it (``ids.stored_manifest``). Arches serves the same JSON at
@@ -91,7 +91,11 @@ class DocumentManifestView(IIIFView):
 
         def build():
             built = document_manifest.build(
-                str(resource_id), reader, version=version, subject=subject
+                str(resource_id),
+                reader,
+                version=version,
+                subject=subject,
+                api=self.version,
             )
             if built is None:
                 raise Missing()
@@ -110,3 +114,9 @@ class DocumentManifestView(IIIFView):
             response = HttpResponse(status=413)
             response["Cache-Control"] = memo.PRIVATE
             return response
+
+
+class DocumentManifestViewV2(DocumentManifestView):
+    """The Presentation 2.1 manifest of a Document or Component."""
+
+    version = 2

@@ -45,6 +45,7 @@ ROUTE_NAMES = (
     "iiif-data-series",
     "iiif-manifest",
     "iiif-v3-manifest",
+    "iiif-v2-manifest",
     "iiif-xy-reading-context",
     "iiif-xy-reading-doc",
     "iiif-xy-reading-schema",

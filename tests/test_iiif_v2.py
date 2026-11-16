@@ -7,7 +7,14 @@ Usage:
 from django.test import Client, SimpleTestCase, override_settings
 
 from manuspectrum.iiif import ids, v2
-from tests.explorer_fixtures import CANVAS, FEATURES, MANIFEST, IIIFCase
+from manuspectrum.iiif.constants import IIIF_V2_MEDIA_TYPE
+from tests.explorer_fixtures import (
+    CANVAS,
+    CANVAS_3,
+    FEATURES,
+    MANIFEST,
+    IIIFCase,
+)
 
 P2 = "http://iiif.io/api/presentation/2/context.json"
 
@@ -143,6 +150,107 @@ class V2RouteTests(IIIFCase):
         self.assertEqual(body["@type"], "dctypes:Dataset")
         self.assertEqual(body["format"], "text/csv")
         self.assertEqual({v["@language"] for v in body["label"]}, {"en", "fr"})
+
+
+V2_SOURCE = {
+    "@context": "http://iiif.io/api/presentation/2/context.json",
+    "@id": MANIFEST,
+    "@type": "sc:Manifest",
+    "label": "Ms 59",
+    "sequences": [
+        {
+            "@type": "sc:Sequence",
+            "canvases": [
+                {
+                    "@id": canvas,
+                    "@type": "sc:Canvas",
+                    "label": label,
+                    "width": 4000,
+                    "height": 5000,
+                    "images": [
+                        {
+                            "@type": "oa:Annotation",
+                            "motivation": "sc:painting",
+                            "on": canvas,
+                            "resource": {
+                                "@id": f"https://img.example/{label}/full/full/0/default.jpg",
+                                "@type": "dctypes:Image",
+                                "service": {"@id": f"https://img.example/{label}"},
+                            },
+                        }
+                    ],
+                }
+                for canvas, label in ((CANVAS, "f1"), (CANVAS_3, "f3"))
+            ],
+        }
+    ],
+}
+
+
+class V2ManifestTests(IIIFCase):
+    def setUp(self):
+        super().setUp()
+        self.doc = str(self.documents["open"].pk)
+        self.url = f"/iiif/v2/manifest/{self.doc}"
+
+    def manifest(self):
+        response = Client().get(self.url)
+        self.assertEqual(response.status_code, 200)
+        return response
+
+    def test_v2_route_media_type(self):
+        self.assertEqual(self.manifest()["Content-Type"], IIIF_V2_MEDIA_TYPE)
+
+    def test_v2_manifest_shape(self):
+        body = self.manifest().json()
+        v3 = Client().get(f"/iiif/v3/manifest/{self.doc}").json()
+
+        self.assertEqual(body["@context"], P2)
+        self.assertEqual(body["@type"], "sc:Manifest")
+        self.assertEqual(body["@id"], ids.as_version(v3["id"], 2))
+        self.assertEqual(len(body["sequences"]), 1)
+        self.assertEqual(body["sequences"][0]["@type"], "sc:Sequence")
+        self.assertEqual(
+            [c["@id"] for c in body["sequences"][0]["canvases"]],
+            [c["id"] for c in v3["items"]],
+        )
+        self.assertEqual(body["sequences"][0]["canvases"][0]["@type"], "sc:Canvas")
+        self.assertEqual(body["sequences"][0]["canvases"][0]["width"], 4000)
+        self.assertIn("attribution", body)
+        self.assertEqual(body["related"][0]["@id"], ids.report(self.doc))
+
+    def test_v2_other_content_names_v2_pages(self):
+        canvases = self.manifest().json()["sequences"][0]["canvases"]
+
+        self.assertEqual(
+            canvases[0]["otherContent"],
+            [{"@id": ids.page(self.doc, 1, version=2), "@type": "sc:AnnotationList"}],
+        )
+
+    def test_v2_metadata_value_lists(self):
+        body = self.manifest().json()
+
+        self.assertTrue(body["metadata"])
+        for entry in body["metadata"]:
+            self.assertIsInstance(entry["label"], list)
+            self.assertIsInstance(entry["value"], list)
+            self.assertIn("@value", entry["value"][0])
+        self.assertIn("@value", body["description"][0])
+
+    def test_v2_copies_v2_source_canvas(self):
+        self.fetch.side_effect = lambda url: V2_SOURCE if url == MANIFEST else None
+        canvas = self.manifest().json()["sequences"][0]["canvases"][0]
+        source = V2_SOURCE["sequences"][0]["canvases"][0]
+
+        self.assertEqual(canvas["images"], source["images"])
+        self.assertEqual(canvas["label"], "f1")
+
+    def test_v2_builds_a_canvas_from_a_v3_source(self):
+        canvas = self.manifest().json()["sequences"][0]["canvases"][0]
+
+        self.assertEqual(canvas["@id"], CANVAS)
+        self.assertEqual(canvas["height"], 5000)
+        self.assertEqual(canvas["images"], [])
 
 
 @override_settings(IIIF_POINT_RADIUS=12)

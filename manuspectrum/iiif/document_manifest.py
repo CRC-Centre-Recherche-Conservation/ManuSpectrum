@@ -28,7 +28,7 @@ from django.conf import settings
 
 from manuspectrum.iiif import facts, ids, pages, record
 from manuspectrum.iiif import language as lang
-from manuspectrum.iiif import manifest, sources
+from manuspectrum.iiif import manifest, sources, v2
 from manuspectrum.iiif.manifest import ManifestTooLarge
 from manuspectrum.utils import role_links
 from manuspectrum.utils.public_visibility import anonymous_user, visible_set
@@ -88,9 +88,10 @@ def _explorer_links(resource_id, subject, version):
     return homepage, rendering
 
 
-def build(resource_id, reader, *, version, subject, embed=False):
+def build(resource_id, reader, *, version, subject, embed=False, api=3):
     """The manifest of *resource_id* for *reader*; None without a readable source manifest or kept page.
 
+    *api* 2 answers the same manifest as Presentation 2.1 (``v2.manifest``).
     Raises ``ManifestTooLarge`` over ``EXPLORER_MANIFEST_MAX_CANVASES`` pages.
     """
     resource_id = str(resource_id)
@@ -170,7 +171,7 @@ def build(resource_id, reader, *, version, subject, embed=False):
         rendering=tuple(rendering),
         thumbnail=sources.canvas_thumbnail(canvases[0]),
     )
-    return pages.with_context(
+    built = pages.with_context(
         {
             "id": ids.manifest(resource_id),
             "type": "Manifest",
@@ -178,3 +179,4 @@ def build(resource_id, reader, *, version, subject, embed=False):
             "items": canvases,
         }
     )
+    return v2.manifest(built, raw) if api == 2 else built

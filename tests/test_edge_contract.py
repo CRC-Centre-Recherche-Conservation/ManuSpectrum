@@ -121,6 +121,7 @@ BARE = [
     ("snippets/edge-rules.conf", f"/iiif/data/{UUID}/raw", "iiif-data-raw"),
     ("snippets/edge-rules.conf", f"/iiif/manifest/{UUID}", "iiif-manifest"),
     ("snippets/edge-rules.conf", f"/iiif/v3/manifest/{UUID}", "iiif-v3-manifest"),
+    ("snippets/edge-rules.conf", f"/iiif/v2/manifest/{UUID}", "iiif-v2-manifest"),
     ("snippets/edge-rules.conf", "/api/site-notice", "site-notice"),
     ("snippets/edge-rules.conf", "/api/csp-report", "csp-report"),
 ]
