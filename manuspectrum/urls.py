@@ -43,7 +43,10 @@ from manuspectrum.views.iiif.auth import (
 )
 from manuspectrum.views.iiif.content_state import ContentStateView
 from manuspectrum.views.iiif.data import RawDataView, SeriesDataView
-from manuspectrum.views.iiif.manifests import StoredManifestView
+from manuspectrum.views.iiif.manifests import (
+    DocumentManifestView,
+    StoredManifestView,
+)
 from manuspectrum.views.iiif.annotations import (
     AnnotationView,
     AnnotationViewV2,
@@ -630,6 +633,15 @@ urlpatterns.append(
         "iiif/v3/content-state/<uuid:resource_id>/<uuid:feature_id>",
         ContentStateView.as_view(),
         name="iiif-v3-content-state",
+    )
+)
+
+### The manifest of a Document or Component (Presentation 3).
+urlpatterns.append(
+    path(
+        "iiif/v3/manifest/<uuid:resource_id>",
+        DocumentManifestView.as_view(),
+        name="iiif-v3-manifest",
     )
 )
 
