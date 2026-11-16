@@ -3,8 +3,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: dev@fargeo.com\n"
-"POT-Creation-Date: 2026-11-16 18:05:49\n"
-"PO-Revision-Date: 2026-11-16 18:05:49\n"
+"POT-Creation-Date: 2026-11-16 18:20:27\n"
+"PO-Revision-Date: 2026-11-16 18:20:27\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -1305,7 +1305,7 @@ msgstr "Temporalité de la personne"
 
 #: cards:1
 msgid "Historical or contemporary"
-msgstr "Historique ou contemporaine"
+msgstr "Historique ou contemporain"
 
 #: cards:1
 msgid ""
@@ -4799,10 +4799,6 @@ msgid "Interpretation"
 msgstr "Interprétation"
 
 #: cards_x_nodes_x_widgets:1
-msgid "Influenced by Interpretation"
-msgstr "Influencé par l'interprétation"
-
-#: cards_x_nodes_x_widgets:1
 msgid "Location of interpretation"
 msgstr "Localisation de l'interprétation"
 
@@ -4995,30 +4991,6 @@ msgstr ""
 "saisit dans « Inférence ».</p>"
 
 #: cards:1
-msgid ""
-"<p>The conclusion drawn from the observations. Write it in <strong>Inference"
-" making</strong> (required), e.g. <em>the darkening is consistent with the "
-"degradation of a lead-based pigment</em>, and rate it in "
-"<strong>Confidence</strong> (required): « Highly confidence », « Good "
-"Confidence », « Use with caution » or « Unsure ».</p><p>Give the "
-"<strong>Start Date</strong> (required) and <strong>End Date</strong> of the "
-"interpretation and its <strong>Authors of inference</strong>. In "
-"<strong>Influenced by Interpretation</strong> choose the other Alteration "
-"records the inference builds on. The supporting analyses go in the sub-"
-"cards.</p>"
-msgstr ""
-"<p>La conclusion tirée des observations. Rédigez-la dans <strong>Élaboration"
-" d'inférence</strong> (obligatoire), ex. <em>l'assombrissement est "
-"compatible avec la dégradation d'un pigment à base de plomb</em>, et notez-"
-"la dans <strong>Fiabilité</strong> (obligatoire) : « Highly confidence », « "
-"Good Confidence », « Use with caution » ou « Unsure ».</p><p>Indiquez la "
-"<strong>Date de début</strong> (obligatoire) et la <strong>Date de "
-"fin</strong> de l'interprétation, ainsi que les <strong>Auteurs de "
-"l'inférence</strong>. Dans <strong>Influencé par l'interprétation</strong>, "
-"choisissez les autres fiches Altération sur lesquelles l'inférence s'appuie."
-" Les analyses qui la soutiennent se saisissent dans les sous-cartes.</p>"
-
-#: cards:1
 msgid "Observed by Interpretation"
 msgstr "Observé par l'interprétation"
 
@@ -5073,3 +5045,31 @@ msgstr ""
 "<code>f31v</code>.</p><p>Sans zone dessinée, le composant ne peut pas être "
 "montré sur l'image, et une interprétation du composant qui n'a pas de zone "
 "propre ne peut pas non plus y être placée.</p>"
+
+#: cards_x_nodes_x_widgets:1
+msgid "Influenced by Alteration"
+msgstr "Influencé par l'altération"
+
+#: cards:1
+msgid ""
+"<p>The conclusion drawn from the observations. Write it in <strong>Inference"
+" making</strong> (required), e.g. <em>the darkening is consistent with the "
+"degradation of a lead-based pigment</em>, and rate it in "
+"<strong>Confidence</strong> (required): « Highly confidence », « Good "
+"Confidence », « Use with caution » or « Unsure ».</p><p>Give the "
+"<strong>Start Date</strong> (required) and <strong>End Date</strong> of the "
+"interpretation and its <strong>Authors of inference</strong>. In "
+"<strong>Influenced by Alteration</strong> choose the other Alteration "
+"records the inference builds on. The supporting analyses go in the sub-"
+"cards.</p>"
+msgstr ""
+"<p>La conclusion tirée des observations. Rédigez-la dans <strong>Élaboration"
+" d'inférence</strong> (obligatoire), ex. <em>l'assombrissement est "
+"compatible avec la dégradation d'un pigment à base de plomb</em>, et notez-"
+"la dans <strong>Fiabilité</strong> (obligatoire) : « Highly confidence », « "
+"Good Confidence », « Use with caution » ou « Unsure ».</p><p>Indiquez la "
+"<strong>Date de début</strong> (obligatoire) et la <strong>Date de "
+"fin</strong> de l'interprétation, ainsi que les <strong>Auteurs de "
+"l'inférence</strong>. Dans <strong>Influencé par l'altération</strong>, "
+"choisissez les autres fiches Altération sur lesquelles l'inférence s'appuie."
+" Les analyses qui la soutiennent se saisissent dans les sous-cartes.</p>"
