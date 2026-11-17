@@ -1018,6 +1018,11 @@ EXPLORER_EXPORT_MAX_BYTES = 500 * 1024 * 1024
 EXPLORER_EXPORT_MAX_FILES = 2000
 # Most canvases one Explorer IIIF manifest lists; above it, 413.
 EXPLORER_MANIFEST_MAX_CANVASES = 1000
+# JPEG 2000 deposits (utils/jp2_profile.py): above 4 megapixels a file needs at least
+# this many resolution levels (decomposition levels + 1), and a file whose tiles
+# (clipped to the image) hold more than JP2_MAX_TILE_PIXELS pixels is refused.
+JP2_MIN_RESOLUTION_LEVELS = 5
+JP2_MAX_TILE_PIXELS = 20_000_000
 # Mirador viewer (mirador-xyviewer) the Explorer opens its IIIF products in, as
 # ?manifest=<url> or ?iiif-content=<content state>; empty hides « Open in Mirador ».
 EXPLORER_MIRADOR_URL = ""

@@ -7720,3 +7720,34 @@ msgstr "Drag to compare Hg / Ca"
 #: templates/index.htm
 msgid "Browse the corpus"
 msgstr "Browse the corpus"
+
+#: utils/jp2_profile.py
+#, python-brace-format
+msgid "Recommended lossless encoding: {command}"
+msgstr "Recommended lossless encoding: {command}"
+
+#: utils/jp2_profile.py
+#, python-brace-format
+msgid "\"{name}\" is not a valid JPEG 2000 file (wrong format, truncated or damaged)."
+msgstr "\"{name}\" is not a valid JPEG 2000 file (wrong format, truncated or damaged)."
+
+#: utils/jp2_profile.py
+#, python-brace-format
+msgid "\"{name}\" cannot be served efficiently: it has {levels} resolution level, at least {minimum} are required."
+msgid_plural "\"{name}\" cannot be served efficiently: it has {levels} resolution levels, at least {minimum} are required."
+msgstr[0] "\"{name}\" cannot be served efficiently: it has {levels} resolution level, at least {minimum} are required."
+msgstr[1] "\"{name}\" cannot be served efficiently: it has {levels} resolution levels, at least {minimum} are required."
+
+#: utils/jp2_profile.py
+#, python-brace-format
+msgid "\"{name}\" cannot be served efficiently: it has tiles of {megapixels} MP (at most {limit} MP). Encode it with 1024 × 1024 tiles."
+msgstr "\"{name}\" cannot be served efficiently: it has tiles of {megapixels} MP (at most {limit} MP). Encode it with 1024 × 1024 tiles."
+
+#: utils/jp2_profile.py
+#, python-brace-format
+msgid "\"{name}\" is a JPEG 2000 file but is not named .jp2: rename it with the .jp2 extension."
+msgstr "\"{name}\" is a JPEG 2000 file but is not named .jp2: rename it with the .jp2 extension."
+
+#: views/manifest_manager.py
+msgid "JPEG 2000 file refused"
+msgstr "JPEG 2000 file refused"
