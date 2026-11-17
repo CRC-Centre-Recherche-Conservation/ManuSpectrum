@@ -16,7 +16,7 @@ object is the digest, never a tag.
 | Build | `staging.yml`, on push to `main` | The image builds from scratch, with the day's Debian security updates, and carries the label `org.opencontainers.image.revision` = the commit |
 | Proof | `stack-proof.yml`, called by `staging.yml` | On that exact image: probe, the whole Compose stack, observability, mails, `down`/`up`, Docker restart, static swap, backup / loss / restore |
 | Publish | `staging.yml` | The image that passed is pushed as `sha-<commit>` and its build provenance is attested (workflow `staging.yml`, branch of the run); its digest is in the job summary |
-| Guard | `release.yml`, on a `v*` tag | A ruleset protects the `v*` tags (the job fails otherwise); final tags sit on the first-parent line of `main`, release candidates on the integration branch (`dev`), no other tag name is accepted; the tag's `X.Y.Z` must equal `APP_VERSION` in `manuspectrum/settings.py` at the tagged commit (`release-version-guard.sh`) |
+| Guard | `release.yml`, on a `v*` tag | A ruleset protects the `v*` tags (the job fails otherwise); final tags sit on the first-parent line of `main`, release candidates on the integration branch (`dev`), no other tag name is accepted; the tag's `X.Y.Z` must equal `APP_VERSION` in `manuspectrum/settings.py`, `version` in `pyproject.toml` and `version` in `package.json` at the tagged commit (`release-version-guard.sh`) |
 | Promote | `release.yml` | The provenance of the `sha-<commit>` digest is verified (`gh attestation verify`: signer workflow `staging.yml`, branch `main` for a final tag, the integration branch for a candidate), then the digest gets the tag name; the digest is compared before and after. No `sha-<commit>` image means `staging.yml` did not publish the commit: the job fails and says so. An image built on the integration branch is therefore never released as final |
 | Scan | `release.yml` | Trivy (HIGH and CRITICAL with a fix) blocks; accepted findings and their expiry are in `.trivyignore` |
 | Sign | `release.yml` | The job first checks that a digest carrying only `staging.yml`'s provenance fails `cosign verify`; then the digest is signed with cosign, keyless (GitHub OIDC); then the SBOM attestation is attached to it in GHCR (made by the same workflow identity, which cosign v3 accepts as a signature, so it comes last) |
@@ -49,10 +49,13 @@ Debian fixes that the published images already carry.
 
    Tag exactly the commit the run published: the job summary of `publish`
    shows its commit and digest. A manual run is never cancelled by a later push.
-2. Test candidate: set `APP_VERSION` in `manuspectrum/settings.py` to the
-   version being released (`0.1.0`, no `v`, no prerelease), merge it, then tag
-   the commit and push the tag. `release.yml` refuses a tag whose `X.Y.Z`
-   differs from `APP_VERSION`.
+2. Test candidate: set the version being released (`0.1.0`, no `v`, no
+   prerelease) in its three places, `APP_VERSION` in
+   `manuspectrum/settings.py`, `version` in `pyproject.toml` (then `uv lock`,
+   which rewrites the project's line of `uv.lock`) and `version` in
+   `package.json` (and at the two places `package-lock.json` repeats it),
+   merge it, then tag the commit and push the tag. `release.yml` refuses a tag
+   whose `X.Y.Z` differs from any of the three.
 
    ```bash
    git tag -s v0.1.0-rc.1 <commit>
