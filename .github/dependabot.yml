@@ -34,7 +34,9 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
   # Base image digests of deploy/docker/Dockerfile: a rebuilt python or node
-  # image carries the Debian security updates, so no cooldown.
+  # image carries the Debian security updates, so no cooldown. Only new
+  # digests of the same tags: Python moves with Arches, Node stays on its LTS
+  # major, and uv moves by hand with deploy/check-stack.sh.
   - package-ecosystem: "docker" # zizmor: ignore[dependabot-cooldown]
     directory: "/deploy/docker"
     open-pull-requests-limit: 5
@@ -45,6 +47,13 @@ updates:
       - dependencies
       - docker
     target-branch: "dev"
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "*astral-sh/uv"
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
   # Compose service images, pinned by digest.
   - package-ecosystem: "docker-compose" # zizmor: ignore[dependabot-cooldown]
     directory: "/deploy/compose"

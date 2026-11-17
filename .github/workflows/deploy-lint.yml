@@ -147,7 +147,8 @@ jobs:
       # the runner's Python resolves.
       - name: uv.lock matches pyproject.toml
         run: |
-          uv_image="$(sed -n 's/^ARG UV_IMAGE=//p' deploy/docker/Dockerfile)"
+          uv_image="$(sed -n 's/^FROM \(ghcr\.io\/astral-sh\/uv:[^ ]*\) AS uv$/\1/p' deploy/docker/Dockerfile)"
+          [ -n "$uv_image" ] || { echo "::error::no uv FROM line in deploy/docker/Dockerfile"; exit 1; }
           container="$(docker create "$uv_image")"
           docker cp "$container:/uv" "$RUNNER_TEMP/uv"
           docker rm "$container" >/dev/null
