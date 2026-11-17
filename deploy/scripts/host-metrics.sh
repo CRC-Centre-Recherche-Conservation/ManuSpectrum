@@ -13,6 +13,7 @@
 #   manuspectrum_container_oom_cgroup                1 when oom_kills comes from the cgroup counter,
 #                                                    0 when it falls back to State.OOMKilled
 #   manuspectrum_container_memory_working_set_bytes  docker stats (usage minus inactive file cache)
+#   manuspectrum_container_memory_unreclaimable_bytes  anon + shmem of the cgroup v2 memory.stat
 #   manuspectrum_container_memory_limit_bytes        HostConfig.Memory, 0 = no limit
 #   manuspectrum_container_metrics_errors            services skipped or without a working set
 #   manuspectrum_container_metrics_last_run_timestamp_seconds
@@ -32,6 +33,13 @@
 # State.OOMKilled with a changed FinishedAt, which misses most kills (Docker
 # clears the flag on restart and a child kill never changes FinishedAt):
 # manuspectrum_container_oom_cgroup is then 0.
+# Unreclaimable memory: the working set still counts the active page cache,
+# which the kernel drops when the container reaches its limit (an image server
+# reading large files keeps it near 100 % without any risk). `anon` (process
+# memory) plus `shmem` (tmpfs, shared memory such as PostgreSQL's buffers) of
+# the same cgroup's memory.stat is what the kernel cannot drop, the stack
+# running without swap. Omitted for a container without a readable
+# memory.stat; the alert then falls back on the working set.
 # A service name outside ^[a-z0-9_-]+$ is skipped. When docker does not answer
 # within HOST_METRICS_DOCKER_TIMEOUT nothing is written (exit 1) and the
 # last-run timestamp ages.
@@ -111,17 +119,34 @@ to_bytes() { # to_bytes TEXT
   }'
 }
 
+# cgroup_file ID NAME: the path of a running container's cgroup v2 file NAME
+# (systemd or cgroupfs driver), empty when none is readable.
+cgroup_file() {
+  local id="$1" dir
+  [[ "$id" =~ ^[0-9a-f]{64}$ ]] || return 0
+  for dir in "$CGROUP_ROOT/system.slice/docker-$id.scope" "$CGROUP_ROOT/docker/$id"; do
+    [ -r "$dir/$2" ] && { printf '%s\n' "$dir/$2"; return 0; }
+  done
+  return 0
+}
+
 # cgroup_oom_kills ID: the oom_kill counter of a running container, empty when
 # no memory.events file is readable.
 cgroup_oom_kills() {
-  local id="$1" dir value
-  [[ "$id" =~ ^[0-9a-f]{64}$ ]] || return 0
-  for dir in "$CGROUP_ROOT/system.slice/docker-$id.scope" "$CGROUP_ROOT/docker/$id"; do
-    if [ -r "$dir/memory.events" ]; then
-      value="$(awk '$1 == "oom_kill" && $2 ~ /^[0-9]+$/ {print $2; exit}' "$dir/memory.events")"
-      [ -z "$value" ] || { printf '%s\n' "$value"; return 0; }
-    fi
-  done
+  local file
+  file="$(cgroup_file "$1" memory.events)"
+  [ -n "$file" ] || return 0
+  awk '$1 == "oom_kill" && $2 ~ /^[0-9]+$/ {print $2; exit}' "$file"
+}
+
+# cgroup_unreclaimable ID: anon + shmem bytes of a running container, empty
+# when no memory.stat is readable or either line is missing.
+cgroup_unreclaimable() {
+  local file
+  file="$(cgroup_file "$1" memory.stat)"
+  [ -n "$file" ] || return 0
+  awk '($1 == "anon" || $1 == "shmem") && $2 ~ /^[0-9]+$/ {sum += $2; n++}
+    END {if (n == 2) printf "%.0f\n", sum}' "$file"
 }
 
 # oom_events_since SERVICE EPOCH RUN_START: `oom` events of the service's
@@ -136,7 +161,7 @@ oom_events_since() {
 }
 
 containers() {
-  local ids inspect stats errors=0 id svc running health restarts oom finished limit short mem now run_start
+  local ids inspect stats errors=0 id svc running health restarts oom finished limit short mem now run_start unrec
   local state="$out_dir/.manuspectrum-container-oom.state"
   local raw delta ev cgroup_ok=0 reset s_total s_raw s_id s_restarts s_finished s_epoch
   declare -A mem_used raw_of
@@ -181,7 +206,7 @@ containers() {
 
   metrics_open "$out_dir/manuspectrum_container.prom"
   metric_family manuspectrum_container_up gauge "1 when the container is running"
-  local lines_up="" lines_healthy="" lines_restarts="" lines_oom="" lines_mem="" lines_limit=""
+  local lines_up="" lines_healthy="" lines_restarts="" lines_oom="" lines_mem="" lines_limit="" lines_unrec=""
   while IFS='|' read -r id svc running health restarts oom finished limit; do
     [ -n "$id" ] || continue
     if ! [[ "$svc" =~ ^[a-z0-9_-]+$ && "$restarts" =~ ^[0-9]+$ && "$limit" =~ ^[0-9]+$ ]]; then
@@ -193,6 +218,8 @@ containers() {
     if [ "$running" = true ]; then
       lines_up+="$svc 1"$'\n'
       if [ -n "${mem_used[$short]:-}" ]; then lines_mem+="$svc ${mem_used[$short]}"$'\n'; else errors=$((errors + 1)); fi
+      unrec="$(cgroup_unreclaimable "$id")"
+      [ -z "$unrec" ] || lines_unrec+="$svc $unrec"$'\n'
     else
       lines_up+="$svc 0"$'\n'
     fi
@@ -247,6 +274,7 @@ containers() {
   emit manuspectrum_container_restarts gauge "Docker restart count" "$lines_restarts"
   emit manuspectrum_container_oom_kills counter "Kernel OOM kills in the container, kept across restarts" "$lines_oom"
   emit manuspectrum_container_memory_working_set_bytes gauge "Working set in bytes" "$lines_mem"
+  emit manuspectrum_container_memory_unreclaimable_bytes gauge "Bytes the kernel cannot drop: anon and shmem of memory.stat" "$lines_unrec"
   emit manuspectrum_container_memory_limit_bytes gauge "Memory limit in bytes, 0 for none" "$lines_limit"
   metric_family manuspectrum_container_oom_cgroup gauge "1 when OOM kills come from the cgroup counter, 0 for the State.OOMKilled fallback"
   metric_sample manuspectrum_container_oom_cgroup "$cgroup_ok"

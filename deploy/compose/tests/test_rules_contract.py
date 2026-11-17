@@ -148,6 +148,7 @@ HOST_METRICS = {
     "manuspectrum_container_restarts",
     "manuspectrum_container_oom_kills",
     "manuspectrum_container_memory_working_set_bytes",
+    "manuspectrum_container_memory_unreclaimable_bytes",
     "manuspectrum_container_memory_limit_bytes",
     "manuspectrum_container_metrics_last_run_timestamp_seconds",
     "manuspectrum_disk_usage_last_run_timestamp_seconds",

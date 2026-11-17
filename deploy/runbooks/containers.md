@@ -64,11 +64,22 @@ An out-of-memory kill may follow.
 
 ### Diagnosis
 
-The memory panel of the Infrastructure dashboard; the working set excludes reclaimable cache.
+The alert reads the memory the kernel cannot drop (`anon` plus `shmem` of the cgroup's `memory.stat`), not the working set: the working set also counts the active page cache, which the kernel drops when the container reaches its limit, so an image server such as Cantaloupe sits near 100 % of it without any risk. A container whose `memory.stat` the collector cannot read falls back on the working set.
+
+The memory panels of the Infrastructure dashboard show both series. On the host, as the service account (`<service>` is the Compose service, for example `cantaloupe`):
+
+```bash
+CID=$(docker ps -qf label=com.docker.compose.service=<service>)
+CG=/sys/fs/cgroup/system.slice/docker-$(docker inspect -f '{{.Id}}' $CID).scope   # cgroupfs driver: /sys/fs/cgroup/docker/<id>
+cat $CG/memory.events
+grep -E '^(anon|shmem|file|active_file|inactive_file|kernel) ' $CG/memory.stat | awk '{printf "%-14s %6.0f MiB\n",$1,$2/1048576}'
+```
+
+`oom_kill` above 0 means a kill already happened (`ContainerOOMKilled`). A high `max` with `oom_kill 0` only says the kernel reclaimed page cache at the limit.
 
 ### Remediation
 
-Lower the load or raise the limit within the host budget.
+Lower the load or raise the limit within the host budget. For a Java service (Cantaloupe, Elasticsearch) the heap is fixed by `-Xmx`; what grows past it is off-heap (metaspace, threads, direct buffers, native decoders), which `-XX:MaxDirectMemorySize` and `-XX:MaxMetaspaceSize` bound.
 
 ### Escalation
 

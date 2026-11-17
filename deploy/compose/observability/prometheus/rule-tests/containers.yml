@@ -72,7 +72,7 @@ tests:
   - expr: ALERTS{alertname="ContainerRestartLoop", alertstate="firing"}
     eval_time: 70h
     exp_samples: []
-- name: web warns at 80 percent, others only at 90 percent
+- name: web warns at 80 percent, others only at 90 percent (working set when memory.stat is unread)
   interval: 1m
   input_series:
   - series: manuspectrum_container_memory_limit_bytes{container="web"}
@@ -104,6 +104,27 @@ tests:
     eval_time: 40m
     exp_samples:
     - labels: ALERTS{alertname="ContainerMemoryNearLimit", alertstate="firing", container="postgres", service="containers", severity="warning"}
+      value: 1
+- name: the page cache alone does not warn, unreclaimable memory does
+  interval: 1m
+  input_series:
+  - series: manuspectrum_container_memory_limit_bytes{container="cantaloupe"}
+    values: 1000x60
+  - series: manuspectrum_container_memory_working_set_bytes{container="cantaloupe"}
+    values: 997x60
+  - series: manuspectrum_container_memory_unreclaimable_bytes{container="cantaloupe"}
+    values: 500x60
+  - series: manuspectrum_container_memory_limit_bytes{container="elasticsearch"}
+    values: 1000x60
+  - series: manuspectrum_container_memory_working_set_bytes{container="elasticsearch"}
+    values: 980x60
+  - series: manuspectrum_container_memory_unreclaimable_bytes{container="elasticsearch"}
+    values: 950x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="ContainerMemoryNearLimit", alertstate="firing"}
+    eval_time: 40m
+    exp_samples:
+    - labels: ALERTS{alertname="ContainerMemoryNearLimit", alertstate="firing", container="elasticsearch", service="containers", severity="warning"}
       value: 1
 - name: an unhealthy container warns after 10 minutes
   interval: 1m
