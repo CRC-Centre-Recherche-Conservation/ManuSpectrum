@@ -61,10 +61,10 @@ class AnalysisPopupTests(TestCase):
 
 
 class TechniqueStatTests(TestCase):
-    def test_the_ma_xrf_stat_names_macro_fluorescence(self):
+    def test_the_ma_xrf_stat_names_x_ray_fluorescence_imaging(self):
         for lang, caption, wrong in (
-            ("en", "Macro X-ray Fluorescence", "Micro-Fluorescence"),
-            ("fr", "Macro-fluorescence X", "Microfluorescence"),
+            ("en", "X-ray Fluorescence Imaging", "Micro-Fluorescence"),
+            ("fr", "Imagerie de fluorescence de rayons X", "Microfluorescence"),
         ):
             with self.subTest(lang=lang):
                 html = self.client.get(f"/{lang}/").content.decode()
