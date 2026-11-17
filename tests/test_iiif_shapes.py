@@ -4,6 +4,8 @@ Usage:
     python manage.py test tests.test_iiif_shapes --settings=tests.test_settings
 """
 
+from xml.etree import ElementTree
+
 from django.test import Client
 
 from arches.app.models.models import ResourceInstance
@@ -45,6 +47,10 @@ def all_values(node, key):
             if k == key:
                 yield v
             yield from all_values(v, key)
+
+
+def link(href, text):
+    return f'<a href="{href}">{text}</a>'
 
 
 class ShapeCase(IIIFCase):
@@ -170,18 +176,39 @@ class LanguageTests(ShapeCase):
             for m in self.annotation_of("open")["metadata"]
         }
 
+        xrf, raman = (
+            "http://vocab.getty.edu/aat/300379594",
+            "http://vocab.getty.edu/aat/300054238",
+        )
         self.assertEqual(
             metadata["Technique"],
             {
-                "en": ["X-ray fluorescence", "Raman"],
-                "fr": ["Fluorescence X", "Raman (fr)"],
+                "en": [link(xrf, "X-ray fluorescence"), link(raman, "Raman")],
+                "fr": [link(xrf, "Fluorescence X"), link(raman, "Raman (fr)")],
             },
         )
-        self.assertEqual(metadata["Operators"], {"none": ["Robinet, L.", "Heu, S."]})
+        self.assertEqual(
+            metadata["Operators"],
+            {
+                "none": [
+                    link(ids.report(self.operator.pk), "Robinet, L."),
+                    link(ids.report(self.second_operator.pk), "Heu, S."),
+                ]
+            },
+        )
         self.assertEqual(metadata["Dates"], {"none": ["2024-03-12 – 2024-03-14"]})
-        self.assertEqual(metadata["Project"], {"none": ["EMMA"]})
-        self.assertEqual(metadata["Component"], {"en": ["f. 1v — initial"]})
-        self.assertEqual(metadata["Document"], {"en": ["Ms 59"]})
+        self.assertEqual(
+            metadata["Project"],
+            {"none": [link(ids.report(self.projects["main"].pk), "EMMA")]},
+        )
+        self.assertEqual(
+            metadata["Component"],
+            {"en": [link(ids.report(self.components["open"].pk), "f. 1v — initial")]},
+        )
+        self.assertEqual(
+            metadata["Document"],
+            {"en": [link(ids.report(self.documents["open"].pk), "Ms 59")]},
+        )
 
     def test_a_draft_analysis_says_so(self):
         status = [
@@ -196,6 +223,84 @@ class LanguageTests(ShapeCase):
         self.assertNotIn(
             ["Status"],
             [m["label"]["en"] for m in self.annotation_of("open")["metadata"]],
+        )
+
+
+class MetadataLinkTests(ShapeCase):
+    def values(self, label="Technique"):
+        return next(
+            m["value"]
+            for m in self.annotation_of("open")["metadata"]
+            if m["label"]["en"] == [label]
+        )
+
+    def add_techniques(self):
+        for uri, en, fr in (
+            ("", "No address", "Sans adresse"),
+            ("urn:x", "Urn", None),
+            ("javascript:alert(1)", "Script", None),
+            ("http://[x", "Broken", None),
+            (
+                "https://manuspectrum.huma-num.fr/plugins/controlled-list-manager/item/"
+                "5b0e2a51-5f43-4ab4-9c2b-6a5bd0ef1a10",
+                "Back office",
+                None,
+            ),
+            ("https://vocab.example/a", "A<B & C", None),
+        ):
+            self.tile(
+                self.analyses["open"],
+                "analysis_technique_used",
+                self.reference_value(uri, en, fr),
+            )
+
+    def test_a_concept_without_a_public_web_address_stays_plain_text(self):
+        self.add_techniques()
+
+        en = self.values()["en"]
+
+        for text in ("No address", "Urn", "Script", "Broken", "Back office"):
+            self.assertIn(text, en)
+        self.assertNotIn("javascript", "".join(en))
+        self.assertNotIn("urn:x", "".join(en))
+
+    def test_a_label_is_escaped_and_every_html_value_parses_with_one_root(self):
+        self.add_techniques()
+
+        en = self.values()["en"]
+
+        self.assertIn(link("https://vocab.example/a", "A&lt;B &amp; C"), en)
+        for text in en:
+            if text.startswith("<"):
+                ElementTree.fromstring(text)
+
+    def test_no_report_link_names_a_hidden_resource(self):
+        self.embargo(self.operator)
+
+        annotation = self.annotation_of("open")
+
+        self.assertEqual(
+            self.values("Operators"),
+            {"none": [link(ids.report(self.second_operator.pk), "Heu, S.")]},
+        )
+        self.assertNotIn(str(self.operator.pk), str(annotation))
+
+    def test_the_v2_annotation_carries_the_same_strings(self):
+        annotation = self.visitor.get(
+            f"/iiif/v2/annotation/{self.analyses['open'].pk}"
+        ).json()
+        operators = next(
+            m["value"]
+            for m in annotation["metadata"]
+            if {"@value": "Operators", "@language": "en"} in m["label"]
+        )
+
+        self.assertEqual(
+            operators,
+            [
+                {"@value": link(ids.report(self.operator.pk), "Robinet, L.")},
+                {"@value": link(ids.report(self.second_operator.pk), "Heu, S.")},
+            ],
         )
 
 

@@ -41,15 +41,16 @@ PROD_LIMITS = {
 PROD_LIMITS_CEILING = 17.5 * GIB
 OBS_LIMITS = {
     "prometheus": 1024 * MIB,
-    "grafana": 512 * MIB,
+    # The cgroup limit counts the page cache Grafana reads its files through.
+    "grafana": 1536 * MIB,
     "alertmanager": 128 * MIB,
     "postgres-exporter": 96 * MIB,
     "node-exporter": 64 * MIB,
     "redis-exporter": 64 * MIB,
     "blackbox-exporter": 64 * MIB,
 }
-OBS_LIMITS_CEILING = 2 * GIB
-TOTAL_LIMITS_CEILING = 19.5 * GIB
+OBS_LIMITS_CEILING = 3 * GIB
+TOTAL_LIMITS_CEILING = 20.5 * GIB
 OBS_EXTERNAL_VOLUMES = {"prometheus_data": "ms_prometheus_data"}
 OBS_SECRETS = {"grafana_admin_password", "pg_monitor_password"}
 
@@ -851,6 +852,29 @@ class ComposeStackTests(unittest.TestCase):
             if n in PROD_LIMITS
         )
         self.assertEqual(steady, sum(PROD_LIMITS.values()))
+
+    def test_sizing_comments_state_the_limit_sums(self):
+        # The header of compose.prod.yaml quotes the sum of the application
+        # ceilings, the sum of the monitoring ceilings and the grand total; the
+        # comment above the monitoring services repeats the monitoring sum.
+        # Operators size the host from these lines, so a changed limit must
+        # update them. If you reword them, keep these patterns in step.
+        text = (COMPOSE_DIR / "compose.prod.yaml").read_text()
+        application = sum(PROD_LIMITS.values()) / GIB
+        monitoring = sum(OBS_LIMITS.values()) // MIB
+        total = (sum(PROD_LIMITS.values()) + sum(OBS_LIMITS.values())) / GIB
+        app_header = re.search(r"they sum to ([\d.]+) GiB and", text)
+        header = re.search(
+            r"add (\d+) MiB of ceilings,\s+#\s+([\d.]+) GiB in all;", text
+        )
+        section = re.search(r"# Monitoring: (\d+) MiB in all,", text)
+        self.assertIsNotNone(app_header, "header sentence on the application sum")
+        self.assertIsNotNone(header, "header sentence on the monitoring ceilings")
+        self.assertIsNotNone(section, "comment above the monitoring services")
+        self.assertEqual(app_header[1], f"{application:.1f}")
+        self.assertEqual(int(header[1]), monitoring)
+        self.assertEqual(header[2], f"{total:.1f}")
+        self.assertEqual(int(section[1]), monitoring)
 
     def test_prometheus_keeps_35_days_on_an_external_volume(self):
         prometheus = self.observability["services"]["prometheus"]

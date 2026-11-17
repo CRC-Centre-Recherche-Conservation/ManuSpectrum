@@ -80,6 +80,11 @@ def selection_manifest(kind, resource_id):
     return explorer_manifest(f"ids={prefix}:{resource_id}:-")
 
 
+def stored_manifest(globalid):
+    """The language-neutral IIIF URL of a stored manifest (``IIIFManifest.globalid``)."""
+    return _url(f"iiif/manifest/{globalid}")
+
+
 def data_raw(file_id):
     """The stored file, served with its true media type."""
     return _url(f"iiif/data/{file_id}/raw")

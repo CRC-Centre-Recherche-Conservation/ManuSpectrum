@@ -46,6 +46,7 @@
     --ink: #1a1a2e;
     --ink-muted: #4a4a5e;
     --ink-dim: #8a8a9a;
+    --ink-soft: #6b6b7b;
 
     // Gold accent — adjusted for light background
     --accent: #a07d1c;
@@ -484,8 +485,9 @@ img { max-width: 100%; height: auto; display: block; }
 .ms-nav-auth a:hover { color: var(--accent); }
 
 .ms-nav-auth .ms-btn-signin {
-    background: var(--ink);
-    color: var(--bg);
+    background: transparent;
+    border: 1px solid var(--ink);
+    color: var(--ink);
     border-radius: 6px;
     padding: 0.5rem 1.3rem;
     font-weight: 500;
@@ -495,8 +497,8 @@ img { max-width: 100%; height: auto; display: block; }
 }
 
 .ms-nav-auth .ms-btn-signin:hover {
-    background: var(--spectral-5);
-    color: #fff;
+    background: var(--bg-warm);
+    color: var(--ink);
     transform: translateY(-1px);
 }
 
@@ -565,28 +567,46 @@ img { max-width: 100%; height: auto; display: block; }
 .ms-hamburger.active span:nth-child(2) { opacity: 0; transform: scaleX(0); }
 .ms-hamburger.active span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
 
-// Mobile overlay nav
+// Mobile overlay nav: under the header (ms-nav.js sets `--ms-header-h`), which
+// keeps the menu button above it, and scrollable when its entries outgrow a
+// short viewport (zoomed desktop, landscape phone).
 .ms-mobile-nav {
     display: none;
     position: fixed;
     inset: 0;
-    top: var(--ms-notice-h, 0px);
+    top: calc(var(--ms-notice-h, 0px) + var(--ms-header-h, 0px));
     background: rgba(250, 249, 247, 0.97);
     backdrop-filter: blur(30px);
     -webkit-backdrop-filter: blur(30px);
     z-index: 1001;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
     gap: 2rem;
+    padding: 1.5rem var(--ms-gutter);
+    overflow-y: auto;
+    overscroll-behavior: contain;
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
-    transition: opacity 0.4s;
+    transition: opacity 0.4s, visibility 0s linear 0.4s;
+
+    // Centred when it fits; auto margins shrink to 0 instead of pushing the
+    // first entries above the top edge the way `justify-content: center` does.
+    > :first-child { margin-top: auto; }
+    > :last-child { margin-bottom: auto; }
 }
 
 .ms-mobile-nav.open {
     opacity: 1;
+    visibility: visible;
     pointer-events: all;
+    transition: opacity 0.4s;
+}
+
+.ms-header.ms-header--menu-open {
+    z-index: 1002;
+    background: rgba(250, 249, 247, 0.97);
+    box-shadow: 0 1px 0 var(--border);
 }
 
 .ms-mobile-nav a {
@@ -780,6 +800,13 @@ img { max-width: 100%; height: auto; display: block; }
     font-size: 1.05rem;
 }
 
+// Short viewports (zoomed desktop, landscape phone): tighter drawer type.
+@media (max-height: 600px) {
+    .ms-mobile-nav { gap: 1rem; }
+    .ms-mobile-nav a:not(.ms-mobile-nav-sublink),
+    .ms-mobile-nav .ms-mobile-nav-group-toggle { font-size: 1.5rem; }
+}
+
 // Buttons
 .ms-btn {
     display: inline-flex;
@@ -949,7 +976,7 @@ img { max-width: 100%; height: auto; display: block; }
     font-size: 0.72rem;
     letter-spacing: 0.2em;
     text-transform: uppercase;
-    color: var(--ink-dim);
+    color: var(--ink-soft);
     margin-bottom: 3rem;
 }
 
@@ -959,7 +986,7 @@ img { max-width: 100%; height: auto; display: block; }
     justify-content: center;
     flex-wrap: wrap;
     gap: 2.5rem 3rem;
-    max-width: 1100px;
+    max-width: 880px;
     margin: 0 auto;
 }
 
@@ -968,7 +995,7 @@ img { max-width: 100%; height: auto; display: block; }
     align-items: center;
     justify-content: center;
     transition: opacity 0.4s, filter 0.4s, transform 0.3s var(--ease-out-expo);
-    opacity: 0.4;
+    opacity: 0.7;
     filter: grayscale(100%);
 }
 
@@ -985,6 +1012,7 @@ img { max-width: 100%; height: auto; display: block; }
 
 // Ministere de la Culture — white background mandatory (charte)
 .ms-partner-link--culture {
+    filter: none;
     background: #fff;
     border-radius: 6px;
     padding: 10px 14px;
@@ -1011,10 +1039,10 @@ img { max-width: 100%; height: auto; display: block; }
 .ms-partner-link--biblissima img { height: 50px; }
 
 // Huma-Num
-.ms-partner-link--humanum img { height: 45px; }
+.ms-partner-link--humanum img { height: 50px; }
 
 // Arches
-.ms-partner-link--arches img { height: 45px; }
+.ms-partner-link--arches img { height: 38px; }
 
 
 // ============================================================
@@ -1067,7 +1095,7 @@ img { max-width: 100%; height: auto; display: block; }
     }
     .ms-header .ms-nav { margin-right: 0.25rem; flex-shrink: 0; }
     .ms-lang-switch { font-size: 11px; }
-    .ms-lang-switch a { padding: 0.3rem 0.35rem; }
+    .ms-lang-switch a { padding: 0.6rem 0.5rem; }
     .ms-hamburger {
         box-sizing: border-box;
         width: 44px;

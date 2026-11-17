@@ -30,6 +30,14 @@ msgstr ""
 msgid "You must accept the terms of use to continue."
 msgstr "Vous devez accepter les conditions d'utilisation pour continuer."
 
+#: accounts/csrf_failure.py:48
+msgid "Request Failed"
+msgstr "Échec de la requête"
+
+#: accounts/csrf_failure.py:48
+msgid "Permission Denied"
+msgstr "Permission refusée"
+
 #: accounts/notices.py:83
 #, python-format
 msgid "in %(days)d day"
@@ -1297,6 +1305,14 @@ msgstr ""
 msgid "Accept and choose your password"
 msgstr "Accepter et choisir votre mot de passe"
 
+#: templates/accounts/activate_continue.htm:10
+msgid ""
+"Your invitation link is valid. Continue to read the terms of use and choose "
+"your password."
+msgstr ""
+"Votre lien d'invitation est valide. Continuez pour lire les conditions "
+"d'utilisation et choisir votre mot de passe."
+
 #: templates/accounts/activation_invalid.htm:3
 #: templates/accounts/activation_invalid.htm:4
 #: templates/accounts/two_factor_reset_invalid.htm:3
@@ -1487,6 +1503,14 @@ msgstr "Mot de passe"
 #: templates/accounts/two_factor_reset.htm:46
 msgid "Continue"
 msgstr "Continuer"
+
+#: templates/accounts/two_factor_reset_continue.htm:14
+msgid ""
+"Your link is valid. Continue to type your password and set up your "
+"authenticator again."
+msgstr ""
+"Votre lien est valide. Continuez pour saisir votre mot de passe et "
+"configurer à nouveau votre application d'authentification."
 
 #: templates/accounts/two_factor_reset_invalid.htm:7
 msgid "The link has expired, has already been used or is incorrect."
@@ -1742,6 +1766,18 @@ msgstr ""
 "Les données proviennent des jeux de données ci-dessous ; citez-les et "
 "réutilisez-les par leur identifiant."
 
+#: templates/explorer/export_readme.md
+msgid "Source manifests"
+msgstr "Manifestes source"
+
+#: templates/explorer/export_readme.md
+msgid ""
+"The documents are described on these IIIF manifests; a manifest imported from "
+"another institution is listed at its publisher."
+msgstr ""
+"Les documents sont décrits par ces manifestes IIIF ; un manifeste importé d'une "
+"autre institution est donné chez son éditeur."
+
 #: templates/explorer/export_readme.md:31
 #: templates/explorer/export_readme.md:33 views/explorer/export.py:508
 #: views/explorer/export.py:509
@@ -1974,11 +2010,11 @@ msgstr ""
 msgid ""
 "The Dataset is never decimated, whatever its size. mirador-xyviewer does not"
 " plot a Dataset larger than 5 MB; such a file still plots in the "
-"ManuSpectrum Explorer."
+"ManuSpectrum Data Lab."
 msgstr ""
 "Le Dataset n'est jamais décimé, quelle que soit sa taille. mirador-xyviewer "
 "ne trace pas un Dataset de plus de 5 Mo ; un tel fichier se trace toujours "
-"dans l'Explorateur ManuSpectrum."
+"dans le Laboratoire des données ManuSpectrum."
 
 #: templates/iiif/xy_reading_1.htm:51
 msgid "Restricted data (IIIF Authorization)"
@@ -2272,12 +2308,6 @@ msgstr "Navigation principale"
 msgid "The Project"
 msgstr "Le Projet"
 
-#: templates/includes/ms_header.htm:12 templates/includes/ms_header.htm:16
-#: templates/includes/ms_header.htm:88 templates/includes/ms_header.htm:92
-#: templates/index.htm:404 templates/index.htm:406
-msgid "Explore"
-msgstr "Explorer"
-
 #: templates/includes/ms_header.htm:13 templates/includes/ms_header.htm:17
 #: templates/includes/ms_header.htm:89 templates/includes/ms_header.htm:93
 #: templates/index.htm:470 templates/index.htm:472
@@ -2292,8 +2322,8 @@ msgstr "Analyses"
 #: templates/views/pages/analysis-explorer.htm:31
 #: templates/views/pages/analysis-explorer.htm:4
 #: templates/views/pages/analysis-explorer.htm:6
-msgid "Discover the data"
-msgstr "Découvrir les données"
+msgid "Data Lab"
+msgstr "Laboratoire des données"
 
 #: templates/includes/ms_header.htm:29 templates/includes/ms_header.htm:33
 msgid "The data model behind ManuSpectrum"
@@ -2409,16 +2439,12 @@ msgstr ""
 
 #: templates/index.htm:238 templates/index.htm:240 templates/index.htm:589
 #: templates/index.htm:591
-msgid "Explore the database"
-msgstr "Explorer la base de données"
+msgid "Search the database"
+msgstr "Rechercher dans la base"
 
 #: templates/index.htm:241 templates/index.htm:243
 msgid "Learn more"
 msgstr "En savoir plus"
-
-#: templates/index.htm:248 templates/index.htm:250
-msgid "scroll"
-msgstr "défiler"
 
 #: templates/index.htm:262 templates/index.htm:264
 msgid "Thinking and modeling written cultural heritage materials"
@@ -2493,8 +2519,8 @@ msgid "X-ray Fluorescence"
 msgstr "Fluorescence X"
 
 #: templates/index.htm:306 templates/index.htm:308
-msgid "X-ray Micro-Fluorescence"
-msgstr "Microfluorescence X"
+msgid "X-ray Fluorescence Imaging"
+msgstr "Imagerie de fluorescence de rayons X"
 
 #: templates/index.htm:311 templates/index.htm:313
 msgid "Fiber Optic Reflectance"
@@ -2850,20 +2876,6 @@ msgstr "Multispectral"
 msgid "Spectral band scanning and false-color composites via IIIF"
 msgstr "Balayage de bandes spectrales et composites fausses couleurs via IIIF"
 
-#: templates/index.htm:591 templates/index.htm:593
-msgid ""
-"Search by material — a pigment, an ink, a support —, analysis technique, "
-"written cultural heritage object, or chemical element. Advanced filters "
-"available in the search interface."
-msgstr ""
-"Recherchez par matériau — un pigment, une encre, un support —, technique "
-"d'analyse, objet du patrimoine culturel écrit ou élément chimique. Filtres "
-"avancés disponibles dans l'interface de recherche."
-
-#: templates/index.htm:604 templates/index.htm:606
-msgid "Search materials, techniques, objects..."
-msgstr "Rechercher des matériaux, techniques, objets..."
-
 #: templates/index.htm:615 templates/index.htm:617
 msgid "Vermilion"
 msgstr "Vermillon"
@@ -2891,10 +2903,6 @@ msgstr "enluminure"
 #: templates/index.htm:619 templates/index.htm:620
 msgid "Illuminations"
 msgstr "Enluminures"
-
-#: templates/index.htm:624 templates/index.htm:635
-msgid "Access advanced search"
-msgstr "Accéder à la recherche avancée"
 
 #: templates/index.htm:637 templates/index.htm:648
 #: templates/views/pages/team.htm:190
@@ -3942,6 +3950,10 @@ msgid ""
 msgstr ""
 "ManuSpectrum — base de données interopérable pour l'analyse physico-chimique"
 " du patrimoine culturel écrit."
+
+#: templates/registration/password_reset_continue.html:3
+msgid "Your link is valid. Continue to choose a new password."
+msgstr "Votre lien est valide. Continuez pour choisir un nouveau mot de passe."
 
 #: templates/registration/password_reset_email_html.html:17
 #, python-format
@@ -5295,18 +5307,19 @@ msgstr "Ouvrir le projet"
 #: templates/views/pages/analysis-explorer.htm:30
 #: templates/views/pages/analysis-explorer.htm:4
 #: templates/views/pages/analysis-explorer.htm:6
-msgid "Analysis explorer"
-msgstr "Explorateur d'analyses"
+msgid "Analyses, spectra and images"
+msgstr "Analyses, spectres et images"
 
 #: templates/views/pages/analysis-explorer.htm:5
 #: templates/views/pages/analysis-explorer.htm:7
 msgid ""
-"Browse the physicochemical analyses of manuscripts: search by technique, "
-"material, project or year, and open each document where it was analysed."
+"Browse the physicochemical analyses of written heritage by technique, "
+"material, project or year, compare spectra and images, and open each "
+"document where it was analysed."
 msgstr ""
-"Parcourez les analyses physico-chimiques des manuscrits : cherchez par "
-"technique, matériau, projet ou année, et ouvrez chaque document là où il a "
-"été analysé."
+"Parcourez les analyses physico-chimiques du patrimoine écrit par technique, "
+"matériau, projet ou année, comparez spectres et images, et ouvrez chaque "
+"document là où il a été analysé."
 
 #: templates/views/pages/analysis-explorer.htm:33
 #: templates/views/pages/analysis-explorer.htm:34
@@ -5320,13 +5333,13 @@ msgstr ""
 
 #: templates/views/pages/analysis-explorer.htm:41
 #: templates/views/pages/analysis-explorer.htm:48
-msgid "Loading the explorer…"
-msgstr "Chargement de l'explorateur…"
+msgid "Loading the Data Lab…"
+msgstr "Chargement du Laboratoire des données…"
 
 #: templates/views/pages/analysis-explorer.htm:44
 #: templates/views/pages/analysis-explorer.htm:71
-msgid "The explorer could not start in this browser."
-msgstr "L'explorateur n'a pas pu démarrer dans ce navigateur."
+msgid "The Data Lab could not start in this browser."
+msgstr "Le Laboratoire des données n'a pas pu démarrer dans ce navigateur."
 
 #: templates/views/pages/analysis-explorer.htm:45
 #: templates/views/pages/analysis-explorer.htm:50
@@ -5337,8 +5350,8 @@ msgstr "Utiliser plutôt la recherche avancée"
 
 #: templates/views/pages/analysis-explorer.htm:49
 #: templates/views/pages/analysis-explorer.htm:76
-msgid "The explorer needs JavaScript."
-msgstr "L'explorateur a besoin de JavaScript."
+msgid "The Data Lab needs JavaScript."
+msgstr "Le Laboratoire des données a besoin de JavaScript."
 
 #: templates/views/pages/conceptual-model.htm:5
 #: templates/views/pages/conceptual-model.htm:7
@@ -5492,8 +5505,8 @@ msgid "Observation · CRMsci"
 msgstr "Observation · CRMsci"
 
 #: templates/views/pages/conceptual-model.htm:109
-msgid "Analysis → Characterization"
-msgstr "Analyse → Caractérisation"
+msgid "Analysis → Interpretation"
+msgstr "Analyse → Interprétation"
 
 #: templates/views/pages/conceptual-model.htm:110
 msgid "Shared context"
@@ -5642,13 +5655,13 @@ msgstr "la mesure : instrument, opérateur, date"
 
 #: templates/views/pages/conceptual-model.htm:201
 #: templates/views/pages/conceptual-model.htm:203
-msgid "Characterization"
-msgstr "Caractérisation"
+msgid "Interpretation"
+msgstr "Interprétation"
 
 #: templates/views/pages/conceptual-model.htm:201
 #: templates/views/pages/conceptual-model.htm:203
-msgid "the interpretation — stored apart from the measurement"
-msgstr "l'interprétation — enregistrée à part de la mesure"
+msgid "the materials identified — stored apart from the measurement"
+msgstr "les matériaux identifiés — enregistrés à part de la mesure"
 
 #: templates/views/pages/conceptual-model.htm:210
 #: templates/views/pages/conceptual-model.htm:212
@@ -6389,7 +6402,7 @@ msgstr "Tout visiteur"
 msgid ""
 "Image servers of the institutions that hold the manuscripts (IIIF). When the"
 " images of a document are not hosted by ManuSpectrum, your browser loads "
-"them from the IIIF server of the holding institution, in the Explorer and on"
+"them from the IIIF server of the holding institution, in the Data Lab and on"
 " resource pages: for example the Bibliothèque nationale de France (Gallica),"
 " the Université de Caen Normandie, e-codices, the Vatican Library or the "
 "BVMM of the IRHT. The list depends on the documents described."
@@ -6397,7 +6410,7 @@ msgstr ""
 "Serveurs d'images des institutions qui conservent les manuscrits (IIIF). "
 "Lorsque les images d'un document ne sont pas hébergées par ManuSpectrum, "
 "votre navigateur les charge depuis le serveur IIIF de l'institution qui le "
-"conserve, dans l'Explorateur et sur les pages de ressource : par exemple la "
+"conserve, dans le Laboratoire des données et sur les pages de ressource : par exemple la "
 "Bibliothèque nationale de France (Gallica), l'Université de Caen Normandie, "
 "e-codices, la Bibliothèque apostolique vaticane ou la BVMM de l'IRHT. La "
 "liste dépend des documents décrits."
@@ -6413,14 +6426,14 @@ msgstr ""
 #: templates/views/pages/privacy.htm:94
 msgid ""
 "OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of "
-"the base map, loaded whenever a map is shown: the Map view of the Explorer, "
+"the base map, loaded whenever a map is shown: the Map view of the Data Lab, "
 "the search map, the maps of the resource reports and the map widgets of the "
 "editing tools. OpenFreeMap is served through Cloudflare (United States). "
 "Data © OpenMapTiles, © OpenStreetMap contributors."
 msgstr ""
 "OpenFreeMap (tiles.openfreemap.org) : les tuiles vectorielles, polices et "
-"sprites du fond de carte, chargés dès qu'une carte s'affiche : vue Carte de "
-"l'Explorateur, carte de la recherche, cartes des rapports de ressource et "
+"sprites du fond de carte, chargés dès qu'une carte s'affiche : vue Carte du "
+"Laboratoire des données, carte de la recherche, cartes des rapports de ressource et "
 "widgets de carte des outils de saisie. OpenFreeMap est servi par Cloudflare "
 "(États-Unis). Données © OpenMapTiles, © contributeurs OpenStreetMap."
 
@@ -6556,11 +6569,11 @@ msgstr "Mémorise la langue que vous avez choisie."
 #: templates/views/pages/privacy.htm:132
 msgid ""
 "There is no tracker, no analytics service and no advertising cookie. The "
-"Analysis Explorer keeps your selection and layout in your browser's local "
-"storage; they are never sent to the server."
+"Data Lab keeps your selection and layout in your browser's local storage; "
+"they are never sent to the server."
 msgstr ""
 "Il n'y a ni traceur, ni service d'analyse d'audience, ni cookie "
-"publicitaire. L'Explorateur d'analyses garde votre sélection et votre "
+"publicitaire. Le Laboratoire des données garde votre sélection et votre "
 "disposition dans le stockage local de votre navigateur ; elles ne sont "
 "jamais envoyées au serveur."
 
@@ -7418,10 +7431,6 @@ msgstr "Référence"
 msgid "IIIF Manifest"
 msgstr "Manifeste IIIF"
 
-#: views/renderer_config.py:51
-msgid "<h1>Renderers do not exist</h1>"
-msgstr "<h1>Les rendus n'existent pas</h1>"
-
 #: views/renderer_config.py:129
 msgid "<h1>Renderers config does not exist</h1>"
 msgstr "<h1>La configuration de rendu n'existe pas</h1>"
@@ -7717,8 +7726,13 @@ msgid "Reuse the data"
 msgstr "Réutiliser les données"
 
 #: templates/views/pages/data.htm
-msgid "The Analysis Explorer is built on public products meant to be downloaded, cited and opened in other tools. Use these; they are stable and documented."
-msgstr "L'Explorateur d'analyses repose sur des produits publics faits pour être téléchargés, cités et ouverts dans d'autres outils. Utilisez-les : ils sont stables et documentés."
+msgid ""
+"The Data Lab is built on public products meant to be downloaded, cited and "
+"opened in other tools. Use these; they are stable and documented."
+msgstr ""
+"Le Laboratoire des données repose sur des produits publics faits pour être "
+"téléchargés, cités et ouverts dans d'autres outils. Utilisez-les : ils sont "
+"stables et documentés."
 
 #: templates/views/pages/data.htm
 msgid "Data package"
@@ -7729,16 +7743,16 @@ msgid "an RO-Crate with the series, the metadata and the citations of a project,
 msgstr "un RO-Crate avec les séries, les métadonnées et les citations d'un projet, d'un document ou d'une sélection."
 
 #: templates/views/pages/data.htm
-msgid "the Explorer manifest of a scope, to open in Mirador or any IIIF viewer."
-msgstr "le manifeste de l'Explorateur pour un périmètre, à ouvrir dans Mirador ou tout visualiseur IIIF."
+msgid "the Data Lab manifest of a scope, to open in Mirador or any IIIF viewer."
+msgstr "le manifeste du Laboratoire des données pour un périmètre, à ouvrir dans Mirador ou tout visualiseur IIIF."
 
 #: templates/views/pages/data.htm
 msgid "Annotations and content states"
 msgstr "Annotations et états de contenu"
 
 #: templates/views/pages/data.htm
-msgid "annotation collections, characterizations and the content state of a zone, for Mirador and mirador-xyviewer."
-msgstr "collections d'annotations, caractérisations et état de contenu d'une zone, pour Mirador et mirador-xyviewer."
+msgid "annotation collections, interpretations and the content state of a zone, for Mirador and mirador-xyviewer."
+msgstr "collections d'annotations, interprétations et état de contenu d'une zone, pour Mirador et mirador-xyviewer."
 
 #: templates/views/pages/data.htm
 msgid "Spectra"
@@ -7765,12 +7779,16 @@ msgid "the JSON-LD context and the documentation of the reading of an XY series.
 msgstr "le contexte JSON-LD et la documentation de la lecture d'une série XY."
 
 #: templates/views/pages/data.htm
-msgid "A machine API with personal read-only access tokens (OAuth, MCP) is planned. Until then, the addresses under /{lang}/api/explorer/ (for example /en/api/explorer/search) and /api/spectrum-preview/ serve the Explorer page only; they are not a contract and answer other requests with a 403."
-msgstr "Une API pour les machines, avec des jetons d'accès personnels en lecture seule (OAuth, MCP), est prévue. D'ici là, les adresses sous /{lang}/api/explorer/ (par exemple /en/api/explorer/search) et /api/spectrum-preview/ servent uniquement la page de l'Explorateur ; elles ne sont pas un contrat et répondent par un 403 aux autres requêtes."
+msgid "A machine API with personal read-only access tokens (OAuth, MCP) is planned. Until then, the addresses under /{lang}/api/explorer/ (for example /en/api/explorer/search) and /api/spectrum-preview/ serve the Data Lab page only; they are not a contract and answer other requests with a 403."
+msgstr "Une API pour les machines, avec des jetons d'accès personnels en lecture seule (OAuth, MCP), est prévue. D'ici là, les adresses sous /{lang}/api/explorer/ (par exemple /en/api/explorer/search) et /api/spectrum-preview/ servent uniquement la page du Laboratoire des données ; elles ne sont pas un contrat et répondent par un 403 aux autres requêtes."
 
 #: templates/views/pages/data.htm
-msgid "The public products of the Analysis Explorer, meant to be downloaded, cited and opened in other tools."
-msgstr "Les produits publics de l'Explorateur d'analyses, faits pour être téléchargés, cités et ouverts dans d'autres outils."
+msgid ""
+"The public products of the Data Lab, meant to be downloaded, cited and "
+"opened in other tools."
+msgstr ""
+"Les produits publics du Laboratoire des données, faits pour être "
+"téléchargés, cités et ouverts dans d'autres outils."
 
 #: templates/views/pages/privacy.htm
 msgid ""
@@ -7803,3 +7821,67 @@ msgstr ""
 "Si vous estimez que vos droits Informatique et Libertés ne sont pas "
 "respectés, vous avez la possibilité d'introduire une réclamation en "
 "ligne auprès de la CNIL,"
+
+#: templates/includes/ms_header.htm
+msgid "Overview"
+msgstr "Aperçu"
+
+#: templates/views/pages/analysis-explorer.htm
+msgid "ManuSpectrum Data Lab"
+msgstr "Laboratoire des données de ManuSpectrum"
+
+#: templates/index.htm
+msgid "Two ways to search"
+msgstr "Deux façons de chercher"
+
+#: templates/index.htm
+msgid "Search terms"
+msgstr "Termes recherchés"
+
+#: templates/index.htm
+msgid "Search the Data Lab"
+msgstr "Rechercher dans le Laboratoire des données"
+
+#: templates/index.htm
+msgid "Every resource in the database — documents, components, analyses, samples, people, places… — with filters to combine on any field, the map and dates."
+msgstr "Toutes les ressources de la base — documents, composants, analyses, échantillons, personnes, lieux… — et des filtres à combiner sur chaque champ, la carte et les dates."
+
+#: templates/index.htm
+msgid "Analysed documents open on their folios, each measurement where it was taken; compare spectra and elemental maps, then export."
+msgstr "Les documents analysés s'ouvrent sur leurs folios, chaque mesure à l'endroit où elle a été prise ; on compare spectres et cartes élémentaires, puis on exporte."
+
+#: templates/index.htm
+msgid "Advanced search"
+msgstr "Recherche avancée"
+
+#: templates/index.htm
+msgid "Advanced search: MS 59 resources (folios, a place, the manuscript) beside a map of the Bay of Mont-Saint-Michel."
+msgstr "Recherche avancée : ressources du MS 59 d'Avranches (folios, lieu, manuscrit) à côté de la carte de la baie du Mont-Saint-Michel."
+
+#: templates/index.htm
+msgid "Data Lab: folio 1v of MS 59 with its analysis zones drawn over the illumination, and the details of a FORS analysis with its reflectance spectrum."
+msgstr "Laboratoire des données : le folio 1v du MS 59, ses zones d'analyse dessinées sur l'enluminure, et le détail d'une analyse FORS avec son spectre de réflectance."
+
+#: templates/index.htm
+msgid "Material, technique, object…"
+msgstr "Matériau, technique, objet…"
+
+#: templates/index.htm
+msgid "Advanced search across every resource."
+msgstr "Recherche avancée dans toutes les ressources."
+
+#: templates/index.htm
+msgid "Analyses on the folio, to compare and export."
+msgstr "Les analyses sur le folio, à comparer et à exporter."
+
+#: templates/index.htm
+msgid "Through the analyses"
+msgstr "Par les analyses"
+
+#: templates/index.htm
+msgid "Drag to compare Hg / Ca"
+msgstr "Glisser pour comparer Hg / Ca"
+
+#: templates/index.htm
+msgid "Browse the corpus"
+msgstr "Parcourir le corpus"

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Mock } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 
@@ -197,7 +198,7 @@ const ITEMS = new Map(
 
 let pinia: Pinia;
 let announce: ReturnType<typeof vi.fn>;
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: Mock<(url: string) => Promise<ReturnType<typeof jsonResponse>>>;
 let synthesis: SynthesisResponse;
 /** Answers the next synthesis requests instead of `synthesis`, while set. */
 let synthesisReply: (() => Promise<Response>) | null = null;

@@ -1,10 +1,10 @@
 {% extends 'ms_base.htm' %}
 {% load i18n %}
 {% load render_bundle from webpack_loader %}
-{% block page_title %}{% trans "Discover the data" %} · {% trans "Analysis explorer" %} — ManuSpectrum{% endblock %}
-{% block page_description %}{% trans "Browse the physicochemical analyses of manuscripts: search by technique, material, project or year, and open each document where it was analysed." %}{% endblock %}
-{% block og_title %}{% trans "Discover the data" %} · {% trans "Analysis explorer" %} — ManuSpectrum{% endblock %}
-{% block og_description %}{% trans "Browse the physicochemical analyses of manuscripts: search by technique, material, project or year, and open each document where it was analysed." %}{% endblock %}
+{% block page_title %}{% trans "Data Lab" %} · {% trans "Analyses, spectra and images" %} — ManuSpectrum{% endblock %}
+{% block page_description %}{% trans "Browse the physicochemical analyses of written heritage by technique, material, project or year, compare spectra and images, and open each document where it was analysed." %}{% endblock %}
+{% block og_title %}{% trans "Data Lab" %} · {% trans "Analyses, spectra and images" %} — ManuSpectrum{% endblock %}
+{% block og_description %}{% trans "Browse the physicochemical analyses of written heritage by technique, material, project or year, compare spectra and images, and open each document where it was analysed." %}{% endblock %}
 {% block structured_data %}
 <script type="application/ld+json">
 {
@@ -12,9 +12,9 @@
     "@graph": [
         {"@type": "BreadcrumbList", "itemListElement": [
             {"@type": "ListItem", "position": 1, "name": "{% trans 'Home' as ms_b1 %}{{ ms_b1|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'root' %}"},
-            {"@type": "ListItem", "position": 2, "name": "{% trans 'Discover the data' as ms_b2 %}{{ ms_b2|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'analysis-explorer' %}"}
+            {"@type": "ListItem", "position": 2, "name": "{% trans 'Data Lab' as ms_b2 %}{{ ms_b2|escapejs }}", "item": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'analysis-explorer' %}"}
         ]},
-        {"@type": "WebApplication", "name": "{% trans 'Analysis explorer' as ms_app %}{{ ms_app|escapejs }}",
+        {"@type": "WebApplication", "name": "{% trans 'ManuSpectrum Data Lab' as ms_app %}{{ ms_app|escapejs }}",
          "applicationCategory": "ResearchApplication", "isAccessibleForFree": true,
          "url": "{{ request.scheme }}://{{ request.get_host|escapejs }}{% url 'analysis-explorer' %}"}
     ]
@@ -26,8 +26,8 @@
 {% block body_attrs %}{% if initial_screen != "home" %} data-explorer-screen="{{ initial_screen }}"{% endif %}{% endblock %}
 {% block content %}
 <section class="ms-explorer-intro">
-    <p class="ms-explorer-intro__kicker">{% trans "Analysis explorer" %}</p>
-    <h1 class="ms-explorer-intro__title">{% trans "Discover the data" %}</h1>
+    <p class="ms-explorer-intro__kicker">{% trans "Analyses, spectra and images" %}</p>
+    <h1 class="ms-explorer-intro__title">{% trans "Data Lab" %}</h1>
     <span class="ms-explorer-intro__accent" aria-hidden="true"></span>
     <p class="ms-explorer-intro__lead">
         {% blocktrans trimmed %}
@@ -44,7 +44,7 @@
             <span class="ms-skeleton"></span>
             <span class="ms-skeleton"></span>
         </div>
-        <p class="ms-explorer-loading__status" role="status" aria-live="polite">{% trans "Loading the explorer…" %}</p>
+        <p class="ms-explorer-loading__status" role="status" aria-live="polite">{% trans "Loading the Data Lab…" %}</p>
         {% if initial_screen != "compare" %}
         <div class="ms-explorer-loading__body" aria-hidden="true">
         {% if initial_screen == "home" %}
@@ -67,12 +67,12 @@
     </div>
 </div>
 <div id="ms-explorer-fallback" class="ms-explorer-fallback" role="alert" hidden>
-    <p>{% trans "The explorer could not start in this browser." %}</p>
+    <p>{% trans "The Data Lab could not start in this browser." %}</p>
     <p><a href="{% url 'search_home' %}">{% trans "Use the advanced search instead" %}</a></p>
 </div>
 <noscript>
     <div class="ms-explorer-fallback">
-        <p>{% trans "The explorer needs JavaScript." %}</p>
+        <p>{% trans "The Data Lab needs JavaScript." %}</p>
         <p><a href="{% url 'search_home' %}">{% trans "Use the advanced search instead" %}</a></p>
     </div>
 </noscript>

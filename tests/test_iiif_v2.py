@@ -53,7 +53,10 @@ class V2RouteTests(IIIFCase):
             for m in annotation["metadata"]
             if {"@value": "Project", "@language": "en"} in m["label"]
         )
-        self.assertEqual(project["value"], [{"@value": "EMMA"}])
+        self.assertEqual(
+            project["value"],
+            [{"@value": f'<a href="{ids.report(self.projects["main"].pk)}">EMMA</a>'}],
+        )
 
     def test_the_v2_layer_lists_its_pages(self):
         layer = self.get(f"/iiif/v2/annotation-collection/{self.doc}")

@@ -5,7 +5,7 @@ host, into the data it creates: concept ``legacyoid`` and ``identifier``
 values (``ARCHES_NAMESPACE_FOR_DATA_EXPORT``), controlled list item URIs and
 their copies in tiles (``PUBLIC_SERVER_ADDRESS``), IIIF manifests and the
 canvases they mint (``manifest_manager.py``: image URLs from the request,
-canvas and sequence ids from ``CANTALOUPE_HTTP_ENDPOINT``). Run this once on
+canvas, sequence and annotation ids from ``CANTALOUPE_HTTP_ENDPOINT``). Run this once on
 a database taken from a development host, before it serves a public address.
 
 Each ``--from`` is an origin (``http://host:port``); ``--to`` is the new base
@@ -14,8 +14,9 @@ is rewritten only when it starts with ``<origin>/``; a value that merely
 contains an origin, an external URL and a value that is not a URL are never
 touched. The mapping is the same in every family:
 
-- ``<origin>/iiif/manifest/<rest>`` becomes ``<to>iiifserver/iiif/manifest/<rest>``
-  (the canvas and sequence ids; set ``CANTALOUPE_HTTP_ENDPOINT`` to
+- ``<origin>/iiif/manifest/(canvas|sequence|annotation)/<rest>`` becomes
+  ``<to>iiifserver/iiif/manifest/(canvas|sequence|annotation)/<rest>`` (the
+  ids Arches mints from Cantaloupe; set ``CANTALOUPE_HTTP_ENDPOINT`` to
   ``<to>iiifserver/`` so ids minted later have the same form);
 - ``<origin>/<rest>`` becomes ``<to><rest>`` for everything else.
 
@@ -80,7 +81,7 @@ from manuspectrum.management.commands.export_pkg import LEAK_RULES
 ORIGIN = re.compile(r"^https?://[^/\s?#]+$")
 STRING_ORIGIN = re.compile(r"^(https?://)(?:[^/\s?#@]*@)?([^/\s?#@]+)(?:[/?#]|$)")
 FAMILIES = ("concepts", "lists", "manifests", "tiles")
-CANVAS_PATH = "iiif/manifest/"
+CANVAS_PATH = re.compile(r"iiif/manifest/(?:canvas|sequence|annotation)/")
 BATCH = 500
 
 
@@ -122,7 +123,7 @@ class OriginMap:
         for prefix in self.prefixes:
             if value.startswith(prefix):
                 rest = value[len(prefix) :]
-                if rest.startswith(CANVAS_PATH):
+                if CANVAS_PATH.match(rest):
                     rest = f"iiifserver/{rest}"
                 return self.target + rest
         self.blobs += sum(value.count(prefix) for prefix in self.blob_prefixes)

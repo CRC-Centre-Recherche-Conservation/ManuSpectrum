@@ -83,6 +83,7 @@ class RegistryRulesTests(SimpleTestCase):
             "spectrum-preview:4f7e:200:c0ff": "spectrum-preview",
             "spectrum-preview-file:4f7e": "spectrum-preview-file",
             "public-visibility:visible:3:12:anon": "public-visibility",
+            "search-thumbnail:5d41": "search-thumbnail",
             "unknown-memo:secret": "other",
             "iiifx:1": "other",
         }

@@ -1,7 +1,8 @@
 """Presentation 2.1 / Open Annotation documents converted from their Presentation 3 form.
 
 The v2 routes carry the same content as v3: every language of a label or a
-metadata value as ``{"@value", "@language"}`` lists (``language.to_v2``), the
+metadata value as ``{"@value", "@language"}`` lists (``language.to_v2``, HTML
+links kept as in v3), the
 same bodies (``dctypes:Dataset``, ``dctypes:Image``, ``sc:Manifest``,
 ``cnt:ContentAsText``, ``oa:SpecificResource`` with ``oa:hasPurpose`` as
 ``{"@id": "oa:<purpose>"}``), the

@@ -260,11 +260,17 @@ class AnalysisMaterialsTests(CharacterizationCase):
         self.assertEqual(set(materials), {"en", "fr"})
         self.assertEqual(
             sorted(materials["en"]),
-            ["lead white", "vermilion (probable)"],
+            [
+                f'<a href="{LEAD_WHITE}">lead white</a>',
+                f'<span><a href="{AAT_VERMILION}">vermilion</a> (probable)</span>',
+            ],
         )
         self.assertEqual(
             sorted(materials["fr"]),
-            ["blanc de plomb", "vermillon (probable)"],
+            [
+                f'<a href="{LEAD_WHITE}">blanc de plomb</a>',
+                f'<span><a href="{AAT_VERMILION}">vermillon</a> (probable)</span>',
+            ],
         )
 
     def test_an_analysis_cited_by_nothing_has_no_materials_entry(self):

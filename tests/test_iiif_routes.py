@@ -43,6 +43,7 @@ ROUTE_NAMES = (
     "iiif-v2-characterization-page",
     "iiif-data-raw",
     "iiif-data-series",
+    "iiif-manifest",
     "iiif-xy-reading-context",
     "iiif-xy-reading-doc",
     "iiif-xy-reading-schema",
@@ -119,6 +120,7 @@ class LegacyUrlTests(RouteCase):
         for url, name in (
             (ids.data_raw(feature), "iiif-data-raw"),
             (ids.data_series(feature), "iiif-data-series"),
+            (ids.stored_manifest(feature), "iiif-manifest"),
             (ids.xy_context(), "iiif-xy-reading-context"),
             (ids.xy_doc(), "iiif-xy-reading-doc"),
             (ids.xy_schema(), "iiif-xy-reading-schema"),
@@ -147,7 +149,7 @@ class LegacyUrlTests(RouteCase):
             "iiif-auth-logout",
         ):
             return ()
-        if name.startswith("iiif-data") or name == "iiif-auth-probe":
+        if name.startswith("iiif-data") or name in ("iiif-auth-probe", "iiif-manifest"):
             return (FEATURES["open"],)
         if name.endswith("page"):
             return (self.doc(), 1)

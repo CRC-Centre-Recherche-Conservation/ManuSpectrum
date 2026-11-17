@@ -15,7 +15,8 @@
                 <div class="ms-footer-col">
                     <h4>{% trans "Platform" %}</h4>
                     <ul>
-                        <li><a href="{% url 'search_home' %}">{% trans "Search" %}</a></li>
+                        <li><a href="{% url 'search_home' %}">{% trans "Advanced search" %}</a></li>
+                        <li><a href="{% url 'analysis-explorer' %}">{% trans "Data Lab" %}</a></li>
                         {% if user.username == 'anonymous' %}
                             <li><a href="{% url 'auth' %}?next={% url 'root' %}">{% trans "Sign In" %}</a></li>
                             <li><a href="{% url 'about-contact' %}?reason=access">{% trans "Request access" %}</a></li>

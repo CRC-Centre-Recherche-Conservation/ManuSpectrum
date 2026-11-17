@@ -1150,8 +1150,8 @@ msgid "Authors of the identification"
 msgstr "Authors of the identification"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/UnavailableState.vue:61
-msgid "Back to the explorer home"
-msgstr "Back to the explorer home"
+msgid "Back to the Data Lab home"
+msgstr "Back to the Data Lab home"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Map/components/MapStage.vue:747
 msgid "Background map unavailable (tile server)."
@@ -1894,12 +1894,12 @@ msgid "Explore what the analyses of written heritage revealed."
 msgstr "Explore what the analyses of written heritage revealed."
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:651
-msgid "Explorer home"
+msgid "Data Lab home"
 msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/components/ViewTabs.vue:39
-msgid "Explorer views"
-msgstr "Explorer views"
+msgid "Data Lab views"
+msgstr "Data Lab views"
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/MaterialsTable.vue:803
 msgid "Fewer folios"
@@ -3950,6 +3950,10 @@ msgid ""
 msgstr ""
 "Someone else changed this configuration since you opened it. Your changes "
 "are not saved: reload it to see their version."
+
+#: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusDocument.vue:1138
+msgid "Source IIIF manifest"
+msgstr ""
 
 #: manuspectrum/src/manuspectrum/pages/AnalysisExplorer/views/Compare/components/XyWorkshop.vue:1901
 msgid "Source: ManuSpectrum, %{url}, %{date}"

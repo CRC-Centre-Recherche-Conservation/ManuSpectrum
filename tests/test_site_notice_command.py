@@ -1,6 +1,6 @@
 import json
 import tempfile
-from datetime import datetime, timedelta
+from datetime import timedelta
 from io import StringIO
 from pathlib import Path
 
@@ -10,8 +10,15 @@ from django.test import TestCase, override_settings
 
 from manuspectrum.models import SiteNotice, site_now
 
-START = "2026-11-03T20:00"
-END = "2026-11-03T20:30"
+# The event is planned relative to now: the snapshot only lists notices that
+# have not ended yet (views/site_notice.py), so fixed calendar dates would make
+# these tests fail once they are in the past.
+_START_AT = (site_now() + timedelta(days=30)).replace(
+    hour=20, minute=0, second=0, microsecond=0
+)
+_END_AT = _START_AT + timedelta(minutes=30)
+START = _START_AT.strftime("%Y-%m-%dT%H:%M")
+END = _END_AT.strftime("%Y-%m-%dT%H:%M")
 
 
 class SiteNoticeCommandTests(TestCase):
@@ -48,8 +55,8 @@ class SiteNoticeCommandTests(TestCase):
         self.assertEqual(
             notice.text_fr, "Mise à jour du site : brève interruption de service."
         )
-        self.assertEqual(notice.starts_at, datetime(2026, 11, 3, 20, 0))
-        self.assertEqual(notice.ends_at, datetime(2026, 11, 3, 20, 30))
+        self.assertEqual(notice.starts_at, _START_AT)
+        self.assertEqual(notice.ends_at, _END_AT)
         self.assertEqual(notice.reminders, "7d 1d 1h 10m")
 
     def test_plan_takes_the_reminders_given(self):
@@ -62,7 +69,7 @@ class SiteNoticeCommandTests(TestCase):
     def test_plan_refuses_bad_input_and_creates_nothing(self):
         bad = [
             ("--start", START, "--end", START),
-            ("--start", START, "--end", "2026-11-03 20:30"),
+            ("--start", START, "--end", END.replace("T", " ")),
             ("--start", "2026-13-03T20:00", "--end", END),
             ("--start", START, "--end", END, "--reminders", "soon"),
             ("--start", START, "--end", END, "--reminders", "100d"),
@@ -75,9 +82,12 @@ class SiteNoticeCommandTests(TestCase):
 
     def test_end_moves_the_end(self):
         notice = self.plan()
-        self.run_command("end", str(notice.pk), "--at", "2026-11-03T20:10")
+        new_end = _START_AT + timedelta(minutes=10)
+        self.run_command(
+            "end", str(notice.pk), "--at", new_end.strftime("%Y-%m-%dT%H:%M")
+        )
         notice.refresh_from_db()
-        self.assertEqual(notice.ends_at, datetime(2026, 11, 3, 20, 10))
+        self.assertEqual(notice.ends_at, new_end)
         self.assertEqual(len(self.snapshot_notices()), 1)
 
     def test_end_extends_by_a_relative_duration_from_now(self):

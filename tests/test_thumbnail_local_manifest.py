@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from arches.app.models.models import IIIFManifest
+from django.core.cache import cache
 from django.test import TestCase
 
 from manuspectrum.utils.search_thumbnail_fetchers import DocumentThumbnailFetcher
@@ -51,6 +52,10 @@ class LocalManifestThumbnailTests(TestCase):
             description="",
             manifest=MANIFEST,
         )
+
+    def setUp(self):
+        super().setUp()
+        cache.clear()
 
     def thumbnail(self, tile_model, value):
         tile_model.objects.filter.return_value = tiles_of(value)

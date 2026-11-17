@@ -42,7 +42,7 @@ instrument reads, cut off from the page they describe.
 
 ManuSpectrum brings them together. Every analysis is tied to **the document, the folio and the exact zone** it was
 measured on, described with a shared vocabulary, and published as **open IIIF annotations**. Anyone can read them in
-the platform's own explorer or in any standard IIIF viewer.
+the platform's own Data Lab or in any standard IIIF viewer.
 
 <table>
   <tr>
@@ -62,7 +62,7 @@ the platform's own explorer or in any standard IIIF viewer.
 
 | | |
 |---|---|
-| 🔎 **Analysis Explorer** | A public Vue 3 application at `/{lang}/discover`: filter the corpus by technique, material, colour, place and period, open a document, and build a Selection. |
+| 🔎 **Data Lab** | The Analysis Explorer, a public Vue 3 application at `/{lang}/discover` shown to visitors as « Data Lab » / « Laboratoire des données » (« explorer » in code, APIs and URLs): filter the corpus by technique, material, colour, place and period, open a document, and build a Selection. |
 | 📈 **Compare** | Spectra side by side in resizable windows, with their treatments (normalisation, derivatives…), a linked focus across plots, tables, maps and the folio, a coverage matrix and a periodic table. |
 | 🖼️ **Light table** | Every imaging layer of a selection in synchronised panes, a curtain between any two canvases, false-colour stacks of elemental maps. |
 | 🌐 **IIIF everywhere** | Presentation 3 and 2.1 manifests and annotations, Content State links to a single zone, IIIF Authorization for restricted files, and `xyReading`, a small IIIF extension that tells a viewer how to plot a spectrum. |
@@ -96,7 +96,7 @@ flowchart LR
     %% Core
     subgraph CORE["🧠 ManuSpectrum on Arches"]
         direction TB
-        MODEL["<b>CIDOC-CRM / CRMsci graphs</b><br/>Project · Document · Component<br/>Analysis · Characterization · Sample …"]
+        MODEL["<b>CIDOC-CRM / CRMsci graphs</b><br/>Project · Document · Component<br/>Analysis · Interpretation · Sample …"]
         VOC["<b>SKOS vocabularies</b><br/>techniques, materials,<br/>colours, places"]
         RULES["<b>Rules on the server</b><br/>permissions · embargoes<br/>XY configuration triggers"]
         DB[("PostgreSQL / PostGIS")]
@@ -119,7 +119,7 @@ flowchart LR
     %% Readers
     subgraph READ["👀 Readers"]
         direction TB
-        EXPL["🔎 <b>Analysis Explorer</b><br/>Corpus · Compare · Light table<br/>Map & timeline"]
+        EXPL["🔎 <b>Data Lab</b> (Analysis Explorer)<br/>Corpus · Compare · Light table<br/>Map & timeline"]
         MIR["🧩 <b>Mirador + mirador-xyviewer</b><br/>spectra on the folio"]
         ANY["🤖 Any IIIF viewer,<br/>harvesters, notebooks"]
     end

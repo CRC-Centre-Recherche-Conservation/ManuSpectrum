@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Mock } from "vitest";
 import { computed, effectScope, h, nextTick, ref, shallowRef } from "vue";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -30,7 +31,7 @@ import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/comp
 import type { RequestStatus } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 
 let scope: EffectScope;
-let announce: ReturnType<typeof vi.fn>;
+let announce: Mock<(message: string) => void>;
 const byKey = ref(new Map<string, Item>());
 const settled = ref(true);
 const status = ref<RequestStatus>("ready");

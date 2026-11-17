@@ -38,6 +38,7 @@ refuses or times out yields the degraded payload, whose name and model come
 from the database.
 """
 
+import html
 import logging
 import re
 from collections import defaultdict, namedtuple
@@ -47,6 +48,7 @@ from django.conf import settings
 
 from elasticsearch import ApiError, NotFoundError, TransportError
 from guardian.models import GroupObjectPermission, UserObjectPermission
+import nh3
 
 from arches.app.models import models
 from arches.app.models.models import ResourceInstance
@@ -483,6 +485,45 @@ def localized_entries(doc, key, language):
 def display_name(doc, language):
     """Localized display name of the indexed resource, or an empty string."""
     return localized_entries(doc, "displayname", language)
+
+
+# The line break and the blocks a rich-text editor writes. A browser starts a
+# new line at each of their tags, opening or closing, so each becomes a space:
+# a name and the paragraph glued to it, or two paragraphs, stay two words.
+_BLOCK_TAGS = frozenset(
+    {"br", "p", "div", "li", "blockquote", "pre", "tr", "td", "th"}
+    | {f"h{level}" for level in range(1, 7)}
+)
+# Those tags as nh3 writes them back: lowercase, and bare, since
+# ``plain_text`` allows no attribute.
+_BLOCK_TAG = re.compile(r"</?(?:%s)>" % "|".join(sorted(_BLOCK_TAGS)))
+# The whitespace HTML collapses. A no-break space is not in it: a browser
+# keeps ``&nbsp;``, which French typography puts before a colon.
+_HTML_SPACE_CHARS = " \t\n\f\r"
+_HTML_SPACES = re.compile(f"[{_HTML_SPACE_CHARS}]+")
+
+
+def plain_text(markup):
+    """*markup* as the one line of text a browser would display for it.
+
+    The ``description`` and ``map_popup`` descriptors are HTML: their string
+    templates may name a rich-text node, and the core popup inserts them with
+    an ``html:`` binding. The summary card binds every value with ``text:``,
+    so a tag left here would be shown as typed (#281).
+
+    nh3 parses *markup* as a browser does, so a ``>`` inside a quoted
+    attribute value cannot end a tag early. It keeps only the block tags,
+    without attributes, and drops every other tag (``script`` and ``style``
+    with their content). Each block tag then becomes a space, and entities are
+    decoded last: an escaped ``&lt;b&gt;`` comes back as the text ``<b>``,
+    which the ``text:`` binding escapes again. The result is therefore not
+    safe to insert as HTML.
+    """
+    # ``{"*": set()}`` and not ``{}``: an empty mapping would still let nh3
+    # keep its generic attributes (``lang``, ``title``) on the block tags.
+    blocks = nh3.clean(markup or "", tags=_BLOCK_TAGS, attributes={"*": set()})
+    text = html.unescape(_BLOCK_TAG.sub(" ", blocks))
+    return _HTML_SPACES.sub(" ", text).strip(_HTML_SPACE_CHARS)
 
 
 def es_client():
@@ -1095,7 +1136,7 @@ def _draft(doc, resourceid, language):
 
     A model the deployment does not carry, or one the function is not
     attached to, stops here on the core display (D11): its name and the
-    ``map_popup`` the descriptors wrote.
+    ``map_popup`` the descriptors wrote, as plain text (see ``plain_text``).
     """
     index = GraphIndex.for_graph(doc["graph_id"]) if doc.get("graph_id") else None
     graph = {
@@ -1111,7 +1152,7 @@ def _draft(doc, resourceid, language):
     config = load_summary_config(index.graph_id) if index else None
     if config is None:
         payload["configured"] = False
-        payload["map_popup"] = localized_entries(doc, "map_popup", language)
+        payload["map_popup"] = plain_text(localized_entries(doc, "map_popup", language))
         return _Draft(payload, index, None, [])
     fields, link_ids, preview = extract_fields(doc, config, index, language)
     payload.update(

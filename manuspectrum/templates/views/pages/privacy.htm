@@ -89,9 +89,9 @@
 
 <h3>{% trans "Every visitor" %}</h3>
 <ul>
-    <li>{% trans "Image servers of the institutions that hold the manuscripts (IIIF). When the images of a document are not hosted by ManuSpectrum, your browser loads them from the IIIF server of the holding institution, in the Explorer and on resource pages: for example the Bibliothèque nationale de France (Gallica), the Université de Caen Normandie, e-codices, the Vatican Library or the BVMM of the IRHT. The list depends on the documents described." %}</li>
+    <li>{% trans "Image servers of the institutions that hold the manuscripts (IIIF). When the images of a document are not hosted by ManuSpectrum, your browser loads them from the IIIF server of the holding institution, in the Data Lab and on resource pages: for example the Bibliothèque nationale de France (Gallica), the Université de Caen Normandie, e-codices, the Vatican Library or the BVMM of the IRHT. The list depends on the documents described." %}</li>
     <li>{% trans "Université de Caen Normandie (iiif.unicaen.fr): the homepage shows three images loaded from its IIIF server." %}</li>
-    <li>{% trans "OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of the base map, loaded whenever a map is shown: the Map view of the Explorer, the search map, the maps of the resource reports and the map widgets of the editing tools. OpenFreeMap is served through Cloudflare (United States). Data © OpenMapTiles, © OpenStreetMap contributors." %}</li>
+    <li>{% trans "OpenFreeMap (tiles.openfreemap.org): the vector tiles, fonts and sprites of the base map, loaded whenever a map is shown: the Map view of the Data Lab, the search map, the maps of the resource reports and the map widgets of the editing tools. OpenFreeMap is served through Cloudflare (United States). Data © OpenMapTiles, © OpenStreetMap contributors." %}</li>
     <li>{% trans "OpenHistoricalMap (vtiles.openhistoricalmap.org): historical borders and names of political entities, loaded only when you tick « Historical borders ». Data © OpenHistoricalMap contributors." %}</li>
 </ul>
 
@@ -129,7 +129,7 @@
         <tr><td><code>{{ language_cookie_name }}</code></td><td>{% trans "Remembers the language you chose." %}</td></tr>
     </tbody>
 </table>
-<p>{% trans "There is no tracker, no analytics service and no advertising cookie. The Analysis Explorer keeps your selection and layout in your browser's local storage; they are never sent to the server." %}</p>
+<p>{% trans "There is no tracker, no analytics service and no advertising cookie. The Data Lab keeps your selection and layout in your browser's local storage; they are never sent to the server." %}</p>
 
 <h2>{% trans "Restricted resources" %}</h2>
 <p>{% blocktrans trimmed count n=embargo_max_months with notices=embargo_notice_days_text %}

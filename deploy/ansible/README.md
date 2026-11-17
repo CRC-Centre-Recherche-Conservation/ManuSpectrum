@@ -202,7 +202,11 @@ digest (`registry/name@sha256:...`) and `app_git_ref` as the matching tag
 (the example inventory holds placeholders: replace both).
 When the update refuses with "re-run Ansible at <tag>", a file Ansible manages
 differs in that tag: check out the tag on the laptop, run the playbook, then run
-the update again.
+the update again. A laptop clone that held a release before the package's
+line-ending fix needs `git submodule update --init --force` once, or the
+CIDOC-CRM ontology of `pkg/` looks modified. After the playbook, check that
+`sudo manuspectrum-update --status` on the host shows `needs_ansible=0` before
+installing: no mail announces the release a second time.
 
 ## Audit and checks without a host
 

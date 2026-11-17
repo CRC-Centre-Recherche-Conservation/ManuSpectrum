@@ -27,7 +27,7 @@
 # release_state_get, release_state_write, release_state_set, release_env_get,
 # release_env_set_image, release_env_missing_keys, release_metrics_write,
 # release_mail, release_slot_parse, release_metrics_from_state,
-# release_metrics_refresh, release_compat_check.
+# release_metrics_refresh, release_compat_check, release_stale_services.
 # shellcheck disable=SC2034  # patterns read by the sourcing scripts
 
 RELEASE_TAG_FINAL_RE='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
@@ -473,4 +473,39 @@ $differing
 Re-run Ansible from a laptop checkout at $tag, then retry."
     return 1
   fi
+}
+
+# Reads `SERVICE STARTED_AT SOURCE...` lines on stdin (the running containers:
+# Compose service, State.StartedAt, bind mount sources; empty lines skipped)
+# and prints, once each, the services with a source inside REPO modified after
+# the container started. A single-file bind mount keeps the inode the container
+# started with, so a checkout that rewrites the file is not seen; a mounted
+# directory shows the new files, but the service reads them only when it
+# starts. Sources outside REPO (data, logs, certificates) are ignored. A start
+# time that cannot be read counts as stale. Status 1 when REPO is not a
+# directory.
+release_stale_services() { # release_stale_services REPO < lines
+  local root svc real src ref seen=" "
+  local -a f
+  root="$(cd "${1-}" 2>/dev/null && pwd -P)" || { _release_err "not a directory: ${1-}"; return 1; }
+  ref="$(mktemp)" || return 1
+  while read -r -a f; do
+    [ "${#f[@]}" -ge 2 ] || continue
+    svc="${f[0]}"
+    case "$seen" in *" $svc "*) continue ;; esac
+    if ! touch -d "${f[1]}" "$ref" 2>/dev/null; then
+      _release_err "$svc: unreadable start time '${f[1]}', counted as stale"
+      echo "$svc"; seen+="$svc "
+      continue
+    fi
+    for src in "${f[@]:2}"; do
+      real="$(realpath -m -- "$src")"
+      case "$real" in "$root" | "$root"/*) ;; *) continue ;; esac
+      if [ -n "$(find "$real" -newer "$ref" -print -quit 2>/dev/null)" ]; then
+        echo "$svc"; seen+="$svc "
+        break
+      fi
+    done
+  done
+  rm -f "$ref"
 }

@@ -16,6 +16,7 @@
         "resolveJsonModule": true,
         "skipLibCheck": true,
         "types": [
+            "node",
             "vitest/globals",
             "chai",
             "leaflet",

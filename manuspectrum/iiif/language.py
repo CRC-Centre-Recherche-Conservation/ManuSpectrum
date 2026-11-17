@@ -10,12 +10,14 @@ under the development server, or a translation setting changed in tests. The v2 
 """
 
 from functools import lru_cache
+from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.core.signals import setting_changed
 from django.dispatch import receiver
 from django.utils import translation
 from django.utils.autoreload import file_changed
+from django.utils.html import conditional_escape, format_html
 from django.utils.translation import gettext, ngettext
 
 LanguageMap = dict[str, list[str]]
@@ -139,23 +141,62 @@ def ngettext_map(singular, plural, number, **params):
     }
 
 
-def qualified(name, qualifier=None):
+def safe_href(url):
+    """*url* as parsed when it is an ``http:``/``https:`` address with a host, else ``None``."""
+    try:
+        parts = urlsplit(url.strip() if isinstance(url, str) else "")
+    except ValueError:
+        return None
+    return (
+        parts.geturl() if parts.scheme in {"http", "https"} and parts.netloc else None
+    )
+
+
+def _link(href, text):
+    return format_html('<a href="{}">{}</a>', href, text)
+
+
+def linked(name, href, markup=False):
+    """The language map *name* with each text an HTML link to *href*.
+
+    Without a safe *href* the texts are copied unchanged, or HTML-escaped with
+    *markup* (texts that are to be joined into one HTML value).
+    """
+    href = safe_href(href)
+    return {
+        code: [
+            (
+                str(_link(href, text))
+                if href
+                else str(conditional_escape(text)) if markup else text
+            )
+            for text in texts
+        ]
+        for code, texts in (name or {}).items()
+    }
+
+
+def qualified(name, qualifier=None, href=None):
     """``name (qualifier)`` in each language of the map *name*; *name* itself without *qualifier*.
 
     The qualifier is read in each of those languages by ``text_in``; the
     pattern is rendered in that language (``settings.LANGUAGE_CODE`` for
-    ``none``).
+    ``none``). With a safe *href*, the name is a link and a text with a
+    qualifier is wrapped in one ``span``, so every value has one root element.
     """
+    href = safe_href(href)
     if not qualifier:
-        return {code: list(texts) for code, texts in (name or {}).items()}
+        return linked(name, href)
     rendered = {}
     for code in name or {}:
         with translation.override(settings.LANGUAGE_CODE if code == NONE else code):
             pattern = gettext("%(name)s (%(qualifier)s)")
-        rendered[code] = [
-            pattern
-            % {"name": text_in(name, code), "qualifier": text_in(qualifier, code)}
-        ]
+        text, extra = text_in(name, code), text_in(qualifier, code)
+        if href:
+            parts = {"name": _link(href, text), "qualifier": conditional_escape(extra)}
+            rendered[code] = [f"<span>{conditional_escape(pattern) % parts}</span>"]
+        else:
+            rendered[code] = [pattern % {"name": text, "qualifier": extra}]
     return rendered
 
 

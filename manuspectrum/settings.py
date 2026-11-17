@@ -19,7 +19,7 @@ except ImportError:
     pass
 
 APP_NAME = "manuspectrum"
-APP_VERSION = semantic_version.Version(major=1, minor=0, patch=1)
+APP_VERSION = semantic_version.Version(major=1, minor=0, patch=2)
 APP_ROOT = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 
 WEBPACK_LOADER = {
@@ -287,6 +287,11 @@ TEMPLATES = build_templates_config(
 TEMPLATES[0]["OPTIONS"]["context_processors"].append(
     "manuspectrum.context_processors.language_switch"
 )
+# A page reached by a personal mailed link must not copy its own URL, which
+# holds the token, into its head (see accounts.mailed_links).
+TEMPLATES[0]["OPTIONS"]["context_processors"].append(
+    "manuspectrum.context_processors.personal_link"
+)
 
 ALLOWED_HOSTS = []
 
@@ -383,6 +388,12 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        # One line per remote manifest an annotation save registers (signals.py).
+        "manuspectrum.manifests": {
+            "handlers": ["file", "console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         # consider adding your own project here if it logs
     },
 }
@@ -435,8 +446,24 @@ CACHES = {
         "LOCATION": "redis://localhost:6379/1",
         "KEY_PREFIX": "ms-iiif-auth",
     },
+    # arches_querysets keeps concept and resource instance lookups in its own
+    # aliases (system check arches_querysets.W001); per-process memory, as upstream.
+    "querysets_concepts": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "querysets_concepts_cache",
+        "TIMEOUT": 86400,
+        "OPTIONS": {"MAX_ENTRIES": 1000},
+    },
+    "querysets_resource_instances": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "querysets_resource_instances_cache",
+        "TIMEOUT": 86400,
+        "OPTIONS": {"MAX_ENTRIES": 1000},
+    },
 }
 IIIF_AUTH_CACHE = "iiif_auth"
+ARCHES_QUERYSETS_CONCEPT_CACHE = "querysets_concepts"
+ARCHES_QUERYSETS_RESOURCE_INSTANCE_CACHE = "querysets_resource_instances"
 
 # Hide nodes and cards in a report that have no data
 HIDE_EMPTY_NODES_IN_REPORT = False
@@ -504,6 +531,10 @@ ACCOUNT_SUMMARY_RECIPIENTS = []
 # settings_local.py on a production host, otherwise the User-Agent silently
 # drops the unusable parts (Arches defaults PUBLIC_SERVER_ADDRESS to localhost).
 CONTACT_EMAIL = ""
+
+# Google Search Console site-verification token, rendered as a <meta> tag on the
+# public pages by the {% google_site_verification %} template tag. Empty: no tag.
+GOOGLE_SITE_VERIFICATION = ""
 
 CELERY_BROKER_URL = "redis://localhost:6379/0"  # RabbitMQ --> "amqp://guest:guest@localhost",  Redis --> "redis://localhost:6379/0"
 CELERY_ACCEPT_CONTENT = ["json"]
@@ -695,9 +726,12 @@ LANGUAGES = [
 ]
 # OPS — after ADDING a language here, run:  python manage.py i18n synclanguages
 # (the official Arches sync: creates the Language row and republishes the
-# per-language graph serialisations for models AND branches). Without it,
-# every Arches page under /<newlang>/ 500s. manuspectrum.checks.W002 (a
-# database system check, runs with migrate) detects the gap.
+# per-language graph serialisations for models AND branches), then
+# python manage.py republish_graph_translations (synclanguages writes the
+# strings of one language into every language's serialisation). Without them,
+# every Arches page under /<newlang>/ 500s, or shows another language.
+# manuspectrum.checks.W002 (a database system check, runs with migrate)
+# detects the first gap.
 # See https://arches.readthedocs.io/en/stable/developing/advanced/localizing-arches/
 
 # override this to permenantly display/hide the language switcher
@@ -801,6 +835,10 @@ SEARCH_THUMBNAIL_MAX_AGE = 60 * 60 * 24
 SEARCH_THUMBNAIL_DEADLINE = 8
 SEARCH_THUMBNAIL_CONNECT_TIMEOUT = 2.5
 SEARCH_THUMBNAIL_HOST_DOWN_TTL = 5 * 60
+# How long a thumbnail that ended without an image is not asked again.
+SEARCH_THUMBNAIL_MISS_TTL = 5 * 60
+# How long a fetched thumbnail image stays cached, keyed by its upstream URL.
+SEARCH_THUMBNAIL_CACHE_TTL = 7 * 24 * 60 * 60
 
 # Knockout component templates (manuspectrum.views.knockout_templates).
 # max-age: how long a browser reuses a template without asking. The URL carries

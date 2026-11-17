@@ -142,6 +142,8 @@ A core service is stopped or absent.
 
 Start the stack with `make -C deploy up`.
 
+`make -C deploy silence-fresh-install` also silences this alert for 48 hours. A container that disappears during that window raises no alert: check `make -C deploy status` meanwhile.
+
 ### Escalation
 
 The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.

@@ -160,6 +160,42 @@ class LanguageMapTests(SimpleTestCase):
         ]
         self.assertEqual(language.reference_labels(value), {"en": ["red", "blue"]})
 
+    def test_linked_escapes_the_text_and_the_address(self):
+        self.assertEqual(
+            language.linked({"en": ["A<B"]}, "https://x.example/?a=1&b=2"),
+            {"en": ['<a href="https://x.example/?a=1&amp;b=2">A&lt;B</a>']},
+        )
+
+    def test_linked_without_a_web_address_keeps_or_escapes_the_text(self):
+        for href in (None, "", "urn:x", "javascript:alert(1)", "https://", "http://[x"):
+            with self.subTest(href=href):
+                self.assertEqual(
+                    language.linked({"en": ["A<B"]}, href), {"en": ["A<B"]}
+                )
+                self.assertEqual(
+                    language.linked({"en": ["A<B"]}, href, markup=True),
+                    {"en": ["A&lt;B"]},
+                )
+
+    def test_a_linked_qualified_name_is_one_span(self):
+        self.assertEqual(
+            language.qualified(
+                {"en": ["red & lead"]}, {"en": ["<probable>"]}, "https://x.example/r"
+            ),
+            {
+                "en": [
+                    '<span><a href="https://x.example/r">red &amp; lead</a>'
+                    " (&lt;probable&gt;)</span>"
+                ]
+            },
+        )
+
+    def test_a_qualified_name_without_address_stays_plain_text(self):
+        self.assertEqual(
+            language.qualified({"en": ["red"]}, {"en": ["probable"]}, "urn:x"),
+            {"en": ["red (probable)"]},
+        )
+
     def test_to_v2_omits_the_language_of_none(self):
         self.assertEqual(
             language.to_v2({"en": ["Ms 59"], "none": ["EMMA"]}),

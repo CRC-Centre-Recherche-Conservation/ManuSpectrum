@@ -227,6 +227,7 @@ SHAPES = {
         "name": "Label",
         "holding": ("Label", None),
         "manifest": (str, type(None)),
+        "manifestSource": (str, type(None)),
         "canvases": list,
         "techniques": dict,
         "analyses": list,

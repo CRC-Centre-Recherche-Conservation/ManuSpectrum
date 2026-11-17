@@ -42,7 +42,9 @@ from manuspectrum.iiif.sources import (
     canvas_index,
     canvas_label,
     canvases_of,
+    manifest_id,
     manifest_json,
+    manifest_source,
 )
 from manuspectrum.iiif.zones import annotation_features, first_zone
 from manuspectrum.models import RendererConfig
@@ -2607,7 +2609,10 @@ def document_payload(document_id, user, language, ticket=None):
     observed (``component``, None on the document). ``components`` lists the
     visible Components placed on its pages (``component_zones``) or observed
     by one of its analyses, the placed ones by first page then name, the
-    others by name after them. ``document_match`` says what the filters keep. ``history`` holds
+    others by name after them. ``manifest`` is the manifest reference of the
+    document; ``manifestSource`` is the publisher's URL of a manifest imported
+    from another institution (None for one created here, or without a
+    manifest), what a link to the source shows. ``document_match`` says what the filters keep. ``history`` holds
     the document's Production line when it has a bound, a visible place or an own geometry (``history_of``).
     """
     bundle = corpus_bundle(user, language, ticket)
@@ -2630,6 +2635,7 @@ def document_payload(document_id, user, language, ticket=None):
         rewrite_legacy_url(values.first(document_id, "doc_manifest") or "") or None
     )
     canvases = canvases_of(manifest_json(manifest_url)) if manifest_url else []
+    source = manifest_source(manifest_url) if manifest_url else None
     dims = canvas_index(canvases)
     position = {canvas["id"]: index for index, canvas in enumerate(canvases)}
     zones = defaultdict(list)
@@ -2698,7 +2704,8 @@ def document_payload(document_id, user, language, ticket=None):
         "id": document_id,
         "name": label_of[document_id],
         "holding": label_of[owners[0]] if owners else None,
-        "manifest": manifest_url,
+        "manifest": manifest_id(manifest_url) if manifest_url else None,
+        "manifestSource": source.original if source else None,
         "canvases": [
             {
                 **c,
@@ -2834,7 +2841,8 @@ def imaging_entries(
 
     *read* reads a manifest by URL: a caller's memoised reader, else
     ``manifest_json``. *layer_tiles* is ``_layer_tiles`` of the analysis; a
-    canvas without a tile is an unclassified layer.
+    canvas without a tile is an unclassified layer. ``downloadUrl`` is the
+    manifest's IIIF id (``manifest_id``); *read* is still given the stored URL.
     """
     read = read or manifest_json
     layer_tiles = layer_tiles or {}
@@ -2880,7 +2888,7 @@ def imaging_entries(
                 },
                 "layers": layers,
                 "license": effective_license({}, language),
-                "downloadUrl": url,
+                "downloadUrl": manifest_id(url),
                 "previewUrl": None,
                 "zone": None,
             }

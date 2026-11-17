@@ -35,7 +35,10 @@ its concepts (materials with their certainty, colours, layers, elements with
 their level) keep the URI and every label the reference value stores; its
 evidence is the visible cited analyses, each with the ids of its zones on the
 Document's canvases. An analysis lists, as its materials, the identified
-materials visible to the reader that cite it.
+materials visible to the reader that cite it. The metadata values naming a
+concept (technique, materials) are links to its URI, unless the controlled-list
+manager minted it (``Concept.href``); those naming a shown resource are links
+to its report, as Presentation 3 §4.5 allows (``language.linked``).
 """
 
 import html
@@ -50,13 +53,14 @@ import nh3
 from arches.app.models.models import File, IIIFManifest, ResourceInstance, TileModel
 from arches.app.utils.permission_backend import user_can_read_resource
 
+from manuspectrum.iiif.ids import report as report_url
 from manuspectrum.iiif import language as lang
 from manuspectrum.iiif import memo
 from manuspectrum.iiif.data import file_size, media_type
 from manuspectrum.iiif.sources import (
-    absolute_url,
     canvas_index,
     canvases_of,
+    manifest_id,
     manifest_json,
 )
 from manuspectrum.iiif.zones import FeatureRows, annotation_features
@@ -90,6 +94,7 @@ ANALYSIS_KEYS = (
 FILE_KINDS = (("files", "measurement"), ("micro", "micro-imaging"))
 _EMPTY = (None, "", [], {})
 _SPACES = re.compile(r"\s+")
+BACK_OFFICE_ITEM = "/plugins/controlled-list-manager/item/"
 
 
 CHARACTERIZATION_KEYS = (
@@ -168,6 +173,15 @@ class Concept:
     uri: str | None
     labels: dict
 
+    @property
+    def href(self):
+        """The URI as a link for people; None for an item of the controlled-list manager (a back-office page)."""
+        try:
+            path = urlsplit(self.uri or "").path
+        except ValueError:
+            return None
+        return None if BACK_OFFICE_ITEM in path else self.uri
+
 
 @dataclass(frozen=True)
 class CharacterizationFact:
@@ -193,6 +207,8 @@ class CharacterizationFact:
 class DocumentFacts:
     """The subject (Document or Component), its Document's source manifest and its analyses.
 
+    ``manifest_url`` is the id of the source manifest
+    (``sources.manifest_id``): a stored one is named at its IIIF route.
     ``canvases`` and ``canvas_labels`` list the canvases of the source manifest
     in order; page *n* is canvas ``n - 1``. ``placed`` maps a kind to
     ``{page number: zone count}`` of the zones placed on the Document by
@@ -391,7 +407,7 @@ def _conditions(values, type_node):
 
 
 def _imaging(values):
-    """``(absolute url, label map)`` of each imaging manifest; the label is the stored manifest's, when local."""
+    """``(id, label map)`` of each imaging manifest (``sources.manifest_id``); the label is the stored manifest's, when local."""
     urls = []
     for _, value, _ in values.get("imaging", ()):
         for item in value if isinstance(value, list) else [value]:
@@ -410,7 +426,7 @@ def _imaging(values):
         labels[url] = label
     return tuple(
         (
-            absolute_url(url) or url,
+            manifest_id(url),
             lang.none(labels.get(url) or labels.get(paths[url]) or ""),
         )
         for url in urls
@@ -873,7 +889,11 @@ def _materials(analysis_ids, visible, readable):
     confidence = role_node(*ROLES["confidence"])
     texts = {
         c: [
-            lang.qualified(concept.labels, qualifier.labels if qualifier else None)
+            lang.qualified(
+                concept.labels,
+                qualifier.labels if qualifier else None,
+                concept.href,
+            )
             for concept, qualifier in _qualified(values[c], "material", confidence)
         ]
         for c in ids
@@ -954,6 +974,9 @@ def _build(
         shown | set(analysis_ids) | set(characterization_ids) | cited, readable
     )
 
+    def report_link(rid):
+        return lang.linked(name_of.get(rid, {}), report_url(rid))
+
     statement_type = role_node(*ROLES["statement_type"])
     analyses = []
     for aid in analysis_ids:
@@ -1004,26 +1027,27 @@ def _build(
                 files=tuple(files),
                 imaging=_imaging(v),
                 technique=lang.listed(
-                    lang.reference_labels(x) for _, x, _ in v.get("technique", ())
+                    lang.listed(lang.linked(c.labels, c.href) for c in _concepts(x))
+                    for _, x, _ in v.get("technique", ())
                 ),
                 dates=lang.none(
                     " – ".join(dict.fromkeys(d for d in (start, end) if d))
                 ),
-                operators=_one([name_of.get(r, {}) for r in refs("operators")]),
-                instrument=_one([name_of.get(r, {}) for r in refs("instrument")]),
+                operators=_one([report_link(r) for r in refs("operators")]),
+                instrument=_one([report_link(r) for r in refs("instrument")]),
                 conditions=_conditions(v, statement_type),
                 projects=_one(
                     [
-                        name_of.get(r, {})
+                        report_link(r)
                         for r in refs(
                             "analysis_by_project",
                             lambda r: r in shown and r in visible.projects,
                         )
                     ]
                 ),
-                document=name_of.get(document, {}),
+                document=report_link(document),
                 component=lang.listed(
-                    name_of.get(r, {}) for r in observed if r in visible.components
+                    report_link(r) for r in observed if r in visible.components
                 ),
                 dataset=dataset,
                 draft=aid in visible.unpublished,
@@ -1033,7 +1057,7 @@ def _build(
     return DocumentFacts(
         document_id=subject_id,
         name=name_of.get(subject_id, {}),
-        manifest_url=(absolute_url(url) or url) if url else None,
+        manifest_url=manifest_id(url) if url else None,
         canvases=tuple(c["id"] for c in listed),
         canvas_labels=tuple(c["label"] for c in listed),
         analyses=tuple(analyses),

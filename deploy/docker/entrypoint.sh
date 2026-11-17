@@ -8,12 +8,13 @@
 #   init           deployment checks as for web; first installation: Arches
 #                  setup_db, then the admin password from the admin_password
 #                  secret, then the data package mounted at PKG_MOUNT
-#                  (/srv/pkg: load_package, i18n synclanguages, then
-#                  check_pkg_inventory against the package's
-#                  expected-inventory.json); refused when the database already
-#                  exists (setup_db drops and recreates it) or when the package
-#                  is missing. A PUBLIC_SERVER_ADDRESS without its trailing
-#                  slash stops the deployment checks (settings_docker.py)
+#                  (/srv/pkg: load_package, i18n synclanguages,
+#                  republish_graph_translations, then check_pkg_inventory
+#                  against the package's expected-inventory.json); refused
+#                  when the database already exists (setup_db drops and
+#                  recreates it) or when the package is missing. A
+#                  PUBLIC_SERVER_ADDRESS without its trailing slash stops the
+#                  deployment checks (settings_docker.py)
 #   manage ARGS    manage.py ARGS; the commands that drop the database (setup_db,
 #                  packages -db / -o setup) only through `init`
 #   anything else  executed as given
@@ -304,6 +305,11 @@ case "$command" in
       || { log "load_package failed: drop the database and run make -C deploy init again (deploy/README.md, \"A failed first installation\")"; exit 1; }
     oneoff python manage.py i18n synclanguages \
       || { log "i18n synclanguages failed; run make -C deploy manage ARGS=\"i18n synclanguages\""; exit 1; }
+    # load_package and synclanguages leave the English strings in every
+    # language's serialisation of the graphs; this rewrites them from the
+    # graph tables, in the same publications.
+    oneoff python manage.py republish_graph_translations \
+      || { log "republish_graph_translations failed; run make -C deploy manage ARGS=\"republish_graph_translations\""; exit 1; }
     oneoff python manage.py check_pkg_inventory "$PKG_MOUNT/expected-inventory.json" \
       || { log "the loaded database differs from the package inventory (above); drop the database and run make -C deploy init again, or inspect the differences first"; exit 1; }
     log "data package loaded"

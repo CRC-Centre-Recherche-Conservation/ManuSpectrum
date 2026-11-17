@@ -2,6 +2,8 @@ import re
 
 from django.core.cache import cache
 from django.test import TestCase, override_settings
+from django.urls import reverse
+from django.utils import translation
 
 NOSCRIPT = re.compile(r"<noscript>(.*?)</noscript>", re.S)
 
@@ -58,6 +60,21 @@ class AnalysisPopupTests(TestCase):
         self.assertIn("Encre ferrogallique", html)
 
 
+class TechniqueStatTests(TestCase):
+    def test_the_ma_xrf_stat_names_x_ray_fluorescence_imaging(self):
+        for lang, caption, wrong in (
+            ("en", "X-ray Fluorescence Imaging", "Micro-Fluorescence"),
+            ("fr", "Imagerie de fluorescence de rayons X", "Microfluorescence"),
+        ):
+            with self.subTest(lang=lang):
+                html = self.client.get(f"/{lang}/").content.decode()
+                self.assertRegex(
+                    html,
+                    rf'>MA-XRF</div>\s*<div class="ms-stat-label">{caption}</div>',
+                )
+                self.assertNotIn(wrong, html)
+
+
 class LogoDialogTests(TestCase):
     def test_zoom_is_a_labelled_dialog(self):
         html = self.client.get("/en/").content.decode()
@@ -84,17 +101,69 @@ class DiscoverEntryTests(TestCase):
     def setUp(self):
         cache.clear()
 
-    def test_search_form_has_a_default_submit_then_the_discover_button(self):
+    def _form(self, html):
+        start = html.index('id="ms-search-form"')
+        return html[start : html.index("</form>", start)]
+
+    def test_search_form_offers_the_database_and_the_data_lab(self):
         html = self.client.get("/en/").content.decode()
-        form = html[
-            html.index('id="ms-search-form"') : html.index(
-                "</form>", html.index('id="ms-search-form"')
-            )
-        ]
-        buttons = re.findall(r"<button[^>]*>", form)
+        self.assertNotIn("<button", self._form(html))
+        buttons = re.findall(r'<button type="submit" form="ms-search-form"[^>]*>', html)
         self.assertEqual(len(buttons), 2)
         self.assertNotIn("formaction", buttons[0])
+        self.assertIn('aria-describedby="ms-way-db"', buttons[0])
         self.assertIn('formaction="/en/discover"', buttons[1])
+        self.assertIn('aria-describedby="ms-way-lab"', buttons[1])
+        for described in ("ms-way-db", "ms-way-lab"):
+            self.assertIn(f'<figcaption id="{described}">', html)
+        self.assertIn('<label class="ms-visually-hidden" for="ms-search-input">', html)
+        self.assertNotIn("ms-search-cta", html)
+        self.assertNotIn("ms-search-discover", html)
+
+    def test_search_form_buttons_are_labelled_in_both_languages(self):
+        for lang, db_label, lab_label in (
+            ("en", "Search the database", "Search the Data Lab"),
+            (
+                "fr",
+                "Rechercher dans la base",
+                "Rechercher dans le Laboratoire des données",
+            ),
+        ):
+            html = self.client.get(f"/{lang}/").content.decode()
+            self.assertRegex(
+                html, rf'form="ms-search-form"[^>]*>\s*{db_label}\s*</button>'
+            )
+            self.assertRegex(
+                html, rf'form="ms-search-form"[^>]*>\s*{lab_label}\s*</button>'
+            )
+
+    def test_each_screenshot_links_to_its_tool(self):
+        for lang in ("en", "fr"):
+            html = self.client.get(f"/{lang}/").content.decode()
+            with translation.override(lang):
+                search_url = reverse("search_home")
+            links = re.findall(r'<a class="ms-search-way-shot" href="([^"]*)">', html)
+            self.assertEqual(links, [search_url, f"/{lang}/discover"], lang)
+
+    def test_more_techniques_tile_links_to_the_corpus(self):
+        html = self.client.get("/en/").content.decode()
+        self.assertIn('<a class="ms-stat ms-stat--more', html)
+        self.assertIn('href="/en/discover?screen=results"', html)
+
+    def test_hero_offers_the_search_and_the_data_lab(self):
+        for lang, search_label, lab_label in (
+            ("en", "Search the database", "Data Lab"),
+            ("fr", "Rechercher dans la base", "Laboratoire des données"),
+        ):
+            html = self.client.get(f"/{lang}/").content.decode()
+            start = html.index('class="ms-hero-actions"')
+            hero = html[start : html.index("ms-hero-scroll", start)]
+            with translation.override(lang):
+                search_url = reverse("search_home")
+            self.assertIn(f'href="{search_url}"', hero, lang)
+            self.assertIn(f'href="/{lang}/discover"', hero, lang)
+            self.assertIn(search_label, hero, lang)
+            self.assertIn(lab_label, hero, lang)
 
     def test_search_chips_offer_fors_after_vermilion(self):
         html = self.client.get("/en/").content.decode()
@@ -111,8 +180,13 @@ class DiscoverEntryTests(TestCase):
         for path in ("/en/", "/en/about/team", "/en/discover"):
             html = self.client.get(path).content.decode()
             self.assertIn('href="/en/discover"', html, path)
+            self.assertIn(">Data Lab</a>", html, path)
             if path != "/en/discover":
                 self.assertNotIn('href="/en/discover" aria-current="page"', html, path)
+
+    def test_header_search_link_scrolls_to_the_homepage_section(self):
+        html = self.client.get("/en/about/team").content.decode()
+        self.assertEqual(html.count('<a href="/en/#search"'), 2)
 
 
 class AboutPagePayloadTests(TestCase):
@@ -162,3 +236,43 @@ class AboutPagePayloadTests(TestCase):
                 any("<style" in block for block in noscript_blocks(html)), path
             )
             self.assertNotIn("ms-nav-dropdown:hover", html, path)
+
+
+class ToolCardsTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def _ways(self, html):
+        start = html.index('class="ms-search-ways"')
+        return html[start : html.index("</figure>\n                </div>", start)]
+
+    def test_each_tool_card_carries_a_localised_screenshot(self):
+        for lang in ("en", "fr"):
+            ways = self._ways(self.client.get(f"/{lang}/").content.decode())
+            imgs = re.findall(r"<img\b[^>]*>", ways)
+            self.assertEqual(len(imgs), 2, lang)
+            for img, tool in zip(imgs, ("search", "lab")):
+                self.assertIn(f"tool-{tool}-{lang}-800.webp", img, lang)
+                self.assertIn(f"tool-{tool}-{lang}.webp", img, lang)
+                self.assertRegex(img, r'alt="[^"]+"')
+                self.assertRegex(img, r'width="\d+"')
+                self.assertRegex(img, r'height="\d+"')
+                self.assertIn('loading="lazy"', img)
+
+    def test_section_title_names_the_two_ways(self):
+        for lang, title in (
+            ("en", "Two ways to search"),
+            ("fr", "Deux façons de chercher"),
+        ):
+            html = self.client.get(f"/{lang}/").content.decode()
+            self.assertIn(f'<h2 class="ms-section-title">{title}</h2>', html)
+
+    def test_hero_has_one_learn_more_cue_to_the_project(self):
+        for lang, label in (("en", "Learn more"), ("fr", "En savoir plus")):
+            html = self.client.get(f"/{lang}/").content.decode()
+            self.assertNotIn("ms-hero-more", html)
+            start = html.index('class="ms-hero-scroll"')
+            cue = html[start : html.index("</div>", start)]
+            self.assertIn('href="#project"', cue)
+            self.assertIn(f"<span>{label}</span>", cue)
+            self.assertEqual(html.count(f">{label}<"), 1, lang)

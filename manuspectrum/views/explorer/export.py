@@ -32,7 +32,12 @@ from django.utils.translation import ngettext
 from django.views import View
 from zipstream import ZIP_STORED, ZipStream
 
-from manuspectrum.iiif.sources import canvas_index, canvases_of
+from manuspectrum.iiif.sources import (
+    canvas_index,
+    canvases_of,
+    manifest_id,
+    manifest_sources,
+)
 from manuspectrum.iiif.zones import annotation_features
 from manuspectrum.observability import metrics
 from manuspectrum.utils.role_links import role_node
@@ -183,6 +188,47 @@ def analysis_zones(scope):
                     rid, {"canvas": canvas, "label": labels[canvas], "shape": shape}
                 )
     return zones
+
+
+@dataclass(frozen=True)
+class SourceManifest:
+    """The manifest a Document of the scope is described on: its name, the *link* given for it and the stored label."""
+
+    document: str
+    name: str
+    link: str
+    label: str | None
+
+
+def source_manifests(scope, content=None):
+    """``[SourceManifest]`` of the Documents of *scope* that hold a manifest, in ``scope.documents`` order.
+
+    The link is the publisher's URL of a manifest imported from another
+    institution, else the public IIIF URL of the stored manifest
+    (``sources.manifest_id``). The manifests are looked up in one query and
+    never fetched. A Document without a name is left out.
+    """
+    bundle = scope.bundle
+    label_of = dict(bundle.label_of)
+    if content is not None:
+        label_of.update(content.label_of)
+    values = Values(list(scope.documents), ["doc_manifest"], scope.reader)
+    urls = {
+        document: rewrite_legacy_url(values.first(document, "doc_manifest") or "")
+        for document in scope.documents
+    }
+    found = manifest_sources(urls.values())
+    result = []
+    for document, url in urls.items():
+        name = (label_of.get(document) or {}).get("value")
+        if not url or not name:
+            continue
+        source = found.get(url)
+        link = (source.original if source else None) or manifest_id(url)
+        result.append(
+            SourceManifest(document, name, link, source.label if source else None)
+        )
+    return result
 
 
 def _unique(values):
@@ -392,14 +438,23 @@ def _markdown_cell(text):
 
 
 def readme(
-    scope, members, citations, availability_text, *, exported_at, datasets=(), notes=()
+    scope,
+    members,
+    citations,
+    availability_text,
+    *,
+    exported_at,
+    datasets=(),
+    notes=(),
+    sources=(),
 ):
     """``README.md`` of the package in ``scope.language``: contents, how to cite, licences per file, availability.
 
     It names the datasets the data come from (*datasets*, ``dataset_of``
     values) by their identifier and never invites to deposit the package
     again. *notes* are extra paragraphs (a manifest left out, imaging given
-    as manifests).
+    as manifests). *sources* are the ``source_manifests`` of the scope's
+    Documents.
     """
     files = [
         {
@@ -425,6 +480,9 @@ def readme(
                 "citations": [c["recommended"] for c in citations],
                 "availability": availability_text,
                 "datasets": _readme_datasets(datasets),
+                "sources": [
+                    {"name": _markdown_cell(s.name), "link": s.link} for s in sources
+                ],
             },
         )
     return text.encode("utf-8")
@@ -464,7 +522,7 @@ def _licence_id(licence):
     return licence.get("url") or f"#licence-{slugify(licence['id'])}"
 
 
-def ro_crate(scope, members, exported_at, content=None):
+def ro_crate(scope, members, exported_at, content=None, sources=None):
     """The RO-Crate 1.2 metadata of the package, as a dict; every ``sha256`` is a 64-character placeholder.
 
     The ``@context`` is the RO-Crate 1.2 context by reference, which defines
@@ -479,12 +537,18 @@ def ro_crate(scope, members, exported_at, content=None):
     path (``crate_id``), with its name, size, media type and licence. Each
     analysis is a ``CreateAction`` identified by its permalink: operators as ``Person`` agents, dates, the document and
     component as ``object``, its files as ``result``, its technique as a
-    ``DefinedTerm`` in ``additionalType``. A licence is a ``CreativeWork``
+    ``DefinedTerm`` in ``additionalType``. A Document with a source manifest
+    (*sources*, ``source_manifests``) is a ``CreativeWork`` identified by its
+    permalink whose ``subjectOf`` is that manifest, a ``CreativeWork`` with the
+    ``application/ld+json`` format; a Document that is the object of no analysis is
+    ``mentions`` of the root. A licence is a ``CreativeWork``
     identified by its URL, with its name, SPDX ``identifier`` and a
     ``description``. Every entity has a name and is reachable from the root.
     No instrument and no place are described.
     """
     content = content or scope_content(scope)
+    if sources is None:
+        sources = source_manifests(scope, content)
     bundle, language = scope.bundle, scope.language
     graph, contextual = [], {}
 
@@ -585,6 +649,7 @@ def ro_crate(scope, members, exported_at, content=None):
     ]
     label_of = dict(bundle.label_of)
     label_of.update(content.label_of)
+    objects_of_actions = set()
     for row in content.rows:
         analysis_id = row["id"]
         action = {
@@ -613,6 +678,7 @@ def ro_crate(scope, members, exported_at, content=None):
         ]
         if objects:
             action["object"] = [{"@id": permalink(r)} for r in objects]
+            objects_of_actions.update(permalink(r) for r in objects)
             for r in objects:
                 describe(
                     {
@@ -636,8 +702,23 @@ def ro_crate(scope, members, exported_at, content=None):
                 }
             )
         graph.append(action)
-    if content.rows:
-        root["mentions"] = [{"@id": permalink(row["id"])} for row in content.rows]
+    mentions = [permalink(row["id"]) for row in content.rows]
+    for source in sources:
+        document_id = permalink(source.document)
+        describe({"@id": document_id, "@type": "CreativeWork", "name": source.name})
+        contextual[document_id].setdefault("subjectOf", []).append({"@id": source.link})
+        describe(
+            {
+                "@id": source.link,
+                "@type": "CreativeWork",
+                "name": source.label or source.link,
+                "encodingFormat": "application/ld+json",
+            }
+        )
+        if document_id not in objects_of_actions and document_id not in mentions:
+            mentions.append(document_id)
+    if mentions:
+        root["mentions"] = [{"@id": m} for m in mentions]
     graph += list(contextual.values())
     return {"@context": RO_CRATE_CONTEXT, "@graph": graph}
 
@@ -745,7 +826,7 @@ def package(scope, exported_at=None):
 
 
 def _assemble(scope, exported_at):
-    """``(members, content)`` of ``package``; *content* is the ``ScopeContent`` the RO-Crate reads."""
+    """``(members, content, sources)`` of ``package``; *content* and *sources* are what the RO-Crate reads."""
     language = scope.language
     content = scope_content(scope, ("statement_type", "statement_content"))
     stored = stored_sizes(scope, content)
@@ -830,6 +911,7 @@ def _assemble(scope, exported_at):
         ),
     ]
     members = built + data
+    sources = source_manifests(scope, content)
     text = readme(
         scope,
         members,
@@ -838,8 +920,9 @@ def _assemble(scope, exported_at):
         exported_at=exported_at,
         datasets=content.datasets,
         notes=notes,
+        sources=sources,
     )
-    return [_built("README.md", text, "text/markdown"), *members], content
+    return [_built("README.md", text, "text/markdown"), *members], content, sources
 
 
 def _crate_bytes(crate):
@@ -942,10 +1025,10 @@ class ExplorerExportView(View):
                 return _not_found()
             exported_at = datetime.date.today()
             try:
-                members, content = _assemble(scope, exported_at)
+                members, content, sources = _assemble(scope, exported_at)
             except ExportTooLarge:
                 return _too_large()
-            crate = ro_crate(scope, members, exported_at, content)
+            crate = ro_crate(scope, members, exported_at, content, sources)
         length, body = stream(members, crate)
         metrics.EXPLORER_EXPORT_BYTES.observe(length)
         response = StreamingHttpResponse(body, content_type="application/zip")

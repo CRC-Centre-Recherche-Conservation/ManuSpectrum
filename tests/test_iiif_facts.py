@@ -280,7 +280,8 @@ class SubjectTests(FactsCase):
 
         self.fetch.assert_not_called()
         self.assertEqual(len(doc.canvases), 3)
+        # Named at the IIIF route, not at Arches' language-prefixed one (#293).
         self.assertEqual(
             doc.manifest_url,
-            f"{settings.PUBLIC_SERVER_ADDRESS}manifest/{stored.globalid}",
+            f"{settings.PUBLIC_SERVER_ADDRESS}iiif/manifest/{stored.globalid}",
         )

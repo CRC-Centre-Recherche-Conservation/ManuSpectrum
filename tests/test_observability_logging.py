@@ -100,6 +100,32 @@ class RedactionTests(SimpleTestCase):
             with self.subTest(text=text):
                 self.assertEqual(obs_logging.redact_text(text), expected)
 
+    def test_the_token_of_a_mailed_link_is_masked_in_a_logged_path(self):
+        """Django logs the path of a refused request (`log_response`)."""
+        cases = {
+            "Forbidden (CSRF token missing.): /en/account/activate/MQ/d3x-0a1b2c": "Forbidden (CSRF token missing.): /en/account/activate/[redacted]",
+            "Method Not Allowed: /fr/reset/MQ/d3x-0a1b2c/": "Method Not Allowed: /fr/reset/[redacted]",
+            "Gone: /en/account/two-factor/reset/eyJ1IjoxfQ:1tX:AbC-_d": "Gone: /en/account/two-factor/reset/[redacted]",
+            "<WSGIRequest: POST '/en/reset/MQ/d3x-0a1b2c/'>": "<WSGIRequest: POST '/en/reset/[redacted]'>",
+            "GET https://site.test/EN/Reset/MQ/d3x-0a1b2c/?next=/x done": "GET https://site.test/EN/Reset/[redacted] done",
+            "Not Found: /en/password_reset/": "Not Found: /en/password_reset/",
+            "Not Found: /en/account/two-factor": "Not Found: /en/account/two-factor",
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(obs_logging.redact_text(text), expected)
+        for fmt in ("json", "text"):
+            with self.subTest(fmt=fmt):
+                output = emit(
+                    fmt,
+                    "Forbidden (%s): %s",
+                    "CSRF token missing.",
+                    "/en/account/activate/MQ/d3x-0a1b2c",
+                    status_code=403,
+                )
+                self.assertIn("/en/account/activate/[redacted]", output)
+                self.assertNotIn("d3x-0a1b2c", output)
+
     def test_a_long_run_of_address_characters_is_scanned_in_linear_time(self):
         import time
 

@@ -177,6 +177,7 @@ jobs:
         with:
           image-ref: ${{ env.IMAGE_NAME }}@${{ env.DIGEST }}
           version: v0.74.0
+          cache: false
           scanners: vuln,secret
           severity: HIGH,CRITICAL
           ignore-unfixed: true

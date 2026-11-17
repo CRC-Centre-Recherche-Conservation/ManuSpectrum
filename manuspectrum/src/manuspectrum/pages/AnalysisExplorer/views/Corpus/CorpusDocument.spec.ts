@@ -317,6 +317,43 @@ describe("CorpusDocument", () => {
         );
     });
 
+    it("links the publisher's manifest of an imported document", async () => {
+        stubFetch({
+            manifestSource: "https://gallica.example/iiif/manifest.json",
+            annotations: [annotation(1)],
+        });
+        const { wrapper } = mountScreen();
+        await flushPromises();
+        const link = wrapper.find(".document-bar .manifest-source a");
+        expect(link.attributes("href")).toBe(
+            "https://gallica.example/iiif/manifest.json",
+        );
+        expect(link.attributes("target")).toBe("_blank");
+        expect(link.attributes("rel")).toBe("noopener");
+        expect(link.text()).toContain("Source IIIF manifest");
+    });
+
+    it("shows no manifest source link without a source", async () => {
+        stubFetch({ annotations: [annotation(1)] });
+        const { wrapper } = mountScreen();
+        await flushPromises();
+        expect(wrapper.find(".document-bar .manifest-source").exists()).toBe(
+            false,
+        );
+    });
+
+    it.each(["javascript:alert(1)", "not a url"])(
+        "shows no manifest source link for %s",
+        async (manifestSource) => {
+            stubFetch({ manifestSource, annotations: [annotation(1)] });
+            const { wrapper } = mountScreen();
+            await flushPromises();
+            expect(
+                wrapper.find(".document-bar .manifest-source").exists(),
+            ).toBe(false);
+        },
+    );
+
     it("shows the production date and places of the document in its header", async () => {
         stubFetch({
             annotations: [annotation(1)],
@@ -1137,9 +1174,9 @@ describe("CorpusDocument", () => {
         await flushPromises();
         const homeLabels = wrapper
             .findAll("button")
-            .filter((button) => button.text() === "Explorer home");
+            .filter((button) => button.text() === "Data Lab home");
         expect(homeLabels).toHaveLength(1);
-        expect(wrapper.text()).not.toContain("Back to the explorer home");
+        expect(wrapper.text()).not.toContain("Back to the Data Lab home");
     });
 
     it("goes back to the results it was opened from", async () => {
@@ -1283,7 +1320,7 @@ describe("CorpusDocument", () => {
         const { wrapper, store } = mountScreen();
         await flushPromises();
         const back = wrapper.find(".return-pill");
-        expect(back.text()).toBe("Explorer home");
+        expect(back.text()).toBe("Data Lab home");
         await back.trigger("click");
         expect(store.corpusScreen).toBe("home");
     });

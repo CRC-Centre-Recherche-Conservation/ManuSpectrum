@@ -2,7 +2,8 @@
 # deploy/scripts/tests/test_lib_release.sh
 # Tests of lib-release.sh: tag regex (shared with release-ref-guard.sh), semver
 # order and channel selection, state files, the .env image rewrite, missing
-# keys, the metrics file, the release mail and the slot parser. Prints
+# keys, the metrics file, the release mail, the slot parser and the stale
+# services. Prints
 # `ok N` / `not ok N`; exits non-zero on failure.
 # shellcheck disable=SC2319,SC2015,SC2001,SC2030,SC2031,SC2016
 set -uo pipefail
@@ -320,6 +321,29 @@ grep -qF 'rollbacks_total 9' "$P" && ok "derive: an explicit value wins" || not_
 printf 'garbage\n' >"$D/pending"
 check "derive: an unreadable state file counts as absent" release_metrics_from_state "$D" "$P"
 grep -qF 'pending_since_timestamp_seconds 0' "$P" && ok "derive: unreadable pending is 0" || not_ok "derive: unreadable pending is 0" "$(cat "$P")"
+
+# --- stale services: bind sources from the checkout changed after the start
+SR="$TMP/stale-repo"
+mkdir -p "$SR/nginx/snippets" "$SR/prom/rules" "$TMP/outside"
+printf 'a\n' >"$SR/nginx/nginx.conf"; printf 'b\n' >"$SR/nginx/snippets/edge.conf"; printf 'c\n' >"$SR/prom/rules/r.yml"; printf 'd\n' >"$TMP/outside/log"
+touch -d '2026-01-01 00:00:00 UTC' "$SR/nginx/nginx.conf" "$SR/nginx/snippets/edge.conf" "$SR/nginx/snippets" "$SR/prom/rules/r.yml" "$SR/prom/rules"
+touch -d '2026-03-01 00:00:00 UTC' "$TMP/outside/log"
+T0=2026-02-01T00:00:00.123456789Z
+stale() { release_stale_services "$SR"; }
+equals "stale: nothing changed after the start" "" "$(printf 'nginx %s %s %s\n' "$T0" "$SR/nginx/nginx.conf" "$SR/nginx/snippets" | stale)"
+equals "stale: a source outside the repository is ignored" "" "$(printf 'nginx %s %s\n' "$T0" "$TMP/outside/log" | stale)"
+touch -d '2026-02-02 00:00:00 UTC' "$SR/nginx/nginx.conf"
+equals "stale: a single file rewritten after the start" "nginx" "$(printf 'nginx %s %s %s\n' "$T0" "$TMP/outside/log" "$SR/nginx/nginx.conf" | stale)"
+equals "stale: a container started after the change is current" "" "$(printf 'nginx 2026-02-03T00:00:00Z %s\n' "$SR/nginx/nginx.conf" | stale)"
+touch -d '2026-02-02 00:00:00 UTC' "$SR/prom/rules/r.yml"
+equals "stale: a file changed inside a mounted directory" "prometheus" "$(printf 'prometheus %s %s\n' "$T0" "$SR/prom/rules" | stale)"
+touch -d '2026-01-01 00:00:00 UTC' "$SR/prom/rules/r.yml"; printf 'n\n' >"$SR/prom/rules/new.yml"; touch -d '2026-01-01 00:00:00 UTC' "$SR/prom/rules/new.yml"; touch -d '2026-02-02 00:00:00 UTC' "$SR/prom/rules"
+equals "stale: a file added to a mounted directory" "prometheus" "$(printf 'prometheus %s %s\n' "$T0" "$SR/prom/rules" | stale)"
+equals "stale: one line per service, in order, empty lines skipped" "nginx
+prometheus" "$(printf '\nnginx %s %s\nnginx %s %s\n\nprometheus %s %s\ngrafana %s\n' "$T0" "$SR/nginx/nginx.conf" "$T0" "$SR/nginx/nginx.conf" "$T0" "$SR/prom/rules" "$T0" | stale)"
+equals "stale: a path through .. inside the repository" "nginx" "$(printf 'nginx %s %s\n' "$T0" "$SR/prom/../nginx/nginx.conf" | stale)"
+equals "stale: an unreadable start time counts as stale" "nginx" "$(printf 'nginx not-a-date %s\n' "$SR/nginx/snippets" | stale 2>/dev/null)"
+refused "stale: the repository must exist" release_stale_services "$TMP/nowhere" </dev/null
 
 echo "1..$N"
 [ "$FAILED" -eq 0 ] || { echo "# FAILED"; exit 1; }

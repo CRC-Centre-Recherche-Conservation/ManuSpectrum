@@ -17,6 +17,7 @@ pointed at its instance in place; KEY_PREFIX and the other entries are kept.
 """
 
 import os
+import re
 import sys
 from urllib.parse import urlparse
 
@@ -113,6 +114,16 @@ def env_choice(name, choices, default):
     return value
 
 
+def env_token(name):
+    """Return the variable `name` as a plain token (letters, digits, `-`, `_`), "" when unset or empty."""
+    value = get_optional_env_variable(name, "").strip()
+    if value and not re.fullmatch(r"[A-Za-z0-9_-]+", value):
+        raise ImproperlyConfigured(
+            f"{name} must contain only letters, digits, '-' and '_'"
+        )
+    return value
+
+
 DEBUG = False
 
 SECRET_KEY = read_secret("MANUSPECTRUM_SECRET_KEY")
@@ -163,6 +174,7 @@ RELATED_RESOURCES_EXPORT_LIMIT = env_positive_int(
 EXPLORER_UI_ONLY = env_choice(
     "EXPLORER_UI_ONLY", ("enforce", "observe", "off"), "enforce"
 )
+GOOGLE_SITE_VERIFICATION = env_token("GOOGLE_SITE_VERIFICATION")
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True

@@ -1,0 +1,25 @@
+# Exceptions to the zizmor audit (.github/workflows/zizmor.yml).
+rules:
+  # main.yml and the two composite actions under .github/actions/ are the
+  # Arches project template, kept as Arches ships them (never patched here).
+  # Every project workflow is audited in full.
+  unpinned-uses:
+    ignore:
+      - main.yml
+      - action.yml
+  template-injection:
+    ignore:
+      - action.yml
+  artipacked:
+    ignore:
+      - main.yml
+  excessive-permissions:
+    ignore:
+      - main.yml
+  overprovisioned-secrets:
+    ignore:
+      - main.yml
+  # `./.github/...` is the path syntax actionlint and test_workflows.py read;
+  # the `$/` form zizmor suggests is newer than both.
+  self-repository:
+    disable: true

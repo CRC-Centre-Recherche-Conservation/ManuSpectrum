@@ -38,7 +38,7 @@ Make targets (`make -C deploy <target>`):
 | `alert-test` | Raise a critical `AlertTest` for five minutes: a mail must arrive |
 | `alerts` | List the alerts Alertmanager holds |
 | `silence` | Silence an alert for maintenance |
-| `silence-fresh-install` | Silence for 48 h the alerts a new install raises before its first backup, restore test, timers and nightly passes |
+| `silence-fresh-install` | Silence for 48 h the alerts a new install raises before its first backup, restore test, timers and nightly passes (`ContainerMissing` included: check `make -C deploy status` meanwhile) |
 | `report-test`, `monthly-report` | Send the monthly report now |
 | `container-metrics`, `disk-usage` | Write the host metrics (the timers call them) |
 
@@ -200,7 +200,9 @@ first run of the systemd timers, `BackupMissing` (critical), `RestoreTestMissing
 `WorkflowCleanupStale` and `AccountRetentionStale` until the first night's passes have run (hour-long `for`, 26 h window). Install the
 timers and take a first backup before `observability-on`, or run
 `make -C deploy silence-fresh-install` (48 h, with a comment) and let the first
-backup, restore test and timers land within it.
+backup, restore test and timers land within it. The silence includes
+`ContainerMissing`: a container that disappears during those 48 hours is not
+alerted, so check `make -C deploy status` meanwhile.
 
 **Heartbeat.** The always-firing `Watchdog` alert becomes one mail on Monday at
 08:00 (Europe/Paris, a five-minute window). It proves that Prometheus evaluates

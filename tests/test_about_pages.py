@@ -149,6 +149,26 @@ class SocialMetaTests(TestCase):
             self.assertIn(f'"name": "{member}"', html)
 
 
+class SiteVerificationMetaTests(TestCase):
+    TAG = '<meta name="google-site-verification" content="tok-en_1">'
+
+    @override_settings(GOOGLE_SITE_VERIFICATION="tok-en_1")
+    def test_tag_is_in_the_head_of_the_homepage_and_of_an_ms_base_page(self):
+        for url in ("/en/", reverse("about-team")):
+            with self.subTest(url=url):
+                html = self.client.get(url).content.decode()
+                self.assertEqual(html.count(self.TAG), 1)
+                self.assertLess(html.index(self.TAG), html.index("</head>"))
+
+    @override_settings(GOOGLE_SITE_VERIFICATION="")
+    def test_no_tag_when_unset(self):
+        for url in ("/en/", reverse("about-team")):
+            with self.subTest(url=url):
+                self.assertNotIn(
+                    "google-site-verification", self.client.get(url).content.decode()
+                )
+
+
 class SitemapTests(TestCase):
     def test_static_sitemap_lists_about_pages_not_index_htm(self):
         xml = self.client.get("/sitemap.xml").content.decode()

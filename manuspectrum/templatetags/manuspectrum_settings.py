@@ -52,6 +52,12 @@ def site_origin(context):
 
 
 @register.simple_tag
+def google_site_verification():
+    """Google Search Console verification token, or '' when none is configured."""
+    return getattr(settings, "GOOGLE_SITE_VERIFICATION", "") or ""
+
+
+@register.simple_tag
 def contact_email():
     """Resolved public contact address, or '' when none is configured yet.
 

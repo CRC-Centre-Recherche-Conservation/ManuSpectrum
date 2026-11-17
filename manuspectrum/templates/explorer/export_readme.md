@@ -29,6 +29,12 @@
 {% trans "The data come from the datasets below; cite and reuse them by their identifier." %}
 
 {% for dataset in datasets %}- {{ dataset.title }}: <{{ dataset.url }}>
+{% endfor %}{% endif %}{% if sources %}
+## {% trans "Source manifests" %}
+
+{% trans "The documents are described on these IIIF manifests; a manifest imported from another institution is listed at its publisher." %}
+
+{% for source in sources %}- {{ source.name }}: <{{ source.link }}>
 {% endfor %}{% endif %}
 ## {% trans "Licences per file" %}
 

@@ -1,0 +1,15 @@
+{% extends 'views/pages/legal_base.htm' %}
+{% load i18n %}
+{% block legal_title %}{% trans "Activate my account" %}{% endblock %}
+{% block legal_og_title %}{% trans "Activate my account" %}{% endblock %}
+{% block legal_heading %}{% trans "Activate my account" %}{% endblock %}
+{% block page_description %}{% trans "Read and accept the terms of use, then choose your password." %}{% endblock %}
+{% block og_description %}{% trans "Read and accept the terms of use, then choose your password." %}{% endblock %}
+
+{% block legal_body %}
+<p>{% trans "Your invitation link is valid. Continue to read the terms of use and choose your password." %}</p>
+<form method="post" class="ms-account-form">
+    {% csrf_token %}
+    <button type="submit">{% trans "Continue" %}</button>
+</form>
+{% endblock %}

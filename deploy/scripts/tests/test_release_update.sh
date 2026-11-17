@@ -63,8 +63,18 @@ case "$1 $2" in
 esac
 case "$1" in
   image) printf '%s\n' "${FAKE_LABEL-}"; exit 0 ;;
+  inspect)
+    [ ! -f "$FAKE_DIR/inspect" ] || sed "s|@APP@|$FAKE_APP|g" "$FAKE_DIR/inspect"
+    [ ! -e "$FAKE_DIR/inspect_fail" ] || exit 1
+    exit 0 ;;
   compose)
     last="$(sed -n 's/^MANUSPECTRUM_IMAGE=.*sha256:\(.\).*/\1/p' "$FAKE_ENV" | tail -n 1)"
+    for a in "$@"; do
+      case "$a" in
+        ps) [ ! -e "$FAKE_DIR/ps_fail" ] || exit 1; [ ! -f "$FAKE_DIR/inspect" ] || echo c0ffee; exit 0 ;;
+        up) [ ! -e "$FAKE_DIR/recreate_fail_$last" ] || exit 1; exit 0 ;;
+      esac
+    done
     if [ -f "$FAKE_DIR/ready_$last" ]; then cat "$FAKE_DIR/ready_$last"; else printf 200; fi
     exit 0 ;;
 esac
@@ -211,7 +221,7 @@ before
 engine v1.1.0
 equals "success: exit 0" 0 "$RC"
 [ "$RC" = 0 ] || echo "$OUT" | sed 's/^/#   /'
-b="$(logline '^make backup')"; u="$(logline '^make up')"; r="$(logline '^docker compose')"
+b="$(logline '^make backup')"; u="$(logline '^make up')"; r="$(logline '^docker compose.* exec -T web')"
 { [ -n "$b" ] && [ -n "$u" ] && [ -n "$r" ] && [ "$b" -lt "$u" ] && [ "$u" -lt "$r" ]; } && ok "success: backup, then up, then readiness" || not_ok "success: backup, then up, then readiness" "$(cat "$LOG")"
 grep -q '^make backup head=v1.0.0 env=1 lock=free inflight=0 .*TAG=pre-update' "$LOG" && ok "success: backup runs on the old version, lock free, nothing in flight" || not_ok "success: backup on the old version" "$(cat "$LOG")"
 grep -q '^make up head=v1.1.0 env=2 lock=held inflight=1 .*UP_WAIT_TIMEOUT=1' "$LOG" && ok "success: up sees the new tag, the new image, the held backup lock, inflight, the wait" || not_ok "success: up state" "$(cat "$LOG")"
@@ -231,6 +241,40 @@ grep -q '^manuspectrum_release_armed 0$' "$P" && grep -qE '^manuspectrum_release
 has '^make (restore|init|load-snapshot)' && not_ok "success: never restore, init or load-snapshot" || ok "success: never restore, init or load-snapshot"
 check "success: the backup lock is free again" bash -c "( flock -n 9 ) 9>'$W/dump/.lock'"
 check "success: no lock held by a child" bash -c "( flock -n 9 ) 9>'$W/state/lock'"
+
+# --- services whose configuration from the checkout changed are recreated
+# (front changes between the tags; the one-off line is empty, as docker prints it)
+stale_setup() {
+  setup
+  printf '%s\n' "nginx 2020-01-01T00:00:00Z @APP@/deploy/sbin/front" "grafana 2099-01-01T00:00:00Z @APP@/deploy/sbin/front" \
+    "certbot 2020-01-01T00:00:00Z $W/dump" "" >"$W/f/inspect"
+}
+stale_setup; engine v1.1.0
+equals "stale mounts: exit 0" 0 "$RC"
+rc_line="$(logline '^docker compose.* up -d --no-deps --force-recreate')"; u="$(logline '^make up')"
+grep -q '^docker compose.* up -d --no-deps --force-recreate nginx$' "$LOG" && ok "stale mounts: only the service started before its file changed is recreated" || not_ok "stale mounts: recreated services" "$(cat "$LOG")"
+{ [ -n "$rc_line" ] && [ -n "$u" ] && [ "$rc_line" -lt "$u" ]; } && ok "stale mounts: recreated before make up" || not_ok "stale mounts: recreated before make up" "$(cat "$LOG")"
+grep -q "^docker inspect --format .*com.docker.compose.oneoff.*State.StartedAt.* c0ffee$" "$LOG" && ok "stale mounts: inspects the running containers" || not_ok "stale mounts: inspect" "$(grep '^docker inspect' "$LOG")"
+grep -q 'recreating the services whose configuration changed: nginx$' <<<"$OUT" && ok "stale mounts: logged" || not_ok "stale mounts: logged" "$OUT"
+setup; engine v1.1.0
+has 'force-recreate' && not_ok "no running container: nothing recreated" "$(cat "$LOG")" || ok "no running container: nothing recreated"
+stale_setup; touch "$W/f/up_fail_2"; engine v1.1.0
+equals "stale mounts, rollback: exit 3" 3 "$RC"
+equals "stale mounts, rollback: recreated on the way in and on the way back" 2 "$(grep -c -- '--force-recreate nginx$' "$LOG")"
+stale_setup; touch "$W/f/recreate_fail_2"; engine v1.1.0
+equals "recreation fails: rolled back" 3 "$RC"
+grep -q '^make up head=v1.1.0' "$LOG" && ok "recreation fails: make up still starts the stack" || not_ok "recreation fails: make up still starts the stack" "$(cat "$LOG")"
+grep -q 'recreating nginx failed' <<<"$OUT" && ok "recreation fails: logged" || not_ok "recreation fails: logged" "$OUT"
+grep -q 'could not be recreated' <<<"$(mails)" && ok "recreation fails: the mail names the cause" || not_ok "recreation fails: the mail names the cause" "$(mails)"
+stale_setup; touch "$W/f/up_fail_2" "$W/f/recreate_fail_1"; engine v1.1.0
+equals "recreation fails on the rollback: the rollback still succeeds" 3 "$RC"
+grep -q '^make up head=v1.0.0' "$LOG" && ok "recreation fails on the rollback: make up starts the old version" || not_ok "recreation fails on the rollback: make up starts the old version" "$(cat "$LOG")"
+stale_setup; touch "$W/f/ps_fail"; engine v1.1.0
+equals "ps fails: installed" 0 "$RC"
+{ grep -q 'cannot list the running containers: none recreated' <<<"$OUT" && ! has 'force-recreate'; } && ok "ps fails: logged, nothing recreated" || not_ok "ps fails: logged, nothing recreated" "$OUT"
+stale_setup; touch "$W/f/inspect_fail"; engine v1.1.0
+equals "inspect fails: installed" 0 "$RC"
+{ grep -q 'docker inspect failed for some containers' <<<"$OUT" && grep -q -- '--force-recreate nginx$' "$LOG"; } && ok "inspect fails: logged, the containers it read are still checked" || not_ok "inspect fails: logged, the containers it read are still checked" "$OUT"
 
 # --- refusals: nothing changes
 setup; printf 'other\n' >"$W/app/stray.txt"; refusal_case "dirty worktree" drift "stray.txt"
@@ -266,7 +310,7 @@ equals "rollback: exit 3" 3 "$RC"
 [ "$RC" = 3 ] || echo "$OUT" | sed 's/^/#   /'
 mapfile -t ups < <(grep -n '^make up' "$LOG" | cut -d: -f1)
 { [ "${#ups[@]}" = 2 ] && grep -q '^make up head=v1.1.0 env=2' <<<"$(sed -n "${ups[0]}p" "$LOG")" && grep -q '^make up head=v1.0.0 env=1' <<<"$(sed -n "${ups[1]}p" "$LOG")"; } && ok "rollback: up on the new version, then up on the old one" || not_ok "rollback: two ups in order" "$(cat "$LOG")"
-mid="$(sed -n "${ups[0]},${ups[1]}p" "$LOG" | grep -c '^docker compose')"
+mid="$(sed -n "${ups[0]},${ups[1]}p" "$LOG" | grep -c '^docker compose.* exec -T web')"
 [ "$mid" -ge 2 ] && ok "rollback: readiness polled until the deadline before the rollback" || not_ok "rollback: readiness polled before the rollback ($mid)"
 after="$(sed -n "${ups[1]},\$p" "$LOG" | grep -c '^docker compose')"
 [ "$after" -ge 1 ] && ok "rollback: readiness checked after the rollback" || not_ok "rollback: readiness after the rollback"
@@ -324,7 +368,7 @@ equals "SIGTERM during make up: exit 3" 3 "$RC"
 [ -e "$W/f/up_finished" ] && ok "SIGTERM during make up: make up was left to finish" || not_ok "SIGTERM during make up: make up was left to finish"
 mapfile -t ups < <(grep -n '^make up' "$LOG" | cut -d: -f1)
 equals "SIGTERM during make up: a second up put the old version back" 2 "${#ups[@]}"
-equals "SIGTERM during make up: no readiness wait on the new version" 0 "$(sed -n "${ups[0]},${ups[1]}p" "$LOG" | grep -c '^docker compose')"
+equals "SIGTERM during make up: no readiness wait on the new version" 0 "$(sed -n "${ups[0]},${ups[1]}p" "$LOG" | grep -c '^docker compose.* exec -T web')"
 equals "SIGTERM during make up: HEAD back" "$HEAD_BEFORE" "$(head_of)"
 equals "SIGTERM during make up: .env back" "$ENV_BEFORE" "$(sha256sum "$ENVF" | cut -d' ' -f1)"
 equals "SIGTERM during make up: rollbacks counter" 1 "$(sget rollbacks COUNT)"

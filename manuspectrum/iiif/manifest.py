@@ -159,18 +159,20 @@ def homepages(query):
 
 
 def unlocated_metadata(entries):
-    """The ``metadata`` entry listing ``(name, permalink)`` *entries*, one joined « name — permalink » string per language."""
-    maps = []
-    for name, link in entries:
-        if name:
-            maps.append(
-                {code: [f"{lang.text_in(name, code)} — {link}"] for code in name}
-            )
-        else:
-            maps.append(lang.none(link))
+    """The ``metadata`` entry listing ``(name, permalink)`` *entries*: one link per entry, joined by "; " in one ``span`` per language.
+
+    An entry without a name shows its permalink as the link text.
+    """
+    maps = [
+        lang.linked(name or lang.none(link), link, markup=True)
+        for name, link in entries
+    ]
     return {
         "label": lang.gettext_map("Without a position on the image"),
-        "value": lang.joined(maps, sep="; "),
+        "value": {
+            code: [f"<span>{text}</span>" for text in texts]
+            for code, texts in lang.joined(maps, sep="; ").items()
+        },
     }
 
 

@@ -3,8 +3,11 @@
 Every model receiver drops a cache entry once the writing transaction
 commits: a reader landing between the write and the commit would otherwise
 memoise the old rows again. The logout receiver revokes the IIIF tokens of
-the session at once.
+the session at once. The manifest receiver registers the remote manifests
+that annotations name once the save commits; it drops no cache.
 """
+
+import logging
 
 from django.contrib.auth.models import Group, User
 from django.contrib.auth.signals import user_logged_out
@@ -15,7 +18,13 @@ from django.db.models.signals import m2m_changed, post_delete, post_save, pre_sa
 from django.dispatch import receiver
 from guardian.models import GroupObjectPermission, UserObjectPermission
 
-from arches.app.models.models import File, FunctionXGraph, GraphXPublishedGraph
+from arches.app.models.models import (
+    File,
+    FunctionXGraph,
+    GraphXPublishedGraph,
+    Node,
+)
+from arches.app.models.tile import Tile
 
 from manuspectrum.accounts.embargo import record_grant
 from manuspectrum.accounts.lockout import current_request
@@ -23,10 +32,16 @@ from manuspectrum.functions.resource_summary import SUMMARY_FUNCTION_ID, forget_
 from manuspectrum.accounts.retention import send_deactivation_notice
 from manuspectrum.iiif.tokens import revoke
 from manuspectrum.models import SiteNotice
+from manuspectrum.utils import manifest_registry
+from manuspectrum.utils.budget import upstream_budget
 from manuspectrum.utils.public_visibility import ANONYMOUS_USERNAME, forget_visibility
 from manuspectrum.views import site_notice
 from manuspectrum.views.spectrum_preview import file_record_key
 from manuspectrum.views.summary_service import SLUG_CACHE_KEY, graph_index_key
+
+logger = logging.getLogger("manuspectrum.manifests")
+
+MANIFEST_REGISTRATION_BUDGET = 30
 
 
 @receiver([post_save, post_delete], sender=GraphXPublishedGraph)
@@ -147,3 +162,87 @@ def revoke_iiif_tokens(sender, request=None, **kwargs):
     """End the IIIF tokens and access cookie of the session signing out of Arches."""
     session = getattr(request, "session", None)
     revoke(getattr(session, "session_key", None))
+
+
+def register_annotation_manifests(tile_id, user_id, manifests):
+    """Register each ``{URL: [canvas ids]}`` of ``manifests`` in ``iiif_manifests``.
+
+    Runs after the annotation's transaction committed, under one write budget.
+    A refused registration is logged as a warning and never raised; an
+    unexpected error is logged and swallowed, since the annotation is already
+    saved. One line per URL on ``manuspectrum.manifests``; no account name or
+    address is logged.
+    """
+    with upstream_budget(MANIFEST_REGISTRATION_BUDGET, kind="write"):
+        for url, canvases in manifests.items():
+            extra = {"tile": tile_id, "user_id": user_id, "url": url}
+            try:
+                _row, outcome = manifest_registry.register_remote_manifest(
+                    url, expected_service=canvases[0] if canvases else None
+                )
+            except manifest_registry.ManifestRegistrationError as exc:
+                logger.warning(
+                    "manifest not registered (%s): %s",
+                    exc.reason,
+                    url,
+                    extra={**extra, "outcome": exc.reason},
+                )
+            except Exception:
+                logger.exception(
+                    "manifest registration failed: %s",
+                    url,
+                    extra={**extra, "outcome": "error"},
+                )
+            else:
+                level = (
+                    logging.INFO
+                    if outcome == manifest_registry.REGISTERED
+                    else logging.DEBUG
+                )
+                logger.log(
+                    level,
+                    "manifest %s: %s",
+                    outcome,
+                    url,
+                    extra={**extra, "outcome": outcome},
+                )
+
+
+@receiver(post_save, sender=Tile)
+def register_manifests_of_annotations(sender, instance, raw=False, **kwargs):
+    """Register, once the save commits, the remote manifests that annotations of the tile reference.
+
+    Reads the approved ``instance.data`` only (a provisional edit is not in
+    it) and the FeatureCollections held by ``annotation`` nodes. The Arches
+    viewer lists registered manifests by label; ``properties.manifest`` is
+    never rewritten.
+    """
+    if raw:
+        return
+    candidates = manifest_registry.annotation_manifests(instance.data)
+    if not candidates:
+        return
+    annotation_nodes = {
+        str(nodeid)
+        for nodeid in Node.objects.filter(
+            nodeid__in=list(candidates), datatype="annotation"
+        ).values_list("nodeid", flat=True)
+    }
+    manifests = {}
+    for nodeid, urls in candidates.items():
+        if nodeid in annotation_nodes:
+            for url, canvases in urls.items():
+                known = manifests.setdefault(url, [])
+                known.extend(c for c in canvases if c not in known)
+    if not manifests:
+        return
+    request = current_request()
+    user = getattr(request, "user", None)
+    user_id = (
+        getattr(user, "pk", None) if getattr(user, "is_authenticated", False) else None
+    )
+    tile_id = str(instance.tileid)
+    transaction.on_commit(
+        lambda: register_annotation_manifests(tile_id, user_id, manifests),
+        robust=True,
+    )

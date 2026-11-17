@@ -73,3 +73,22 @@ tests:
     exp_samples:
     - labels: 'manuspectrum:consultations:total{kind="file_download", job="web", instance="web:8000"}'
       value: 450
+- name: a manifest consultation is a GET of Arches' manifest route or of its language-neutral IIIF route
+  interval: 1m
+  input_series:
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="manifest", method="GET", job="web", instance="web:8000"}
+    values: 0+60x60
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="iiif-manifest", method="GET", job="web", instance="web:8000"}
+    values: 0+60x60
+  - series: django_http_responses_total_by_status_view_method_total{status="304", view="iiif-manifest", method="GET", job="web", instance="web:8000"}
+    values: 0+60x60
+  - series: django_http_responses_total_by_status_view_method_total{status="404", view="iiif-manifest", method="GET", job="web", instance="web:8000"}
+    values: 0+100x60
+  - series: django_http_responses_total_by_status_view_method_total{status="200", view="iiif-manifest", method="OPTIONS", job="web", instance="web:8000"}
+    values: 0+100x60
+  promql_expr_test:
+  - expr: manuspectrum:consultations:total{kind="iiif_manifest"}
+    eval_time: 30m
+    exp_samples:
+    - labels: 'manuspectrum:consultations:total{kind="iiif_manifest", job="web", instance="web:8000"}'
+      value: 5400
