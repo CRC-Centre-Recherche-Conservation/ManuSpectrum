@@ -63,12 +63,15 @@ case "$1 $2" in
 esac
 case "$1" in
   image) printf '%s\n' "${FAKE_LABEL-}"; exit 0 ;;
-  inspect) [ ! -f "$FAKE_DIR/inspect" ] || sed "s|@APP@|$FAKE_APP|g" "$FAKE_DIR/inspect"; exit 0 ;;
+  inspect)
+    [ ! -f "$FAKE_DIR/inspect" ] || sed "s|@APP@|$FAKE_APP|g" "$FAKE_DIR/inspect"
+    [ ! -e "$FAKE_DIR/inspect_fail" ] || exit 1
+    exit 0 ;;
   compose)
     last="$(sed -n 's/^MANUSPECTRUM_IMAGE=.*sha256:\(.\).*/\1/p' "$FAKE_ENV" | tail -n 1)"
     for a in "$@"; do
       case "$a" in
-        ps) [ ! -f "$FAKE_DIR/inspect" ] || echo c0ffee; exit 0 ;;
+        ps) [ ! -e "$FAKE_DIR/ps_fail" ] || exit 1; [ ! -f "$FAKE_DIR/inspect" ] || echo c0ffee; exit 0 ;;
         up) [ ! -e "$FAKE_DIR/recreate_fail_$last" ] || exit 1; exit 0 ;;
       esac
     done
@@ -260,7 +263,18 @@ equals "stale mounts, rollback: exit 3" 3 "$RC"
 equals "stale mounts, rollback: recreated on the way in and on the way back" 2 "$(grep -c -- '--force-recreate nginx$' "$LOG")"
 stale_setup; touch "$W/f/recreate_fail_2"; engine v1.1.0
 equals "recreation fails: rolled back" 3 "$RC"
-grep -q '^make up head=v1.1.0' "$LOG" && not_ok "recreation fails: no make up on the new version" "$(cat "$LOG")" || ok "recreation fails: no make up on the new version"
+grep -q '^make up head=v1.1.0' "$LOG" && ok "recreation fails: make up still starts the stack" || not_ok "recreation fails: make up still starts the stack" "$(cat "$LOG")"
+grep -q 'recreating nginx failed' <<<"$OUT" && ok "recreation fails: logged" || not_ok "recreation fails: logged" "$OUT"
+grep -q 'could not be recreated' <<<"$(mails)" && ok "recreation fails: the mail names the cause" || not_ok "recreation fails: the mail names the cause" "$(mails)"
+stale_setup; touch "$W/f/up_fail_2" "$W/f/recreate_fail_1"; engine v1.1.0
+equals "recreation fails on the rollback: the rollback still succeeds" 3 "$RC"
+grep -q '^make up head=v1.0.0' "$LOG" && ok "recreation fails on the rollback: make up starts the old version" || not_ok "recreation fails on the rollback: make up starts the old version" "$(cat "$LOG")"
+stale_setup; touch "$W/f/ps_fail"; engine v1.1.0
+equals "ps fails: installed" 0 "$RC"
+{ grep -q 'cannot list the running containers: none recreated' <<<"$OUT" && ! has 'force-recreate'; } && ok "ps fails: logged, nothing recreated" || not_ok "ps fails: logged, nothing recreated" "$OUT"
+stale_setup; touch "$W/f/inspect_fail"; engine v1.1.0
+equals "inspect fails: installed" 0 "$RC"
+{ grep -q 'docker inspect failed for some containers' <<<"$OUT" && grep -q -- '--force-recreate nginx$' "$LOG"; } && ok "inspect fails: logged, the containers it read are still checked" || not_ok "inspect fails: logged, the containers it read are still checked" "$OUT"
 
 # --- refusals: nothing changes
 setup; printf 'other\n' >"$W/app/stray.txt"; refusal_case "dirty worktree" drift "stray.txt"
