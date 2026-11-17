@@ -465,6 +465,26 @@ class StagingTests(unittest.TestCase):
     def test_publish_exposes_the_digest(self):
         self.assertIn("digest", self.workflow["jobs"]["publish"]["outputs"])
 
+    def test_every_published_build_rebuilds_the_runtime_stage(self):
+        builds = [
+            s
+            for s in steps(self.workflow["jobs"]["build"])
+            if "build-push-action" in s.get("uses", "")
+        ]
+        self.assertEqual(len(builds), 2)
+        for build in builds:
+            options = build["with"]
+            if "cache-from" in options:
+                self.assertEqual(options.get("no-cache-filters"), "runtime")
+                self.assertNotIn("cache-to", options)
+            else:
+                self.assertIs(options.get("no-cache"), True)
+
+    def test_runtime_is_the_final_stage_of_the_dockerfile(self):
+        dockerfile = (ROOT / "deploy/docker/Dockerfile").read_text()
+        stages = re.findall(r"^FROM \S+ AS (\S+)$", dockerfile, re.M)
+        self.assertEqual(stages[-1], "runtime")
+
 
 class ReleaseTests(unittest.TestCase):
     def setUp(self):

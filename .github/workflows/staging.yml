@@ -8,7 +8,9 @@ name: staging
 # carries the day's Debian security updates), stack-proof.yml runs the whole
 # stack on the loaded image, then the image is pushed and its build provenance
 # attested (release.yml checks it before promoting the digest).
-# Manual run on the integration branch: the same, with the buildkit cache read.
+# Manual run on the integration branch: the same, with the buildkit cache read
+# for every stage but `runtime`, which builds again so the published image
+# carries the day's Debian security updates like the one built on main.
 # Push to the integration branch: cache warm-up and probe only, nothing is
 # published. Every pull request that targets the branch reads that cache
 # (scope `image`, stored under the branch's own ref).
@@ -89,7 +91,7 @@ jobs:
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      - name: Build the image (integration cache, read only)
+      - name: Build the image (integration cache, read only; runtime stage rebuilt)
         if: github.ref == 'refs/heads/dev'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -101,6 +103,7 @@ jobs:
           provenance: false
           sbom: false
           cache-from: type=gha,scope=image
+          no-cache-filters: runtime
 
       - name: Build the image (from scratch)
         if: github.ref != 'refs/heads/dev'
