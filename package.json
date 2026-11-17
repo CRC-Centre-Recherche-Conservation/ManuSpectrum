@@ -43,7 +43,7 @@
         "primelocale": "^2.6.2",
         "primevue": "4.3.7",
         "typescript": "5.9.3",
-        "uuid": "^11"
+        "uuid": "^14"
     },
     "devDependencies": {
         "@maplibre/maplibre-gl-style-spec": "20.4.0",
