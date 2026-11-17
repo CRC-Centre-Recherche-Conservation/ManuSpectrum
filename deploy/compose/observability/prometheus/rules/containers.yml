@@ -35,8 +35,15 @@ groups:
           description: "For every container the collector fell back on Docker's OOMKilled flag, which misses most kills; the cgroup memory.events file is unreadable."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/containers.md#oomsourcedegraded
       - alert: ContainerMemoryNearLimit
+        # Memory the kernel cannot drop (anon + shmem): the working set also
+        # counts the active page cache, which keeps an image server near its
+        # limit without any risk. The working set only stands in for a
+        # container whose memory.stat the collector cannot read.
         expr: |
-          manuspectrum_container_memory_working_set_bytes{container!="web"}
+          (
+            manuspectrum_container_memory_unreclaimable_bytes{container!="web"}
+            or manuspectrum_container_memory_working_set_bytes{container!="web"}
+          )
           / (manuspectrum_container_memory_limit_bytes{container!="web"} > 0) > 0.9
         for: 30m
         labels:
@@ -44,7 +51,7 @@ groups:
           service: containers
         annotations:
           summary: "A container is close to its memory limit"
-          description: "{{ $labels.container }} uses {{ $value | humanizePercentage }} of its memory limit."
+          description: "{{ $labels.container }} holds {{ $value | humanizePercentage }} of its memory limit in memory the kernel cannot reclaim."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/containers.md#containermemorynearlimit
       - alert: WebMemoryNearLimit
         expr: |
