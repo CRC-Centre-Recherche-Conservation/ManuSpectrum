@@ -105,6 +105,47 @@ The Image Service Manager's save and delete actions answer only to `Resource Edi
 « Request Failed ». The same rule applies to the manifest upload of the resource editor's
 IIIF manifest widget, which then shows « An error occurred while creating the manifest. ».
 
+### JPEG 2000 images
+
+JPEG 2000 (`.jp2`) images are accepted by the Image Service Manager (« Create manifest »,
+« Add images ») and by the manifest widget of the Document « Facsimiles » and the Analysis
+« Chemical/physical imaging » fields. They are served as they are by Cantaloupe, which decodes
+them with OpenJPEG (`ManualSelectionStrategy`, `jp2 = OpenJpegProcessor`); the viewers receive
+JPEG or PNG tiles, as for any other image. The file-list nodes (Measurement Point data,
+Instrument File), the ETL modules and the « Micro/macro imaging » node do not accept JPEG 2000.
+
+Every `.jp2` of a deposit is checked on its headers before anything is written; one refusal
+refuses the whole deposit, and the message names the file and gives the command below:
+
+- the file must be a readable JPEG 2000 file (not a renamed image, not truncated);
+- above 4 megapixels it needs at least 5 resolution levels (`JP2_MIN_RESOLUTION_LEVELS`);
+- its tiles, clipped to the image, may not exceed 20 megapixels each (`JP2_MAX_TILE_PIXELS`): a
+  file of one tile covering the image is the largest case, and a grid of huge tiles is refused too;
+- a file that starts with the JPEG 2000 signature must be named `.jp2` (Cantaloupe picks its
+  decoder from the extension), whatever name it was deposited under.
+
+A JPEG 2000 file with one resolution level, or a large one without tiles, costs hundreds of
+megabytes of memory for each tile Cantaloupe decodes. The message names each refused file and
+gives the command once. Scientific imaging is best deposited
+lossless, tiled by 1024 pixels and with 7 resolution levels:
+
+```bash
+opj_compress -i in.tif -o out.jp2 -n 7 -t 1024,1024 -c "[256,256]" -b "64,64" -p RPCL -SOP -PLT -TP R
+```
+
+(OpenJPEG 2.4 or later; add `-r 10 -I` for a lossy file of about a tenth of the size.) The
+upload limit is unchanged, 100 MB per deposit (`client_max_body_size` in `nginx.conf`), all
+the files of a deposit in one request: a lossless JPEG 2000 of about 75 megapixels is near
+the limit. A `.jp2` copied straight into `uploadedfiles/` escapes the check.
+
+The Image Service Manager page itself shadows the core file `manifest-manager.js`
+(`manuspectrum/media/js/views/components/plugins/`) for one line: the file picker of
+« Create manifest » lists `.jp2`. `tests/test_manifest_manager_shadow.py` fails when Arches
+changes the core file; copy it again below the header and re-apply the line. The POST is
+`manuspectrum/views/manifest_manager.py`, a copy of the core `post()` with `.jp2` added and the
+check above; `CorePostCanaryTests` fails at the same moment. Both go once Arches accepts
+JPEG 2000.
+
 ### Workflows and data-management tools
 
 Arches opens a tool page only for a holder of `view_plugin` on that tool, and lists a bulk data
