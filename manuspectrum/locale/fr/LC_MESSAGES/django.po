@@ -2519,8 +2519,8 @@ msgid "X-ray Fluorescence"
 msgstr "Fluorescence X"
 
 #: templates/index.htm:306 templates/index.htm:308
-msgid "X-ray Micro-Fluorescence"
-msgstr "Microfluorescence X"
+msgid "Macro X-ray Fluorescence"
+msgstr "Macro-fluorescence X"
 
 #: templates/index.htm:311 templates/index.htm:313
 msgid "Fiber Optic Reflectance"
