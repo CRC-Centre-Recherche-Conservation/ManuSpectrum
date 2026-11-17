@@ -320,6 +320,10 @@ class ComposeStackTests(unittest.TestCase):
             environment["CANTALOUPE_LOG_ACCESS_CONSOLEAPPENDER_ENABLED"], "false"
         )
 
+    def test_cantaloupe_purges_expired_derivatives(self):
+        environment = self.base["services"]["cantaloupe"]["environment"]
+        self.assertEqual(environment["CANTALOUPE_CACHE_SERVER_WORKER_ENABLED"], "true")
+
     def test_every_service_restarts_logs_and_drops_privileges(self):
         for label, name, service in self.each_service():
             with self.subTest(stack=label, service=name):
