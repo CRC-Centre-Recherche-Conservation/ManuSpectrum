@@ -60,6 +60,21 @@ class AnalysisPopupTests(TestCase):
         self.assertIn("Encre ferrogallique", html)
 
 
+class TechniqueStatTests(TestCase):
+    def test_the_ma_xrf_stat_names_x_ray_fluorescence_imaging(self):
+        for lang, caption, wrong in (
+            ("en", "X-ray Fluorescence Imaging", "Micro-Fluorescence"),
+            ("fr", "Imagerie de fluorescence de rayons X", "Microfluorescence"),
+        ):
+            with self.subTest(lang=lang):
+                html = self.client.get(f"/{lang}/").content.decode()
+                self.assertRegex(
+                    html,
+                    rf'>MA-XRF</div>\s*<div class="ms-stat-label">{caption}</div>',
+                )
+                self.assertNotIn(wrong, html)
+
+
 class LogoDialogTests(TestCase):
     def test_zoom_is_a_labelled_dialog(self):
         html = self.client.get("/en/").content.decode()
