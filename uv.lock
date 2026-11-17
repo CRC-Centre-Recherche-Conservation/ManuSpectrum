@@ -1311,7 +1311,7 @@ wheels = [
 
 [[package]]
 name = "manuspectrum"
-version = "1.0.0a0"
+version = "1.0.2"
 source = { editable = "." }
 dependencies = [
     { name = "arches" },

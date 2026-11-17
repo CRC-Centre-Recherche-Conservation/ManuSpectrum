@@ -1,5 +1,6 @@
 {
     "name": "manuspectrum",
+    "version": "1.0.2",
     "license": "AGPL-3.0-only",
     "engines": {
         "node": "^22.13.0 || >=24"
