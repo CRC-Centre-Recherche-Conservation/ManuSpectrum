@@ -15,3 +15,21 @@ class ManifestWidgetTemplateTests(unittest.TestCase):
         )
         self.assertIsNotNone(select)
         self.assertRegex(select[1].strip(), r"^<option>\s*</option>")
+
+
+class ManifestWidgetJpeg2000Tests(unittest.TestCase):
+    SCRIPT = (
+        TEMPLATE.parents[4] / "media/js/views/components/widgets/manifest-widget.js"
+    )
+
+    def test_both_panels_list_jpeg_2000_among_the_accepted_formats(self):
+        lines = re.findall(r"Accepted formats:\" %\}([^\n]*)", TEMPLATE.read_text())
+        self.assertEqual(len(lines), 2)
+        for line in lines:
+            self.assertEqual(line.strip(), "JPEG, PNG, TIFF, JPEG 2000")
+
+    def test_the_dropzone_accepts_jp2_by_extension_only(self):
+        accepted = re.search(r"acceptedFiles: \[([^\]]*)\]", self.SCRIPT.read_text())
+        self.assertIsNotNone(accepted)
+        self.assertIn('".jp2"', accepted[1])
+        self.assertNotIn("image/jp2", accepted[1])

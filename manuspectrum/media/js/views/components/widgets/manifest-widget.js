@@ -369,7 +369,7 @@ const viewModel = function(params) {
         dictDefaultMessage: '',
         autoProcessQueue: false,
         uploadMultiple: true,
-        acceptedFiles: ["image/jpeg", "image/png", "image/tiff"].join(','),
+        acceptedFiles: ["image/jpeg", "image/png", "image/tiff", ".jp2"].join(","),
         autoQueue: false,
         clickable: ".fileinput-create-button." + self.uniqueidClass(),
         previewsContainer: '#hidden-dz-manifest-previews-' + self.uniqueId,

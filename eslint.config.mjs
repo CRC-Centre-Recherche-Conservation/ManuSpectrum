@@ -38,6 +38,14 @@ try {
 }
 
 export default [
+    {
+        // Verbatim copy of an Arches core file (header in the file): `eslint --fix`
+        // in pre-commit must not edit it, tests/test_manifest_manager_shadow.py
+        // compares it with the installed Arches.
+        "ignores": [
+            `${APP_RELATIVE_PATH}/media/js/views/components/plugins/manifest-manager.js`,
+        ],
+    },
     js.configs.recommended,
     ...pluginVue.configs['flat/recommended'],
     ...tseslint.configs.recommended,
