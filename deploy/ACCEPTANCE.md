@@ -1718,6 +1718,9 @@ Needs the stack running `vOld` and `vA` armed.
   the checks end with `check passed for vB`, the description shows `release: vB (installed: vA)`, `yes` →
   `step 5: backup (pre-update)`, `step 7: switching vA -> vB`, `readiness: 200`, `vB is installed and the application answers.`,
   exit status 0.
+- [ ] When `vB` changes a file the stack mounts from the checkout (`nginx.conf`, a Prometheus rule…): the journal has
+  `recreating the services whose configuration changed: …` naming its services, and *(service account)* `docker
+  compose … exec -T nginx sha256sum /etc/nginx/nginx.conf` prints the hash of `deploy/compose/nginx/nginx.conf`.
 - [ ] `--status` → `current: vB (…)`, `previous: vA`, `armed:    none`, `pending:  none`, `rollbacks:` unchanged. `curl -sk
   https://<host>/readyz` → `200`. The site answers; `smoke.sh edge` passes. `ReleasePendingTooLong` and `UpdateRolledBack`
   are not firing once the 64 hours of a previous rollback are over.

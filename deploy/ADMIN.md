@@ -558,7 +558,12 @@ What the update does, in order:
 2. **Pre-update backup.** `make backup TAG=pre-update` from the running version
    (`BACKUP.md`). If the backup fails, nothing is changed.
 3. **Switch.** It records the update as in flight, checks out the tag, rewrites
-   the image in `.env` and runs `make up`.
+   the image in `.env`, recreates the running services whose configuration
+   from the checkout changed after they started (nginx, Prometheus, Grafana…:
+   a container keeps a mounted single file as it was when it started, and
+   reads a mounted directory again only when it restarts; PostgreSQL too when
+   `deploy/compose/postgres/init` changed, a restart that leaves its data as they
+   are) and runs `make up`. A failed recreation fails the update, which rolls back.
 4. **Readiness.** It polls `/readyz` inside the `web` container until it answers
    200, for at most `RELEASE_READY_WAIT_SECONDS` (600 s by default, counted from
    the start of the switch). The maximum is **1800 s** (inventory variable
