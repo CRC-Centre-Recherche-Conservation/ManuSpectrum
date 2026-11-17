@@ -362,7 +362,7 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
 ### 2.5 Resources and restart policy (D-H6)
 
 - [ ] *(service account)* `docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'` → limits (second figure):
-  elasticsearch 5GiB, postgres 3GiB, web 4GiB, worker 2GiB, cantaloupe 1.75GiB,
+  elasticsearch 5GiB, postgres 3GiB, web 4GiB, worker 2GiB, cantaloupe 2.5GiB,
   redis-broker 256MiB, redis-cache 768MiB, beat 256MiB, nginx 512MiB. Record the idle usage of each.
   Expected idle: elasticsearch about 2.7 GiB on an empty database, about 3.4 GiB with data
   loaded (heap 2 GiB; the rest is direct memory, metaspace, threads and page cache). The

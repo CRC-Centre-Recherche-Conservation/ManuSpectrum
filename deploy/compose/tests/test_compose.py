@@ -33,12 +33,12 @@ PROD_LIMITS = {
     "web": 4 * GIB,
     "worker": 2 * GIB,
     "beat": 256 * MIB,
-    "cantaloupe": 1792 * MIB,
+    "cantaloupe": 2560 * MIB,
     "redis-broker": 256 * MIB,
     "redis-cache": 768 * MIB,
     "nginx": 512 * MIB,
 }
-PROD_LIMITS_CEILING = 17.5 * GIB
+PROD_LIMITS_CEILING = 18.25 * GIB
 OBS_LIMITS = {
     "prometheus": 1024 * MIB,
     # The cgroup limit counts the page cache Grafana reads its files through.
@@ -50,7 +50,7 @@ OBS_LIMITS = {
     "blackbox-exporter": 64 * MIB,
 }
 OBS_LIMITS_CEILING = 3 * GIB
-TOTAL_LIMITS_CEILING = 20.5 * GIB
+TOTAL_LIMITS_CEILING = 21.25 * GIB
 OBS_EXTERNAL_VOLUMES = {"prometheus_data": "ms_prometheus_data"}
 OBS_SECRETS = {"grafana_admin_password", "pg_monitor_password"}
 
@@ -318,6 +318,36 @@ class ComposeStackTests(unittest.TestCase):
         environment = self.base["services"]["cantaloupe"]["environment"]
         self.assertEqual(
             environment["CANTALOUPE_LOG_ACCESS_CONSOLEAPPENDER_ENABLED"], "false"
+        )
+
+    def test_cantaloupe_selects_processors_by_a_manual_table_with_openjpeg_for_jp2(
+        self,
+    ):
+        environment = self.base["services"]["cantaloupe"]["environment"]
+        self.assertEqual(
+            environment["CANTALOUPE_PROCESSOR_SELECTION_STRATEGY"],
+            "ManualSelectionStrategy",
+        )
+        self.assertEqual(
+            environment["CANTALOUPE_MANUAL_PROCESSOR_JP2"],
+            "OpenJpegProcessor",
+        )
+
+    def test_cantaloupe_purges_expired_derivatives(self):
+        environment = self.base["services"]["cantaloupe"]["environment"]
+        self.assertEqual(environment["CANTALOUPE_CACHE_SERVER_WORKER_ENABLED"], "true")
+
+    def test_cantaloupe_serves_jpeg_at_quality_90(self):
+        environment = self.base["services"]["cantaloupe"]["environment"]
+        self.assertEqual(environment["CANTALOUPE_PROCESSOR_JPG_QUALITY"], "90")
+
+    def test_production_cantaloupe_leaves_room_for_openjpeg_subprocesses(self):
+        cantaloupe = self.prod["services"]["cantaloupe"]
+        self.assertEqual(cantaloupe["environment"]["OPJ_NUM_THREADS"], "2")
+        self.assertIn("-Xmx1g", cantaloupe["environment"]["JAVA_TOOL_OPTIONS"].split())
+        self.assertGreaterEqual(
+            to_bytes(cantaloupe["deploy"]["resources"]["limits"]["memory"]),
+            2560 * MIB,
         )
 
     def test_every_service_restarts_logs_and_drops_privileges(self):
@@ -871,7 +901,7 @@ class ComposeStackTests(unittest.TestCase):
         self.assertIsNotNone(app_header, "header sentence on the application sum")
         self.assertIsNotNone(header, "header sentence on the monitoring ceilings")
         self.assertIsNotNone(section, "comment above the monitoring services")
-        self.assertEqual(app_header[1], f"{application:.1f}")
+        self.assertEqual(app_header[1], f"{application:.2f}")
         self.assertEqual(int(header[1]), monitoring)
         self.assertEqual(header[2], f"{total:.1f}")
         self.assertEqual(int(section[1]), monitoring)

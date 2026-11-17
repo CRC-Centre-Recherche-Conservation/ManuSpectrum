@@ -177,8 +177,18 @@ services:
       CANTALOUPE_CACHE_SERVER_DERIVATIVE_ENABLED: "true"
       CANTALOUPE_CACHE_SERVER_DERIVATIVE: FilesystemCache
       CANTALOUPE_CACHE_SERVER_DERIVATIVE_TTL_SECONDS: "2592000"
+      # The image default never purges expired derivatives.
+      CANTALOUPE_CACHE_SERVER_WORKER_ENABLED: "true"
       CANTALOUPE_CACHE_SERVER_INFO_ENABLED: "true"
       CANTALOUPE_FILESYSTEMCACHE_PATHNAME: /var/cache/cantaloupe
+      # AutomaticSelectionStrategy picks KakaduNativeProcessor for a JP2 (its native
+      # library is not in the image) and does not fall back: the manual table maps
+      # jp2 to OpenJpegProcessor and leaves the other formats on the processors
+      # the automatic strategy chose.
+      CANTALOUPE_PROCESSOR_SELECTION_STRATEGY: ManualSelectionStrategy
+      CANTALOUPE_MANUAL_PROCESSOR_JP2: OpenJpegProcessor
+      # Image default is 80; scientific imaging is shown at the highest practical quality.
+      CANTALOUPE_PROCESSOR_JPG_QUALITY: "90"
       CANTALOUPE_LOG_APPLICATION_CONSOLEAPPENDER_ENABLED: "true"
       CANTALOUPE_LOG_APPLICATION_ROLLINGFILEAPPENDER_ENABLED: "false"
       CANTALOUPE_LOG_ERROR_ROLLINGFILEAPPENDER_ENABLED: "false"
