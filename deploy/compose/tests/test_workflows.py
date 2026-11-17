@@ -465,6 +465,28 @@ class StagingTests(unittest.TestCase):
     def test_publish_exposes_the_digest(self):
         self.assertIn("digest", self.workflow["jobs"]["publish"]["outputs"])
 
+    def test_every_published_build_rebuilds_the_runtime_stage(self):
+        builds = [
+            s
+            for s in steps(self.workflow["jobs"]["build"])
+            if "build-push-action" in s.get("uses", "")
+        ]
+        self.assertEqual(len(builds), 2)
+        for build in builds:
+            options = build["with"]
+            if "cache-from" in options:
+                self.assertEqual(options.get("no-cache-filters"), "runtime")
+                self.assertNotIn("cache-to", options)
+            else:
+                self.assertIs(options.get("no-cache"), True)
+
+    def test_the_runtime_stage_is_final_and_upgrades_the_debian_packages(self):
+        dockerfile = (ROOT / "deploy/docker/Dockerfile").read_text()
+        stages = re.split(r"^FROM\s", dockerfile, flags=re.M)
+        final = stages[-1]
+        self.assertRegex(final.splitlines()[0], r"\sAS\s+runtime\s*$")
+        self.assertIn("apt-get upgrade", final)
+
 
 class ReleaseTests(unittest.TestCase):
     def setUp(self):
