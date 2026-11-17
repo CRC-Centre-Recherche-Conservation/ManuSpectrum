@@ -480,10 +480,12 @@ class StagingTests(unittest.TestCase):
             else:
                 self.assertIs(options.get("no-cache"), True)
 
-    def test_runtime_is_the_final_stage_of_the_dockerfile(self):
+    def test_the_runtime_stage_is_final_and_upgrades_the_debian_packages(self):
         dockerfile = (ROOT / "deploy/docker/Dockerfile").read_text()
-        stages = re.findall(r"^FROM \S+ AS (\S+)$", dockerfile, re.M)
-        self.assertEqual(stages[-1], "runtime")
+        stages = re.split(r"^FROM\s", dockerfile, flags=re.M)
+        final = stages[-1]
+        self.assertRegex(final.splitlines()[0], r"\sAS\s+runtime\s*$")
+        self.assertIn("apt-get upgrade", final)
 
 
 class ReleaseTests(unittest.TestCase):

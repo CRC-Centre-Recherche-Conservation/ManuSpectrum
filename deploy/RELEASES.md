@@ -30,7 +30,9 @@ Pushes to the integration branch only warm that cache (`staging.yml`,
 image too. That run reads the cache for every stage but `runtime`, which it
 builds again (`no-cache-filters`): the cached `apt-get upgrade` of the last
 push would otherwise ship Debian packages without the day's security updates,
-and Trivy would refuse the candidate.
+and Trivy would refuse the candidate. Pull-request builds (`deploy-lint.yml`)
+keep reading that cached layer, so their Trivy report (not blocking) may list
+Debian fixes that the published images already carry.
 
 ## Cut a release
 
