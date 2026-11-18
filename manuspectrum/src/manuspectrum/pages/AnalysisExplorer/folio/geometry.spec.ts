@@ -11,12 +11,14 @@ import {
 
 import {
     componentOutlines,
+    liveUnit,
     markedZones,
     shapeBounds,
     shapeCentre,
     shapeCorner,
     shapeFeature,
     toLatLng,
+    zoneUnitFor,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 
 describe("folio geometry", () => {
@@ -127,28 +129,42 @@ describe("folio geometry", () => {
                     name: label("Initial"),
                     unpublished: false,
                     zones: [
-                        { canvas: 1, shape: rect, feature: "k1" },
-                        { canvas: 0, shape: rect, feature: "k2" },
+                        { canvas: 1, unit: null, shape: rect, feature: "k1" },
+                        { canvas: 0, unit: null, shape: rect, feature: "k2" },
                     ],
                 },
                 {
                     id: uuid(902),
                     name: label("Point only"),
                     unpublished: false,
-                    zones: [{ canvas: 0, shape: point, feature: "k3" }],
+                    zones: [
+                        { canvas: 0, unit: null, shape: point, feature: "k3" },
+                    ],
                 },
                 {
                     id: uuid(903),
                     name: label("Border"),
                     unpublished: false,
-                    zones: [{ canvas: 0, shape: rect, feature: "k4" }],
+                    zones: [
+                        { canvas: 0, unit: null, shape: rect, feature: "k4" },
+                    ],
                 },
             ],
         });
         const [first, second] = payload.canvases;
         expect(componentOutlines(payload, first.id)).toEqual([
-            { id: uuid(901), name: label("Initial"), shapes: [rect] },
-            { id: uuid(903), name: label("Border"), shapes: [rect] },
+            {
+                id: uuid(901),
+                name: label("Initial"),
+                shapes: [rect],
+                units: [null],
+            },
+            {
+                id: uuid(903),
+                name: label("Border"),
+                shapes: [rect],
+                units: [null],
+            },
         ]);
         expect(
             componentOutlines(payload, second.id).map((outline) => outline.id),
@@ -181,5 +197,32 @@ describe("folio geometry", () => {
             [uuid(101), "k2"],
             [uuid(102), pointOnly.key],
         ]);
+    });
+});
+
+describe("liveUnit and zoneUnitFor", () => {
+    it("derives the unit of the zones from the frame of the live layer", () => {
+        expect(
+            liveUnit(
+                { zoom: 4, width: 4913, height: 6609 },
+                { width: 4913, height: 6609 },
+            ),
+        ).toEqual({ x: 16, y: 16, read: true });
+        expect(
+            liveUnit(
+                { zoom: 3, width: 2000, height: 1000 },
+                { width: 4000, height: 3000 },
+            ),
+        ).toEqual({ x: 16, y: 24, read: true });
+    });
+
+    it("keeps the zone's own unit, else the live one, else the canvas's", () => {
+        const own = { x: 2, y: 2, read: false };
+        const live = { x: 16, y: 16, read: true };
+        const fallback = { x: 32, y: 32, read: false };
+        expect(zoneUnitFor({ unit: own }, live, fallback)).toBe(own);
+        expect(zoneUnitFor({ unit: null }, live, fallback)).toBe(live);
+        expect(zoneUnitFor({}, null, fallback)).toBe(fallback);
+        expect(zoneUnitFor({ unit: null }, null, null)).toBeNull();
     });
 });

@@ -249,11 +249,13 @@ describe("folioMarks", () => {
                 zones: [
                     {
                         canvas: 0,
+                        unit: null,
                         shape: { type: "point", x: 1, y: 2 },
                         feature: "f1",
                     },
                     {
                         canvas: 1,
+                        unit: null,
                         shape: { type: "point", x: 3, y: 4 },
                         feature: "f2",
                     },
@@ -269,6 +271,7 @@ describe("folioMarks", () => {
                 zones: [
                     {
                         canvas: 0,
+                        unit: null,
                         shape: { type: "point", x: 5, y: 6 },
                         feature: "f3",
                     },
@@ -279,6 +282,7 @@ describe("folioMarks", () => {
             characterization(1, {
                 zone: {
                     canvas: "https://iiif.example/c1",
+                    unit: null,
                     shape: { type: "rect", x: 0, y: 0, w: 10, h: 10 },
                     source: "own",
                 },
@@ -286,6 +290,7 @@ describe("folioMarks", () => {
             characterization(2, {
                 zone: {
                     canvas: "https://iiif.example/c2",
+                    unit: null,
                     shape: { type: "point", x: 0, y: 0 },
                     source: "own",
                 },
@@ -315,6 +320,7 @@ describe("folioMarks", () => {
             [uuid(101), "analysis", [3], [{ type: "point", x: 1, y: 2 }]],
         ]);
         expect(marks[1].technique?.code).toBe("XRF");
+        expect(marks.map((mark) => mark.units)).toEqual([[null], [null]]);
     });
 
     it("marks nothing on a canvas the document does not list", () => {

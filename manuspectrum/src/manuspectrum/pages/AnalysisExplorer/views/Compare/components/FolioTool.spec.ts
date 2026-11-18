@@ -87,6 +87,7 @@ const DOCUMENT: DocumentPayload = documentPayload({
             zones: [
                 {
                     canvas: 0,
+                    unit: null,
                     shape: { type: "rect", x: 10, y: 10, w: 100, h: 100 },
                     feature: "f1",
                 },
@@ -102,6 +103,7 @@ const DOCUMENT: DocumentPayload = documentPayload({
             zones: [
                 {
                     canvas: 1,
+                    unit: null,
                     shape: { type: "point", x: 300, y: 300 },
                     feature: "f2",
                 },
@@ -112,6 +114,7 @@ const DOCUMENT: DocumentPayload = documentPayload({
         characterization(1, {
             zone: {
                 canvas: C1,
+                unit: null,
                 shape: { type: "point", x: 500, y: 500 },
                 source: "own",
             },
@@ -126,11 +129,13 @@ const INITIAL = {
         {
             canvas: 0,
             shape: { type: "rect", x: 0, y: 0, w: 400, h: 400 },
+            unit: null,
             feature: "k1",
         },
         {
             canvas: 1,
             shape: { type: "rect", x: 0, y: 0, w: 64, h: 64 },
+            unit: null,
             feature: "k2",
         },
     ],
@@ -143,6 +148,7 @@ const BORDER = {
         {
             canvas: 0,
             shape: { type: "rect", x: 500, y: 0, w: 64, h: 900 },
+            unit: null,
             feature: "k3",
         },
     ],
@@ -313,6 +319,7 @@ describe("FolioTool", () => {
                         zones: [
                             {
                                 canvas: 0,
+                                unit: null,
                                 shape: {
                                     type: "rect",
                                     x: 50,

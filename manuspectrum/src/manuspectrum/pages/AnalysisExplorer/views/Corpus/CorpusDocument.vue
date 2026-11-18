@@ -93,6 +93,7 @@ import type {
     DocumentCanvas,
     FacetKey,
     Label,
+    ZoneUnit,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
     Focus,
@@ -538,6 +539,8 @@ const zones = computed<ReadonlySet<string>>(
                 .map((entry) => entry.analysis),
         ),
 );
+/** The unit of the folio's live layer, as `FolioMap` reports it; null until its info.json is read. */
+const liveUnit = ref<ZoneUnit | null>(null);
 const overlays = computed(() =>
     folioOverlays(
         analysis.data.value?.id === focusedAnalysis.value
@@ -548,6 +551,7 @@ const overlays = computed(() =>
         {
             canvas: currentCanvas.value?.id ?? null,
             unit: currentCanvas.value?.zoneUnit ?? null,
+            live: liveUnit.value,
             registration:
                 focusedAnalysis.value === null
                     ? null
@@ -1248,6 +1252,7 @@ function goHome(): void {
                             :caption="folioCaption"
                             stage="soft"
                             @select="onSelect"
+                            @live-unit="liveUnit = $event"
                             @layer-adjust="onLayerAdjust"
                             @layer-turn="onLayerTurn"
                             @layer-place="onLayerPlace"

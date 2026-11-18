@@ -27,10 +27,12 @@ import {
     shapeCentre,
     shapeCorner,
     shapeFeature,
+    zoneUnitFor,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import {
     fitPage,
     layPage,
+    liveUnitOf,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import {
     FOLIO_REQUEST_KEY,
@@ -50,6 +52,7 @@ import type { Feature } from "geojson";
 import type { SynthesisCanvas } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { LinkedMark } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
 import type { PreviewEvent } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
+import type { ZoneUnit } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { ComponentOutline } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import type { PageLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import type { NodeId } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
@@ -219,6 +222,13 @@ const outlinesShown = computed<ComponentOutline[]>(() => {
 const hasImage = computed(() => Boolean(canvas.value?.image.service));
 /** The unit of the folio's zones (`toLatLng`). */
 const unit = computed(() => canvas.value?.zoneUnit ?? null);
+/** The unit of the page's live layer once its info.json is read; null until then, and when it cannot be. */
+const live = ref<ZoneUnit | null>(null);
+
+/** The unit of a zone with `own` as its stored unit: its own, else the live layer's, else the canvas's (`zoneUnitFor`). */
+function placedWith(own: ZoneUnit | null | undefined): ZoneUnit | null {
+    return zoneUnitFor({ unit: own }, live.value, unit.value);
+}
 /** The marks of the page the selection links. */
 const relatedHere = computed(() =>
     folioMarksShown.value.filter((mark) =>
@@ -279,7 +289,7 @@ watch(
     },
 );
 watch(() => canvas.value?.id, drawPage);
-watch([folioMarksShown, outlinesShown], drawMarks);
+watch([folioMarksShown, outlinesShown, live], drawMarks);
 watch(
     () => [
         linkedMarks.linked?.relations.value,
@@ -363,10 +373,15 @@ function drawPage(): void {
     page = null;
     pageFailed.value = false;
     pageView = true;
+    live.value = null;
     const service = canvas.value?.image.service;
-    if (!service) return;
-    page = layPage(map, service, () => {
+    if (!service || !canvas.value) return;
+    const laid = layPage(map, service, () => {
         pageFailed.value = true;
+    });
+    page = laid;
+    void liveUnitOf(laid, canvas.value.image).then((resolved) => {
+        if (page === laid) live.value = resolved;
     });
 }
 
@@ -452,8 +467,12 @@ function previewEvent(event: L.LeafletEvent): PreviewEvent {
 function drawOutlines(group: L.LayerGroup): void {
     for (const outline of outlinesShown.value) {
         const node = componentNode(outline.id);
-        const features = outline.shapes.flatMap((shape) => {
-            const feature = shapeFeature(shape, { id: outline.id }, unit.value);
+        const features = outline.shapes.flatMap((shape, at) => {
+            const feature = shapeFeature(
+                shape,
+                { id: outline.id },
+                placedWith(outline.units[at]),
+            );
             return feature ? [feature] : [];
         });
         const layer = L.geoJSON(features, {
@@ -471,7 +490,10 @@ function drawOutlines(group: L.LayerGroup): void {
         );
         layer.on("mouseout", (event) => linkedMarks.leave(previewEvent(event)));
         group.addLayer(layer);
-        const corner = shapeCorner(outline.shapes[0], unit.value);
+        const corner = shapeCorner(
+            outline.shapes[0],
+            placedWith(outline.units[0]),
+        );
         const label = corner
             ? L.marker(corner, {
                   icon: outlineLabel(outline),
@@ -496,10 +518,14 @@ function drawMarks(): void {
     const markers: L.Marker[] = [];
     const framed: [FolioMark, Feature[], L.Marker | null][] = [];
     for (const mark of folioMarksShown.value) {
-        const anchor =
-            mark.shapes.find((shape) => shapeBounds(shape) !== null) ??
-            mark.shapes[0];
-        const centre = shapeCentre(anchor, unit.value);
+        const anchorAt = Math.max(
+            0,
+            mark.shapes.findIndex((shape) => shapeBounds(shape) !== null),
+        );
+        const centre = shapeCentre(
+            mark.shapes[anchorAt],
+            placedWith(mark.units[anchorAt]),
+        );
         let marker: L.Marker | null = null;
         if (centre) {
             marker = L.marker(centre, {
@@ -510,11 +536,15 @@ function drawMarks(): void {
             markers.push(marker);
             drawn.addLayer(marker);
         }
-        const frames = mark.shapes.flatMap((shape) => {
+        const frames = mark.shapes.flatMap((shape, at) => {
             const feature =
                 shape.type === "point"
                     ? null
-                    : shapeFeature(shape, { id: mark.id }, unit.value);
+                    : shapeFeature(
+                          shape,
+                          { id: mark.id },
+                          placedWith(mark.units[at]),
+                      );
             return feature ? [feature] : [];
         });
         framed.push([mark, frames, marker]);

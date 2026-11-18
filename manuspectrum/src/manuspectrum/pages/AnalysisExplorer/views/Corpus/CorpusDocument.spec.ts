@@ -631,6 +631,7 @@ describe("CorpusDocument", () => {
                     characterization(1, {
                         zone: {
                             canvas: "https://iiif.example/c1",
+                            unit: null,
                             shape: { type: "point", x: 1, y: 1 },
                             source: "own",
                         },
@@ -638,6 +639,7 @@ describe("CorpusDocument", () => {
                     characterization(2, {
                         zone: {
                             canvas: "https://iiif.example/c1",
+                            unit: null,
                             shape: { type: "point", x: 2, y: 2 },
                             source: "own",
                         },
@@ -720,6 +722,7 @@ describe("CorpusDocument", () => {
                         ],
                         zone: {
                             canvas: "https://iiif.example/c1",
+                            unit: null,
                             shape: { type: "point", x: 10, y: 10 },
                             source: "own",
                         },
@@ -730,6 +733,7 @@ describe("CorpusDocument", () => {
                     sample(2, {
                         zone: {
                             canvas: "https://iiif.example/c2",
+                            unit: null,
                             shape: { type: "point", x: 10, y: 10 },
                         },
                     }),

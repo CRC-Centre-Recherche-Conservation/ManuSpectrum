@@ -23,6 +23,7 @@ import {
     markedZones,
     shapeCentre,
     shapeFeature,
+    zoneUnitFor,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import {
     layerSizeOf,
@@ -37,6 +38,7 @@ import { laidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-lay
 import {
     fitPage,
     layPage,
+    liveUnitOf,
     pageBoundsOf,
     servedSize,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
@@ -56,6 +58,7 @@ import type {
     DocumentCanvas,
     DocumentComponent,
     SampleSummary,
+    ZoneUnit,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { CaptureFailure } from "@/manuspectrum/pages/AnalysisExplorer/folio/capture.ts";
 import type {
@@ -154,6 +157,7 @@ const emit = defineEmits<{
     "capture-failed": [key: string, reason: CaptureFailure];
     "layer-reset": [key: string];
     "layer-place": [key: string, box: Box];
+    "live-unit": [unit: ZoneUnit | null];
 }>();
 defineExpose({ focusTarget, focusCurrent });
 
@@ -212,8 +216,19 @@ let adjustment: Adjustment | null = null;
 const hasImage = computed((): boolean => Boolean(props.canvas?.image.service));
 /** The unit of the page's zones (`toLatLng`). */
 const unit = computed(() => props.canvas?.zoneUnit ?? null);
+/** The unit of the page's live layer once its info.json is read; null until then, and when it cannot be. */
+const live = ref<ZoneUnit | null>(null);
+
+/** The unit `zone` is placed with: its own, else the live layer's, else the canvas's (`zoneUnitFor`). */
+function placedWith(zone: { unit: ZoneUnit | null }): ZoneUnit | null {
+    return zoneUnitFor(zone, live.value, unit.value);
+}
 
 watch(() => props.canvas?.id, drawPage);
+watch(live, () => {
+    drawMarks();
+    emit("live-unit", live.value);
+});
 watch(
     () => [
         props.annotations,
@@ -476,10 +491,15 @@ function drawPage(): void {
     page?.remove();
     page = null;
     pageFailed.value = false;
+    live.value = null;
     const service = props.canvas?.image.service;
-    if (!service) return;
-    page = layPage(map, service, () => {
+    if (!service || !props.canvas) return;
+    const laid = layPage(map, service, () => {
         pageFailed.value = true;
+    });
+    page = laid;
+    void liveUnitOf(laid, props.canvas.image).then((resolved) => {
+        if (page === laid) live.value = resolved;
     });
 }
 
@@ -570,7 +590,7 @@ function drawComponentZones(): L.GeoJSON {
                           ? shapeFeature(
                                 zone.shape,
                                 { id: component.id },
-                                unit.value,
+                                placedWith(zone),
                             )
                           : null;
                   return feature ? [feature] : [];
@@ -622,7 +642,7 @@ function drawMarks(): void {
     });
     for (const annotation of markedZones(props.annotations)) {
         if (!isShown(annotation)) continue;
-        const centre = shapeCentre(annotation.shape, unit.value);
+        const centre = shapeCentre(annotation.shape, placedWith(annotation));
         if (!centre) continue;
         const marker = L.marker(centre, {
             icon: markerIcon(annotation),
@@ -635,7 +655,7 @@ function drawMarks(): void {
     const shownSamples = props.view === "samples" ? props.samples : [];
     for (const sample of shownSamples) {
         const centre = sample.zone
-            ? shapeCentre(sample.zone.shape, unit.value)
+            ? shapeCentre(sample.zone.shape, placedWith(sample.zone))
             : null;
         if (!centre) continue;
         const target = `${SAMPLE_PREFIX}${sample.id}`;
@@ -662,7 +682,7 @@ function drawMarks(): void {
                 analysis: annotation.analysis,
                 colour: style?.colour ?? null,
             },
-            unit.value,
+            placedWith(annotation),
         );
         if (feature) frameFeatures.push(feature);
     }
@@ -698,7 +718,7 @@ function drawMarks(): void {
                     ? shapeFeature(
                           sample.zone.shape,
                           { id: sample.id },
-                          unit.value,
+                          placedWith(sample.zone),
                       )
                     : null;
             return feature ? [feature] : [];
@@ -720,7 +740,7 @@ function drawMarks(): void {
                       ? shapeFeature(
                             summary.zone.shape,
                             { id: summary.id },
-                            unit.value,
+                            placedWith(summary.zone),
                         )
                       : null;
                   return feature ? [feature] : [];

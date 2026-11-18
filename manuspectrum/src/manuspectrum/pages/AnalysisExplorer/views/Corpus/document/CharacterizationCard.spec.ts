@@ -68,6 +68,7 @@ describe("CharacterizationCard", () => {
     it("says the zone is the observed component's when it is not the material's own", () => {
         const zone = (source: "own" | "component") => ({
             canvas: "c1",
+            unit: null,
             shape: { type: "rect" as const, x: 0, y: 0, w: 1, h: 1 },
             source,
         });
