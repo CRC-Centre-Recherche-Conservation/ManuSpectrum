@@ -248,7 +248,7 @@ class LeafletRoundTests(SimpleTestCase):
         self.assertEqual(frames.leaflet_round(3), 3.0)
 
     def test_leaflet_round_refuses_non_coordinates(self):
-        for bad in (True, float("nan"), float("inf"), 1e308, "1"):
+        for bad in (True, float("nan"), float("inf"), 1e308, 10**400, "1"):
             with self.subTest(bad=bad):
                 with self.assertRaises(ValueError):
                     frames.leaflet_round(bad)
@@ -277,6 +277,7 @@ class LeafletRoundTests(SimpleTestCase):
             point(float("nan"), 1),
             point(float("inf"), 1),
             point(True, 1),
+            point(10**400, 1),
         ):
             with self.subTest(bad=bad):
                 self.assertFalse(frames.same_geometry(bad, bad))
@@ -339,11 +340,12 @@ class ReviewFocusTests(SimpleTestCase):
     def test_unrelated_save_keeps_the_untouched_features_as_they_were(self):
         stamped = feature("a", point(0.0078125, 1), **stamp(unit=32))
         bare = feature("b", point(5, 5))
-        before = previous_of(stamped, bare)
+        moved = feature("c", point(7, 7), **stamp(unit=8))
+        before = previous_of(stamped, bare, moved)
         sent = collection(
             feature("a", point(0.007813, 1), **stamp(unit=64)),
             feature("b", point(5.0000000001, 5), **stamp(unit=64)),
-            feature("c", point(9, 9)),
+            feature("c", point(9, 9), **stamp(unit=64)),
         )
         out, _ = frames.stamp_collection(sent, before, NODE, Calls(), False)
         units = [f["properties"].get("msUnit") for f in out["features"]]
@@ -364,9 +366,11 @@ class ReviewFocusTests(SimpleTestCase):
         self.assertEqual(frame_for.services, [SERVICE])
         self.assertEqual(todo, {})
         self.assertEqual(out["features"][0]["properties"]["msUnit"], 16)
+        unknown = Calls(None)
         out, todo = frames.stamp_collection(
-            collection(feature()), previous_of(), NODE, lambda s: None, True
+            collection(feature()), previous_of(), NODE, unknown, True
         )
+        self.assertEqual(unknown.services, [SERVICE])
         self.assertEqual(todo, {})
 
     def test_two_features_of_one_canvas_keep_their_own_stamps(self):
@@ -397,3 +401,17 @@ class TrustedIdlessTests(SimpleTestCase):
                 self.assertEqual(
                     out["features"][0]["properties"].get("msUnit"), expected
                 )
+
+
+class HugeCoordinateTests(SimpleTestCase):
+    def test_stored_feature_with_a_huge_integer_does_not_break_a_save(self):
+        stored = feature(geometry=point(10**400, 1), **stamp(unit=32))
+        out, todo = frames.stamp_collection(
+            collection(feature(geometry=point(10**400, 1))),
+            previous_of(stored),
+            NODE,
+            Calls(),
+            False,
+        )
+        self.assertEqual(todo, {})
+        self.assertEqual(out["features"][0]["properties"]["msUnit"], 16)

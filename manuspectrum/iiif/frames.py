@@ -75,7 +75,10 @@ def leaflet_round(value):
     """
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"not a coordinate: {value!r}")
-    scaled = float(value) * 1e6
+    try:
+        scaled = float(value) * 1e6
+    except OverflowError:
+        raise ValueError(f"not a finite coordinate: {value!r}") from None
     if not math.isfinite(scaled):
         raise ValueError(f"not a finite coordinate: {value!r}")
     floor = math.floor(scaled)
