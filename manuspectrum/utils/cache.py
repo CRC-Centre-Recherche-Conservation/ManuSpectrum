@@ -9,13 +9,13 @@ from manuspectrum.observability import metrics
 
 
 def stable_cache_key(prefix, *parts):
-    """A bounded key: fixed prefix plus the sha1 of the joined parts.
+    """A bounded key: fixed prefix plus the sha256 of the joined parts.
 
     Client-supplied strings (URLs, hash lists) never reach the key verbatim,
     and two part lists cannot collide through the join.
     """
     joined = "\x1f".join(str(p) for p in parts)
-    return f"{prefix}:{hashlib.sha1(joined.encode('utf-8')).hexdigest()}"  # noqa: S324
+    return f"{prefix}:{hashlib.sha256(joined.encode('utf-8')).hexdigest()}"
 
 
 def etag_already_held(request, etag):
