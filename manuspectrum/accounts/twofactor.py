@@ -345,7 +345,9 @@ class TwoFactorResetView(View):
             return self.confirm(request)
         if action == "cancel":
             self.forget(request)
-        return redirect(request.path)
+        return redirect(
+            reverse("account-two-factor-reset", kwargs={"token": token})
+        )
 
     def verified(self, request):
         return request.session.get(RESET_VERIFIED_KEY) == self.account.pk
@@ -379,7 +381,11 @@ class TwoFactorResetView(View):
     def confirm(self, request):
         secret = decrypt_secret(request.session.get(RESET_PENDING_KEY))
         if not self.verified(request) or not secret:
-            return redirect(request.path)
+            return redirect(
+                reverse(
+                    "account-two-factor-reset", kwargs={"token": RESET_PLACEHOLDER}
+                )
+            )
         if not code_matches(secret, request.POST.get("code")):
             return self.render(
                 request,
