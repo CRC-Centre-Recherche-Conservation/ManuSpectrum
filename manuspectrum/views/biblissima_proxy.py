@@ -97,7 +97,7 @@ from django.views.decorators.cache import cache_control, cache_page, never_cache
 from arches.app.models.models import ResourceInstance
 from arches.app.models.models import TileModel
 from arches.app.models.tile import Tile
-from arches_controlled_lists.models import ListItem
+from arches.extensions.controlled_lists.models import ListItem
 from arches.app.utils.decorators import group_required
 
 from manuspectrum.accounts.workflows import (
@@ -3757,7 +3757,7 @@ class BiblissimaCreateResourceView(View):
                 resource = Resource.objects.select_related("graph__publication").get(
                     pk=resource_id
                 )
-                resource.set_serialized_graph(serialized_graph)
+                resource.serialized_graph = serialized_graph
                 self._flush_tile_buffer(
                     resource, user=user, default_transaction_id=transaction_id
                 )
@@ -3861,7 +3861,7 @@ class BiblissimaCreateResourceView(View):
             resource = Resource.objects.select_related("graph__publication").get(
                 pk=resource_id
             )
-            resource.set_serialized_graph(serialized_graph)
+            resource.serialized_graph = serialized_graph
             self._flush_tile_buffer(resource, user, transaction_id)
 
             # The project link writes a tile on the project through
@@ -4306,7 +4306,7 @@ class BiblissimaCreateResourceView(View):
                     resource = Resource.objects.select_related(
                         "graph__publication"
                     ).get(pk=resource_id)
-                    resource.set_serialized_graph(serialized_graph)
+                    resource.serialized_graph = serialized_graph
                     self._flush_tile_buffer(resource, user, uuid.uuid4())
             if added:
                 self._defer_indexing(resource_ids=[str(resource_id)])
@@ -5268,8 +5268,8 @@ class BiblissimaCreateResourceView(View):
 
         new_ref = {
             "resourceId": str(resource_id),
-            "ontologyProperty": "",
-            "inverseOntologyProperty": "",
+            "relationship": "",
+            "inverseRelationship": "",
             "resourceXresourceId": "",
         }
 
@@ -5421,8 +5421,8 @@ class BiblissimaCreateResourceView(View):
         new_refs = [
             {
                 "resourceId": str(rid),
-                "ontologyProperty": "",
-                "inverseOntologyProperty": "",
+                "relationship": "",
+                "inverseRelationship": "",
                 "resourceXresourceId": "",
             }
             for rid in created_ids
@@ -5466,8 +5466,8 @@ class BiblissimaCreateResourceView(View):
         return [
             {
                 "resourceId": resource_id,
-                "ontologyProperty": "",
-                "inverseOntologyProperty": "",
+                "relationship": "",
+                "inverseRelationship": "",
                 "resourceXresourceId": "",
             }
         ]
@@ -5483,8 +5483,8 @@ class BiblissimaCreateResourceView(View):
         return [
             {
                 "resourceId": str(rid).strip(),
-                "ontologyProperty": "",
-                "inverseOntologyProperty": "",
+                "relationship": "",
+                "inverseRelationship": "",
                 "resourceXresourceId": "",
             }
             for rid in resource_ids
