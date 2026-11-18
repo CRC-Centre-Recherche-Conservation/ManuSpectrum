@@ -112,7 +112,7 @@ import os
 import sys
 
 try:
-    import psycopg2
+    import psycopg
 
     what = sys.argv[1]
     path = os.environ.get("PGPASSWORD_FILE")
@@ -132,7 +132,7 @@ try:
             "SELECT 1 FROM resource_instances WHERE resourceinstanceid = %s",
             (SYSTEM_SETTINGS_RESOURCE_ID,),
         )
-    connection = psycopg2.connect(
+    connection = psycopg.connect(
         host=os.environ["PGHOST"],
         port=os.environ["PGPORT"],
         user=os.environ["PGUSERNAME"],
@@ -141,11 +141,11 @@ try:
         connect_timeout=5,
     )
     try:
-        with connection, connection.cursor() as cursor:
+        with connection.cursor() as cursor:
             try:
                 cursor.execute(*query)
                 found = cursor.fetchone() is not None
-            except psycopg2.errors.UndefinedTable:
+            except psycopg.errors.UndefinedTable:
                 found = False
     finally:
         connection.close()
