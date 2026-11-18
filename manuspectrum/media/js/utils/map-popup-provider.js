@@ -1,5 +1,5 @@
 /**
- * Shadow of arches/app/media/js/utils/map-popup-provider.js (Arches 8.1.4).
+ * Shadow of arches/app/media/js/utils/map-popup-provider.js (Arches 8.2.0).
  *
  * Diff vs original:
  *   - the core provider is re-exported with two members replaced; it holds no

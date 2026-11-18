@@ -828,9 +828,9 @@ change shows within a minute (reload after waiting). Browser in a private window
     on `/en/`; toggling an overlay keeps the French labels;
   - an editor draws a point and a polygon on a Place card (map widget), saves, and sees them on the
     report map; popups and hover work on the search map;
-  - no address search box on the maps (removed until Arches 8.2);
+  - no address search box on the Knockout maps (Arches 8.2's Nominatim geocoder is dropped);
   - the console shows no `access token` or Mapbox error, and the Network tab no request to
-    `*.mapbox.com`;
+    `*.mapbox.com` nor `nominatim.openstreetmap.org`;
 - [ ] the Network tab shows no request outside the domain (spec §6.2) except the expected third
   parties of the privacy policy (`tiles.openfreemap.org`, the holding institutions' IIIF servers,
   `iiif.unicaen.fr` on the homepage; for signed-in editors `cke4.ckeditor.com`, and
