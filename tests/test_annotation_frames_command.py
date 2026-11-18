@@ -354,9 +354,16 @@ class JournalGuardTests(AnnotationFramesCase):
 
     def test_a_journal_that_fails_to_sync_rolls_the_batch_back(self):
         before = self.snapshot()
+        real = os.fsync
+
+        def fails_on_files(fd):
+            if os.path.isfile(f"/proc/self/fd/{fd}"):
+                raise OSError("disk full")
+            return real(fd)
+
         with mock.patch(
             "manuspectrum.management.commands.annotation_frames.os.fsync",
-            side_effect=OSError("disk full"),
+            fails_on_files,
         ):
             with self.assertRaisesMessage(CommandError, "journal write failed"):
                 self.run_command("stamp", "--apply", "--journal", self.journal)
@@ -600,3 +607,99 @@ class LegacyFromImageTests(AnnotationFramesCase):
             (props["msUnit"], props["msImageWidth"], props["msFrame"]),
             (32, 4913, "import-legacy"),
         )
+
+
+class JournalDurabilityTests(AnnotationFramesCase):
+    def test_a_failure_after_a_commit_keeps_the_journal_of_the_committed_rows(self):
+        tile = self.tile(zone("a", canvas=READ_SERVICE))
+        before = self.snapshot()
+        real = annotation_frames.apply_batch
+
+        def committed_then_lost(batch, journal):
+            real(batch, journal)
+            raise RuntimeError("interrupted after the commit")
+
+        with mock.patch.object(annotation_frames, "apply_batch", committed_then_lost):
+            with self.assertRaises(RuntimeError):
+                self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertIn("msUnit", self.props(tile, "a"))
+        self.assertEqual(
+            sum(len(v) for v in annotation_frames.read_journal(self.journal).values()),
+            1,
+        )
+        self.run_command("unstamp", "--journal", self.journal, "--apply")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_a_journal_directory_that_cannot_be_synced_fails_before_planning(self):
+        self.tile(zone("a"))
+        real = os.open
+
+        def refuse_directories(path, flags, *args, **kwargs):
+            if flags & os.O_DIRECTORY:
+                raise OSError(errno.EACCES, "denied")
+            return real(path, flags, *args, **kwargs)
+
+        with mock.patch.object(
+            frame_writes, "frame_for_service", wraps=frame_writes.frame_for_service
+        ) as spy:
+            with mock.patch(
+                "manuspectrum.management.commands.annotation_frames.os.open",
+                refuse_directories,
+            ):
+                with self.assertRaisesMessage(CommandError, "cannot create"):
+                    self.run_command("stamp", "--apply", "--journal", self.journal)
+        spy.assert_not_called()
+        self.assertFalse(os.path.exists(self.journal))
+
+    def test_a_write_that_accepts_no_byte_fails_instead_of_spinning(self):
+        self.tile(zone("a", canvas=READ_SERVICE))
+        before = self.snapshot()
+        calls = []
+
+        def stuck(fd, data):
+            calls.append(1)
+            if len(calls) > 5:
+                raise AssertionError("the write loop spins")
+            return 0
+
+        with mock.patch(
+            "manuspectrum.management.commands.annotation_frames.os.write", stuck
+        ):
+            with self.assertRaisesMessage(CommandError, "journal write failed"):
+                self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_a_short_write_is_completed(self):
+        self.tile(zone("a", canvas=READ_SERVICE))
+        real = os.write
+        cut = []
+
+        def short(fd, data):
+            data = bytes(data)
+            if data.startswith(b'{"') and not cut:
+                cut.append(1)
+                return real(fd, data[: len(data) // 2])
+            return real(fd, data)
+
+        with mock.patch(
+            "manuspectrum.management.commands.annotation_frames.os.write", short
+        ):
+            self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertEqual(cut, [1])
+        self.assertEqual(
+            sum(len(v) for v in annotation_frames.read_journal(self.journal).values()),
+            1,
+        )
+
+    def test_an_unterminated_last_segment_is_skipped_with_a_warning(self):
+        self.tile(zone("a", canvas=READ_SERVICE))
+        self.run_command("stamp", "--apply", "--journal", self.journal)
+        with open(self.journal, "a") as handle:
+            handle.write('{"tile": "')
+        warnings = []
+        grouped = annotation_frames.read_journal(self.journal, warnings.append)
+        self.assertEqual(sum(len(v) for v in grouped.values()), 1)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("line 2", warnings[0])
+        out = self.run_command("unstamp", "--journal", self.journal)
+        self.assertIn("1 of 1", out)

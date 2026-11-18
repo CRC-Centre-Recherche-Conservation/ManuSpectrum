@@ -14,7 +14,7 @@ carrying a valid stamp is never touched.
 ``stamp`` is dry by default; the dry run reads image descriptions over the
 network (and fills the image-info cache) but writes nothing. With ``--apply``
 a ``--journal`` path is required and created (never overwritten) before
-anything is read; the file is removed again when nothing was written. The
+anything is read; the file is removed again when it is empty. The
 writes go by batches of tiles under ``transaction.atomic()``: the tiles are
 locked in primary-key order and re-read, and a zone is stamped only when it is
 still unstamped, on the same canvas and with the geometry it had when it was
@@ -37,7 +37,9 @@ order). Dry by default as well.
 """
 
 import copy
+import errno
 import json
+import logging
 import os
 import uuid
 from collections import Counter, defaultdict
@@ -53,6 +55,8 @@ from manuspectrum.iiif import frame_writes, frames, units
 from manuspectrum.iiif.units import Frame
 from manuspectrum.observability import activity
 from manuspectrum.views.explorer.values import rewrite_legacy_url
+
+logger = logging.getLogger(__name__)
 
 LEGACY_SIZE = (4000, 5000)
 LEGACY_UNIT = 32
@@ -289,7 +293,10 @@ def _append(fd, lines):
         data = "".join(json.dumps(line, sort_keys=True) + "\n" for line in lines)
         view = memoryview(data.encode("utf-8"))
         while view:
-            view = view[os.write(fd, view) :]
+            count = os.write(fd, view)
+            if count <= 0:
+                raise OSError(errno.ENOSPC, "the journal accepts no more bytes")
+            view = view[count:]
         os.fsync(fd)
     except BaseException:
         try:
@@ -381,15 +388,25 @@ def _journal_line(text):
     return line
 
 
-def read_journal(path):
+def read_journal(path, warn=logger.warning):
     """The lines of the JSONL journal *path*, grouped by tile id (as ``uuid.UUID``).
 
-    A line that is not valid raises ``CommandError`` naming its number.
+    A terminated line that is not valid raises ``CommandError`` naming its
+    number. An unterminated last segment (a write cut short by a crash) belongs
+    to a batch that never committed, as a committed batch ends with a newline
+    fsynced before the commit: it is skipped and *warn* is called with a message
+    naming its line.
     """
     grouped = defaultdict(list)
     try:
-        with open(path, encoding="utf-8") as handle:
+        with open(path, encoding="utf-8", newline="\n") as handle:
             for number, text in enumerate(handle, 1):
+                if not text.endswith("\n"):
+                    if text.strip():
+                        warn(
+                            f"{path}: line {number} is cut short (an unfinished write); skipped"
+                        )
+                    continue
                 if not text.strip():
                     continue
                 try:
@@ -405,11 +422,49 @@ def read_journal(path):
 
 
 def open_journal(path):
-    """The file descriptor of the new journal *path* (append-only, never an existing file); ``CommandError`` when it cannot be created."""
+    """The file descriptor of the new journal *path* (append-only, never an existing file); ``CommandError`` when it cannot be created.
+
+    The parent directory is fsynced so the new file survives a crash.
+    """
     try:
-        return os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_APPEND, 0o640)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_APPEND, 0o640)
     except OSError as error:
         raise CommandError(f"cannot create the journal {path}: {error}") from error
+    try:
+        directory = os.open(os.path.dirname(path) or ".", os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    except OSError as error:
+        os.close(fd)
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        raise CommandError(f"cannot create the journal {path}: {error}") from error
+    return fd
+
+
+def _close_journal(fd, path):
+    """Close the journal *fd*, and remove the file when it is empty; never raises.
+
+    A journal holding a line is kept whatever happened: a batch may have
+    committed without the caller having seen it return.
+    """
+    try:
+        empty = os.fstat(fd).st_size == 0
+    except OSError:
+        empty = False
+    try:
+        os.close(fd)
+    except OSError:
+        pass
+    if empty:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
 
 
 class Command(BaseCommand):
@@ -498,12 +553,7 @@ class Command(BaseCommand):
                             ) from error
         finally:
             if journal is not None:
-                try:
-                    os.close(journal)
-                except OSError:
-                    pass
-                if not written:
-                    os.unlink(journal_path)
+                _close_journal(journal, journal_path)
         self._out("")
         if service:
             self._out(f"Only the zones of {service}.")
@@ -535,7 +585,7 @@ class Command(BaseCommand):
             self._out("Pass --apply --journal PATH to write.")
 
     def _unstamp(self, options):
-        grouped = read_journal(options["journal"])
+        grouped = read_journal(options["journal"], self.stderr.write)
         tiles = list(grouped)
         total = sum(len(lines) for lines in grouped.values())
         restored, changed = 0, []
