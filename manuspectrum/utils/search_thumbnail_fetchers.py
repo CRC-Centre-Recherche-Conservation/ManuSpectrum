@@ -22,7 +22,12 @@ from arches.app.utils.search_thumbnail_fetcher_factory import (
 from manuspectrum.iiif import units
 from manuspectrum.iiif.frames import frame_of
 from manuspectrum.iiif.zones import annotation_zones
-from manuspectrum.iiif.sources import ManifestReader, canvases_of, manifest_json
+from manuspectrum.iiif.sources import (
+    ManifestReader,
+    canvases_of,
+    local_manifest_id,
+    manifest_json,
+)
 from manuspectrum.utils.http import safe_fetch
 from manuspectrum.utils.iiif_tools import (
     CanvasIIIF,
@@ -201,6 +206,13 @@ def _is_number(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
+def _readable_manifest(url):
+    """True for an http(s) manifest URL or a local ``/manifest/<uuid>`` path (``sources.local_manifest_id``)."""
+    if not isinstance(url, str):
+        return False
+    return url.startswith(("http://", "https://")) or local_manifest_id(url) is not None
+
+
 def _zone_region_url(annotation, manifests):
     """IIIF region URL of one annotation zone, or None when it cannot be shown.
 
@@ -211,8 +223,9 @@ def _zone_region_url(annotation, manifests):
     manifest is bounded when the zone is stamped or the stored service's
     info.json is read. A
     zone drawn outside a bounded image gives None, and so does a zone whose
-    manifest is not a string, whose coordinates cannot be read or, for a
-    Point, whose radius is not a number.
+    manifest is neither http(s) nor local, whose coordinates cannot be read
+    or, for a Point, whose radius is not a number; those are refused before
+    any manifest or image description is read.
     """
     feature = annotation.feature if isinstance(annotation.feature, dict) else {}
     properties = feature.get("properties") or {}
@@ -221,7 +234,7 @@ def _zone_region_url(annotation, manifests):
         return None
     stored = rewrite_legacy_url(annotation.canvas or "")
     manifest_url = properties.get("manifest")
-    if not stored or not isinstance(manifest_url, str) or not manifest_url:
+    if not stored or not _readable_manifest(manifest_url):
         return None
     if not geometry.get("coordinates"):
         return None
@@ -229,6 +242,8 @@ def _zone_region_url(annotation, manifests):
         return None
     radius = properties.get("radius", DEFAULT_POINT_RADIUS)
     if geometry["type"] == "Point" and not _is_number(radius):
+        return None
+    if _extent(geometry, radius, 0) is None:
         return None
     names = manifests.names(manifest_url)
     if names is None:
@@ -241,10 +256,10 @@ def _zone_region_url(annotation, manifests):
     service = (service or stored).rstrip("/")
 
     zoom, width, height = _image_frame(service, width, height, frame_of(feature))
-    extent = _extent(geometry, radius, zoom)
-    if extent is None:
-        return None
     if width != sys.maxsize:
+        extent = _extent(geometry, radius, zoom)
+        if extent is None:
+            return None
         xmin, ymin, xmax, ymax = extent
         if xmax <= 0 or ymax <= 0 or xmin >= width or ymin >= height:
             return None

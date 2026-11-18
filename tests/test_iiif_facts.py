@@ -304,7 +304,9 @@ class MalformedZoneTests(FactsCase):
 
         found = [str(feature) for _, feature, _, _ in self.read()]
         doc = self.facts()
-        zones = next(a for a in doc.analyses if a.id == str(self.analysis.pk)).zones
+        zones = next(
+            fact for fact in doc.analyses if fact.id == str(self.analysis.pk)
+        ).zones
 
         self.assertEqual(found, [a, b])
         self.assertEqual([zone.feature for zone in zones], [a, b])

@@ -8,8 +8,8 @@ import sys
 import uuid
 from collections import defaultdict, namedtuple
 
-from django.db.models import JSONField
-from django.db.models.expressions import RawSQL
+from django.db.models import F, Func, JSONField, TextField, Value
+from django.db.models.functions import Cast
 
 from arches.app.models.models import TileModel
 
@@ -94,7 +94,7 @@ class FeatureRows:
                 nodegroup_id=node.nodegroup_id,
                 resourceinstance_id__in=list(resource_ids),
             )
-            .annotate(feature=_stored_features("%s", [str(node.nodeid)]))
+            .annotate(feature=_StoredFeatures(Value(str(node.nodeid))))
             .values_list("resourceinstance_id", "feature")
         )
         usable = [row for row in rows if _usable(row[1])]
@@ -134,7 +134,7 @@ def annotation_zones(resource_id):
         TileModel.objects.filter(
             resourceinstance_id=resource_id, nodegroup__node__datatype="annotation"
         )
-        .annotate(feature=_stored_features("nodes.nodeid::text", []))
+        .annotate(feature=_StoredFeatures(Cast("nodegroup__node__nodeid", TextField())))
         .values_list("feature", flat=True)
     )
     rows = sorted(
@@ -164,15 +164,23 @@ def annotation_features(node, resource_ids, dims, readable):
     yield from FeatureRows(node, resource_ids, readable).features(resource_ids, dims)
 
 
-def _stored_features(key, params):
-    """One row per element of the ``features`` array a tile stores under the node id *key* (SQL, *params*); none when that value is not an array."""
-    return RawSQL(
-        f"jsonb_array_elements(CASE WHEN"
-        f" jsonb_typeof(tiles.tiledata -> {key} -> 'features') = 'array'"
-        f" THEN tiles.tiledata -> {key} -> 'features' ELSE '[]'::jsonb END)",
-        params * 2,
-        JSONField(),
+class _StoredFeatures(Func):
+    """One row per element of the ``features`` array a tile stores under the node id *key* (a text expression); none when that value is not an array."""
+
+    template = (
+        "jsonb_array_elements(CASE WHEN"
+        " jsonb_typeof(%(expressions)s -> 'features') = 'array'"
+        " THEN %(expressions)s -> 'features' ELSE '[]'::jsonb END)"
     )
+    arg_joiner = " -> "
+    output_field = JSONField()
+
+    def __init__(self, key):
+        super().__init__(F("data"), key)
+
+    def as_sql(self, compiler, connection, **extra_context):
+        sql, params = super().as_sql(compiler, connection, **extra_context)
+        return sql, (*params, *params)
 
 
 def _usable(feature):
