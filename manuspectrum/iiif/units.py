@@ -391,6 +391,7 @@ class UnitReader:
 
     def __init__(self):
         self._units = {}
+        self._noted = {}
         self._deadline = None
 
     def __call__(self, canvas, service, width, height):
@@ -402,6 +403,10 @@ class UnitReader:
             self._units[canvas] = zone_unit(service, width, height, self._deadline)
         return self._units[canvas]
 
+    def note(self, canvas, unit):
+        """Record the *unit* a stamped zone was converted with; the first one noted stands, and a unit read for the canvas takes precedence in ``used``."""
+        self._noted.setdefault(canvas, unit)
+
     def used(self, canvas):
-        """The unit given for *canvas* so far, or None."""
-        return self._units.get(canvas)
+        """The unit given for *canvas* so far (read, else noted by a stamped zone), or None."""
+        return self._units.get(canvas) or self._noted.get(canvas)

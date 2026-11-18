@@ -79,7 +79,7 @@ class FetcherTestCase(SimpleTestCase):
         cache.clear()
         frame = mock.patch(
             f"{FETCHERS}._image_frame",
-            lambda service, width, height: (5, width, height),
+            lambda service, width, height, frame=None: (5, width, height),
         )
         frame.start()
         self.addCleanup(frame.stop)
@@ -1326,6 +1326,23 @@ class ImageFrameTests(SimpleTestCase):
             self.fetcher.get_thumbnail(retrieve=True)
         read.assert_called_once_with(CANVAS_SERVICE)
         return safe_fetch.call_args.args[0].removeprefix(f"{CANVAS_SERVICE}/")
+
+    def test_stamped_zone_region_needs_no_image_description(
+        self, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        stamp = units.Frame(16, 4913, 6609, "browser").stamp()
+        vw_annotation.objects.filter.return_value = queryset(
+            [annotation(geometry=self.ZONE, **stamp)]
+        )
+        fetch_manifest.return_value = v2_manifest(width=100, height=135)
+        safe_fetch.return_value = response()
+        with mock.patch(
+            f"{FETCHERS}.units.image_info", side_effect=AssertionError("read")
+        ):
+            self.fetcher.get_thumbnail(retrieve=True)
+
+        region = safe_fetch.call_args.args[0].removeprefix(f"{CANVAS_SERVICE}/")
+        self.assertEqual(region, "150,310,100,180/100,/0/default.jpg")
 
     def test_a_read_image_gives_the_zoom_of_its_tiles(
         self, vw_annotation, fetch_manifest, safe_fetch

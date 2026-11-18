@@ -20,6 +20,7 @@ from arches.app.utils.search_thumbnail_fetcher_factory import (
     SearchThumbnailFetcherFactory,
 )
 from manuspectrum.iiif import units
+from manuspectrum.iiif.frames import frame_of
 from manuspectrum.iiif.sources import ManifestReader, canvases_of, manifest_json
 from manuspectrum.utils.http import safe_fetch
 from manuspectrum.utils.iiif_tools import (
@@ -156,13 +157,17 @@ def _canvas_names(manifest):
     return names
 
 
-def _image_frame(service, width, height):
+def _image_frame(service, width, height, frame=None):
     """``(zoom, width, height)`` of the image a zone was drawn on: the zoom of its stored units (``units.native_zoom``) and the size a region is cut in.
 
-    From the service's info.json when it is read; else from the canvas size
-    (``units.assumed_unit``), or the zoom of ``units.UNKNOWN_SCALE`` and no
-    bound for a canvas the manifest does not list.
+    A zone's own stamp (*frame*, a ``units.Frame``) gives them without a
+    read. Otherwise from the service's info.json when it is read; else from
+    the canvas size (``units.assumed_unit``), or the zoom of
+    ``units.UNKNOWN_SCALE`` and no bound for a canvas the manifest does not
+    list.
     """
+    if frame is not None:
+        return int(math.log2(frame.unit)), frame.width, frame.height
     info = units.image_info(service)
     if isinstance(info, units.ImageInfo):
         zoom = units.native_zoom(info.width, info.height, info.tile)
@@ -197,7 +202,7 @@ def _zone_region_url(annotation, manifests):
     Polygons and Points are accepted. The zone's canvas is found in its
     manifest by id or image service, and the region is asked of that canvas's
     image service (the stored name when the canvas is unknown or has none),
-    in the pixels of that image (``_image_frame``). A canvas missing from the
+    in the pixels of that image (``_image_frame``), or of the frame stamped on the zone. A canvas missing from the
     manifest is bounded only when the stored service's info.json is read. A
     zone drawn outside a bounded image gives None.
     """
@@ -220,7 +225,7 @@ def _zone_region_url(annotation, manifests):
     )
     service = (service or stored).rstrip("/")
 
-    zoom, width, height = _image_frame(service, width, height)
+    zoom, width, height = _image_frame(service, width, height, frame_of(feature))
     radius = properties.get("radius", DEFAULT_POINT_RADIUS)
     if width != sys.maxsize:
         extent = _extent(geometry, radius, zoom)

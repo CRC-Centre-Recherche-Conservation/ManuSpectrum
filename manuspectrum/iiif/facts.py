@@ -118,10 +118,10 @@ REFUSED = Refused()
 class Zone:
     """One located zone: its feature id, canvas id, 1-based canvas position and pixel shape.
 
-    *found* is the shape, or the function converting it
-    (``zones.canvas_and_convert``): ``shape`` then reads the canvas's unit
-    the first time it is asked, so a zone that is only counted or placed
-    costs no request.
+    *found* is the shape, or the function converting it to ``(shape, unit)``
+    (``zones.canvas_and_convert``): ``shape`` and ``unit`` then read the
+    canvas's unit the first time they are asked, so a zone that is only
+    counted or placed costs no request.
     """
 
     feature: str
@@ -131,7 +131,12 @@ class Zone:
 
     @property
     def shape(self):
-        return self.found() if callable(self.found) else self.found
+        return self.found()[0] if callable(self.found) else self.found
+
+    @property
+    def unit(self):
+        """The ``ZoneUnit`` the shape was converted with; None for a zone given as a shape."""
+        return self.found()[1] if callable(self.found) else None
 
 
 @dataclass(frozen=True)

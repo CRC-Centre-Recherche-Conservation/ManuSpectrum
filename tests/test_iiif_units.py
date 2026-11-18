@@ -13,6 +13,7 @@ from django.core.cache import cache
 from django.test import SimpleTestCase, override_settings
 
 from manuspectrum.iiif import memo, units
+from manuspectrum.iiif.frames import frame_of
 from manuspectrum.iiif.sources import canvas_index
 from manuspectrum.iiif.zones import (
     FeatureRows,
@@ -423,8 +424,8 @@ class ZoneConversionTests(UnitCase):
         self.assertEqual(found, CANVAS)
         self.assertIsNone(dims.unit_used(CANVAS))
         self.fetch.assert_not_called()
-        self.assertEqual(convert(), {"type": "point", "x": 160, "y": 320})
-        self.assertEqual(convert(), {"type": "point", "x": 160, "y": 320})
+        self.assertEqual(convert()[0], {"type": "point", "x": 160, "y": 320})
+        self.assertEqual(convert()[0], {"type": "point", "x": 160, "y": 320})
         self.assertEqual(self.fetch.call_count, 1)
         self.assertEqual(
             dims.unit_used(CANVAS).payload(), {"x": 16.0, "y": 16.0, "read": True}
@@ -473,7 +474,7 @@ class ZoneConversionTests(UnitCase):
         located = list(rows.located(["r"], canvas_index(listed)))
         self.assertEqual([row[2] for row in located], [CANVAS, f"{CANVAS}-b"])
         self.fetch.assert_not_called()
-        self.assertEqual(located[1][3](), {"type": "point", "x": 160, "y": 320})
+        self.assertEqual(located[1][3]()[0], {"type": "point", "x": 160, "y": 320})
         self.assertEqual(self.fetch.call_count, 1)
         self.assertEqual(self.fetch.call_args.args[0], f"{OTHER}/info.json")
 
@@ -502,7 +503,13 @@ class KeptZoneTests(UnitCase):
             zones = first_zone(mock.Mock(), ["r"], dims, set())
         self.assertEqual(
             zones,
-            {"r": {"canvas": CANVAS, "shape": {"type": "point", "x": 160, "y": 320}}},
+            {
+                "r": {
+                    "canvas": CANVAS,
+                    "shape": {"type": "point", "x": 160, "y": 320},
+                    "unit": None,
+                }
+            },
         )
         self.assertEqual(self.fetch.call_count, 1)
         self.assertEqual(self.fetch.call_args.args[0], f"{SERVICE}/info.json")
@@ -541,3 +548,75 @@ class KeptZoneTests(UnitCase):
         self.assertEqual(zones["r"]["shape"], {"type": "point", "x": 160, "y": 320})
         self.assertEqual(self.fetch.call_count, 1)
         self.assertIsNone(built["dims"].unit_used(f"{CANVAS}-b"))
+
+
+def stamped(geometry, unit, width=4913, height=6609, source="browser", stored=SERVICE):
+    found = feature(geometry, stored)
+    found["properties"].update(units.Frame(unit, width, height, source).stamp())
+    return found
+
+
+class StampedZoneTests(UnitCase):
+    def test_stamped_feature_reads_no_image_description(self):
+        self.fetch.side_effect = AssertionError("info.json read")
+        dims = canvas_index([canvas()])
+        found, convert = canvas_and_convert(stamped(point(10, -20), 16), dims)
+        shape, unit = convert()
+        self.assertEqual(found, CANVAS)
+        self.assertEqual(shape, {"type": "point", "x": 160, "y": 320})
+        self.assertEqual((unit.x, unit.y, unit.read), (16, 16, True))
+        self.assertEqual(
+            dims.unit_used(CANVAS).payload(), {"x": 16.0, "y": 16.0, "read": True}
+        )
+
+    def test_two_stamps_on_one_canvas_land_at_their_own_pixels(self):
+        self.fetch.side_effect = AssertionError("info.json read")
+        dims = canvas_index([canvas()])
+        xs = []
+        for unit in (32, 16):
+            _, convert = canvas_and_convert(stamped(point(1, -1), unit), dims)
+            xs.append(convert()[0]["x"])
+        self.assertEqual(xs, [32, 16])
+        self.assertEqual(dims.unit_used(CANVAS).x, 32)
+
+    def test_an_estimated_stamp_reports_an_unmeasured_unit(self):
+        dims = canvas_index([canvas()])
+        _, convert = canvas_and_convert(
+            stamped(point(1, -1), 32, source="estimated"), dims
+        )
+        self.assertFalse(convert()[1].read)
+
+    def test_a_stamp_is_brought_to_the_canvas_size(self):
+        dims = canvas_index([canvas(width=2000, height=3000)])
+        _, convert = canvas_and_convert(stamped(point(2, -2), 16, 4000, 6000), dims)
+        self.assertEqual(convert()[0], {"type": "point", "x": 16, "y": 16})
+
+    def test_unstamped_feature_keeps_the_canvas_rule(self):
+        self.serve(info_json(4913, 6609, 512))
+        dims = canvas_index([canvas()])
+        _, convert = canvas_and_convert(feature(point(10, -20)), dims)
+        self.assertEqual(convert()[0], {"type": "point", "x": 160, "y": 320})
+        self.assertEqual(self.fetch.call_count, 1)
+
+    def test_a_noted_unit_never_replaces_a_read_one(self):
+        self.serve(info_json(4913, 6609, 512))
+        dims = canvas_index([canvas()])
+        dims.unit(SERVICE)
+        dims.note_unit(
+            CANVAS, units.unit_of_frame(frame_of(stamped(point(1, -1), 64)), 0, 0)
+        )
+        self.assertEqual(dims.unit_used(CANVAS).x, 16)
+
+    def test_an_unstamped_zone_on_a_canvas_with_a_stamped_one_reads_its_own_unit(self):
+        self.serve(info_json(4913, 6609, 512))
+        dims = canvas_index([canvas()])
+        canvas_and_convert(stamped(point(1, -1), 64), dims)[1]()
+        _, convert = canvas_and_convert(feature(point(10, -20)), dims)
+        self.assertEqual(convert()[0], {"type": "point", "x": 160, "y": 320})
+
+    def test_size_of_a_canvas(self):
+        dims = canvas_index([canvas(), canvas(OTHER, 0, 10, f"{CANVAS}-b")])
+        self.assertEqual(dims.size(SERVICE), (4913, 6609))
+        self.assertEqual(dims.size(CANVAS), (4913, 6609))
+        self.assertIsNone(dims.size(OTHER))
+        self.assertIsNone(dims.size("https://else.example/x"))

@@ -47,7 +47,7 @@ from manuspectrum.iiif.sources import (
     manifest_source,
 )
 from manuspectrum.iiif.zones import (
-    annotation_features,
+    assumed_unit_payload,
     first_zone,
     located_features,
 )
@@ -2474,7 +2474,12 @@ def characterization_summaries(
         ]
         origin, zones = placed.get(c, (None, None))
         zone = (
-            {"canvas": zones[0].canvas, "shape": zones[0].shape, "source": origin}
+            {
+                "canvas": zones[0].canvas,
+                "shape": zones[0].shape,
+                "unit": assumed_unit_payload(zones[0].unit),
+                "source": origin,
+            }
             if zones
             else None
         )
@@ -2573,6 +2578,17 @@ def sample_summaries(analyses, visible, user, language, dims, sample_of=None):
     ]
 
 
+def _zone(canvas, feature, convert):
+    """``AnalysisZone`` of a located feature: *unit* is the ``ZoneUnit`` its shape was converted with when that unit was not measured, else None."""
+    shape, unit = convert()
+    return {
+        "canvas": canvas,
+        "shape": shape,
+        "feature": feature,
+        "unit": assumed_unit_payload(unit),
+    }
+
+
 def component_zones(document_id, bundle, dims, position, readable):
     """``{component id: [AnalysisZone, …]}`` of the visible Components of *document_id* placed on a canvas of its manifest.
 
@@ -2587,13 +2603,11 @@ def component_zones(document_id, bundle, dims, position, readable):
         if document_id in documents and c in bundle.visible.components
     )
     zones = defaultdict(list)
-    for component, feature, canvas, shape in annotation_features(
+    for component, feature, canvas, convert in located_features(
         role_node(*ROLES["comp_zone"]), ids, dims, readable
     ):
         if canvas in position:
-            zones[component].append(
-                {"canvas": position[canvas], "shape": shape, "feature": feature}
-            )
+            zones[component].append(_zone(position[canvas], feature, convert))
     return {c: sorted(z, key=lambda zone: zone["canvas"]) for c, z in zones.items()}
 
 
@@ -2609,8 +2623,9 @@ def document_payload(document_id, user, language, ticket=None):
     names its technique by that uri and lists its zones, each on a canvas
     given by its position in ``canvases`` and named by its ``feature`` id.
     Every shape is in the pixels of its canvas, whose ``zoneUnit`` gives the
-    pixels of one stored annotation unit (``iiif.units``) and whether the
-    image's description gave it.
+    pixels of one stored annotation unit (``iiif.units``) and whether it was
+    measured (a frame stamp or the image's description). A zone whose unit was
+    not measured carries it as ``unit``.
     A zone on a canvas the manifest does not list is left out; an analysis
     without zones is not located on a page and names the Component it
     observed (``component``, None on the document). ``components`` lists the
@@ -2647,13 +2662,11 @@ def document_payload(document_id, user, language, ticket=None):
     dims = placing.dims
     position = {canvas["id"]: index for index, canvas in enumerate(canvases)}
     zones = defaultdict(list)
-    for analysis, feature, canvas, shape in annotation_features(
+    for analysis, feature, canvas, convert in located_features(
         role_node(*ROLES["zone"]), [row["id"] for row in rows], dims, readable
     ):
         if canvas in position:
-            zones[analysis].append(
-                {"canvas": position[canvas], "shape": shape, "feature": feature}
-            )
+            zones[analysis].append(_zone(position[canvas], feature, convert))
     placed = component_zones(document_id, bundle, dims, position, readable)
     techniques = {}
     analyses = []

@@ -164,6 +164,8 @@ export interface AnalysisZone {
     canvas: number;
     shape: Shape;
     feature: string;
+    /** The unit the shape was converted with when it was not measured (an estimated frame or an assumed unit); null when measured (always sent; optional only for the fixtures). */
+    unit?: ZoneUnit | null;
 }
 
 /** The published IIIF Content State of one zone of an analysis: `url` its absolute id. */
@@ -212,7 +214,7 @@ export interface DocumentMatch {
 export interface SampleSummary {
     id: string;
     name: Label;
-    zone: { canvas: string; shape: Shape } | null;
+    zone: { canvas: string; shape: Shape; unit?: ZoneUnit | null } | null;
     analyses: string[];
     unpublished: boolean;
 }
@@ -317,7 +319,12 @@ export interface CharacterizationSummary {
     colours: ColourRef[];
     layers: ValueRef[];
     elements: { level: RankedValue | null; values: ValueRef[] }[];
-    zone: { canvas: string; shape: Shape; source: "own" | "component" } | null;
+    zone: {
+        canvas: string;
+        shape: Shape;
+        unit?: ZoneUnit | null;
+        source: "own" | "component";
+    } | null;
     /** The visible analyses cited, in id order. */
     evidence: NamedRef[];
     note: { html: string; lang: string } | null;
@@ -964,10 +971,12 @@ export const SHAPE_KEYS = {
         zones: true,
         component: true,
     } satisfies Record<keyof DocumentAnalysis, true>,
-    AnalysisZone: { canvas: true, shape: true, feature: true } satisfies Record<
-        keyof AnalysisZone,
-        true
-    >,
+    AnalysisZone: {
+        canvas: true,
+        shape: true,
+        feature: true,
+        unit: true,
+    } satisfies Record<keyof AnalysisZone, true>,
     DocumentComponent: {
         id: true,
         name: true,
