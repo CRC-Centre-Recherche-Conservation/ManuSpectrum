@@ -19,7 +19,7 @@ except ImportError:
     pass
 
 APP_NAME = "manuspectrum"
-APP_VERSION = semantic_version.Version(major=1, minor=0, patch=2)
+APP_VERSION = semantic_version.Version(major=1, minor=0, patch=3)
 APP_ROOT = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 
 WEBPACK_LOADER = {
