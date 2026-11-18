@@ -104,6 +104,7 @@ from manuspectrum.accounts.workflows import (
     WorkflowTransactionError,
     workflow_transaction,
 )
+from manuspectrum.iiif.units import zone_unit
 from manuspectrum.observability import metrics
 from manuspectrum.utils.budget import (
     BudgetSpent,
@@ -5174,20 +5175,21 @@ class BiblissimaCreateResourceView(View):
             width = int(bbma_data.get("canvasWidth") or 0) or 4000
             height = int(bbma_data.get("canvasHeight") or 0) or 5000
 
-            # Arches stores annotations in Leaflet CRS.simple coordinates,
-            # not raw pixels. The conversion is:
-            #   lng = pixel_x / scale
-            #   lat = -pixel_y / scale   (Y axis is inverted)
-            # with scale = 2^zoom. Arches' annotation widget defaults to
-            # zoom=5 (scale=32). See BBoxCalculator in utils/iiif_tools.py
-            # for the inverse conversion.
-            scale = 2**5  # 32 — must match the Arches annotation viewer
+            # Arches stores annotations in the Leaflet CRS.Simple units of
+            # the image layer its viewer draws (y upwards); `zone_unit` gives
+            # the canvas pixels of one unit, read from the image service.
+            unit = zone_unit(bbma_data.get("imageServiceUrl"), width, height)
+            if not unit.read:
+                logger.warning(
+                    "Whole-page zone on image service %s written with an assumed unit",
+                    urlsplit(bbma_data.get("imageServiceUrl") or "").netloc or "?",
+                )
             polygon_coords = [
                 [
                     [0, 0],
-                    [width / scale, 0],
-                    [width / scale, -height / scale],
-                    [0, -height / scale],
+                    [width / unit.x, 0],
+                    [width / unit.x, -height / unit.y],
+                    [0, -height / unit.y],
                     [0, 0],
                 ]
             ]

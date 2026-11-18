@@ -205,6 +205,7 @@ export function documentPayload(
                 image: { service: null, url: null, width: 1, height: 1 },
                 analysisCount: 3,
                 characterizationCount: 0,
+                zoneUnit: null,
             },
             {
                 id: "https://iiif.example/c2",
@@ -212,6 +213,7 @@ export function documentPayload(
                 image: { service: null, url: null, width: 1, height: 1 },
                 analysisCount: 0,
                 characterizationCount: 0,
+                zoneUnit: null,
             },
         ],
         techniques: {},

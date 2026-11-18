@@ -823,6 +823,30 @@ IIIF_RETRY_AFTER_MAX = 10
 # costs nothing next to re-fetching one per search result.
 IIIF_MANIFEST_CACHE_TTL = 60 * 60 * 24
 
+# Annotation zones are stored in the units of the leaflet-iiif layer Arches'
+# viewer drew, which only the image's info.json converts to pixels
+# (manuspectrum/iiif/units.py). A read is kept IIIF_IMAGE_INFO_CACHE_TTL
+# seconds; a host that refuses this server (403) or a service without a usable
+# description is asked again after IIIF_IMAGE_INFO_REFUSED_TTL; a host that
+# failed (timeout, 429, 5xx) is left alone IIIF_IMAGE_INFO_DOWN_TTL seconds.
+# One read gets IIIF_IMAGE_INFO_TIMEOUT seconds, the reads of one manifest in
+# one request IIIF_IMAGE_INFO_DEADLINE. IIIF_IMAGE_INFO_READ = False requests
+# nothing: every unit is then assumed from the canvas size.
+IIIF_IMAGE_INFO_READ = True
+IIIF_IMAGE_INFO_CACHE_TTL = 7 * 24 * 60 * 60
+IIIF_IMAGE_INFO_REFUSED_TTL = 60 * 60
+IIIF_IMAGE_INFO_DOWN_TTL = 120
+IIIF_IMAGE_INFO_TIMEOUT = 4
+IIIF_IMAGE_INFO_DEADLINE = 6
+# Tile width, by host name, of image services whose info.json this server
+# cannot read (a host that blocks server-side requests): what a browser reads
+# in `tiles[0].width` (`tile_width` in Image API 1.1) there. Without an entry
+# an unread image is assumed to be tiled at 256.
+IIIF_IMAGE_TILE_HINTS = {}
+# Tile width assumed for an unread image of this platform's own image server;
+# it follows Cantaloupe's `endpoint.iiif.min_tile_size` (512 by default in Cantaloupe 5).
+IIIF_OWN_IMAGE_TILE = 512
+
 # max-age advertised on a search thumbnail. Each miss costs a manifest fetch
 # plus an image fetch from the provider, so the browser and any intermediary
 # must be told the answer keeps.

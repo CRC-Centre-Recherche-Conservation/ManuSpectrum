@@ -217,6 +217,8 @@ const outlinesShown = computed<ComponentOutline[]>(() => {
     );
 });
 const hasImage = computed(() => Boolean(canvas.value?.image.service));
+/** The unit of the folio's zones (`toLatLng`). */
+const unit = computed(() => canvas.value?.zoneUnit ?? null);
 /** The marks of the page the selection links. */
 const relatedHere = computed(() =>
     folioMarksShown.value.filter((mark) =>
@@ -451,7 +453,7 @@ function drawOutlines(group: L.LayerGroup): void {
     for (const outline of outlinesShown.value) {
         const node = componentNode(outline.id);
         const features = outline.shapes.flatMap((shape) => {
-            const feature = shapeFeature(shape, { id: outline.id });
+            const feature = shapeFeature(shape, { id: outline.id }, unit.value);
             return feature ? [feature] : [];
         });
         const layer = L.geoJSON(features, {
@@ -469,7 +471,7 @@ function drawOutlines(group: L.LayerGroup): void {
         );
         layer.on("mouseout", (event) => linkedMarks.leave(previewEvent(event)));
         group.addLayer(layer);
-        const corner = shapeCorner(outline.shapes[0]);
+        const corner = shapeCorner(outline.shapes[0], unit.value);
         const label = corner
             ? L.marker(corner, {
                   icon: outlineLabel(outline),
@@ -497,7 +499,7 @@ function drawMarks(): void {
         const anchor =
             mark.shapes.find((shape) => shapeBounds(shape) !== null) ??
             mark.shapes[0];
-        const centre = shapeCentre(anchor);
+        const centre = shapeCentre(anchor, unit.value);
         let marker: L.Marker | null = null;
         if (centre) {
             marker = L.marker(centre, {
@@ -512,7 +514,7 @@ function drawMarks(): void {
             const feature =
                 shape.type === "point"
                     ? null
-                    : shapeFeature(shape, { id: mark.id });
+                    : shapeFeature(shape, { id: mark.id }, unit.value);
             return feature ? [feature] : [];
         });
         framed.push([mark, frames, marker]);

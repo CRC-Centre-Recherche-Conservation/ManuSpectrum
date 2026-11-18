@@ -16,23 +16,42 @@ from arches.app.models.models import TileModel
 from manuspectrum.views.explorer.values import rewrite_legacy_url, shape_of
 
 
-def canvas_and_shape(feature, dims):
-    """Canvas id and pixel ``Shape`` of one annotation feature; canvas empty and shape None when unresolved.
+def canvas_and_convert(feature, dims):
+    """Canvas id of one annotation feature and the function giving its pixel ``Shape``; ``("", None)`` when unresolved.
 
-    *dims* is a ``canvas_index``: the stored name (canvas id or image service)
-    becomes the manifest's canvas id. A canvas missing from it keeps its
-    stored name and is not clamped to any size, so a zone has the same
-    coordinates whether its canvas dimensions are known or not.
+    *dims* is a ``CanvasIndex``: the stored name (canvas id or image service)
+    becomes the manifest's canvas id. The shape is converted with the unit of
+    that canvas (``CanvasIndex.unit``), which is read when the function is
+    called: a zone whose shape is never asked costs no request. A shape is
+    brought inside its canvas when the unit was read from the image's
+    description. With an assumed unit, or on a canvas missing from the index
+    (which keeps its stored name), it is not clamped to the canvas: its
+    coordinates are the stored ones times the unit, negatives brought to 0.
     """
     feature = feature or {}
     stored = rewrite_legacy_url((feature.get("properties") or {}).get("canvas") or "")
-    canvas, width, height = dims.get(stored.rstrip("/")) or (
-        stored,
-        sys.maxsize,
-        sys.maxsize,
-    )
-    shape = shape_of(feature.get("geometry"), width, height)
-    return canvas, shape
+    geometry = feature.get("geometry")
+    name = stored.rstrip("/")
+    canvas = (dims.get(name) or (stored,))[0]
+    if not canvas or shape_of(geometry, sys.maxsize, sys.maxsize) is None:
+        return "", None
+
+    def convert():
+        unit = dims.unit(name)
+        return shape_of(
+            geometry,
+            unit.width or sys.maxsize,
+            unit.height or sys.maxsize,
+            (unit.x, unit.y),
+        )
+
+    return canvas, convert
+
+
+def canvas_and_shape(feature, dims):
+    """Canvas id and pixel ``Shape`` of one annotation feature (``canvas_and_convert``); canvas empty and shape None when unresolved."""
+    canvas, convert = canvas_and_convert(feature, dims)
+    return (canvas, convert()) if convert else ("", None)
 
 
 class FeatureRows:
@@ -64,17 +83,28 @@ class FeatureRows:
         for order, (rid, feature) in enumerate(sorted(rows, key=_by_feature_id)):
             self._by_resource[str(rid)].append((order, str(rid), feature))
 
-    def features(self, resource_ids, dims):
-        """``(resource id, feature id, canvas, shape)`` of every resolved feature of *resource_ids*, by feature id."""
+    def located(self, resource_ids, dims):
+        """``(resource id, feature id, canvas, convert)`` of every resolved feature of *resource_ids*, by feature id; ``convert()`` gives the shape (``canvas_and_convert``)."""
         picked = sorted(
             row
             for rid in {str(r) for r in resource_ids}
             for row in self._by_resource.get(rid, ())
         )
         for _, rid, feature in picked:
-            canvas, shape = canvas_and_shape(feature, dims)
-            if canvas and shape:
-                yield rid, _feature_id(feature), canvas, shape
+            canvas, convert = canvas_and_convert(feature, dims)
+            if canvas and convert:
+                yield rid, _feature_id(feature), canvas, convert
+
+    def features(self, resource_ids, dims):
+        """``(resource id, feature id, canvas, shape)`` of every resolved feature of *resource_ids*, by feature id."""
+        for rid, feature, canvas, convert in self.located(resource_ids, dims):
+            yield rid, feature, canvas, convert()
+
+
+def located_features(node, resource_ids, dims, readable):
+    """``FeatureRows.located`` of *node* on *resource_ids*: the shapes are converted on demand."""
+    resource_ids = [str(r) for r in resource_ids]
+    yield from FeatureRows(node, resource_ids, readable).located(resource_ids, dims)
 
 
 def annotation_features(node, resource_ids, dims, readable):
@@ -98,10 +128,12 @@ def _by_feature_id(row):
 
 
 def first_zone(node, resource_ids, dims, readable):
-    """``{resource id: {"canvas", "shape"}}`` from the first annotation feature of *node*; ``{}`` when its nodegroup is not in *readable*."""
+    """``{resource id: {"canvas", "shape"}}`` from the first annotation feature of *node*; ``{}`` when its nodegroup is not in *readable*.
+
+    Only the kept feature is converted: a discarded one reads no image description.
+    """
     zones = {}
-    for rid, _, canvas, shape in annotation_features(
-        node, resource_ids, dims, readable
-    ):
-        zones.setdefault(rid, {"canvas": canvas, "shape": shape})
+    for rid, _, canvas, convert in located_features(node, resource_ids, dims, readable):
+        if rid not in zones:
+            zones[rid] = {"canvas": canvas, "shape": convert()}
     return zones
