@@ -310,6 +310,30 @@ class EdgeContractTests(SimpleTestCase):
         self.assertIn("zone=annotations_site:", zones)
         self.assertIn("zone=annotations_conn:", zones)
 
+    def test_iiif_annotation_batch_has_its_own_post_location_and_body_limit(self):
+        for code, _ in settings.LANGUAGES:
+            path = f"/{code}/iiifannotations/batch"
+            batch = self.location_body("snippets/edge-rules.conf", path)
+            single = self.location_body(
+                "snippets/edge-rules.conf", f"/{code}/iiifannotations"
+            )
+            self.assertNotEqual(batch, single)
+            self.assertIn("$request_method != POST", batch)
+            self.assertRegex(batch, r"client_max_body_size \d+k;")
+            self.assertRegex(
+                batch, r"limit_req zone=annotations_batch burst=\d+ nodelay;"
+            )
+            self.assertRegex(
+                batch, r"limit_req zone=annotations_batch_site burst=\d+ nodelay;"
+            )
+        zones = (NGINX_DIR / "snippets/ratelimit.conf").read_text()
+        self.assertIn("zone=annotations_batch:", zones)
+        self.assertIn("zone=annotations_batch_site:", zones)
+
+    def test_module_scripts_are_served_as_javascript(self):
+        text = (NGINX_DIR / "nginx.conf").read_text()
+        self.assertRegex(text, r"types\s*\{\s*text/javascript\s+mjs;\s*\}")
+
     def test_geojson_barrier_reads_the_session_cookie_of_the_settings(self):
         zones = (NGINX_DIR / "snippets/ratelimit.conf").read_text()
         self.assertIn(f"$cookie_{settings.SESSION_COOKIE_NAME}", zones)
