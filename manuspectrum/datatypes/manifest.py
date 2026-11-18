@@ -177,24 +177,25 @@ class ManifestDataType(BaseDataType):
         tile.data[str(nodeid)] = f"/manifest/{manifest.globalid}"
 
     def transform_value_for_tile(self, value, **kwargs):
-        """Transform input value for tile storage. Returns a URL string."""
+        """The URL string a tile stores for *value*; a local manifest reference in any form becomes ``/manifest/<globalid>``, as bulk loads write this value without ``pre_tile_save``."""
         if not value:
             return None
 
         if isinstance(value, dict):
-            if "manifest_url" in value:
-                return self._normalize_url(value["manifest_url"])
-            return None
+            if "manifest_url" not in value:
+                return None
+            value = value["manifest_url"]
 
         if isinstance(value, str):
-            return self._normalize_url(value)
+            url = self._normalize_url(value)
+            globalid = sources.local_manifest_id(url)
+            return f"/manifest/{globalid}" if globalid else url
 
     def transform_export_values(self, value, *args, **kwargs):
         """The public IIIF URL (``ids.stored_manifest``) of a local manifest reference; any other value unchanged.
 
-        Importing that URL back resolves to the same stored row
-        (``pre_tile_save``: a local reference is found by globalid, never
-        fetched).
+        ``transform_value_for_tile`` maps that URL back to the stored
+        ``/manifest/<globalid>``.
         """
         globalid = sources.local_manifest_id(value) if isinstance(value, str) else None
         return ids.stored_manifest(globalid) if globalid else value

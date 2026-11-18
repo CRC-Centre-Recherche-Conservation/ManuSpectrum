@@ -1267,16 +1267,40 @@ class TestLocalReferenceToStoredManifest(TestCase):
         self.fetch.assert_not_called()
         self.assertEqual(self.IIIFManifest.objects.count(), before)
 
-    def test_an_export_names_the_iiif_route_and_imports_back_to_the_same_row(self):
+    def test_an_export_names_the_iiif_route_and_imports_back_to_the_stored_value(self):
+        before = self.IIIFManifest.objects.count()
         for manifest in (self.created, self.imported):
-            exported = self.datatype.transform_export_values(
-                f"/manifest/{manifest.globalid}"
-            )
+            stored = f"/manifest/{manifest.globalid}"
+            exported = self.datatype.transform_export_values(stored)
             with self.subTest(manifest=manifest.label):
                 self.assertEqual(exported, self.ids.stored_manifest(manifest.globalid))
                 value = self.datatype.transform_value_for_tile(exported)
+                self.assertEqual(value, stored)
                 self.assertEqual(self.datatype.validate(value), [])
                 self._assert_resolves(value, manifest)
+        self.fetch.assert_not_called()
+        self.assertEqual(self.IIIFManifest.objects.count(), before)
+
+    def test_every_local_form_is_written_to_a_tile_as_the_bare_path(self):
+        stored = f"/manifest/{self.created.globalid}"
+        for value in (
+            stored,
+            f"/en/manifest/{self.created.globalid}",
+            f"/iiif/manifest/{self.created.globalid}",
+            f"https://manuspectrum.example/manifest/{self.created.globalid}/",
+            self.ids.stored_manifest(self.created.globalid),
+            {"manifest_url": self.ids.stored_manifest(self.created.globalid)},
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(self.datatype.transform_value_for_tile(value), stored)
+
+    def test_an_external_url_is_written_to_a_tile_unchanged(self):
+        external = "https://example.org/iiif/book1/manifest"
+        self.assertEqual(self.datatype.transform_value_for_tile(external), external)
+        self.assertEqual(
+            self.datatype.transform_value_for_tile({"manifest_url": external}),
+            external,
+        )
 
     def test_every_local_form_is_exported_as_the_iiif_route(self):
         expected = self.ids.stored_manifest(self.created.globalid)
