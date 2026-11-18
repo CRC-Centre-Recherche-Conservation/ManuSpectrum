@@ -19,7 +19,8 @@ symptom and marks the IIIF memo build degraded.
 
 The conversion holds for the tiling served when the zone was drawn:
 re-encoding an image or changing Cantaloupe's tile size moves its existing
-zones, and a read is kept ``IIIF_IMAGE_INFO_CACHE_TTL`` seconds.
+unstamped and ``estimated`` zones (a measured frame keeps its place), and a read is kept
+``IIIF_IMAGE_INFO_CACHE_TTL`` seconds.
 
 A ``Frame`` is the image frame a zone was drawn in, stamped on the zone: its
 unit and the image size it was measured against, so its pixel position no
@@ -28,7 +29,8 @@ reads). A frame whose ``source`` is ``estimated`` was assumed, not measured.
 
 The stamps rest on what Arches' IIIF viewer and leaflet-iiif do: the layer is
 built without a ``tileSize`` and sets ``x``, ``y`` and ``maxNativeZoom`` from
-the info.json, and the annotation card stores whole features. At an Arches or
+the info.json, and the annotation card returns each feature with its id,
+``properties.canvas`` and the geometry Leaflet wrote. At an Arches or
 leaflet-iiif upgrade, ``tests/test_arches_pins.py`` (``ZoneFrameContractTests``)
 fails when one of these moves; compare ``native_zoom`` with leaflet-iiif's
 ``_getInfo`` then.
