@@ -38,7 +38,6 @@ import { laidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-lay
 import {
     fitPage,
     layPage,
-    liveUnitOf,
     pageBoundsOf,
     servedSize,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
@@ -47,6 +46,10 @@ import {
     offsetInside,
     readingOrder,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/roving.ts";
+import {
+    followLiveUnit,
+    unitKey,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/live-unit.ts";
 import { techniqueKey } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import {
     folioLayerOf,
@@ -67,6 +70,7 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import type { AnchoredControl } from "@/manuspectrum/pages/AnalysisExplorer/folio/anchored-control.ts";
 import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
+import type { LiveReport } from "@/manuspectrum/pages/AnalysisExplorer/folio/live-unit.ts";
 import type { LaidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-layers.ts";
 import type { FolioOverlay } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import type { PageLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
@@ -157,7 +161,7 @@ const emit = defineEmits<{
     "capture-failed": [key: string, reason: CaptureFailure];
     "layer-reset": [key: string];
     "layer-place": [key: string, box: Box];
-    "live-unit": [unit: ZoneUnit | null];
+    "live-unit": [report: LiveReport | null];
 }>();
 defineExpose({ focusTarget, focusCurrent });
 
@@ -225,10 +229,14 @@ function placedWith(zone: { unit: ZoneUnit | null }): ZoneUnit | null {
 }
 
 watch(() => props.canvas?.id, drawPage);
-watch(live, () => {
-    drawMarks();
-    emit("live-unit", live.value);
-});
+/** What the zones are placed with, as a key: a frame that gives the unit already used redraws nothing. */
+const placedKey = computed(() => unitKey(live.value ?? unit.value));
+watch(live, () =>
+    emit("live-unit", {
+        canvas: props.canvas?.id ?? null,
+        unit: live.value,
+    }),
+);
 watch(
     () => [
         props.annotations,
@@ -241,6 +249,7 @@ watch(
         props.samples,
         props.components,
         props.lit,
+        placedKey.value,
     ],
     drawMarks,
 );
@@ -289,6 +298,7 @@ onMounted(() => {
 useResizeObserver(host, () => map?.invalidateSize({ animate: false }));
 
 onBeforeUnmount(() => {
+    emit("live-unit", null);
     page?.remove();
     page = null;
     stopAdjusting(true);
@@ -498,9 +508,14 @@ function drawPage(): void {
         pageFailed.value = true;
     });
     page = laid;
-    void liveUnitOf(laid, props.canvas.image).then((resolved) => {
-        if (page === laid) live.value = resolved;
-    });
+    void followLiveUnit(
+        laid,
+        props.canvas.image,
+        () => page === laid,
+        (resolved) => {
+            live.value = resolved;
+        },
+    );
 }
 
 /**

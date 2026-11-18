@@ -146,7 +146,12 @@ describe("folio geometry", () => {
                     name: label("Border"),
                     unpublished: false,
                     zones: [
-                        { canvas: 0, unit: null, shape: rect, feature: "k4" },
+                        {
+                            canvas: 0,
+                            unit: { x: 8, y: 8, read: false },
+                            shape: rect,
+                            feature: "k4",
+                        },
                     ],
                 },
             ],
@@ -156,14 +161,12 @@ describe("folio geometry", () => {
             {
                 id: uuid(901),
                 name: label("Initial"),
-                shapes: [rect],
-                units: [null],
+                zones: [{ shape: rect, unit: null }],
             },
             {
                 id: uuid(903),
                 name: label("Border"),
-                shapes: [rect],
-                units: [null],
+                zones: [{ shape: rect, unit: { x: 8, y: 8, read: false } }],
             },
         ]);
         expect(

@@ -86,9 +86,7 @@ export interface FolioMark {
     slots: number[];
     name: Label;
     technique: Technique | null;
-    shapes: Shape[];
-    /** The own unit of each of `shapes`, by position (`zoneUnitFor`); null when measured. */
-    units: (ZoneUnit | null)[];
+    zones: { shape: Shape; unit: ZoneUnit | null }[];
 }
 
 /**
@@ -117,8 +115,7 @@ export function folioMarks(
                 analysis.technique === null
                     ? null
                     : payload.techniques[analysis.technique] ?? null,
-            shapes: zones.map((zone) => zone.shape),
-            units: zones.map((zone) => zone.unit),
+            zones: zones.map(({ shape, unit }) => ({ shape, unit })),
         });
     }
     for (const summary of payload.characterizations) {
@@ -130,8 +127,7 @@ export function folioMarks(
             slots: [...held],
             name: summary.name,
             technique: null,
-            shapes: [summary.zone.shape],
-            units: [summary.zone.unit],
+            zones: [{ shape: summary.zone.shape, unit: summary.zone.unit }],
         });
     }
     return marks.sort((a, b) => a.slots[0] - b.slots[0]);

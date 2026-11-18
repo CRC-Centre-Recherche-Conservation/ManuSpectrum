@@ -18,10 +18,11 @@ export type LatLng = [number, number];
 
 /**
  * Where the canvas pixel (`x`, `y`) lies on the page's leaflet-iiif layer.
- * `unit` is the canvas's `zoneUnit`: the pixels the server counted per stored
- * Leaflet unit. Dividing by it gives back the stored coordinates, the ones the
- * Arches IIIF viewer draws over the same layer, whatever the size and the
- * tiles of the image. Without a unit, `ANNOTATION_SCALE` on both axes.
+ * `unit` is the zone's (`zoneUnitFor`): its own when its frame is not
+ * measured, else the live layer's (`liveUnit`), else the canvas's `zoneUnit`;
+ * the canvas pixels per Leaflet unit. Dividing by it gives back the
+ * coordinates the Arches IIIF viewer draws over the same layer, whatever the
+ * size and the tiles of the image. Without a unit, `ANNOTATION_SCALE` on both axes.
  */
 export function toLatLng(
     x: number,
@@ -126,9 +127,7 @@ export function shapeCorner(
 export interface ComponentOutline {
     id: string;
     name: Label;
-    shapes: Shape[];
-    /** The own unit of each of `shapes`, by position (`zoneUnitFor`); null when measured. */
-    units: (ZoneUnit | null)[];
+    zones: { shape: Shape; unit: ZoneUnit | null }[];
 }
 
 /** The Components of `payload` outlined on the canvas `canvasId`, in the payload's order; a Component with no extent there is left out. */
@@ -150,8 +149,7 @@ export function componentOutlines(
                   {
                       id: component.id,
                       name: component.name,
-                      shapes: zones.map((zone) => zone.shape),
-                      units: zones.map((zone) => zone.unit),
+                      zones: zones.map(({ shape, unit }) => ({ shape, unit })),
                   },
               ]
             : [];

@@ -83,17 +83,18 @@ import {
     selectedFacets,
     useExplorerStore,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import { liveFor } from "@/manuspectrum/pages/AnalysisExplorer/folio/live-unit.ts";
 import {
     snapshotOf,
     toQuery,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 
+import type { LiveReport } from "@/manuspectrum/pages/AnalysisExplorer/folio/live-unit.ts";
 import type {
     CharacterizationSummary,
     DocumentCanvas,
     FacetKey,
     Label,
-    ZoneUnit,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
     Focus,
@@ -539,8 +540,8 @@ const zones = computed<ReadonlySet<string>>(
                 .map((entry) => entry.analysis),
         ),
 );
-/** The unit of the folio's live layer, as `FolioMap` reports it; null until its info.json is read. */
-const liveUnit = ref<ZoneUnit | null>(null);
+/** What `FolioMap` last read of its live layer; it counts only for the canvas it was read on (`liveFor`). */
+const liveReport = ref<LiveReport | null>(null);
 const overlays = computed(() =>
     folioOverlays(
         analysis.data.value?.id === focusedAnalysis.value
@@ -551,7 +552,7 @@ const overlays = computed(() =>
         {
             canvas: currentCanvas.value?.id ?? null,
             unit: currentCanvas.value?.zoneUnit ?? null,
-            live: liveUnit.value,
+            live: liveFor(currentCanvas.value?.id ?? null, liveReport.value),
             registration:
                 focusedAnalysis.value === null
                     ? null
@@ -1252,7 +1253,7 @@ function goHome(): void {
                             :caption="folioCaption"
                             stage="soft"
                             @select="onSelect"
-                            @live-unit="liveUnit = $event"
+                            @live-unit="liveReport = $event"
                             @layer-adjust="onLayerAdjust"
                             @layer-turn="onLayerTurn"
                             @layer-place="onLayerPlace"

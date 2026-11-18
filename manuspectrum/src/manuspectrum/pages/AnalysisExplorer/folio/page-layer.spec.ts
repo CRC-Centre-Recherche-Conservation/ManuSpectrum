@@ -223,7 +223,7 @@ describe("servedSize", () => {
         await Promise.resolve();
         await Promise.resolve();
         expect(servedSize(page)).toEqual({ w: 1529, h: 2405 });
-        expect(nativeZoomOf(page)).toBe(2);
+        expect(nativeZoomOf(page.layer)).toBe(2);
     });
 
     it("lays the page bounds at size / 2^nativeZoom units, y down", async () => {
@@ -245,7 +245,7 @@ describe("servedSize", () => {
 
     it("reads no size from a missing page or a size that is not a number", async () => {
         expect(servedSize(null)).toBeNull();
-        expect(nativeZoomOf(null)).toBe(0);
+        expect(nativeZoomOf(undefined)).toBe(0);
         fake = pendingPage([{}]);
         const page = layPage(map, "https://iiif.example/image/p1", vi.fn());
         answer.resolve();
@@ -284,6 +284,36 @@ describe("layServed", () => {
         answer.resolve();
         await settle();
         expect(read).toHaveBeenCalledWith({ w: 10, h: 10 }, 0);
+    });
+
+    it("gives the frame of a layer laid alone, none for one in a scale group", async () => {
+        fake.maxNativeZoom = 4;
+        fake.x = 10;
+        fake.y = 10;
+        const alone = layServed(map, "https://iiif.example/image/p1", {
+            read: vi.fn(),
+            failed: vi.fn(),
+        });
+        answer.resolve();
+        await settle();
+        await expect(alone.frame).resolves.toEqual({
+            zoom: 4,
+            width: 10,
+            height: 10,
+        });
+        fake = pendingPage([{ x: 10, y: 10 }]);
+        fake.maxNativeZoom = 4;
+        fake.x = 10;
+        fake.y = 10;
+        const grouped = layServed(
+            map,
+            "https://iiif.example/image/p2",
+            { read: vi.fn(), failed: vi.fn() },
+            { scale: createScaleGroup() },
+        );
+        answer.resolve();
+        await settle();
+        await expect(grouped.frame).resolves.toBeNull();
     });
 
     it("fails when the info.json is refused or holds no size", async () => {

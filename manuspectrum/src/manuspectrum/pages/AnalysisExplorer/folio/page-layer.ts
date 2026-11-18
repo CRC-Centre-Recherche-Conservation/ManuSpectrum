@@ -74,9 +74,11 @@ export interface PageLayer {
     layer: L.TileLayer;
     remove: () => void;
     /**
-     * The layer's frame once its info.json is read (`maxNativeZoom`, `x`, `y`
-     * of the leaflet-iiif layer, which scale groups never change); null when
-     * the read failed or gave no size, or the page was removed first.
+     * The frame of the layer laid alone, once its info.json is read
+     * (`maxNativeZoom`, `x`, `y` of the leaflet-iiif layer); null when the
+     * read failed or gave no size, or the page was removed first. A layer
+     * placed by a scale group is shifted and rescaled: `layServed` gives it
+     * no frame.
      */
     frame: Promise<LayerFrame | null>;
 }
@@ -382,11 +384,7 @@ function iiifMember(
     layer: IiifLayer,
     size: PixelSize,
 ): ScaleMember {
-    const own = nativeZoomOf({
-        layer,
-        remove: () => undefined,
-        frame: Promise.resolve(null),
-    });
+    const own = nativeZoomOf(layer);
     const shift = shiftTiles(layer);
     return {
         nativeZoom: own,
@@ -454,14 +452,16 @@ export function layServed(
             member = iiifMember(map, laid.layer as IiifLayer, size);
             options.scale.join(member);
         }
-        const zoom = options.scale ? options.scale.zoom() : nativeZoomOf(laid);
+        const zoom = options.scale
+            ? options.scale.zoom()
+            : nativeZoomOf(laid.layer);
         allowOverzoom(map, zoom);
         handlers.read(size, zoom);
     }
     map.on("layeradd", onAdd);
     return {
         layer: laid.layer,
-        frame: laid.frame,
+        frame: options.scale ? Promise.resolve(null) : laid.frame,
         remove: () => {
             map.off("layeradd", onAdd);
             if (member) options.scale?.leave(member);
@@ -706,7 +706,7 @@ export function pageBoundsOf(
 ): [[number, number], [number, number]] | null {
     const size = servedSize(page);
     if (!size) return null;
-    const scale = 2 ** nativeZoomOf(page);
+    const scale = 2 ** nativeZoomOf(page?.layer);
     return [
         [-size.h / scale, 0],
         [0, size.w / scale],
@@ -714,9 +714,9 @@ export function pageBoundsOf(
 }
 
 /** The map zoom at which the page shows at its served size, one pixel per unit. */
-export function nativeZoomOf(page: PageLayer | null): number {
-    const layer = page?.layer as IiifLayer | undefined;
-    const declared = layer?.options?.maxNativeZoom;
+export function nativeZoomOf(layer: L.TileLayer | undefined): number {
+    const iiif = layer as IiifLayer | undefined;
+    const declared = iiif?.options?.maxNativeZoom;
     if (typeof declared === "number") return declared;
-    return Math.max(0, (layer?._imageSizes?.length ?? 1) - 1);
+    return Math.max(0, (iiif?._imageSizes?.length ?? 1) - 1);
 }

@@ -32,12 +32,15 @@ import {
 import {
     fitPage,
     layPage,
-    liveUnitOf,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
 import {
     FOLIO_REQUEST_KEY,
     WINDOW_RESIZE_KEY,
 } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import {
+    followLiveUnit,
+    unitKey,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/live-unit.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import {
     analysisNode,
@@ -289,7 +292,9 @@ watch(
     },
 );
 watch(() => canvas.value?.id, drawPage);
-watch([folioMarksShown, outlinesShown, live], drawMarks);
+/** What the zones are placed with, as a key: a frame that gives the unit already used redraws nothing. */
+const placedKey = computed(() => unitKey(live.value ?? unit.value));
+watch([folioMarksShown, outlinesShown, placedKey], drawMarks);
 watch(
     () => [
         linkedMarks.linked?.relations.value,
@@ -380,9 +385,14 @@ function drawPage(): void {
         pageFailed.value = true;
     });
     page = laid;
-    void liveUnitOf(laid, canvas.value.image).then((resolved) => {
-        if (page === laid) live.value = resolved;
-    });
+    void followLiveUnit(
+        laid,
+        canvas.value.image,
+        () => page === laid,
+        (resolved) => {
+            live.value = resolved;
+        },
+    );
 }
 
 /** A marker as wide as its label (at least a disc), centred on its point. */
@@ -467,11 +477,11 @@ function previewEvent(event: L.LeafletEvent): PreviewEvent {
 function drawOutlines(group: L.LayerGroup): void {
     for (const outline of outlinesShown.value) {
         const node = componentNode(outline.id);
-        const features = outline.shapes.flatMap((shape, at) => {
+        const features = outline.zones.flatMap((zone) => {
             const feature = shapeFeature(
-                shape,
+                zone.shape,
                 { id: outline.id },
-                placedWith(outline.units[at]),
+                placedWith(zone.unit),
             );
             return feature ? [feature] : [];
         });
@@ -491,8 +501,8 @@ function drawOutlines(group: L.LayerGroup): void {
         layer.on("mouseout", (event) => linkedMarks.leave(previewEvent(event)));
         group.addLayer(layer);
         const corner = shapeCorner(
-            outline.shapes[0],
-            placedWith(outline.units[0]),
+            outline.zones[0].shape,
+            placedWith(outline.zones[0].unit),
         );
         const label = corner
             ? L.marker(corner, {
@@ -518,14 +528,10 @@ function drawMarks(): void {
     const markers: L.Marker[] = [];
     const framed: [FolioMark, Feature[], L.Marker | null][] = [];
     for (const mark of folioMarksShown.value) {
-        const anchorAt = Math.max(
-            0,
-            mark.shapes.findIndex((shape) => shapeBounds(shape) !== null),
-        );
-        const centre = shapeCentre(
-            mark.shapes[anchorAt],
-            placedWith(mark.units[anchorAt]),
-        );
+        const anchor =
+            mark.zones.find((zone) => shapeBounds(zone.shape) !== null) ??
+            mark.zones[0];
+        const centre = shapeCentre(anchor.shape, placedWith(anchor.unit));
         let marker: L.Marker | null = null;
         if (centre) {
             marker = L.marker(centre, {
@@ -536,14 +542,14 @@ function drawMarks(): void {
             markers.push(marker);
             drawn.addLayer(marker);
         }
-        const frames = mark.shapes.flatMap((shape, at) => {
+        const frames = mark.zones.flatMap((zone) => {
             const feature =
-                shape.type === "point"
+                zone.shape.type === "point"
                     ? null
                     : shapeFeature(
-                          shape,
+                          zone.shape,
                           { id: mark.id },
-                          placedWith(mark.units[at]),
+                          placedWith(zone.unit),
                       );
             return feature ? [feature] : [];
         });

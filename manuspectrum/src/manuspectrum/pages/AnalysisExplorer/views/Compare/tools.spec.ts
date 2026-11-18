@@ -249,7 +249,7 @@ describe("folioMarks", () => {
                 zones: [
                     {
                         canvas: 0,
-                        unit: null,
+                        unit: { x: 8, y: 8, read: false },
                         shape: { type: "point", x: 1, y: 2 },
                         feature: "f1",
                     },
@@ -309,18 +309,32 @@ describe("folioMarks", () => {
             ]),
         );
         expect(
-            marks.map((mark) => [mark.id, mark.kind, mark.slots, mark.shapes]),
+            marks.map((mark) => [mark.id, mark.kind, mark.slots, mark.zones]),
         ).toEqual([
             [
                 uuid(501),
                 "characterization",
                 [0, 5],
-                [{ type: "rect", x: 0, y: 0, w: 10, h: 10 }],
+                [
+                    {
+                        shape: { type: "rect", x: 0, y: 0, w: 10, h: 10 },
+                        unit: null,
+                    },
+                ],
             ],
-            [uuid(101), "analysis", [3], [{ type: "point", x: 1, y: 2 }]],
+            [
+                uuid(101),
+                "analysis",
+                [3],
+                [
+                    {
+                        shape: { type: "point", x: 1, y: 2 },
+                        unit: { x: 8, y: 8, read: false },
+                    },
+                ],
+            ],
         ]);
         expect(marks[1].technique?.code).toBe("XRF");
-        expect(marks.map((mark) => mark.units)).toEqual([[null], [null]]);
     });
 
     it("marks nothing on a canvas the document does not list", () => {
