@@ -2283,7 +2283,11 @@ class UnitaryCreateDependencyGuardTests(TestCase):
         view = BiblissimaCreateResourceView()
         resp = view.post(req)
         self.assertEqual(resp.status_code, 400)
-        self.assertIn("does not exist", json.loads(resp.content)["error"])
+        self.assertNotIn(self.DEP.encode(), resp.content)
+        self.assertEqual(
+            json.loads(resp.content)["error"],
+            "A linked place, person or group could not be found.",
+        )
 
     def _post_create(self, side_effect):
         from django.test import RequestFactory
@@ -2308,12 +2312,24 @@ class UnitaryCreateDependencyGuardTests(TestCase):
         ):
             return BiblissimaCreateResourceView().post(req)
 
+    def test_post_maps_project_error_to_a_fixed_message(self):
+        from manuspectrum.views.biblissima_proxy import ProjectError
+
+        with self.assertLogs("manuspectrum.views.biblissima_proxy", "WARNING"):
+            resp = self._post_create(ProjectError(f"Project {self.DEP} does not exist"))
+        self.assertEqual(resp.status_code, 400)
+        self.assertNotIn(self.DEP.encode(), resp.content)
+        self.assertEqual(
+            json.loads(resp.content)["error"],
+            "The project chosen for this import could not be found.",
+        )
+
     def test_post_hides_unexpected_valueerror_text(self):
         with self.assertLogs("manuspectrum.views.biblissima_proxy", "WARNING"):
             resp = self._post_create(ValueError("internal detail"))
         self.assertEqual(resp.status_code, 400)
         self.assertNotIn(b"internal detail", resp.content)
-        self.assertEqual(json.loads(resp.content)["error"], "Invalid Biblissima data")
+        self.assertEqual(json.loads(resp.content)["error"], "Invalid Biblissima data.")
 
     def test_post_hides_unexpected_exception_text(self):
         with self.assertLogs("manuspectrum.views.biblissima_proxy", "ERROR"):
