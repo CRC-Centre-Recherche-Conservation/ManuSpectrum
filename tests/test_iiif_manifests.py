@@ -636,6 +636,20 @@ class LegacyRedirectTests(StoredManifestCase):
         )
         self.assertEqual(cross_site["Location"], ids.stored_manifest(created.globalid))
 
+    def test_a_failed_lookup_keeps_arches_route_and_is_logged(self):
+        with (
+            patch(
+                "manuspectrum.views.iiif.manifests.stored_manifests.named_for",
+                side_effect=RuntimeError("database gone"),
+            ),
+            self.assertLogs("manuspectrum.views.iiif.manifests", "ERROR"),
+        ):
+            response = self.visitor.get(self.legacy(), HTTP_ORIGIN=DEMO)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], self.core())
+        self.assertEqual(response["Access-Control-Allow-Origin"], "*")
+
     def test_other_fetch_sites_go_to_the_iiif_route(self):
         for site in ("cross-site", "same-site", "none"):
             with self.subTest(site=site):
