@@ -49,7 +49,7 @@ from django.db import transaction
 from arches.app.models.models import Node, TileModel
 
 from manuspectrum.constants.biblissima import COMP_LOCATION_DOC_NODE
-from manuspectrum.iiif import frame_writes, frames
+from manuspectrum.iiif import frame_writes, frames, units
 from manuspectrum.iiif.units import Frame
 from manuspectrum.observability import activity
 from manuspectrum.views.explorer.values import rewrite_legacy_url
@@ -97,27 +97,37 @@ def whole_page(frame):
     }
 
 
-def _legacy_frame(feature, node_id, size_of):
+def _legacy_frame(feature, node_id, plan):
     """The ``import-legacy`` frame of a whole-page zone the Biblissima import wrote, or None.
 
     The page is the registered canvas size, else the import's 4000 x 5000
-    default; a size no ``Frame`` accepts is passed over.
+    default, else the size of the image description (read once per image
+    service); a size no ``Frame`` accepts is passed over.
     """
     if node_id != COMP_LOCATION_DOC_NODE:
         return None
     manifest = feature["properties"].get("manifest")
-    registered = size_of(
-        manifest if isinstance(manifest, str) else None, frames.canvas_of(feature)
-    )
+    canvas = frames.canvas_of(feature)
+    registered = plan.size_of(manifest if isinstance(manifest, str) else None, canvas)
     sizes = ([tuple(registered)] if registered else []) + [LEGACY_SIZE]
     for width, height in sizes:
-        try:
-            frame = Frame(LEGACY_UNIT, width, height, "import-legacy")
-        except ValueError:
-            continue
-        if frames.same_geometry(feature.get("geometry"), whole_page(frame)):
+        frame = _page_frame(feature, width, height)
+        if frame:
             return frame
-    return None
+    info = plan.info(canvas)
+    return _page_frame(feature, info.width, info.height) if info else None
+
+
+def _page_frame(feature, width, height):
+    try:
+        frame = Frame(LEGACY_UNIT, width, height, "import-legacy")
+    except ValueError:
+        return None
+    return (
+        frame
+        if frames.same_geometry(feature.get("geometry"), whole_page(frame))
+        else None
+    )
 
 
 class Plan:
@@ -128,10 +138,18 @@ class Plan:
         self.entries = defaultdict(list)
         self.frames = {}
         self.size_of = frame_writes.size_lookup()
+        self._infos = {}
         self.skipped = Counter()
         self.stamped = Counter()
         self.already = 0
         self.unusable = 0
+
+    def info(self, service):
+        """The ``ImageInfo`` of *service*, read once per run, or None."""
+        if service not in self._infos:
+            found = units.image_info(service)
+            self._infos[service] = found if isinstance(found, units.ImageInfo) else None
+        return self._infos[service]
 
     def frame(self, service, manifest):
         key = (service, manifest)
@@ -162,7 +180,7 @@ def plan_stamps(nodes, service=None):
                     continue
                 if plan.service and canvas != plan.service:
                     continue
-                frame = _legacy_frame(feature, node_id, plan.size_of)
+                frame = _legacy_frame(feature, node_id, plan)
                 legacy = frame is not None
                 if frame is None:
                     manifest = props.get("manifest")
@@ -212,6 +230,7 @@ def apply_batch(batch, journal):
 
     The tiles are locked and re-read; the journal lines are appended and
     fsynced before the batch commits, and cut off again if that fails.
+    *journal* is the file descriptor of ``open_journal``.
     """
     written, all_lines = 0, []
     with transaction.atomic():
@@ -259,18 +278,23 @@ def apply_batch(batch, journal):
     return written
 
 
-def _append(journal, lines):
-    """Write *lines* to *journal* and fsync; on a failure the file is cut back to where it was and the error is raised."""
-    start = journal.tell()
+def _append(fd, lines):
+    """Write *lines* to the journal *fd* and fsync it; on a failure the file is cut back to where it was and the error is raised.
+
+    The descriptor is unbuffered (``os.write``), so a failed write leaves
+    nothing in user space to flush again at the cut or at the close.
+    """
+    start = os.fstat(fd).st_size
     try:
-        for line in lines:
-            journal.write(json.dumps(line, sort_keys=True) + "\n")
-        journal.flush()
-        os.fsync(journal.fileno())
+        data = "".join(json.dumps(line, sort_keys=True) + "\n" for line in lines)
+        view = memoryview(data.encode("utf-8"))
+        while view:
+            view = view[os.write(fd, view) :]
+        os.fsync(fd)
     except BaseException:
         try:
-            journal.truncate(start)
-            journal.seek(start)
+            os.ftruncate(fd, start)
+            os.fsync(fd)
         except OSError:
             pass
         raise
@@ -343,10 +367,10 @@ def _journal_line(text):
     line = json.loads(text)
     if not isinstance(line, dict):
         raise ValueError("not an object")
-    uuid.UUID(line["tile"])
-    for key in ("node", "canvas", "digest"):
+    for key in ("tile", "node", "canvas", "digest"):
         if not isinstance(line[key], str):
             raise ValueError(f"{key} is not a string")
+    uuid.UUID(line["tile"])
     if not frames.valid_id(line["feature"]):
         raise ValueError("feature is not an id")
     if line["provisional"] is not None and not isinstance(line["provisional"], str):
@@ -381,9 +405,9 @@ def read_journal(path):
 
 
 def open_journal(path):
-    """The new journal file *path*, opened for writing; ``CommandError`` when it exists or cannot be created."""
+    """The file descriptor of the new journal *path* (append-only, never an existing file); ``CommandError`` when it cannot be created."""
     try:
-        return open(path, "x", encoding="utf-8")
+        return os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_APPEND, 0o640)
     except OSError as error:
         raise CommandError(f"cannot create the journal {path}: {error}") from error
 
@@ -466,12 +490,18 @@ class Command(BaseCommand):
                 size = options["batch"]
                 with frames.trusted_writes():
                     for start in range(0, len(items), size):
-                        written += apply_batch(items[start : start + size], journal)
-        except OSError as error:
-            raise CommandError(f"journal write failed: {error}") from error
+                        try:
+                            written += apply_batch(items[start : start + size], journal)
+                        except OSError as error:
+                            raise CommandError(
+                                f"journal write failed: {error}"
+                            ) from error
         finally:
             if journal is not None:
-                journal.close()
+                try:
+                    os.close(journal)
+                except OSError:
+                    pass
                 if not written:
                     os.unlink(journal_path)
         self._out("")

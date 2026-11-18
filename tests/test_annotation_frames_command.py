@@ -5,6 +5,7 @@ Usage:
 """
 
 import copy
+import errno
 import json
 import os
 import tempfile
@@ -26,6 +27,7 @@ from arches.app.models.models import (
 
 from manuspectrum.constants.biblissima import COMP_LOCATION_DOC_NODE
 from manuspectrum.iiif import frame_writes, frames
+from manuspectrum.management.commands import annotation_frames
 from manuspectrum.utils.data_version import data_version
 
 from tests import test_manifest_registry as reg
@@ -514,4 +516,87 @@ class LegacyRuleTests(AnnotationFramesCase):
         self.assertEqual(
             (props["msFrame"], props["msImageWidth"], props["msImageHeight"]),
             ("import-legacy", 4000, 5000),
+        )
+
+
+class FullDiskTests(AnnotationFramesCase):
+    def test_a_write_failing_after_a_first_batch_keeps_the_journal_readable(self):
+        first = self.tile(zone("a", canvas=READ_SERVICE))
+        second = self.tile(zone("b", x=5.0, canvas=READ_SERVICE))
+        real = os.write
+        seen = []
+
+        def full(fd, data):
+            if bytes(data).startswith(b'{"'):
+                seen.append(1)
+                if len(seen) == 2:
+                    real(fd, bytes(data)[:10])
+                    raise OSError(errno.ENOSPC, "No space left on device")
+            return real(fd, data)
+
+        with mock.patch(
+            "manuspectrum.management.commands.annotation_frames.os.write", full
+        ):
+            with self.assertRaisesMessage(CommandError, "journal write failed"):
+                self.run_command(
+                    "stamp", "--apply", "--journal", self.journal, "--batch", "1"
+                )
+        lines = open(self.journal, "rb").read()
+        self.assertTrue(lines.endswith(b"\n"))
+        self.assertEqual(lines.count(b"\n"), 1)
+        grouped = annotation_frames.read_journal(self.journal)
+        self.assertEqual(sum(len(v) for v in grouped.values()), 1)
+        stamped = [
+            t for t in (first, second) if "msUnit" in next(iter(self._features(t)))
+        ]
+        self.assertEqual(len(stamped), 1)
+
+    def _features(self, tile):
+        return (
+            f["properties"]
+            for f in self.row(tile).data[str(self.annotation.pk)]["features"]
+        )
+
+
+class PlanningErrorTests(AnnotationFramesCase):
+    def test_a_network_error_while_planning_is_not_a_journal_failure(self):
+        self.tile(zone("a"))
+        with mock.patch.object(
+            frame_writes, "frame_for_service", side_effect=ConnectionError("down")
+        ):
+            with self.assertRaises(ConnectionError):
+                self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertFalse(os.path.exists(self.journal))
+
+    def test_a_journal_line_with_a_non_string_tile_is_refused_cleanly(self):
+        good = {
+            "tile": str(uuid.uuid4()),
+            "node": "n",
+            "provisional": None,
+            "feature": "z",
+            "canvas": "c",
+            "digest": "d",
+            "before": {},
+            "after": {},
+        }
+        for tile in (3, [], {}, None):
+            with open(self.journal, "w") as handle:
+                handle.write(json.dumps({**good, "tile": tile}) + "\n")
+            with self.subTest(tile=tile):
+                with self.assertRaisesMessage(CommandError, "line 1"):
+                    self.run_command("unstamp", "--journal", self.journal)
+
+
+class LegacyFromImageTests(AnnotationFramesCase):
+    def test_a_whole_page_rectangle_is_read_from_the_image_without_a_registered_row(
+        self,
+    ):
+        feature = zone("w", canvas=READ_SERVICE, manifest="https://m.example/none")
+        feature["geometry"] = rectangle(4913, 6609)
+        tile = self.tile(feature, node=COMP_LOCATION_DOC_NODE)
+        self.run_command("stamp", "--apply", "--journal", self.journal)
+        props = self.props(tile, "w", COMP_LOCATION_DOC_NODE)
+        self.assertEqual(
+            (props["msUnit"], props["msImageWidth"], props["msFrame"]),
+            (32, 4913, "import-legacy"),
         )
