@@ -74,5 +74,22 @@
     mode: "0644"
   notify: restart journald
 
-- name: Restart Docker and journald now, before the stack starts
+- name: Create the drop-in directory of the Docker scopes
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker-.scope.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Keep the containers from swapping across a systemd reload
+  ansible.builtin.template:
+    src: docker-scope-no-swap.conf.j2
+    dest: /etc/systemd/system/docker-.scope.d/10-manuspectrum-no-swap.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload systemd
+
+- name: Restart Docker and journald, reload systemd, now, before the stack starts
   ansible.builtin.meta: flush_handlers
