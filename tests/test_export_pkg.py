@@ -27,8 +27,8 @@ from rdflib import RDF, Graph, Literal, URIRef
 from rdflib.namespace import DCTERMS, SKOS
 
 from arches.app.models import models
-from arches_controlled_lists.models import List, ListItem, ListItemValue
-from arches_controlled_lists.utils.skos import ARCHES
+from arches.extensions.controlled_lists.models import List, ListItem, ListItemValue
+from arches.extensions.controlled_lists.utils.skos import ARCHES
 
 from django.apps import apps
 
@@ -199,7 +199,7 @@ import django
 django.setup()
 from rdflib import RDF, Graph, Literal
 from rdflib.namespace import DCTERMS, SKOS
-from arches_controlled_lists.utils.skos import ARCHES
+from arches.extensions.controlled_lists.utils.skos import ARCHES
 from manuspectrum.management.commands.export_pkg import render_skos
 graph = Graph()
 scheme = ARCHES["11111111-1111-4111-8111-111111111111"]

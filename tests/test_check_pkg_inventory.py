@@ -20,7 +20,7 @@ from django.db import InternalError
 from django.utils import timezone
 from django.test import TestCase
 
-from arches_controlled_lists.models import List, ListItem, ListItemValue
+from arches.extensions.controlled_lists.models import List, ListItem, ListItemValue
 
 from manuspectrum import basemaps
 from manuspectrum.management.commands import check_pkg_inventory

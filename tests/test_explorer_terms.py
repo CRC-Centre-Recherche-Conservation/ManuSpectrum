@@ -6,7 +6,7 @@ Usage:
 
 from unittest.mock import patch
 
-from arches_controlled_lists.models import List, ListItem, ListItemValue
+from arches.extensions.controlled_lists.models import List, ListItem, ListItemValue
 from django.test import SimpleTestCase, TestCase
 
 from manuspectrum.views.explorer import terms

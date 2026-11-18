@@ -33,7 +33,7 @@ from arches.app.models.models import (
     ResourceInstance,
     TileModel,
 )
-from arches_controlled_lists.models import ListItem, ListItemValue
+from arches.extensions.controlled_lists.models import ListItem, ListItemValue
 
 from manuspectrum.constants.licenses import effective_license
 from manuspectrum.iiif.facts import CharacterizationZones, listed_source

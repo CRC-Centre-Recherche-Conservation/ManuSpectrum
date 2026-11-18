@@ -83,11 +83,7 @@ NAMES = [
     "CONTACT_EMAIL",
     "DEFAULT_FROM_EMAIL",
     "SERVER_EMAIL",
-    "EMAIL_HOST",
-    "EMAIL_PORT",
-    "EMAIL_USE_TLS",
-    "EMAIL_HOST_USER",
-    "EMAIL_HOST_PASSWORD",
+    "MAILERS",
     "INSTALLED_APPS",
     "MIDDLEWARE",
     "LOGGING",
@@ -410,13 +406,12 @@ class SettingsDockerTests(SimpleTestCase):
 
     def test_mail_defaults_suit_a_relay_without_tls_or_authentication(self):
         values = load(BASE_ENV)
+        options = values["MAILERS"]["default"]["OPTIONS"]
         self.assertEqual(
-            (values["EMAIL_HOST"], values["EMAIL_PORT"]), ("smtp.manuspectrum.test", 25)
+            (options["host"], options["port"]), ("smtp.manuspectrum.test", 25)
         )
-        self.assertIs(values["EMAIL_USE_TLS"], False)
-        self.assertEqual(
-            (values["EMAIL_HOST_USER"], values["EMAIL_HOST_PASSWORD"]), ("", "")
-        )
+        self.assertIs(options["use_tls"], False)
+        self.assertEqual((options["username"], options["password"]), ("", ""))
         self.assertEqual(values["DEFAULT_FROM_EMAIL"], "noreply@manuspectrum.test")
         self.assertEqual(values["SERVER_EMAIL"], "noreply@manuspectrum.test")
 
@@ -431,7 +426,12 @@ class SettingsDockerTests(SimpleTestCase):
                 self.assertRefused(env, "DEFAULT_FROM_EMAIL")
 
     def test_booleans_are_parsed_strictly(self):
-        self.assertIs(load(dict(BASE_ENV, EMAIL_USE_TLS="true"))["EMAIL_USE_TLS"], True)
+        self.assertIs(
+            load(dict(BASE_ENV, EMAIL_USE_TLS="true"))["MAILERS"]["default"]["OPTIONS"][
+                "use_tls"
+            ],
+            True,
+        )
         self.assertRefused(dict(BASE_ENV, EMAIL_USE_TLS="maybe"), "EMAIL_USE_TLS")
 
     def test_statement_timeout_applies_to_the_connection_options(self):
@@ -488,12 +488,14 @@ class SettingsDockerTests(SimpleTestCase):
             handle.write("relay-secret\n")
         self.addCleanup(os.unlink, handle.name)
         values = load(dict(BASE_ENV, EMAIL_HOST_PASSWORD_FILE=handle.name))
-        self.assertEqual(values["EMAIL_HOST_PASSWORD"], "relay-secret")
+        self.assertEqual(
+            values["MAILERS"]["default"]["OPTIONS"]["password"], "relay-secret"
+        )
         with tempfile.NamedTemporaryFile("w", delete=False) as empty:
             pass
         self.addCleanup(os.unlink, empty.name)
         values = load(dict(BASE_ENV, EMAIL_HOST_PASSWORD_FILE=empty.name))
-        self.assertEqual(values["EMAIL_HOST_PASSWORD"], "")
+        self.assertEqual(values["MAILERS"]["default"]["OPTIONS"]["password"], "")
 
     def test_logging_writes_json_to_the_console_and_counts_errors(self):
         logging_config = load(BASE_ENV)["LOGGING"]

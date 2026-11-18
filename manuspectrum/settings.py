@@ -123,7 +123,7 @@ ELASTICSEARCH_CONNECTION_OPTIONS = {
 # a prefix to append to all elasticsearch indexes, note: must be lower case
 ELASTICSEARCH_PREFIX = "manuspectrum"
 
-# arches_controlled_lists indexes reference-datatype values in their own ES
+# arches.extensions.controlled_lists indexes reference-datatype values in their own ES
 # index, separate from the resource index, so list items stay searchable as
 # terms. Adding an entry here requires a reindex. It is updated synchronously:
 # `Resource.index` queues the task inside the tile transaction, before the
@@ -133,7 +133,7 @@ REFERENCES_INDEX_NAME = "references"
 
 ELASTICSEARCH_CUSTOM_INDEXES = [
     {
-        "module": "arches_controlled_lists.search_indexes.reference_index.ReferenceIndex",
+        "module": "arches.extensions.controlled_lists.search_indexes.reference_index.ReferenceIndex",
         "name": REFERENCES_INDEX_NAME,
         "should_update_asynchronously": False,
     }
@@ -167,7 +167,7 @@ TERM_SEARCH_TYPES = [
         "type": "reference",
         "label": _("References"),
         "key": REFERENCES_INDEX_NAME,
-        "module": "arches_controlled_lists.search_indexes.reference_index.ReferenceIndex",
+        "module": "arches.extensions.controlled_lists.search_indexes.reference_index.ReferenceIndex",
     },
 ]
 
@@ -219,9 +219,14 @@ INSTALLED_APPS = (
     "django.contrib.staticfiles",
     "django.contrib.sitemaps",
     "django.contrib.gis",
-    # Before "arches" so its `packages` command (which also loads controlled
-    # lists) takes precedence over the core one.
-    "arches_controlled_lists",
+    # The bundled applications precede "arches": Django resolves a management
+    # command from the first app that ships it, so the controlled lists'
+    # `packages` (which also loads controlled lists) and the Vue components'
+    # `validate` win over the core ones. controlled_lists follows querysets,
+    # against which it registers a serializer at startup.
+    "arches.extensions.querysets",
+    "arches.extensions.vue_components",
+    "arches.extensions.controlled_lists",
     "arches",
     "arches.app.models",
     "arches.management",
@@ -236,12 +241,7 @@ INSTALLED_APPS = (
     "manuspectrum",  # Ensure the project is listed before any other arches applications
     "pgtrigger",
     "django_migrate_sql",
-    "arches_querysets",
     "rest_framework",
-    # Arches applications. Project templates win through TEMPLATES[0]["DIRS"];
-    # these precede the "arches.app" append below, which provides the core
-    # templates.
-    "arches_vue_components",
     "django.contrib.postgres",
 )
 
@@ -318,10 +318,10 @@ MEDIA_URL = "/files/"
 # (upload_to="archestemp", so always under MEDIA_ROOT) and those archives hold
 # whole resource-data exports.
 # django.conf.urls.static.static() mounts MEDIA_ROOT as a raw file tree under
-# /files/<path> whenever DEBUG is on, and arches_controlled_lists.urls:106
-# registers that mount independently of this project; a front-end
-# `location /files/ { alias ...; }` reproduces it without DEBUG. Whatever
-# serves MEDIA_ROOT therefore serves the source tree.
+# /files/<path> whenever DEBUG is on (Arches' project template urls.py does;
+# this project does not); a front-end `location /files/ { alias ...; }`
+# reproduces it without DEBUG. Whatever serves MEDIA_ROOT therefore serves the
+# source tree.
 #
 # Closing it takes DEBUG=False AND moving the root out of the package:
 #
@@ -446,8 +446,9 @@ CACHES = {
         "LOCATION": "redis://localhost:6379/1",
         "KEY_PREFIX": "ms-iiif-auth",
     },
-    # arches_querysets keeps concept and resource instance lookups in its own
-    # aliases (system check arches_querysets.W001); per-process memory, as upstream.
+    # arches.extensions.querysets keeps concept and resource instance lookups in
+    # its own aliases (system check arches_querysets.W001); per-process memory,
+    # as upstream.
     "querysets_concepts": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
         "LOCATION": "querysets_concepts_cache",
@@ -509,14 +510,22 @@ ENABLE_CAPTCHA = False
 NOCAPTCHA = True
 # RECAPTCHA_PROXY = 'http://127.0.0.1:8000'
 
-# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  #<-- Only need to uncomment this for testing without an actual email server
-# EMAIL_USE_TLS = True
-# EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_HOST_USER = "xxxx@xxx.com"
-# EMAIL_HOST_PASSWORD = 'xxxxxxx'
-# EMAIL_PORT = 587
+# Replace "BACKEND" with "django.core.mail.backends.console.EmailBackend" to
+# test without an actual email server.
+MAILERS = {
+    "default": {
+        "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
+        "OPTIONS": {
+            "use_tls": True,
+            # "host": "smtp.gmail.com",
+            # "port": 587,
+            "username": "xxxx@xxx.com",
+            # "password": "xxxxxxx",
+        },
+    },
+}
 
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+DEFAULT_FROM_EMAIL = MAILERS["default"]["OPTIONS"]["username"]
 
 # Administrators' copy of the account notices (accounts.notices); the image
 # reads the host's ALERT_EMAILS.
@@ -741,11 +750,11 @@ SHOW_LANGUAGE_SWITCH = len(LANGUAGES) > 1
 # See tests.views.search_tests.TestEsMappingModifier class for example
 # ES_MAPPING_MODIFIER_CLASSES = ["manuspectrum.search.es_mapping_modifier.EsMappingModifier"]
 #
-# arches_controlled_lists needs its modifier here so reference-datatype values
+# arches.extensions.controlled_lists needs its modifier here so reference-datatype values
 # land in the resource index. It changes the resource mapping, so a full
 # reindex is required after enabling it.
 ES_MAPPING_MODIFIER_CLASSES = [
-    "arches_controlled_lists.search.references_es_mapping_modifier.ReferencesEsMappingModifier"
+    "arches.extensions.controlled_lists.search.references_es_mapping_modifier.ReferencesEsMappingModifier"
 ]
 
 # Arches matches a file to a renderer on an EXACT extension match, or on a
@@ -1167,9 +1176,8 @@ ACCOUNT_RETENTION_NOTICE_DAYS = 30
 # (update_from_db). Migration 0013 rewrites the tiles of EXISTING databases; a
 # fresh setup_db takes them from the overlay system_settings/System_Settings.json
 # (dev) or from the package (make init).
-MAPBOX_API_KEY = ""
-MAPBOX_SPRITES = "https://tiles.openfreemap.org/sprites/ofm_f384/ofm"
-MAPBOX_GLYPHS = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf"
+MAPLIBRE_SPRITES = "https://tiles.openfreemap.org/sprites/ofm_f384/ofm"
+MAPLIBRE_GLYPHS = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf"
 
 try:
     from .package_settings import *

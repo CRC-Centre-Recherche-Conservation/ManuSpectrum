@@ -1,10 +1,12 @@
 """Arches' default-allow permission framework, with a bounded restricted-ids search.
 
 Subclass of ``arches.app.permissions.arches_default_allow.
-ArchesDefaultAllowPermissionFramework`` (Arches 8.1.5, l.194-260), selected by
-``PERMISSION_FRAMEWORK``. Only ``get_restricted_instances`` differs, and only
-in its Elasticsearch branch (a non-superuser, ``allresources=False``): every
-other path is the parent's.
+ArchesDefaultAllowPermissionFramework`` (Arches 8.2.0a25), selected by ``PERMISSION_FRAMEWORK``. Only
+``get_restricted_instances`` differs, and only in its Elasticsearch branch (a
+non-superuser, ``allresources=False``): every other path is the parent's.
+``filter_resource_queryset`` raises as the default-allow framework does: the
+parent decides by comparing ``PERMISSION_FRAMEWORK`` with core's own dotted
+path, which this subclass's path never equals.
 
 The core method opens a scroll context (``scroll="1m"``) on every call and
 never clears it. ``MVTTiler.createTile`` calls it once per map tile, so a map
@@ -35,12 +37,23 @@ SCROLL_KEEP_ALIVE = "1m"
 class ManuSpectrumDefaultAllowPermissionFramework(
     ArchesDefaultAllowPermissionFramework
 ):
+    def filter_resource_queryset(self, *args, **kwargs):
+        raise Exception(
+            "The default allow permission framework does not support this "
+            "method. Use the default deny."
+        )
+
     def get_restricted_instances(
         self, user, search_engine=None, allresources=False, resources=None
     ):
         if allresources is True or user.is_superuser is True:
             return super().get_restricted_instances(
                 user, search_engine, allresources, resources
+            )
+
+        if not settings.ELASTICSEARCH_ENABLED:
+            raise Exception(
+                "The default allow permission framework requires Elasticsearch."
             )
 
         limit = settings.SEARCH_RESULT_LIMIT

@@ -277,15 +277,23 @@ STATIC_ROOT = "/app/static"
 RESOURCE_IMPORT_LOG = "/tmp/resource_import.log"
 
 CONTACT_EMAIL = get_env_variable("CONTACT_EMAIL")
-EMAIL_HOST = get_env_variable("EMAIL_HOST")
-EMAIL_PORT = int(get_env_variable("EMAIL_PORT"))
-EMAIL_USE_TLS = env_bool("EMAIL_USE_TLS", False)
-EMAIL_HOST_USER = get_optional_env_variable("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = (
-    read_secret("EMAIL_HOST_PASSWORD")
-    if "EMAIL_HOST_PASSWORD_FILE" in os.environ or "EMAIL_HOST_PASSWORD" in os.environ
-    else ""
-)
+MAILERS = {
+    "default": {
+        "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
+        "OPTIONS": {
+            "host": get_env_variable("EMAIL_HOST"),
+            "port": int(get_env_variable("EMAIL_PORT")),
+            "use_tls": env_bool("EMAIL_USE_TLS", False),
+            "username": get_optional_env_variable("EMAIL_HOST_USER", ""),
+            "password": (
+                read_secret("EMAIL_HOST_PASSWORD")
+                if "EMAIL_HOST_PASSWORD_FILE" in os.environ
+                or "EMAIL_HOST_PASSWORD" in os.environ
+                else ""
+            ),
+        },
+    },
+}
 # The sender is an address on the host's own domain, never CONTACT_EMAIL: a
 # sender on an institutional domain with a DMARC policy is quarantined when it
 # goes through the host's relay (deploy/OBSERVABILITY.md, "Sender").
@@ -298,7 +306,7 @@ ACCOUNT_SUMMARY_RECIPIENTS = [
     for address in get_optional_env_variable("ALERT_EMAILS", "").split(",")
     if address.strip()
 ]
-ADMINS = [("", address) for address in get_optional_env_variable("ADMINS", "").split()]
+ADMINS = get_optional_env_variable("ADMINS", "").split()
 
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = get_optional_env_variable("CORS_ALLOWED_ORIGINS", "").split()

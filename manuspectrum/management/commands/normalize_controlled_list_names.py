@@ -41,7 +41,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from arches.app.models.models import Value
-from arches_controlled_lists.models import List
+from arches.extensions.controlled_lists.models import List
 
 LANGUAGE_PREFERENCE = ["en", "en-US", "en-UK", "fr", "fr-FR"]
 NAME_MAX_LENGTH = 127

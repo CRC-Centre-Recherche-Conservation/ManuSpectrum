@@ -81,11 +81,11 @@ from rdflib import RDF, Graph, Literal
 from rdflib.namespace import DCTERMS, SKOS
 
 from arches.app.models import models
-from arches_controlled_lists.management.commands.packages import (
+from arches.extensions.controlled_lists.management.commands.packages import (
     Command as PackagesCommand,
 )
-from arches_controlled_lists.models import List, ListItem, ListItemValue
-from arches_controlled_lists.utils.skos import ARCHES, SKOSWriter
+from arches.extensions.controlled_lists.models import List, ListItem, ListItemValue
+from arches.extensions.controlled_lists.utils.skos import ARCHES, SKOSWriter
 
 from manuspectrum import basemaps
 from manuspectrum.models import RendererConfig
