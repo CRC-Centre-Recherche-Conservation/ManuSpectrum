@@ -363,7 +363,9 @@ report runs it in its own container.
 
 **Gauges** are refreshed hourly by the Celery task `manuspectrum.record_activity` (and when the worker
 starts): `manuspectrum_resources{model}`, `manuspectrum_resource_changes{model,kind}` (last 24 hours),
-`manuspectrum_workflows{kind,state}` and `manuspectrum_activity_timestamp_seconds`. `model` is the closed
+`manuspectrum_workflows{kind,state}`, `manuspectrum_annotation_zones{state}` (annotation zones stamped
+`measured`, `estimated` or `unstamped`; no panel or alert reads it yet, `python manage.py annotation_frames
+check` gives the same counts) and `manuspectrum_activity_timestamp_seconds`. `model` is the closed
 list of resource models, anything else is `other`. `ActivityStale` warns when they are more than three
 hours old or the worker publishes no time at all. `WriteRequestsFailing` (warning) warns when three POST, PUT or DELETE requests answer a 5xx
 within 30 minutes: a curator's input may be lost, which `ErrorRateHigh` does not see.

@@ -393,8 +393,41 @@ def monthly_summary(label, now=None):
     return {"month": label, **collect(start, end, now)}
 
 
+ZONE_STATE_SQL = """
+SELECT CASE
+    WHEN jsonb_typeof(f -> 'properties' -> 'msUnit') = 'number'
+     AND f -> 'properties' ->> 'msFrame' IN ('browser', 'read', 'import-legacy')
+        THEN 'measured'
+    WHEN jsonb_typeof(f -> 'properties' -> 'msUnit') = 'number'
+     AND f -> 'properties' ->> 'msFrame' = 'estimated'
+        THEN 'estimated'
+    ELSE 'unstamped'
+  END AS state, count(*)
+FROM tiles t
+JOIN nodes n ON n.nodegroupid = t.nodegroupid AND n.datatype = 'annotation'
+CROSS JOIN LATERAL jsonb_array_elements(
+    CASE WHEN jsonb_typeof(t.tiledata -> n.nodeid::text -> 'features') = 'array'
+         THEN t.tiledata -> n.nodeid::text -> 'features' ELSE '[]'::jsonb END
+  ) AS f
+GROUP BY 1
+"""
+
+
+def annotation_zone_counts():
+    """``{state: zones}`` over the annotation nodes' stored features, every state present.
+
+    ``measured`` is a stamp whose ``msFrame`` is ``browser``, ``read`` or
+    ``import-legacy``, ``estimated`` one that says ``estimated``, ``unstamped``
+    every other feature, whatever its shape. Provisional edits are not counted.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(ZONE_STATE_SQL)
+        found = dict(cursor.fetchall())
+    return {state: found.get(state, 0) for state in metrics.ZONE_STATES}
+
+
 def publish_gauges(now=None):
-    """Set the activity gauges: totals, the last 24 hours, open workflows."""
+    """Set the activity gauges: totals, the last 24 hours, open workflows, annotation zones."""
     now = now or datetime.now(timezone.utc)
     figures = collect(now - timedelta(hours=RECENT_HOURS), now, now)
     totals = dict.fromkeys(metrics.RESOURCE_MODELS + (metrics.OTHER,), 0)
@@ -419,5 +452,9 @@ def publish_gauges(now=None):
         metrics.RESOURCE_CHANGES.labels(model=model, kind=kind).set(n)
     for (kind, state), n in runs.items():
         metrics.WORKFLOWS.labels(kind=kind, state=state).set(n)
+    for state, n in annotation_zone_counts().items():
+        metrics.ANNOTATION_ZONES.labels(
+            state=metrics.bounded(state, metrics.ZONE_STATES)
+        ).set(n)
     metrics.ACTIVITY_MEASURED.set(now.timestamp())
     return figures
