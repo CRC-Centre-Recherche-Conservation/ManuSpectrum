@@ -958,7 +958,9 @@ class AnnotationTargetGuardTests(TestCase):
             )
 
         self.assertIn("without a frame", "\n".join(logs.output))
+        self.assertNotIn("assumed unit", "\n".join(logs.output))
         self.assertEqual(self._frame_of(tiles), {})
+        self.assertEqual(self._corner(tiles), [305.175781, -366.210937])
 
     def test_an_absurd_canvas_on_a_refusing_host_is_unstamped_and_assumed(self):
         with self.assertLogs("manuspectrum.views.biblissima_proxy", "WARNING") as logs:
@@ -972,6 +974,30 @@ class AnnotationTargetGuardTests(TestCase):
         tiles = self._build_read(b"{}", canvas=("-5", "1000"))
 
         self.assertEqual(self._corner(tiles), [250, -62.5])
+
+    def test_canvas_sides_are_positive_whole_numbers_or_default(self):
+        for bad in (
+            True,
+            12.5,
+            float("inf"),
+            float("nan"),
+            10**400,
+            10**9 + 1,
+            0,
+            -5,
+            "x",
+            None,
+            [],
+        ):
+            self.assertEqual(bp._canvas_side(bad, 7), 7, repr(bad))
+        for good, expected in (
+            ("800", 800),
+            (800, 800),
+            (800.0, 800),
+            ("١٢", 12),
+            (10**9, 10**9),
+        ):
+            self.assertEqual(bp._canvas_side(good, 7), expected, repr(good))
 
     def test_an_unread_image_is_logged_with_its_host_only(self):
         with self.assertLogs("manuspectrum.views.biblissima_proxy", "WARNING") as logs:

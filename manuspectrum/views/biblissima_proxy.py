@@ -271,13 +271,20 @@ def _get_biblissima_session():
 _biblissima_semaphore = threading.BoundedSemaphore(_BIBLISSIMA_CONCURRENCY_LIMIT)
 
 
+_MAX_CANVAS_SIDE = 10**9
+
+
 def _canvas_side(value, default):
     """A canvas side in pixels: *value* when it is a positive whole number, else *default*."""
-    try:
-        side = int(value)
-    except (TypeError, ValueError):
+    if isinstance(value, bool):
         return default
-    return side if side > 0 else default
+    try:
+        if isinstance(value, float) and not value.is_integer():
+            return default
+        side = int(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    return side if 0 < side <= _MAX_CANVAS_SIDE else default
 
 
 class BiblissimaBusy(Exception):
@@ -4958,8 +4965,10 @@ class BiblissimaCreateResourceView(View):
         Iconographic representation  one tile per ``descriptorLinks[i]``: ``url = desc ARK``, ``url_label = label``
         Period                       ``date`` → century concept + medieval production period
         Production                   ``date``, ``deps["productionPlace"]``, ``deps["productionActors"]``
-        Location in Document         whole-page Polygon sized from ``canvasWidth/canvasHeight``
-                                     (fallback 4000×5000); ``folio`` → Location appellation
+        Location in Document         whole-page Polygon: the image extent in stored units when its
+                                     description is read, else the canvas size from
+                                     ``canvasWidth/canvasHeight`` (fallback 4000×5000);
+                                     ``folio`` → Location appellation
         ============================ =========================================================================
 
         Attention: ``folio`` lives **only** in Location appellation, not
