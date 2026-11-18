@@ -36,7 +36,7 @@ RUN set -a && . /tmp/placeholder.env && set +a \
     && python -c "import django; django.setup()" \
     && test -s frontend_configuration/webpack-metadata.json
 
-FROM node:24-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe AS frontend
+FROM node:24-trixie-slim@sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0 AS frontend
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # hadolint ignore=DL3008
 RUN apt-get update \
