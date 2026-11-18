@@ -318,7 +318,8 @@ class BufferIsolationTests(CreateAllBase):
         self.assertEqual(
             [r["status"] for r in results], ["created", "failed", "created"]
         )
-        self.assertIn("403", results[1]["error"])
+        self.assertEqual(results[1]["error"], "Creation failed for this item.")
+        self.assertNotIn(b"403", json.dumps(payload).encode())
 
         # Survivors are items 0 and 2; item 1 failed and has no resourceId.
         survivor_ids = {r["resourceId"] for r in results if r["status"] == "created"}
@@ -426,8 +427,10 @@ class DanglingDependencyTests(CreateAllBase):
         self.assertEqual(
             [r["status"] for r in results], ["created", "failed", "created"]
         )
-        # message names the dangling dep
-        self.assertIn(missing_dep, results[1]["error"])
+        self.assertEqual(
+            results[1]["error"], "A linked place, person or group could not be found."
+        )
+        self.assertNotIn(missing_dep, results[1]["error"])
 
         # RIs are created ONLY for survivors (one Pass-2 bulk insert); the
         # dangling item never becomes a survivor.
@@ -438,6 +441,33 @@ class DanglingDependencyTests(CreateAllBase):
         inserted = self.mock_tilemodel.objects.bulk_create.call_args.args[0]
         self.assertEqual(len(inserted), 2)
         self.assertEqual(self.mock_write_editlog.call_count, 2)
+
+
+class UnexpectedBuildErrorTests(CreateAllBase):
+    def _run(self, exc):
+        def boom(rid, tx, bbma_data, deps, concepts, created_deps):
+            raise exc
+
+        self.view._create_document_tiles = boom
+        with self.assertLogs("manuspectrum.views.biblissima_proxy", "ERROR"):
+            return self._post(
+                {"resourceType": "Document", "items": [_item("c0"), _item("c1")]}
+            )
+
+    def test_keyerror_text_is_not_returned(self):
+        response, payload = self._run(KeyError("secret_column"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"secret_column", response.content)
+        for r in payload["results"]:
+            self.assertEqual(r["status"], "failed")
+            self.assertEqual(r["error"], "Creation failed for this item.")
+
+    def test_plain_valueerror_text_is_not_returned(self):
+        response, payload = self._run(ValueError("internal detail"))
+        self.assertNotIn(b"internal detail", response.content)
+        self.assertEqual(
+            payload["results"][0]["error"], "Creation failed for this item."
+        )
 
 
 # ===========================================================================
@@ -602,8 +632,11 @@ class DanglingProjectTests(CreateAllBase):
         self.assertEqual(
             [r["status"] for r in results], ["created", "failed", "created"]
         )
-        # message names the dangling project
-        self.assertIn(missing_project, results[1]["error"])
+        self.assertEqual(
+            results[1]["error"],
+            "The project chosen for this import could not be found.",
+        )
+        self.assertNotIn(missing_project, results[1]["error"])
 
         # Existence-checked BEFORE ri creation: RIs are created ONLY for
         # survivors (one Pass-2 bulk insert), so the dangling-project item never
@@ -637,7 +670,10 @@ class DanglingProjectTests(CreateAllBase):
         self.assertEqual(response.status_code, 200)
         statuses = [r["status"] for r in payload["results"]]
         self.assertEqual(statuses, ["created", "failed", "created"])
-        self.assertIn("123", payload["results"][1]["error"])
+        self.assertEqual(
+            payload["results"][1]["error"],
+            "The project chosen for this import could not be found.",
+        )
 
         # Bad-project item never becomes a survivor; RIs created once for the
         # two survivors.
@@ -671,7 +707,10 @@ class MalformedDepValueTests(CreateAllBase):
         self.assertEqual(response.status_code, 200)
         statuses = [r["status"] for r in payload["results"]]
         self.assertEqual(statuses, ["created", "failed", "created"])
-        self.assertIn("123", payload["results"][1]["error"])
+        self.assertEqual(
+            payload["results"][1]["error"],
+            "A linked place, person or group could not be found.",
+        )
 
         # Malformed item never becomes a survivor; RIs created once for the
         # two survivors.

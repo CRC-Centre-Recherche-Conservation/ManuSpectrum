@@ -2416,6 +2416,23 @@ def _count_created_items(resource_type, results, out_of_budget):
             ).inc(count)
 
 
+class DependencyError(ValueError):
+    """A create request links a place, person or group that does not exist
+    or is not a resource id. The exception text goes to the logs only: the
+    user gets ``_dependency_error_message``."""
+
+
+class ProjectError(DependencyError):
+    """The project of a create request does not exist or is not a resource id."""
+
+
+def _dependency_error_message(exc):
+    """The translated message a user gets for a ``DependencyError``."""
+    if isinstance(exc, ProjectError):
+        return _("The project chosen for this import could not be found.")
+    return _("A linked place, person or group could not be found.")
+
+
 class WriteDeadlineExceeded(Exception):
     """A create ran out of its write budget; the message is shown to the user."""
 
@@ -3664,15 +3681,15 @@ class BiblissimaCreateResourceView(View):
         except WriteDeadlineExceeded as exc:
             logger.warning("Biblissima create abandoned: %s", exc.__cause__)
             return JsonResponse({"error": str(exc)}, status=504)
-        except ValueError as exc:
-            # Dangling / malformed dependency (or project) rejected by the
-            # existence guard — a client-data problem, so a clean 400 rather
-            # than an opaque 500.
+        except DependencyError as exc:
             logger.warning("Biblissima create rejected: %s", exc)
-            return JsonResponse({"error": str(exc)}, status=400)
+            return JsonResponse({"error": _dependency_error_message(exc)}, status=400)
+        except ValueError:
+            logger.warning("Biblissima create rejected", exc_info=True)
+            return JsonResponse({"error": _("Invalid Biblissima data.")}, status=400)
         except Exception:
             logger.exception("Failed to create resource from Biblissima data")
-            return JsonResponse({"error": "Resource creation failed"}, status=500)
+            return JsonResponse({"error": _("Resource creation failed.")}, status=500)
 
         return JsonResponse(
             {
@@ -3820,12 +3837,12 @@ class BiblissimaCreateResourceView(View):
         project_id = dependencies.get("project")
         if project_id:
             if not isinstance(project_id, str):
-                raise ValueError(
+                raise ProjectError(
                     f"Project {project_id!r} is not a valid resource id; "
                     "cannot link."
                 )
             if project_id.strip() and project_id.strip() not in valid_dep_ids:
-                raise ValueError(f"Project {project_id} does not exist; cannot link.")
+                raise ProjectError(f"Project {project_id} does not exist; cannot link.")
 
         created_deps = {"places": {}, "persons": {}, "groups": {}}
         resource_instance = ResourceInstance(graph_id=graph_id)
@@ -3945,12 +3962,12 @@ class BiblissimaCreateResourceView(View):
                     if not one.strip():
                         continue
                     if one.strip() not in valid_dep_ids:
-                        raise ValueError(
+                        raise DependencyError(
                             f"Dependency {one} for '{key}' does not exist; "
                             "cannot link a dangling relationship."
                         )
                 else:
-                    raise ValueError(
+                    raise DependencyError(
                         f"Dependency {one!r} for '{key}' is not a valid "
                         "resource id; cannot link."
                     )
@@ -5672,12 +5689,12 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
                     proj = deps.get("project")
                     if proj:
                         if not isinstance(proj, str):
-                            raise ValueError(
+                            raise ProjectError(
                                 f"Project {proj!r} is not a valid resource "
                                 "id; cannot link."
                             )
                         if proj.strip() and proj.strip() not in valid_dep_ids:
-                            raise ValueError(
+                            raise ProjectError(
                                 f"Project {proj} does not exist; cannot link."
                             )
 
@@ -5697,12 +5714,19 @@ class BiblissimaCreateAllView(BiblissimaCreateResourceView):
                 deadline_error = _write_deadline_error(budget, exc)
                 if deadline_error:
                     out_of_budget += 1
+                    message = deadline_error
+                elif isinstance(exc, DependencyError):
+                    logger.warning(
+                        "Biblissima batch item %s rejected: %s", client_id, exc
+                    )
+                    message = _dependency_error_message(exc)
+                else:
+                    logger.exception(
+                        "Biblissima batch create failed for item %s", client_id
+                    )
+                    message = _("Creation failed for this item.")
                 results.append(
-                    {
-                        "clientId": client_id,
-                        "status": "failed",
-                        "error": deadline_error or str(exc),
-                    }
+                    {"clientId": client_id, "status": "failed", "error": message}
                 )
                 continue
 

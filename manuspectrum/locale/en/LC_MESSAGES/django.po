@@ -7701,6 +7701,26 @@ msgstr "Drag to compare Hg / Ca"
 msgid "Browse the corpus"
 msgstr "Browse the corpus"
 
+#: views/biblissima_proxy.py
+msgid "A linked place, person or group could not be found."
+msgstr ""
+
+#: views/biblissima_proxy.py
+msgid "The project chosen for this import could not be found."
+msgstr ""
+
+#: views/biblissima_proxy.py
+msgid "Invalid Biblissima data."
+msgstr ""
+
+#: views/biblissima_proxy.py
+msgid "Resource creation failed."
+msgstr ""
+
+#: views/biblissima_proxy.py
+msgid "Creation failed for this item."
+msgstr ""
+
 #: templates/accounts/activation_invalid.htm:3
 #: templates/accounts/activation_invalid.htm:4
 #: templates/accounts/activation_invalid.htm:5
