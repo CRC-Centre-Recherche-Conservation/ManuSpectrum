@@ -1,6 +1,6 @@
 """Plugin pages, with a 404 for a plugin that does not exist.
 
-Subclass of ``arches.app.views.plugin.PluginView`` (Arches 8.1.5), which looks
+Subclass of ``arches.app.views.plugin.PluginView`` (Arches 8.2.0), which looks
 the plugin up with ``Plugin.objects.get``, by slug when the URL has one and by
 id otherwise, and lets ``Plugin.DoesNotExist`` escape as a 500. Everything
 else is the core view.

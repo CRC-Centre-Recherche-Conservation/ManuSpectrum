@@ -2,8 +2,8 @@
 import { computed, ref, useId } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import InputText from "primevue/inputtext";
-import Tooltip from "primevue/tooltip";
+import InputText from "openvue/inputtext";
+import Tooltip from "openvue/tooltip";
 
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 import FacetTree from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetTree.vue";

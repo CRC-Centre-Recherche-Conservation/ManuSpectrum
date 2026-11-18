@@ -15,12 +15,14 @@ style is a new data migration.
 
 `SPRITES_URL` and `GLYPHS_URL` are the style's own `sprite` and `glyphs`. The
 sprite path is versioned by OpenFreeMap (`ofm_f384`); the System Settings tile
-of each node wins over `settings.MAPBOX_SPRITES` / `MAPBOX_GLYPHS`.
+of each node wins over `settings.MAPLIBRE_SPRITES` / `MAPLIBRE_GLYPHS`.
 
 `core_map_rows()` reads the map rows Arches installs, as left by its migrations
-(`0010_4_1_0` deletes the `mapzen` rows `db_data.sql` still inserts). It serves
-`export_pkg` and the checks; data migration 0013 carries its own frozen copy and
-a test pins the two together.
+(`0010_4_1_0` deletes the `mapzen` rows `db_data.sql` still inserts): on Arches
+8.2, `streets` drawn from the Maptoolkit `mtk` source and its sibling sources. It
+serves `export_pkg` and the checks. Data migration 0013 carries the Mapbox rows of
+Arches 8.1 in its own frozen snapshot; migration 0017 brings an 8.2 database to
+the OpenFreeMap basemap.
 """
 
 import json

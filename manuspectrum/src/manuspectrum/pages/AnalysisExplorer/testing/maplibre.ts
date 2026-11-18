@@ -322,5 +322,5 @@ export function maplibreModule(): Record<string, unknown> {
         AttributionControl: FakeControl,
         NavigationControl: FakeControl,
     };
-    return { default: module, ...module };
+    return module;
 }

@@ -1,6 +1,6 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import PrimeVue from "primevue/config";
+import OpenVue from "openvue/config";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import SelectionDrawer from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionDrawer.vue";
@@ -9,7 +9,7 @@ import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/ex
 import { uuid } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 
-vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+vi.mock("@/arches_vue_components/application/generate-arches-url.ts", () => ({
     generateArchesURL: () => "/en/api/explorer/items",
 }));
 
@@ -27,7 +27,7 @@ function mountDrawer() {
     setActivePinia(pinia);
     const wrapper = mount(SelectionDrawer, {
         attachTo: document.body,
-        global: { plugins: [pinia, PrimeVue], stubs: { transition: false } },
+        global: { plugins: [pinia, OpenVue], stubs: { transition: false } },
     });
     return { wrapper, store: useExplorerStore() };
 }

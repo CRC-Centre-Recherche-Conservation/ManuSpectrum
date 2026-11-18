@@ -65,7 +65,6 @@ services:
   postgres:
     <<: *service
     image: postgis/postgis:17-3.5@sha256:01a6a70e41e6c4467c8f55f6063555ed72db2d6662cd0d571040d42eadaeb6f6
-    command: ["postgres", "-c", "standard_conforming_strings=off"]
     environment:
       POSTGRES_USER: ${PGUSERNAME:?set PGUSERNAME in .env}
       POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
@@ -90,7 +89,7 @@ services:
 
   elasticsearch:
     <<: *service
-    image: elasticsearch:8.19.21@sha256:ae1f398ec8734a63eb7f719cecc2ea33e2bb46e23bdf24641dec86fd256bf594
+    image: elasticsearch:9.5.5@sha256:b7b0f24e9b5e90656ffe69804b3a48907499ab2b9cd67f02b7af3aff1b026a89
     environment:
       discovery.type: single-node
       xpack.security.enabled: "true"

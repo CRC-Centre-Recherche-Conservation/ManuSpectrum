@@ -18,12 +18,16 @@ from django.urls import reverse
 from guardian.models import GroupObjectPermission
 
 from arches.app.models.models import ETLModule, Plugin
-from arches_controlled_lists.etl_modules.migrate_to_reference_datatype import (
+from arches.extensions.controlled_lists.etl_modules.migrate_to_reference_datatype import (
     details as MIGRATE_TO_REFERENCE,
 )
 
 migration = importlib.import_module(
     "manuspectrum.migrations.0016_workflow_plugin_access"
+)
+
+json_importer_migration = importlib.import_module(
+    "manuspectrum.migrations.0018_arches_json_importer_access"
 )
 
 WORKFLOWS_DIR = Path(__file__).resolve().parent.parent / "manuspectrum" / "workflows"
@@ -54,6 +58,7 @@ ETL_GROUPS = {
     "tile-excel-importer": {"Resource Editor"},
     "import-single-csv": {"Resource Editor"},
     "jsonld-importer": {"Resource Editor"},
+    "arches-json-importer": {"Resource Editor"},
     "bulk-replace-editor": {"Resource Editor"},
     "bulk-trim-editor": {"Resource Editor"},
     "bulk-case-editor": {"Resource Editor"},
@@ -235,3 +240,36 @@ class ArchesPageTests(TestCase):
         }
         self.assertEqual(listed, expected)
         self.assertNotIn("bulk-data-deletion", listed)
+
+
+class ArchesJsonImporterGrantTests(TestCase):
+    def module(self):
+        return ETLModule.objects.get(slug="arches-json-importer")
+
+    def run_migration(self):
+        json_importer_migration.grant_arches_json_importer(apps, SCHEMA_EDITOR)
+
+    def test_the_module_is_shown_to_resource_editor_only(self):
+        self.assertEqual(
+            granted_groups(self.module(), "view_etlmodule"), {"Resource Editor"}
+        )
+
+    def test_running_twice_adds_nothing(self):
+        before = all_grants()
+        self.run_migration()
+        self.run_migration()
+        self.assertEqual(all_grants(), before)
+
+    def test_it_grants_a_group_that_lost_its_row(self):
+        GroupObjectPermission.objects.filter(
+            permission__codename="view_etlmodule", object_pk=str(self.module().pk)
+        ).delete()
+        self.run_migration()
+        self.assertEqual(
+            granted_groups(self.module(), "view_etlmodule"), {"Resource Editor"}
+        )
+
+    def test_a_missing_module_is_an_error(self):
+        ETLModule.objects.filter(slug="arches-json-importer").delete()
+        with self.assertRaises(RuntimeError):
+            self.run_migration()

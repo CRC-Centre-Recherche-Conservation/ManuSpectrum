@@ -1,7 +1,7 @@
 """The page a password-reset link opens.
 
 Overrides the core route `reset/<uidb64>/<token>/` (`password_reset_confirm`,
-`arches/urls.py`), which Arches 8.1.6 answers with
+`arches/urls.py`), which Arches 8.2.0 answers with
 `arches.app.views.auth.PasswordResetConfirmView` (Django's view with
 `ArchesSetPasswordForm`). Core moves a valid token into the session on the GET
 of the link and redirects to `.../set-password/`; clicked from a webmail, that

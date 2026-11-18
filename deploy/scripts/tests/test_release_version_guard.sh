@@ -29,7 +29,7 @@ at() { # at VERSION-ARGS PYPROJECT-VERSION NPM-VERSION TAG...: commit settings.p
   local args="$1" pyproject="$2" npm="$3" t
   shift 3
   printf 'APP_NAME = "manuspectrum"\nAPP_VERSION = semantic_version.Version(%s)\n' "$args" > manuspectrum/settings.py
-  printf '[project]\nname = "manuspectrum"\nrequires-python = ">=3.11"\nversion = "%s"\n' "$pyproject" > pyproject.toml
+  printf '[project]\nname = "manuspectrum"\nrequires-python = ">=3.12"\nversion = "%s"\n' "$pyproject" > pyproject.toml
   if [ -n "$npm" ]; then
     printf '{\n    "name": "manuspectrum",\n    "version": "%s",\n    "dependencies": {"x": {"version": "%s"}}\n}\n' "$npm" "$pyproject" > package.json
   else

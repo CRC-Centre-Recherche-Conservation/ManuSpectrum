@@ -32,8 +32,9 @@ so on a card using this component they have no editor at all.
     <div class="ms-file-metadata-field">
         <label>
             {% trans "Alternative text" %}
-            <i class="fa fa-question-circle text-muted" data-toggle="tooltip"
-                title="{% trans "Concise statement that assistive technology can pronounce to convey the meaning of the file" %}"></i>
+            <i class="fa fa-question-circle text-muted" role="img"
+                aria-label="{% trans "Concise statement that assistive technology can pronounce to convey the meaning of the file" %}"
+                data-tooltip="{% trans "Concise statement that assistive technology can pronounce to convey the meaning of the file" %}"></i>
         </label>
         <input type="text" class="form-control"
             data-bind="textInput: entry.altText['{{ LANGUAGE_CODE }}'].value,

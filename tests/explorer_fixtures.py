@@ -27,7 +27,7 @@ from arches.app.models.models import (
     TileModel,
 )
 from arches.app.utils.permission_backend import assign_perm
-from arches_controlled_lists.models import List, ListItem, ListItemValue
+from arches.extensions.controlled_lists.models import List, ListItem, ListItemValue
 from manuspectrum.views.explorer import memo as explorer_memo
 
 LIFECYCLE = "7e3cce56-fbfb-4a4b-8e83-59b9f9e7cb75"
@@ -144,16 +144,16 @@ ROLE_NODES = [
         "geojson-feature-collection",
         "comp_production",
     ),
-    ("component", "production_date_end_of_the_begin_", "date", "comp_production"),
-    ("component", "production_date_end_of_the_end_", "date", "comp_production"),
+    ("component", "production_date_end_of_the_begin", "date", "comp_production"),
+    ("component", "production_date_end_of_the_end", "date", "comp_production"),
     ("place", "literal_location", "geojson-feature-collection", "place_geometry"),
     ("place", "value_of_identifier", "string", "place_identifier"),
     ("modification", "label_of_name", "string", "mod_name"),
     ("modification", "document_modified", "resource-instance-list", "mod_object"),
     ("modification", "date_start_of_production_time", "date", "mod_dates"),
     ("modification", "date_end_of_modification_time", "date", "mod_dates"),
-    ("modification", "modification_date_end_of_the_begin_", "date", "mod_dates"),
-    ("modification", "modification_date_end_of_the_end_", "date", "mod_dates"),
+    ("modification", "modification_date_end_of_the_begin", "date", "mod_dates"),
+    ("modification", "modification_date_end_of_the_end", "date", "mod_dates"),
     ("modification", "type_of_modification_time", "boolean", "mod_dates"),
     ("modification", "took_place_at_place", "resource-instance", "mod_place"),
     (
@@ -172,8 +172,8 @@ ROLE_NODES = [
     ("alteration", "object_altered", "resource-instance-list", "alt_object"),
     ("alteration", "alteration_process_start_date", "date", "alt_dates"),
     ("alteration", "alteration_process_end_date", "date", "alt_dates"),
-    ("alteration", "alteration_process_date_end_of_the_begin_", "date", "alt_dates"),
-    ("alteration", "alteration_process_date_end_of_the_end_", "date", "alt_dates"),
+    ("alteration", "alteration_process_date_end_of_the_begin", "date", "alt_dates"),
+    ("alteration", "alteration_process_date_end_of_the_end", "date", "alt_dates"),
     ("alteration", "type_of_alteration_process_timespan", "boolean", "alt_dates"),
     ("alteration", "alteration_took_place_at_place", "resource-instance", "alt_place"),
     ("alteration", "occured_in_presence_of_material", "reference", "alt_material"),
@@ -382,8 +382,8 @@ class ExplorerCase(TestCase):
         return [
             {
                 "resourceId": str(r.pk),
-                "ontologyProperty": "",
-                "inverseOntologyProperty": "",
+                "relationship": "",
+                "inverseRelationship": "",
             }
             for r in resources
         ]

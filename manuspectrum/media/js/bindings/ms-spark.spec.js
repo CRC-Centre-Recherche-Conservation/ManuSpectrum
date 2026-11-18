@@ -18,7 +18,7 @@ const { generateArchesURL } = vi.hoisted(() => ({
     generateArchesURL: vi.fn((name, params) => `/prefix/api/spectrum-preview/${params.file_id}`),
 }));
 
-vi.mock('@/arches/utils/generate-arches-url.ts', () => ({ generateArchesURL }));
+vi.mock('@/arches_vue_components/application/generate-arches-url.ts', () => ({ generateArchesURL }));
 
 import './ms-spark.js';
 

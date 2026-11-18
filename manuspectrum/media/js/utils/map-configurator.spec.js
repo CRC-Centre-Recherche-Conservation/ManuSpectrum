@@ -6,17 +6,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { archesStub } = vi.hoisted(() => ({
-    archesStub: { mapboxApiKey: "", activeLanguage: "en" },
+    archesStub: { activeLanguage: "en" },
 }));
 
 vi.mock("arches", () => ({ default: archesStub }));
-vi.mock("mapbox-gl-geocoder", () => ({
-    default: class MapboxGeocoder {},
+vi.mock("@maplibre/maplibre-gl-geocoder", () => ({
+    default: class MaplibreGeocoder {},
+}));
+vi.mock("utils/maplibre-geocoder-api", () => ({
+    geocoderAttribution: "Geocoding by Nominatim",
 }));
 
-import MapboxGeocoder from "mapbox-gl-geocoder";
+import MaplibreGeocoder from "@maplibre/maplibre-gl-geocoder";
 import mapConfigurator, { labelField } from "utils/map-configurator";
-import { validate } from "mapbox-gl/dist/style-spec/index.es.js";
+import { validateStyleMin as validate } from "@maplibre/maplibre-gl-style-spec";
 
 import bright from "../../../constants/openfreemap_bright_layers.json";
 
@@ -43,27 +46,31 @@ class FakeMap {
 
 describe("map-configurator", () => {
     beforeEach(() => {
-        archesStub.mapboxApiKey = "";
         archesStub.activeLanguage = "en";
     });
 
-    it("skips the MapboxGeocoder without a Mapbox key and keeps the other controls", () => {
+    it("skips the MaplibreGeocoder and keeps the other controls", () => {
         const map = new FakeMap();
         const navigation = { name: "navigation" };
         mapConfigurator.preConfig(map);
         map.addControl(navigation, "top-left");
-        const result = map.addControl(new MapboxGeocoder(), "top-right");
+        const result = map.addControl(new MaplibreGeocoder(), "top-right");
         expect(map.added).toEqual([[navigation, "top-left"]]);
         expect(result).toBe(map);
     });
 
-    it("adds the MapboxGeocoder when a Mapbox key is set", () => {
-        archesStub.mapboxApiKey = "pk.example";
+    it("drops the Nominatim credit from the attribution control only", () => {
         const map = new FakeMap();
-        const geocoder = new MapboxGeocoder();
+        const nominatim = {
+            options: { customAttribution: "Geocoding by Nominatim" },
+        };
+        const other = { options: { customAttribution: "Another credit" } };
         mapConfigurator.preConfig(map);
-        map.addControl(geocoder, "top-right");
-        expect(map.added).toEqual([[geocoder, "top-right"]]);
+        map.addControl(nominatim);
+        map.addControl(other);
+        expect(nominatim.options.customAttribution).toBeUndefined();
+        expect(other.options.customAttribution).toBe("Another credit");
+        expect(map.added).toHaveLength(2);
     });
 
     it("puts the map back as it was in postConfig", () => {
@@ -76,7 +83,7 @@ describe("map-configurator", () => {
         expect(Object.prototype.hasOwnProperty.call(map, "addControl")).toBe(
             false,
         );
-        const geocoder = new MapboxGeocoder();
+        const geocoder = new MaplibreGeocoder();
         map.addControl(geocoder, "top-right");
         expect(map.added).toEqual([[geocoder, "top-right"]]);
     });
@@ -305,7 +312,7 @@ describe("map-configurator", () => {
             );
         });
 
-        it("the rewritten vendored layers are a valid mapbox-gl 1.13 style", () => {
+        it("the rewritten vendored layers are a valid MapLibre style", () => {
             const map = fakeMapOf(JSON.parse(JSON.stringify(bright)));
             archesStub.activeLanguage = "fr";
             mapConfigurator.postConfig(map);

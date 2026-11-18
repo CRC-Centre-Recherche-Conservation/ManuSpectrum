@@ -20,7 +20,7 @@ from django.test import SimpleTestCase, override_settings
 from django.utils import translation
 from guardian.models import GroupObjectPermission
 
-from arches_controlled_lists.models import List, ListItem
+from arches.extensions.controlled_lists.models import List, ListItem
 
 from arches.app.models.models import (
     GraphXPublishedGraph,

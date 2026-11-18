@@ -16,17 +16,64 @@ updates:
     # not wait.
     cooldown:
       default-days: 7
-    # The packages Arches pins exactly and the project follows at the same
-    # version: they move with an Arches upgrade. The list is kept equal to
-    # that set by tests/test_arches_pins.py.
+    # The packages Arches pins exactly (its `dependencies` and its
+    # `peerDependencies`) and the project follows at the same version: they
+    # move with an Arches upgrade. The list is kept equal to that set by
+    # tests/test_arches_pins.py.
     ignore:
+      - dependency-name: "babel-loader"
+      - dependency-name: "@babel/plugin-syntax-dynamic-import"
+      - dependency-name: "@babel/plugin-transform-class-properties"
+      - dependency-name: "@babel/plugin-transform-runtime"
+      - dependency-name: "@babel/preset-env"
+      - dependency-name: "clean-webpack-plugin"
+      - dependency-name: "cross-env"
+      - dependency-name: "cross-fetch"
+      - dependency-name: "css-loader"
+      - dependency-name: "dompurify"
+      - dependency-name: "es-toolkit"
+      - dependency-name: "eslint"
+      - dependency-name: "eslint-config-prettier"
+      - dependency-name: "eslint-plugin-vue"
+      - dependency-name: "@eslint/js"
+      - dependency-name: "globals"
+      - dependency-name: "jsdom"
       - dependency-name: "leaflet"
       - dependency-name: "leaflet-iiif"
+      - dependency-name: "maplibre-gl"
+      - dependency-name: "mini-css-extract-plugin"
+      - dependency-name: "nodemon"
+      - dependency-name: "openvue"
+      - dependency-name: "@openvue/themes"
+      - dependency-name: "pinia"
+      - dependency-name: "postcss"
+      - dependency-name: "postcss-loader"
+      - dependency-name: "prettier"
       - dependency-name: "primeicons"
-      - dependency-name: "primevue"
+      - dependency-name: "sass"
+      - dependency-name: "sass-loader"
+      - dependency-name: "style-loader"
+      - dependency-name: "stylelint"
+      - dependency-name: "stylelint-config-standard"
+      - dependency-name: "stylelint-webpack-plugin"
+      - dependency-name: "ts-loader"
+      - dependency-name: "@types/codemirror"
+      - dependency-name: "@types/geojson"
+      - dependency-name: "@types/js-cookie"
       - dependency-name: "typescript"
+      - dependency-name: "typescript-eslint"
+      - dependency-name: "@typescript-eslint/parser"
+      - dependency-name: "@vitejs/plugin-vue"
+      - dependency-name: "vitest"
+      - dependency-name: "@vitest/coverage-v8"
+      - dependency-name: "vue-loader"
+      - dependency-name: "vue-tsc"
+      - dependency-name: "@vue/test-utils"
+      - dependency-name: "webpack"
+      - dependency-name: "webpack-cli"
+      - dependency-name: "webpack-merge"
       # Major only: the expression evaluator the map tests use must stay on
-      # the style-spec major that maplibre-gl bundles (20 for maplibre-gl 4).
+      # the style-spec major that maplibre-gl bundles (26 for maplibre-gl 6).
       - dependency-name: "@maplibre/maplibre-gl-style-spec"
         update-types: ["version-update:semver-major"]
     groups:

@@ -14,8 +14,8 @@ from dataclasses import dataclass, field
 
 from arches.app.models.models import TileModel
 from arches.app.models.tile import Tile
-from arches_controlled_lists.datatypes.datatypes import ReferenceDataType
-from arches_controlled_lists.models import ListItemValue
+from arches.extensions.controlled_lists.datatypes.datatypes import ReferenceDataType
+from arches.extensions.controlled_lists.models import ListItemValue
 
 from manuspectrum.iiif.sources import canvas_label, manifest_json
 from manuspectrum.utils.iiif_tools import CanvasIIIF

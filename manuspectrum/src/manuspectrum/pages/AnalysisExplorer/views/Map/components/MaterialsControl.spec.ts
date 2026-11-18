@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import PrimeVue from "primevue/config";
+import OpenVue from "openvue/config";
 
 import MaterialsControl from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/MaterialsControl.vue";
 
@@ -25,7 +25,7 @@ import type {
     MapMaterial,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
-vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+vi.mock("@/arches_vue_components/application/generate-arches-url.ts", () => ({
     generateArchesURL: (name: string) => `/en/${name}`,
 }));
 
@@ -98,7 +98,7 @@ function mountControl(
     return mount(MaterialsControl, {
         props: { events: shown, materials: known, colours, coveringMaterials },
         global: {
-            plugins: [pinia, PrimeVue],
+            plugins: [pinia, OpenVue],
             provide: { [ANNOUNCE_KEY as symbol]: announce },
         },
     });

@@ -48,7 +48,7 @@ from collections import defaultdict
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from arches_controlled_lists.models import ListItemValue
+from arches.extensions.controlled_lists.models import ListItemValue
 
 LANGUAGE_FOLDING = {"fr-FR": "fr", "en-US": "en", "en-UK": "en"}
 

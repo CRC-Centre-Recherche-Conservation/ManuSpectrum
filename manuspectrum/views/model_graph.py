@@ -60,7 +60,7 @@ def _lists_hash():
     reads only the lists its reference fields name; hashing all of them keeps
     the query independent of the graphs.
     """
-    from arches_controlled_lists.models import List, ListItem
+    from arches.extensions.controlled_lists.models import List, ListItem
 
     with connection.cursor() as cursor:
         cursor.execute(f"""

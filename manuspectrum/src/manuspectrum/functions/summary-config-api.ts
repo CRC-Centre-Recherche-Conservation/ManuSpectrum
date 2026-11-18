@@ -1,7 +1,7 @@
 // Transport and pure helpers of the summary configuration form. No user-facing
 // string lives here: a failure is thrown and the component words it.
 
-import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
+import { generateArchesURL } from "@/arches_vue_components/application/generate-arches-url.ts";
 
 import type {
     EditableConfig,

@@ -56,6 +56,8 @@ Fix the cause, then install again with `sudo manuspectrum-update --now <TAG>`. T
 
 A migration that takes long is the usual reason for a rollback that was not a bug: the engine waits `RELEASE_READY_WAIT_SECONDS` (default 600, at most 1800) for `/readyz` and then rolls back, and a migration that was running at that moment is interrupted. The rollback never restores the data, so check that the database is consistent with the previous release before trying again. A release with long migrations says how long its readiness takes (RELEASES.md, pre-tag checklist): raise `RELEASE_READY_WAIT_SECONDS` in `.env` first, then install.
 
+A rollback across an Elasticsearch major version (1.1.0 moves from 8.19 to 9) leaves the previous Elasticsearch unable to open the data directory the new one has upgraded. Stop `elasticsearch`, empty the `ms_es_data` volume, start it again, then run `make -C deploy manage ARGS="es reindex_database"`. Arches migrations already applied stay applied: a rollback past them needs the `pre-update` backup (`BACKUP.md`, « Restore the stack »).
+
 ### Escalation
 
 The technical lead at once if the site is down or a restore is needed.
