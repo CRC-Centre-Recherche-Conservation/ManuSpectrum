@@ -11,6 +11,7 @@ feed them modified copies.
 """
 
 import copy
+import hashlib
 import fnmatch
 import importlib.metadata
 import json
@@ -427,4 +428,124 @@ class CheckBehaviourTests(unittest.TestCase):
     def test_a_pin_of_a_name_arches_does_not_require_passes(self):
         self.assertEqual(
             python_pin_problems(self.real["pyproject"], ["celery==5.5.0"]), []
+        )
+
+
+LEAFLET_IIIF = ROOT / "node_modules" / "leaflet-iiif" / "leaflet-iiif.js"
+LEAFLET_IIIF_SHA256 = "3910f668c74903c81f9f2fd1a1cb40cd3151b54cfffe8144b5bfa560cf5cd8f3"
+ARCHES_VIEWER_DIR = ROOT / "node_modules" / "arches" / "arches" / "app" / "media" / "js"
+IIIF_VIEWER = ARCHES_VIEWER_DIR / "views" / "components" / "iiif-viewer.js"
+IIIF_ANNOTATION = ARCHES_VIEWER_DIR / "views" / "components" / "iiif-annotation.js"
+
+REVISIT = (
+    "Zone stamps (`msUnit`, `msImageWidth`, `msImageHeight`, `msFrame`, "
+    "manuspectrum/iiif/units.py and frames.py) rely on this: "
+)
+
+
+def leaflet_iiif_problems(source):
+    """What the zone frame arithmetic relies on in leaflet-iiif's layer."""
+    problems = []
+    if hashlib.sha256(source.encode()).hexdigest() != LEAFLET_IIIF_SHA256:
+        problems.append(
+            REVISIT + "leaflet-iiif.js changed: compare its `_getInfo` (how it sets "
+            "`maxNativeZoom` from the info.json tile size and sizes) with "
+            "`units.native_zoom`, then update LEAFLET_IIIF_SHA256."
+        )
+    for needle in (
+        "_this.x = data.width",
+        "_this.y = data.height",
+        "_this.maxNativeZoom =",
+        "_this._infoPromise =",
+    ):
+        if needle not in source:
+            problems.append(
+                REVISIT + f"leaflet-iiif no longer assigns `{needle}`; the Data Lab "
+                "reads these layer fields (folio/page-layer.ts)."
+            )
+    return problems
+
+
+def iiif_viewer_problems(source):
+    """Arches builds its image layers with leaflet-iiif's default tile size."""
+    problems = []
+    if source.count("L.tileLayer.iiif(") < 2:
+        problems.append(
+            REVISIT + "iiif-viewer.js no longer builds both layers with "
+            "`L.tileLayer.iiif(`; re-check how the layer (and so the unit) is made."
+        )
+    if "tileSize" in source:
+        problems.append(
+            REVISIT + "iiif-viewer.js now passes a `tileSize`; the unit then depends "
+            "on it, not only on the info.json tile width."
+        )
+    return problems
+
+
+def iiif_annotation_problems(source):
+    """Arches keeps whole features, so unknown properties round-trip."""
+    problems = []
+    for snippet in (
+        "features.push(feature);",
+        "features: features",
+        "drawFeatures(drawFeatures().concat(featureCollection.features));",
+        "feature.properties.nodeId = id;",
+    ):
+        if snippet not in source:
+            problems.append(
+                REVISIT + f"iiif-annotation.js no longer contains `{snippet}` "
+                "(updateTiles/updateDrawFeatures keep whole features): check the "
+                "stamp properties still survive a save."
+            )
+    return problems
+
+
+class ZoneFrameContractTests(unittest.TestCase):
+    def test_leaflet_iiif_layer_is_the_one_the_frames_are_computed_for(self):
+        problems = leaflet_iiif_problems(LEAFLET_IIIF.read_text())
+        self.assertEqual(problems, [], "\n" + "\n".join(problems))
+
+    def test_arches_viewer_builds_layers_without_a_tile_size(self):
+        problems = iiif_viewer_problems(IIIF_VIEWER.read_text())
+        self.assertEqual(problems, [], "\n" + "\n".join(problems))
+
+    def test_arches_annotation_card_keeps_whole_features(self):
+        problems = iiif_annotation_problems(IIIF_ANNOTATION.read_text())
+        self.assertEqual(problems, [], "\n" + "\n".join(problems))
+
+    def test_arches_annotation_datatype_accepts_stamped_features(self):
+        from arches.app.datatypes.datatypes import AnnotationDataType
+
+        collection = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "id": "0b0d0f3e-0b8a-4a39-9a63-0c4d5f5a1a11",
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]],
+                    },
+                    "properties": {
+                        "msUnit": 32,
+                        "msImageWidth": 4000,
+                        "msImageHeight": 3000,
+                        "msFrame": "read",
+                    },
+                }
+            ],
+        }
+        self.assertEqual(AnnotationDataType().validate(collection), [])
+
+    def test_changed_sources_fail_with_what_to_recheck(self):
+        source = LEAFLET_IIIF.read_text()
+        self.assertEqual(len(leaflet_iiif_problems(source + "\n// edit")), 1)
+        problems = leaflet_iiif_problems(source.replace("_this.x = ", "_this.w = "))
+        self.assertTrue(any("_this.x = data.width" in p for p in problems))
+        viewer = IIIF_VIEWER.read_text()
+        self.assertTrue(iiif_viewer_problems(viewer + "\nvar o = {tileSize: 512};"))
+        self.assertTrue(iiif_viewer_problems(viewer.replace("L.tileLayer.iiif(", "x(")))
+        annotation = IIIF_ANNOTATION.read_text()
+        self.assertTrue(
+            iiif_annotation_problems(annotation.replace("features.push(feature);", ""))
         )

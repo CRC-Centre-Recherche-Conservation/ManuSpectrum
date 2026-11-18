@@ -25,6 +25,13 @@ A ``Frame`` is the image frame a zone was drawn in, stamped on the zone: its
 unit and the image size it was measured against, so its pixel position no
 longer depends on the live image host (``frames.py`` stamps, ``unit_of_frame``
 reads). A frame whose ``source`` is ``estimated`` was assumed, not measured.
+
+The stamps rest on what Arches' IIIF viewer and leaflet-iiif do: the layer is
+built without a ``tileSize`` and sets ``x``, ``y`` and ``maxNativeZoom`` from
+the info.json, and the annotation card stores whole features. At an Arches or
+leaflet-iiif upgrade, ``tests/test_arches_pins.py`` (``ZoneFrameContractTests``)
+fails when one of these moves; compare ``native_zoom`` with leaflet-iiif's
+``_getInfo`` then.
 """
 
 import logging
