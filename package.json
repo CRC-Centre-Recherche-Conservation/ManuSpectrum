@@ -35,7 +35,7 @@
         "leaflet": "1.6.0",
         "leaflet-iiif": "3.0.0",
         "leaflet.markercluster": "^1.5.3",
-        "maplibre-gl": "4.7.1",
+        "maplibre-gl": "6.17.0",
         "papaparse": "^5.7.0",
         "pinia": "^4.1.0",
         "plotly.js-cartesian-dist": "^4.1.2",
