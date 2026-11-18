@@ -20,6 +20,11 @@ symptom and marks the IIIF memo build degraded.
 The conversion holds for the tiling served when the zone was drawn:
 re-encoding an image or changing Cantaloupe's tile size moves its existing
 zones, and a read is kept ``IIIF_IMAGE_INFO_CACHE_TTL`` seconds.
+
+A ``Frame`` is the image frame a zone was drawn in, stamped on the zone: its
+unit and the image size it was measured against, so its pixel position no
+longer depends on the live image host (``frames.py`` stamps, ``unit_of_frame``
+reads). A frame whose ``source`` is ``estimated`` was assumed, not measured.
 """
 
 import logging
@@ -85,6 +90,37 @@ class ZoneUnit:
     def payload(self):
         """The ``ZoneUnit`` of the Explorer contract."""
         return {"x": self.x, "y": self.y, "read": self.read}
+
+
+FRAME_SOURCES = ("browser", "read", "estimated", "import-legacy")
+ESTIMATED = "estimated"
+
+
+@dataclass(frozen=True)
+class Frame:
+    """The image frame of a zone: stored units are ``unit`` pixels of a ``width`` x ``height`` image.
+
+    ``source`` is ``browser``, ``read`` or ``import-legacy`` for a measured
+    frame, ``estimated`` for an assumed one.
+    """
+
+    unit: int
+    width: int
+    height: int
+    source: str
+
+    @property
+    def measured(self):
+        return self.source != ESTIMATED
+
+    def stamp(self):
+        """The four feature properties that store this frame."""
+        return {
+            "msUnit": self.unit,
+            "msImageWidth": self.width,
+            "msImageHeight": self.height,
+            "msFrame": self.source,
+        }
 
 
 UNKNOWN_UNIT = ZoneUnit(float(UNKNOWN_SCALE), float(UNKNOWN_SCALE), False)
@@ -269,6 +305,41 @@ def assumed_unit(width, height, service=None):
     """``ZoneUnit`` of a canvas whose image description was not read: the canvas size taken as the image's, the host's hinted tile width or 256."""
     scale = float(2 ** native_zoom(width, height, _hinted_tile(service)))
     return ZoneUnit(scale, scale, False)
+
+
+def frame_from_info(info, source="read"):
+    """The ``Frame`` of an image described by *info*."""
+    return Frame(
+        2 ** native_zoom(info.width, info.height, info.tile),
+        info.width,
+        info.height,
+        source,
+    )
+
+
+def frame_assumed(service, width, height):
+    """The ``estimated`` ``Frame`` of an image of *width* x *height* whose info.json was not read: the host's hinted tile width or 256."""
+    unit = 2 ** native_zoom(width, height, _hinted_tile(service))
+    return Frame(unit, width, height, ESTIMATED)
+
+
+def unit_of_frame(frame, canvas_width, canvas_height):
+    """``ZoneUnit`` of a canvas of *canvas_width* x *canvas_height* for a zone drawn in *frame*.
+
+    The unit is brought to canvas pixels by the ratio of the canvas size to the
+    frame's image size on each axis; a size of 0 or None counts as unknown and
+    the frame's size stands for the canvas'. ``read`` tells whether the frame
+    was measured.
+    """
+    if not (canvas_width and canvas_height and canvas_width > 0 and canvas_height > 0):
+        canvas_width, canvas_height = frame.width, frame.height
+    return ZoneUnit(
+        frame.unit * canvas_width / frame.width,
+        frame.unit * canvas_height / frame.height,
+        frame.measured,
+        canvas_width,
+        canvas_height,
+    )
 
 
 def zone_unit(service, width, height, deadline=None):
