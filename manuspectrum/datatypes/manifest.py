@@ -8,6 +8,7 @@ from arches.app.models.models import IIIFManifest, Widget
 from django.utils.translation import gettext_lazy as _
 
 from manuspectrum.iiif import ids
+from manuspectrum.iiif import sources
 from manuspectrum.iiif.sources import original_url
 from manuspectrum.utils import manifest_registry
 from manuspectrum.utils.manifest_registry import FailParsingManifestIIIF
@@ -189,7 +190,14 @@ class ManifestDataType(BaseDataType):
             return self._normalize_url(value)
 
     def transform_export_values(self, value, *args, **kwargs):
-        return value
+        """The public IIIF URL (``ids.stored_manifest``) of a local manifest reference; any other value unchanged.
+
+        Importing that URL back resolves to the same stored row
+        (``pre_tile_save``: a local reference is found by globalid, never
+        fetched).
+        """
+        globalid = sources.local_manifest_id(value) if isinstance(value, str) else None
+        return ids.stored_manifest(globalid) if globalid else value
 
     def get_display_value(self, tile, node, **kwargs):
         # Search export passes tiles as plain dicts (ES _source), not Tile
