@@ -458,8 +458,21 @@ def squeeze(source):
     return re.sub(r"\s+", " ", source)
 
 
+JS_TOKEN = re.compile(
+    r"(?P<keep>\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`"
+    r"|(?<=[=(,:!&|?;{}\[])\s*/(?![/*])(?:\\.|\[(?:\\.|[^\]\\\n])*\]|[^/\\\n\[])+/)"
+    r"|/\*.*?\*/|//[^\n]*",
+    re.S,
+)
+
+
 def strip_comments(source):
-    return re.sub(r"/\*.*?\*/|(?<![:'\"])//[^\n]*", "", source, flags=re.S)
+    """*source* without its JavaScript comments.
+
+    String, template and regular expression literals are kept whole, so a `//`
+    or `/*` inside one does not open a comment.
+    """
+    return JS_TOKEN.sub(lambda m: m.group("keep") or " ", source)
 
 
 def bare(source):
@@ -496,45 +509,60 @@ def leaflet_iiif_problems(raw):
     return problems
 
 
-LAYER_OPTION = r"(?:fitBounds|className)\s*:\s*(?:\"[^\"]*\"|'[^']*'|true|false)"
-LAYER_CALL = re.compile(
-    rf"L\.tileLayer\.iiif\([^,(){{}}]+,\s*\{{\s*{LAYER_OPTION}(?:\s*,\s*{LAYER_OPTION})*"
-    r"\s*,?\s*\}\s*\)"
+LAYER_FACTORY = re.compile(
+    r"\b(?:tileLayer\s*(?:\.\s*iiif\b|\[\s*(['\"])iiif\1\s*\])"
+    r"|TileLayer\s*(?:\.\s*Iiif\b|\[\s*(['\"])Iiif\2\s*\]))"
+    r"(?:\s*\.\s*(?:call|apply|bind)\b)?\s*\("
+)
+LAYER_OPTION = (
+    r"(?:fitBounds|className)\s*:\s*(?:\"[^\"\n]*\"|'[^'\n]*'|`[^`]*`|[^,{}\"'`])+"
+)
+LAYER_ARGS = re.compile(
+    rf"[^,(){{}}]+,\s*\{{\s*{LAYER_OPTION}(?:\s*,\s*{LAYER_OPTION})*\s*,?\s*\}}\s*\)"
 )
 UNIT_NAMES = r"(?:tileSize|zoomOffset|detectRetina|zoomReverse|maxNativeZoom)"
+WRITE = r"\s*(?:\+\+|--|(?:\*\*|<<|>>>?|&&|\|\||\?\?|[-+*/%&|^])?=(?![=>]))"
 UNIT_CHANGE = re.compile(
-    rf"\b{UNIT_NAMES}\b['\"]?\s*(?::|=(?!=)|[,}}])"
+    rf"(?<=[{{,])\s*(?:{UNIT_NAMES}|(['\"]){UNIT_NAMES}\1"
+    rf"|\[\s*(['\"]){UNIT_NAMES}\2\s*\])\s*:"
+    rf"|(?<=[{{,])\s*{UNIT_NAMES}\s*[,}}]"
+    rf"|\b(?:{UNIT_NAMES}|crs)\b['\"]?\]?{WRITE}"
+    rf"|(?:\+\+|--)\s*[\w$.]*\b{UNIT_NAMES}\b"
+    rf"|\boptions['\"]?\]?(?:\s*\[[^\]]*\])?{WRITE}"
     r"|\b(?:setOptions|mergeOptions)\s*\("
-    r"|\b(?:TileLayer|GridLayer|Iiif)\.extend\s*\("
-    r"|\.options\s*=(?!=)"
-    r"|assign\(\s*[\w.]*options",
+    r"|\.(?:extend|defaults)\s*\("
+    r"|\bassign\s*\(\s*[\w$.\[\]'\"]*options"
 )
 
 
 def iiif_viewer_problems(source):
     """Arches builds its image layers with leaflet-iiif's defaults on CRS.Simple.
 
-    Every `L.tileLayer.iiif(` call takes a literal options object of
-    `fitBounds` and `className` with literal values (no spread, variable or
-    template literal), and nothing sets a unit-moving option (`tileSize`,
-    `zoomOffset`, `detectRetina`, `zoomReverse`, `maxNativeZoom`) or changes a
-    layer's options after construction. Reading `maxNativeZoom` is allowed.
+    Every way of building a leaflet-iiif layer (`L.tileLayer.iiif(`, its
+    bracket and `.call` forms, `new L.TileLayer.Iiif(`) takes a URL and an
+    object literal of `fitBounds` and `className` only; there are at least
+    two. Outside comments, nothing sets a unit-moving option (`tileSize`,
+    `zoomOffset`, `detectRetina`, `zoomReverse`, `maxNativeZoom`) as a key, a
+    shorthand or a write, changes a layer's options after construction
+    (`setOptions`, `mergeOptions`, any `.extend(` or `.defaults(`, `assign`
+    into options, a write to `options` or one of its entries) or writes a
+    `crs`. Reading these options is allowed.
     """
     problems = []
     source = strip_comments(source)
-    total = source.count("L.tileLayer.iiif(")
-    if total < 2 or len(LAYER_CALL.findall(source)) != total:
+    calls = list(LAYER_FACTORY.finditer(source))
+    if len(calls) < 2 or any(not LAYER_ARGS.match(source, c.end()) for c in calls):
         problems.append(
             REVISIT + "iiif-viewer.js no longer builds every layer with "
-            "`L.tileLayer.iiif(url, {fitBounds, className})` and literal values; "
-            "other options, a spread, a variable or a template literal may move "
-            "the unit: re-check how the layer is made."
+            "`L.tileLayer.iiif(url, {fitBounds, className})`; other options, a "
+            "spread or options built elsewhere may move the unit: re-check how "
+            "the layer is made."
         )
-    moving = sorted({m.group(0) for m in UNIT_CHANGE.finditer(source)})
+    moving = sorted({m.group(0).strip() for m in UNIT_CHANGE.finditer(source)})
     if moving:
         problems.append(
             REVISIT + f"iiif-viewer.js now writes {moving}: options of a layer that "
-            "move the unit are set or changed there."
+            "move the unit, or the map's CRS, are set or changed there."
         )
     if bare("crs: L.CRS.Simple") not in bare(source):
         problems.append(
@@ -614,7 +642,7 @@ class ZoneFrameContractTests(unittest.TestCase):
         problems = leaflet_iiif_problems(LEAFLET_IIIF.read_bytes())
         self.assertEqual(problems, [], "\n" + "\n".join(problems))
 
-    def test_arches_viewer_layers_take_only_literal_default_options(self):
+    def test_arches_viewer_layers_take_only_default_unit_options(self):
         problems = iiif_viewer_problems(IIIF_VIEWER.read_text())
         self.assertEqual(problems, [], "\n" + "\n".join(problems))
 
@@ -690,10 +718,6 @@ class ZoneFrameContractTests(unittest.TestCase):
             ),
             "spread": ("fitBounds: false,", "...layerDefaults, fitBounds: false,"),
             "shorthand": ("fitBounds: false,", "fitBounds: false, tileSize,"),
-            "template literal": (
-                'className: "iiif-layer-primary"',
-                "className: `iiif-layer-${side}`",
-            ),
             "call removed": ("L.tileLayer.iiif(", "x("),
             "options after construction": (
                 "});\n\n                    canvasLayer.on",
@@ -713,37 +737,48 @@ class ZoneFrameContractTests(unittest.TestCase):
         push = "layers.push(canvasLayer);"
         self.assertIn(push, viewer)
         for name, code in {
-            "setOptions": "L.setOptions(canvasLayer, params.o);",
-            "assign into options": "Object.assign(canvasLayer.options, params.o);",
-            "options replaced": "canvasLayer.options = params.o;",
-            "mergeOptions": "L.TileLayer.Iiif.mergeOptions(params.o);",
-            "extend": "const B = L.TileLayer.Iiif.extend({options: params.o});",
-            "quoted key": "const o = {'zoomOffset': 1};",
+            "tileSize key": "const o = {tileSize: 512};",
+            "zoomOffset key": "const o = {zoomOffset: 1};",
+            "detectRetina key": "const o = {detectRetina: true};",
+            "zoomReverse write": "zoomReverse = true;",
             "maxNativeZoom write": "canvasLayer.maxNativeZoom = 3;",
+            "maxNativeZoom write by key": "canvasLayer['maxNativeZoom'] = 3;",
+            "shorthand key": "const o = {tileSize};",
+            "quoted key": "const o = {'detectRetina': true};",
+            "computed key": "const o = {['zoomOffset']: 1};",
+            "compound write": "canvasLayer.options.zoomOffset += 1;",
+            "postfix increment": "canvasLayer.options.zoomOffset++;",
+            "prefix increment": "++canvasLayer.options.zoomOffset;",
+            "bracket write": "canvasLayer.options['zoomOffset'] = 1;",
+            "entry write": "for (var k in params.o) canvasLayer.options[k] = params.o[k];",
+            "options replaced": "canvasLayer.options = params.o;",
+            "options replaced by key": "canvasLayer['options'] = params.o;",
+            "setOptions": "L.setOptions(canvasLayer, params.o);",
+            "mergeOptions": "L.TileLayer.Iiif.mergeOptions(params.o);",
+            "extend a class": "const B = L.TileLayer.Iiif.extend({options: params.o});",
+            "L.extend": "L.extend(canvasLayer.options, params.o);",
+            "L.Util.extend": "L.Util.extend(canvasLayer.options, params.o);",
+            "$.extend": "$.extend(canvasLayer.options, params.o);",
+            "_.extend": "_.extend(canvasLayer.options, params.o);",
+            "_.defaults": "_.defaults(canvasLayer.options, params.o);",
+            "assign into options": "Object.assign(canvasLayer.options, params.o);",
+            "assign into bracket options": (
+                "Object.assign(canvasLayer['options'], params.o);"
+            ),
+            "crs write": "map.options.crs = L.CRS.EPSG3857;",
+            "crs bracket write": "map.options['crs'] = L.CRS.EPSG3857;",
+            "write between strings holding comment marks": (
+                "var g = 'image/*'; canvasLayer.options.zoomOffset = 1; var h = 'a*/b';"
+            ),
+            "write after a regex holding a quote": (
+                "var r = /'/; var u = '//'; canvasLayer.options.zoomOffset = 1;"
+            ),
         }.items():
             self.assertTrue(
                 iiif_viewer_problems(viewer.replace(push, code + push)), name
             )
 
-    def test_viewer_changes_that_leave_the_unit_alone_pass(self):
-        viewer = IIIF_VIEWER.read_text()
-        push = "layers.push(canvasLayer);"
-        for name, source in {
-            "reflowed options": viewer.replace(
-                "fitBounds: false,", "fitBounds:false,", 1
-            ).replace("{\n                        fitBounds", "{ fitBounds", 1),
-            "comment naming tileSize": viewer.replace(
-                push, "// leaflet-iiif reads tileSize\n" + push
-            ),
-            "a read of maxNativeZoom": viewer.replace(
-                push,
-                "var z = canvasLayer.options.maxNativeZoom;"
-                " if (canvasLayer.maxNativeZoom === 3) {}" + push,
-            ),
-        }.items():
-            self.assertEqual(iiif_viewer_problems(source), [], name)
-
-    def test_the_call_pattern_alone_catches_variable_spread_and_template(self):
+    def test_every_way_to_build_the_layer_takes_allowed_keys_only(self):
         viewer = IIIF_VIEWER.read_text()
         first_call = re.compile(r"L\.tileLayer\.iiif\(layerInfoUrl, \{.*?\}\)", re.S)
         for name, source in {
@@ -753,12 +788,68 @@ class ZoneFrameContractTests(unittest.TestCase):
             "variable": first_call.sub(
                 "L.tileLayer.iiif(layerInfoUrl, opts)", viewer, count=1
             ),
-            "template literal": viewer.replace(
-                'className: "iiif-layer-primary"', "className: `iiif-layer-${side}`"
+            "another key": viewer.replace(
+                "fitBounds: false,", "fitBounds: false, setMaxBounds: true,", 1
             ),
+            "spread after an allowed key": viewer.replace(
+                'className: "iiif-layer-primary"',
+                'className: "iiif-layer-primary", ...layerDefaults',
+            ),
+            "space before the parenthesis": viewer + "\nx = L.tileLayer.iiif (u, o);",
+            "reflowed member": viewer + "\nx = L.tileLayer\n    .iiif(u, o);",
+            "bracket member": viewer + "\nx = L.tileLayer['iiif'](u, o);",
+            "class": viewer + "\nx = new L.TileLayer.Iiif(u, o);",
+            "class bracket member": viewer + "\nx = new L.TileLayer['Iiif'](u, o);",
+            "call": viewer + "\nx = L.tileLayer.iiif.call(L, u, {fitBounds: false});",
         }.items():
             self.assertIsNone(UNIT_CHANGE.search(strip_comments(source)), name)
             self.assertTrue(iiif_viewer_problems(source), name)
+        for name, code in {
+            "class with allowed keys": "new L.TileLayer.Iiif(u, {fitBounds: false});",
+            "bracket member with allowed keys": "L.tileLayer['iiif'](u, {className: c});",
+        }.items():
+            self.assertEqual(iiif_viewer_problems(viewer + "\nx = " + code), [], name)
+
+    def test_viewer_changes_that_leave_the_unit_alone_pass(self):
+        viewer = IIIF_VIEWER.read_text()
+        push = "layers.push(canvasLayer);"
+        for name, source in {
+            "reflowed options": viewer.replace(
+                "fitBounds: false,", "fitBounds:false,", 1
+            ).replace("{\n                        fitBounds", "{ fitBounds", 1),
+            "className from a template literal": viewer.replace(
+                'className: "iiif-layer-primary"', "className: `iiif-layer-${side}`"
+            ),
+            "className from a variable": viewer.replace(
+                'className: "iiif-layer-primary"', "className: self.layerClass"
+            ),
+        }.items():
+            self.assertEqual(iiif_viewer_problems(source), [], name)
+        for name, code in {
+            "comment naming tileSize": "// leaflet-iiif reads tileSize\n",
+            "Math.min read": "var z = Math.min(canvasLayer.options.maxNativeZoom, 3);",
+            "ternary read": "var z = c ? canvasLayer.options.maxNativeZoom : 0;",
+            "object literal read": "var o = {z: canvasLayer.options.maxNativeZoom};",
+            "bracket read": "var z = canvasLayer.options['maxNativeZoom'];",
+            "comparison": "if (canvasLayer.maxNativeZoom === 3) {}",
+            "crs read": "var c = map.options.crs;",
+            "arrow parameter": "var f = maxNativeZoom => maxNativeZoom * 2;",
+        }.items():
+            self.assertEqual(
+                iiif_viewer_problems(viewer.replace(push, code + push)), [], name
+            )
+
+    def test_unit_options_in_comments_are_not_writes(self):
+        viewer = IIIF_VIEWER.read_text()
+        push = "layers.push(canvasLayer);"
+        for comment in (
+            "// options: {tileSize: 256}\n",
+            "/* canvasLayer.options.zoomOffset = 1; */",
+        ):
+            self.assertTrue(UNIT_CHANGE.search(comment), comment)
+            self.assertEqual(
+                iiif_viewer_problems(viewer.replace(push, comment + push)), [], comment
+            )
 
     def test_annotation_changes_that_lose_id_canvas_or_geometry_fail(self):
         annotation = IIIF_ANNOTATION.read_text()
@@ -783,6 +874,20 @@ class ZoneFrameContractTests(unittest.TestCase):
                 "features = features.map(strip);\n            "
                 "if (ko.isObservable(self.tile.data[id])) {",
             ),
+            (
+                "this.card.triggerUpdate = updateDrawFeatures;",
+                "feature.id = uuid.generate(); "
+                "this.card.triggerUpdate = updateDrawFeatures;",
+            ),
+            (
+                "this.card.triggerUpdate = updateDrawFeatures;",
+                "feature.id = makeId(); this.card.triggerUpdate = updateDrawFeatures;",
+            ),
+            (
+                "this.card.triggerUpdate = updateDrawFeatures;",
+                "feature['id'] = uuid.generate(); "
+                "this.card.triggerUpdate = updateDrawFeatures;",
+            ),
         ):
             self.assertIn(old, annotation)
             self.assertTrue(
@@ -793,9 +898,20 @@ class ZoneFrameContractTests(unittest.TestCase):
         )
         self.assertTrue(iiif_annotation_problems(style))
 
-    def test_a_reflowed_annotation_card_passes(self):
+    def test_a_reflowed_or_commented_annotation_card_passes(self):
         annotation = IIIF_ANNOTATION.read_text()
-        self.assertEqual(iiif_annotation_problems(annotation.replace("\n", "\n  ")), [])
+        trigger = "this.card.triggerUpdate = updateDrawFeatures;"
+        for name, source in {
+            "reflowed": annotation.replace("\n", "\n  "),
+            "comment in the pinned block": annotation.replace(
+                "features.push(feature);", "features.push(feature); // kept whole\n"
+            ),
+            "commented id assignment": annotation.replace(
+                trigger, "/* feature.id = uuid.generate(); */ " + trigger
+            ),
+        }.items():
+            self.assertNotEqual(source, annotation, name)
+            self.assertEqual(iiif_annotation_problems(source), [], name)
 
     def test_leaflet_rounding_changes_fail(self):
         leaflet = LEAFLET_SRC.read_text()
