@@ -465,7 +465,7 @@ class AnnotationReceiverTests(AnnotationFixtures):
                 self.save(self.annotation, feature_collection())
         self.assertEqual(fetch.call_count, 0)
 
-    def test_tile_data_is_not_rewritten(self):
+    def test_manifest_reference_is_not_rewritten(self):
         tile = None
         with fetching(v2_manifest()):
             with self.captureOnCommitCallbacks(execute=True):

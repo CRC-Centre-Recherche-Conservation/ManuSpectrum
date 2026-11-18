@@ -23,6 +23,7 @@ from arches.app.models.models import (
     FunctionXGraph,
     GraphXPublishedGraph,
     Node,
+    TileModel,
 )
 from arches.app.models.tile import Tile
 
@@ -30,6 +31,7 @@ from manuspectrum.accounts.embargo import record_grant
 from manuspectrum.accounts.lockout import current_request
 from manuspectrum.functions.resource_summary import SUMMARY_FUNCTION_ID, forget_config
 from manuspectrum.accounts.retention import send_deactivation_notice
+from manuspectrum.iiif import frame_writes
 from manuspectrum.iiif.tokens import revoke
 from manuspectrum.models import SiteNotice
 from manuspectrum.utils import manifest_registry
@@ -208,6 +210,40 @@ def register_annotation_manifests(tile_id, user_id, manifests):
                 )
 
 
+@receiver(pre_save, sender=Tile)
+@receiver(pre_save, sender=TileModel)
+def stamp_annotation_frames(sender, instance, raw=False, update_fields=None, **kwargs):
+    """Stamp the image frame on the annotation zones a tile is about to store.
+
+    Looks at ``data`` and at the value of every provisional edit; a tile
+    holding no FeatureCollection costs no query. The rule is
+    ``frames.stamp_collection``; the zones of an image not known yet are
+    stamped once the save commits (``frame_writes.resolve_pending``). A value
+    of an unexpected shape is left as it came.
+    """
+    instance.__dict__.pop("_ms_annotation_nodes", None)
+    if raw:
+        return
+    if update_fields is not None and not {"data", "provisionaledits"} & set(
+        update_fields
+    ):
+        return
+    try:
+        holders = frame_writes.holders(instance)
+    except Exception:
+        logger.debug("tile holds no readable zones", exc_info=True)
+        return
+    if not holders:
+        return
+    pending = frame_writes.stamp_instance(instance, holders)
+    if not pending:
+        return
+    tile_id = str(instance.pk)
+    transaction.on_commit(
+        lambda: frame_writes.resolve_pending(tile_id, pending), robust=True
+    )
+
+
 @receiver(post_save, sender=Tile)
 def register_manifests_of_annotations(sender, instance, raw=False, **kwargs):
     """Register, once the save commits, the remote manifests that annotations of the tile reference.
@@ -222,12 +258,14 @@ def register_manifests_of_annotations(sender, instance, raw=False, **kwargs):
     candidates = manifest_registry.annotation_manifests(instance.data)
     if not candidates:
         return
-    annotation_nodes = {
-        str(nodeid)
-        for nodeid in Node.objects.filter(
-            nodeid__in=list(candidates), datatype="annotation"
-        ).values_list("nodeid", flat=True)
-    }
+    annotation_nodes = getattr(instance, "_ms_annotation_nodes", None)
+    if annotation_nodes is None:
+        annotation_nodes = {
+            str(nodeid)
+            for nodeid in Node.objects.filter(
+                nodeid__in=list(candidates), datatype="annotation"
+            ).values_list("nodeid", flat=True)
+        }
     manifests = {}
     for nodeid, urls in candidates.items():
         if nodeid in annotation_nodes:

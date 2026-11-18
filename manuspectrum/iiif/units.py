@@ -311,6 +311,15 @@ def image_info(service, deadline=None):
     return info
 
 
+def known_info(service):
+    """The kept ``ImageInfo`` of *service*, or None: the cache is read, nothing is requested and no host is noted."""
+    service = (service or "").rstrip("/")
+    if not service:
+        return None
+    held = cache.get(stable_cache_key(_INFO_PREFIX, service))
+    return ImageInfo(*held) if held else None
+
+
 def _hinted_tile(service):
     hints = _setting("IIIF_IMAGE_TILE_HINTS", {}) or {}
     found = hints.get(urlsplit(service or "").hostname or "")
