@@ -19,7 +19,8 @@ symptom and marks the IIIF memo build degraded.
 
 The conversion holds for the tiling served when the zone was drawn:
 re-encoding an image or changing Cantaloupe's tile size moves its existing
-unstamped and ``estimated`` zones (a measured frame keeps its place), and a read is kept
+unstamped zones, and the drawing of ``estimated`` ones over the live layer (a
+measured frame keeps its place); a read is kept
 ``IIIF_IMAGE_INFO_CACHE_TTL`` seconds.
 
 A ``Frame`` is the image frame a zone was drawn in, stamped on the zone: its

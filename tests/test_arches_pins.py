@@ -9,7 +9,10 @@ Arches leaves open stays free.
 The checks are functions of the parsed files, so the unit cases at the bottom
 feed them modified copies. `ZoneFrameContractTests` pins by source snippet what
 the annotation zone stamps rely on in Arches' IIIF viewer, leaflet-iiif and
-Leaflet, and fails with what to re-check when an upgrade moves it.
+Leaflet, and fails with what to re-check when an upgrade moves it. The pins read
+`node_modules/arches`; webpack builds from the Python package copy, which is
+byte-identical today and kept on the same version by
+`test_arches_version_agrees_across_files`.
 """
 
 import copy
@@ -452,6 +455,11 @@ def squeeze(source):
     return re.sub(r"\s+", " ", source)
 
 
+def bare(source):
+    """*source* without any whitespace, so a reflow cannot break a snippet."""
+    return re.sub(r"\s+", "", source)
+
+
 def leaflet_iiif_problems(raw):
     """What the zone frame arithmetic relies on in leaflet-iiif's layer."""
     problems = []
@@ -463,13 +471,13 @@ def leaflet_iiif_problems(raw):
             "folio/page-layer.ts and folio/geometry.ts, then update "
             "LEAFLET_IIIF_SHA256."
         )
-    source = squeeze(raw.decode())
+    source = bare(raw.decode())
     for needle in (
-        "_this.x = data.width",
-        "_this.y = data.height",
-        "_this.maxNativeZoom =",
-        "_this._infoPromise =",
-        "_this._imageSizes =",
+        "_this.x=data.width",
+        "_this.y=data.height",
+        "_this.maxNativeZoom=",
+        "_this._infoPromise=",
+        "_this._imageSizes=",
         "_getZoomForUrl",
         "_isValidTile",
     ):
@@ -482,25 +490,41 @@ def leaflet_iiif_problems(raw):
 
 
 def iiif_viewer_problems(source):
-    """Arches builds its image layers with leaflet-iiif's defaults on CRS.Simple."""
+    """Arches builds its image layers with leaflet-iiif's defaults on CRS.Simple.
+
+    Every `L.tileLayer.iiif(` call takes a literal options object of
+    `fitBounds` and `className` with literal values; no other option, spread,
+    variable or later `options` change is accepted, and the options that move
+    the unit are named nowhere in the file.
+    """
     problems = []
     source = squeeze(source)
-    calls = re.findall(r"L\.tileLayer\.iiif\([^,]*,\s*\{([^}]*)\}", source)
-    if len(calls) < 2:
+    literal = r"(?:\"[^\"]*\"|'[^']*'|true|false)"
+    option = rf"(?:fitBounds|className): {literal}"
+    call = re.compile(
+        rf"L\.tileLayer\.iiif\([^,(){{}}]+, \{{ ?{option}(?:, {option})*,? ?\}}\)"
+    )
+    total = source.count("L.tileLayer.iiif(")
+    if total < 2 or len(call.findall(source)) != total:
         problems.append(
-            REVISIT + "iiif-viewer.js no longer builds both layers with "
-            "`L.tileLayer.iiif(url, {...})`; re-check how the layer (and so the "
-            "unit) is made."
+            REVISIT + "iiif-viewer.js no longer builds every layer with "
+            "`L.tileLayer.iiif(url, {fitBounds, className})` and literal values; "
+            "other options, a spread, a variable or a template literal may move "
+            "the unit: re-check how the layer is made."
         )
-    for body in calls:
-        keys = set(re.findall(r"([A-Za-z_]\w*)\s*:", body))
-        if not keys <= LAYER_OPTION_KEYS:
-            problems.append(
-                REVISIT + f"iiif-viewer.js passes layer options {sorted(keys)}; "
-                f"only {sorted(LAYER_OPTION_KEYS)} leave the unit unchanged "
-                "(`tileSize`, `zoomOffset`, `detectRetina`, `crs`… move it)."
+    moving = sorted(
+        set(
+            re.findall(
+                r"tileSize|zoomOffset|detectRetina|zoomReverse|maxNativeZoom", source
             )
-    if "crs: L.CRS.Simple" not in source:
+        )
+    )
+    if moving:
+        problems.append(
+            REVISIT + f"iiif-viewer.js now names {moving}, options that move the "
+            "unit of a layer."
+        )
+    if bare("crs: L.CRS.Simple") not in bare(source):
         problems.append(
             REVISIT + "iiif-viewer.js no longer sets `crs: L.CRS.Simple` on the map."
         )
@@ -514,47 +538,49 @@ def iiif_annotation_problems(source):
     id, `properties.canvas` and the geometry rounded as Leaflet writes it.
     """
     problems = []
-    source = squeeze(source)
+    source = bare(source)
     for snippet in (
         "features.push(feature);",
+        "features:features}",
+        "self.tile.data[id].features(features);",
         "drawFeatures(drawFeatures().concat(featureCollection.features));",
         "feature.properties.nodeId = id;",
-        "feature.id = uuid.generate();",
-        "canvas: self.canvas(),",
-        "drawFeature.properties = Object.assign( drawFeature.properties, "
-        "styleProperties );",
+        "feature.id=uuid.generate();",
+        "canvas:self.canvas(),",
+        "drawFeature.properties=Object.assign(drawFeature.properties,styleProperties);",
         "drawFeature.geometry = layer.toGeoJSON().geometry;",
     ):
-        if snippet not in source:
+        if bare(snippet) not in source:
             problems.append(
                 REVISIT + f"iiif-annotation.js no longer contains `{snippet}`: "
                 "check a save still returns each feature with its id, "
                 "`properties.canvas`, stamp and 6-decimal geometry."
             )
-    load = source.split("var updateDrawFeatures", 1)[-1].split(
-        "updateDrawFeatures();", 1
-    )[0]
-    if "uuid.generate" in load or re.search(r"feature\.id\s*=", load):
+    if (
+        source.count("uuid.generate") != 1
+        or len(re.findall(r"\.id=(?!=)", source)) != 1
+    ):
         problems.append(
-            REVISIT + "iiif-annotation.js now assigns a feature id when it loads "
-            "the tile; every zone would be re-stamped with the live frame."
+            REVISIT + "iiif-annotation.js assigns a feature id elsewhere than on "
+            "draw (or no longer on draw); an id given on load would re-stamp "
+            "every zone with the live frame."
         )
     return problems
 
 
 def leaflet_rounding_problems(source):
     """Leaflet 1.6 `toGeoJSON` rounds to 6 decimals, as `frames.leaflet_round`."""
-    source = squeeze(source)
+    source = bare(source)
     needles = (
-        "precision = typeof precision === 'number' ? precision : 6;",
-        "var pow = Math.pow(10, (digits === undefined ? 6 : digits)); "
-        "return Math.round(num * pow) / pow;",
+        "precision=typeofprecision==='number'?precision:6;",
+        "varpow=Math.pow(10,(digits===undefined?6:digits));"
+        "returnMath.round(num*pow)/pow;",
     )
     return [
         REVISIT + f"leaflet-src.js no longer contains `{n}`: compare with "
         "`frames.leaflet_round` (geometry equality, `same_geometry`)."
         for n in needles
-        if n not in source
+        if bare(n) not in source
     ]
 
 
@@ -563,11 +589,11 @@ class ZoneFrameContractTests(unittest.TestCase):
         problems = leaflet_iiif_problems(LEAFLET_IIIF.read_bytes())
         self.assertEqual(problems, [], "\n" + "\n".join(problems))
 
-    def test_arches_viewer_builds_layers_without_a_tile_size(self):
+    def test_arches_viewer_layers_take_only_literal_default_options(self):
         problems = iiif_viewer_problems(IIIF_VIEWER.read_text())
         self.assertEqual(problems, [], "\n" + "\n".join(problems))
 
-    def test_arches_annotation_card_keeps_whole_features(self):
+    def test_arches_annotation_card_returns_id_canvas_and_geometry(self):
         problems = iiif_annotation_problems(IIIF_ANNOTATION.read_text())
         self.assertEqual(problems, [], "\n" + "\n".join(problems))
 
@@ -617,6 +643,10 @@ class ZoneFrameContractTests(unittest.TestCase):
             ("fitBounds: false,", "fitBounds: false, zoomOffset: 1,"),
             ("fitBounds: false,", "fitBounds: false, detectRetina: true,"),
             ("L.tileLayer.iiif(", "x("),
+            (
+                "});\n\n                    canvasLayer.on",
+                "}); canvasLayer.options.zoomOffset = 1; canvasLayer.on",
+            ),
             ("crs: L.CRS.Simple", "crs: L.CRS.EPSG3857"),
         ):
             self.assertTrue(iiif_viewer_problems(viewer.replace(old, new)), (old, new))
@@ -626,11 +656,15 @@ class ZoneFrameContractTests(unittest.TestCase):
             ("drawFeature.geometry = layer.toGeoJSON().geometry;", ""),
             ("feature.properties.nodeId = id;", ""),
             ("canvas: self.canvas(),", ""),
+            ("features: features", "features: features.map(fn)"),
+            ("self.tile.data[id].features(features);", ""),
+            ("feature.id = uuid.generate();", ""),
             (
                 "feature.properties.nodeId = id;",
                 "feature.properties.nodeId = id; feature.id = uuid.generate();",
             ),
         ):
+            self.assertIn(old, annotation)
             self.assertTrue(
                 iiif_annotation_problems(annotation.replace(old, new)), (old, new)
             )
