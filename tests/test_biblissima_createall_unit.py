@@ -318,7 +318,8 @@ class BufferIsolationTests(CreateAllBase):
         self.assertEqual(
             [r["status"] for r in results], ["created", "failed", "created"]
         )
-        self.assertIn("403", results[1]["error"])
+        self.assertEqual(results[1]["error"], "Creation failed for this item")
+        self.assertNotIn(b"403", json.dumps(payload).encode())
 
         # Survivors are items 0 and 2; item 1 failed and has no resourceId.
         survivor_ids = {r["resourceId"] for r in results if r["status"] == "created"}
@@ -438,6 +439,33 @@ class DanglingDependencyTests(CreateAllBase):
         inserted = self.mock_tilemodel.objects.bulk_create.call_args.args[0]
         self.assertEqual(len(inserted), 2)
         self.assertEqual(self.mock_write_editlog.call_count, 2)
+
+
+class UnexpectedBuildErrorTests(CreateAllBase):
+    def _run(self, exc):
+        def boom(rid, tx, bbma_data, deps, concepts, created_deps):
+            raise exc
+
+        self.view._create_document_tiles = boom
+        with self.assertLogs("manuspectrum.views.biblissima_proxy", "ERROR"):
+            return self._post(
+                {"resourceType": "Document", "items": [_item("c0"), _item("c1")]}
+            )
+
+    def test_keyerror_text_is_not_returned(self):
+        response, payload = self._run(KeyError("secret_column"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"secret_column", response.content)
+        for r in payload["results"]:
+            self.assertEqual(r["status"], "failed")
+            self.assertEqual(r["error"], "Creation failed for this item")
+
+    def test_plain_valueerror_text_is_not_returned(self):
+        response, payload = self._run(ValueError("internal detail"))
+        self.assertNotIn(b"internal detail", response.content)
+        self.assertEqual(
+            payload["results"][0]["error"], "Creation failed for this item"
+        )
 
 
 # ===========================================================================
