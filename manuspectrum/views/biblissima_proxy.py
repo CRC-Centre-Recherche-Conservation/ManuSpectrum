@@ -108,10 +108,13 @@ from manuspectrum.iiif.frames import leaflet_round
 from manuspectrum.iiif.units import (
     REFUSED,
     ImageInfo,
+    ZoneUnit,
+    assumed_unit,
     frame_assumed,
     frame_from_info,
     image_info,
-    zone_unit,
+    native_zoom,
+    unit_of_frame,
 )
 from manuspectrum.observability import metrics
 from manuspectrum.utils.budget import (
@@ -266,6 +269,15 @@ def _get_biblissima_session():
 # gunicorn worker holds its own semaphore, so the upstream sees at most
 # _BIBLISSIMA_CONCURRENCY_LIMIT × workers calls at once.
 _biblissima_semaphore = threading.BoundedSemaphore(_BIBLISSIMA_CONCURRENCY_LIMIT)
+
+
+def _canvas_side(value, default):
+    """A canvas side in pixels: *value* when it is a positive whole number, else *default*."""
+    try:
+        side = int(value)
+    except (TypeError, ValueError):
+        return default
+    return side if side > 0 else default
 
 
 class BiblissimaBusy(Exception):
@@ -4954,10 +4966,11 @@ class BiblissimaCreateResourceView(View):
         in Context of Component (which has no Biblissima source).
 
         The whole-page zone is stamped with its image frame (``Frame.stamp``):
-        read from the image service's info.json, else estimated. That read is
-        the one network call allowed inside the creation transaction (bounded
-        by ``image_info``'s own timeout, memoised); a size no ``Frame`` accepts
-        writes the zone unstamped.
+        read from the image service's info.json, else estimated. The read runs
+        while the tiles are built, before the write transaction opens, under
+        the item's write budget (``BIBLISSIMA_WRITE_ITEM_DEADLINE``), and is
+        kept by ``image_info``; a size no ``Frame`` accepts writes the zone
+        unstamped.
         """
         i18n = self._i18n_string
         clist = self._concept_list
@@ -5203,34 +5216,37 @@ class BiblissimaCreateResourceView(View):
             and manifest_url
             and _annotation_targets_are_safe(canvas_url, manifest_url)
         ):
-            width = int(bbma_data.get("canvasWidth") or 0) or 4000
-            height = int(bbma_data.get("canvasHeight") or 0) or 5000
+            width = _canvas_side(bbma_data.get("canvasWidth"), 4000)
+            height = _canvas_side(bbma_data.get("canvasHeight"), 5000)
 
             # Arches stores annotations in the Leaflet CRS.Simple units of
             # the image layer its viewer draws (y upwards): the zone carries
             # the frame (unit and image size) it is written in.
             service = bbma_data.get("imageServiceUrl")
             info = image_info(service) if service else REFUSED
-            frame = None
+            stamp = {}
             try:
                 if isinstance(info, ImageInfo):
                     frame = frame_from_info(info)
                 else:
                     frame = frame_assumed(service, width, height)
+                unit = unit_of_frame(frame, width, height)
+                stamp = frame.stamp()
             except ValueError:
                 logger.warning(
                     "Whole-page zone on image service %s written without a frame",
                     urlsplit(service or "").netloc or "?",
                 )
-            if frame is None:
-                unit = zone_unit(service, width, height)
-                unit_x, unit_y, stamp = unit.x, unit.y, {}
-                read = unit.read
-            else:
-                unit_x = frame.unit * width / frame.width
-                unit_y = frame.unit * height / frame.height
-                stamp = frame.stamp()
-                read = frame.measured
+                if isinstance(info, ImageInfo):
+                    scale = 2 ** native_zoom(info.width, info.height, info.tile)
+                    unit = ZoneUnit(
+                        scale * width / info.width,
+                        scale * height / info.height,
+                        True,
+                    )
+                else:
+                    unit = assumed_unit(width, height, service)
+            unit_x, unit_y, read = unit.x, unit.y, unit.read
             if not read:
                 logger.warning(
                     "Whole-page zone on image service %s written with an assumed unit",

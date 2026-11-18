@@ -848,7 +848,11 @@ class AnnotationTargetGuardTests(TestCase):
         )
         data = _make_minimal_component_data()
         if canvas:
-            data["canvasWidth"], data["canvasHeight"] = canvas
+            for key, value in zip(("canvasWidth", "canvasHeight"), canvas):
+                if value is None:
+                    data.pop(key, None)
+                else:
+                    data[key] = value
         view = _make_builder_view()
         with (
             self.settings(IIIF_IMAGE_INFO_READ=True),
@@ -919,13 +923,55 @@ class AnnotationTargetGuardTests(TestCase):
         self.assertEqual(self._feature(tiles)["properties"]["msFrame"], "estimated")
         self.assertIn("assumed unit", "\n".join(logs.output))
 
-    def test_an_absurd_image_size_writes_the_zone_unstamped(self):
-        tiles = self._build_read(
-            b'{"width": 5000000, "height": 6000000, "tiles": [{"width": 512}]}',
-            canvas=("800", "1000"),
-        )
+    def _frame_of(self, tiles):
+        properties = self._feature(tiles)["properties"]
+        return {k: v for k, v in properties.items() if k.startswith("ms")}
 
-        self.assertNotIn("msFrame", self._feature(tiles)["properties"])
+    def _corner(self, tiles):
+        return self._feature(tiles)["geometry"]["coordinates"][0][2]
+
+    BIG = b'{"width": 4913, "height": 6609, "tiles": [{"width": 512}]}'
+    BIG_FRAME = {
+        "msUnit": 16,
+        "msImageWidth": 4913,
+        "msImageHeight": 6609,
+        "msFrame": "read",
+    }
+
+    def test_whole_page_zone_is_in_image_units_whatever_the_canvas_size(self):
+        tiles = self._build_read(self.BIG, canvas=("1000", "1000"))
+
+        self.assertEqual(self._corner(tiles), [307.0625, -413.0625])
+        self.assertEqual(self._frame_of(tiles), self.BIG_FRAME)
+
+    def test_whole_page_zone_without_a_canvas_size_is_in_image_units(self):
+        tiles = self._build_read(self.BIG, canvas=(None, None))
+
+        self.assertEqual(self._corner(tiles), [307.0625, -413.0625])
+        self.assertEqual(self._frame_of(tiles), self.BIG_FRAME)
+
+    def test_an_absurd_image_size_writes_the_zone_unstamped(self):
+        with self.assertLogs("manuspectrum.views.biblissima_proxy", "WARNING") as logs:
+            tiles = self._build_read(
+                b'{"width": 5000000, "height": 6000000, "tiles": [{"width": 512}]}',
+                canvas=("800", "1000"),
+            )
+
+        self.assertIn("without a frame", "\n".join(logs.output))
+        self.assertEqual(self._frame_of(tiles), {})
+
+    def test_an_absurd_canvas_on_a_refusing_host_is_unstamped_and_assumed(self):
+        with self.assertLogs("manuspectrum.views.biblissima_proxy", "WARNING") as logs:
+            tiles = self._build_read(b"{}", canvas=("2000000", "3000000"))
+
+        self.assertIn("without a frame", "\n".join(logs.output))
+        self.assertEqual(self._frame_of(tiles), {})
+        self.assertEqual(self._corner(tiles), [122.070313, -183.105469])
+
+    def test_a_negative_canvas_size_counts_as_missing(self):
+        tiles = self._build_read(b"{}", canvas=("-5", "1000"))
+
+        self.assertEqual(self._corner(tiles), [250, -62.5])
 
     def test_an_unread_image_is_logged_with_its_host_only(self):
         with self.assertLogs("manuspectrum.views.biblissima_proxy", "WARNING") as logs:
