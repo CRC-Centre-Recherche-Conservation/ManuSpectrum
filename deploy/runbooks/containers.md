@@ -109,6 +109,73 @@ Reduce the number of gunicorn workers or raise the limit within the host budget.
 
 The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
 
+## ContainerSwapAllowed
+
+Severity: warning. A container may swap: the kernel limit `memory.swap.max` is not `0`.
+
+### Prerequisites
+
+SSH access to the host as the service account, from the repository checkout, and `sudo` for the Ansible run.
+
+### Symptom
+
+None at first. Under memory pressure the kernel moves the pages of the container to swap instead of only dropping page cache, and a Java service (Cantaloupe, Elasticsearch) slows down. `ContainerSwapping` follows once pages have moved.
+
+### Diagnosis
+
+`memswap_limit` in `compose.prod.yaml` makes Docker write `0` to the cgroup file, but runc does not hand that value to systemd: the container's scope unit keeps `MemorySwapMax=infinity`, and the next `systemctl daemon-reload` (an apt upgrade, Ansible) writes `max` back. The host role installs a drop-in that gives every `docker-<id>.scope` `MemorySwapMax=0`. On the host (`<service>` is the Compose service):
+
+```bash
+CID=$(docker inspect -f '{{.Id}}' "$(docker ps -qf label=com.docker.compose.service=<service>)")
+cat /sys/fs/cgroup/system.slice/docker-$CID.scope/memory.swap.max      # expected: 0
+systemctl show docker-$CID.scope -p MemorySwapMax                      # expected: MemorySwapMax=0
+systemctl cat docker-$CID.scope                                        # lists 10-manuspectrum-no-swap.conf
+ls -l /etc/systemd/system/docker-.scope.d/
+```
+
+A missing `10-manuspectrum-no-swap.conf`, or a later file that sets another `MemorySwapMax` (a container started with a swap allowance writes its own `50-MemorySwapMax.conf`), explains the alert.
+
+### Remediation
+
+Re-run the Ansible host role from the administrator's laptop (`ansible-playbook -i inventories/<host> site.yml --tags host --ask-become-pass`, see `deploy/ansible/README.md`): it restores the drop-in and reloads systemd, which applies the value to the running containers without restarting Docker. Check the three commands above again. Pages already in swap stay there: see `ContainerSwapping`.
+
+### Escalation
+
+The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
+
+## ContainerSwapping
+
+Severity: warning. A container holds memory in swap.
+
+### Prerequisites
+
+SSH access to the host as the service account, from the repository checkout.
+
+### Symptom
+
+Slower responses of the container; `SwapInUse` fires when the amount is large.
+
+### Diagnosis
+
+The alert reads `memory.swap.current` of the container. On the host:
+
+```bash
+for d in /sys/fs/cgroup/system.slice/docker-*.scope; do
+  id=$(basename "$d" .scope); id=${id#docker-}
+  printf '%s %s\n' "$(docker inspect -f '{{.Name}}' "$id")" "$(( $(cat "$d/memory.swap.current") / 1048576 )) MiB"
+done
+```
+
+Check that the limit now holds (`ContainerSwapAllowed`, `memory.swap.max` must be `0`).
+
+### Remediation
+
+Once the limit holds, nothing moves new pages to swap, but the old ones stay there until the container restarts. Restart it off-peak to bring them back (`docker restart "$(docker ps -qf label=com.docker.compose.service=<service>)"`). If the limit does not hold, fix that first, or the pages return to swap.
+
+### Escalation
+
+The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
+
 ## ContainerUnhealthy
 
 Severity: warning. A container is unhealthy.

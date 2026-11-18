@@ -282,6 +282,41 @@ run containers
 [ -n "$(unrec web)" ] && ! grep -q 'unreclaimable_bytes{container="worker"}' "$OUT/$F"
 assert "memory: a stopped container has no unreclaimable sample" $?
 
+# swap: memory.swap.current in bytes, and whether memory.swap.max lets it swap
+swapb() { sample "manuspectrum_container_memory_swap_bytes{container=\"$1\"}" $F; }
+swapok() { sample "manuspectrum_container_swap_allowed{container=\"$1\"}" $F; }
+set_containers
+d="$TMP/cgroup/system.slice/docker-$IDA.scope"
+printf '0\n' >"$d/memory.swap.max"
+printf '0\n' >"$d/memory.swap.current"
+d="$TMP/cgroup/system.slice/docker-$IDB.scope"
+printf 'max\n' >"$d/memory.swap.max"
+printf '602931200\n' >"$d/memory.swap.current"
+run containers
+[ "$(swapb web)" = 0 ] && [ "$(swapb redis-cache)" = 602931200 ]
+assert "swap: memory.swap.current is exported in bytes" $?
+[ "$(swapok web)" = 0 ] && [ "$(swapok redis-cache)" = 1 ]
+assert "swap: a container whose memory.swap.max is not 0 is marked as allowed to swap" $?
+grep -q '^# TYPE manuspectrum_container_memory_swap_bytes gauge$' "$OUT/$F" && grep -q '^# TYPE manuspectrum_container_swap_allowed gauge$' "$OUT/$F"
+assert "swap: both series are gauges" $?
+printf '1048576\n' >"$d/memory.swap.max"
+run containers
+[ "$(swapok redis-cache)" = 1 ]
+assert "swap: a finite non-zero memory.swap.max is allowed too" $?
+rm -f "$TMP/cgroup/system.slice/docker-$IDB.scope/memory.swap.max" "$TMP/cgroup/system.slice/docker-$IDB.scope/memory.swap.current"
+printf 'garbage\n' >"$TMP/cgroup/system.slice/docker-$IDA.scope/memory.swap.max"
+run containers
+! grep -q 'container_swap_allowed{' "$OUT/$F" && ! grep -q 'memory_swap_bytes{container="redis-cache"}' "$OUT/$F" && [ "$(sample 'manuspectrum_container_metrics_errors' $F)" = 0 ]
+assert "swap: unreadable or malformed files give no sample and no error" $?
+set_containers
+printf '0\n' >"$TMP/cgroup/system.slice/docker-$IDA.scope/memory.swap.max"
+printf '%s\n' \
+  "$IDA|web|false|none|0|false|0001-01-01T00:00:00Z|0" \
+  "$IDB|redis-cache|true|none|0|false|0001-01-01T00:00:00Z|0" >"$TMP/inspect"
+run containers
+! grep -q 'swap_allowed{container="web"}' "$OUT/$F"
+assert "swap: a stopped container has no swap sample" $?
+
 # a malformed id never reaches a path
 set_containers
 echo "../../x|web|true|healthy|0|false|0001-01-01T00:00:00Z|0" >"$TMP/inspect"

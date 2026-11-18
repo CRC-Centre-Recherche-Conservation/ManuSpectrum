@@ -390,6 +390,12 @@ cache) and `manuspectrum_container_memory_unreclaimable_bytes`, `anon` plus
 `shmem` of the cgroup v2 `memory.stat`, the memory the kernel cannot drop (the
 stack runs without swap). `ContainerMemoryNearLimit` reads the second, and the
 working set only for a container without a readable `memory.stat`.
+Swap is read from the same cgroup: `manuspectrum_container_memory_swap_bytes`
+(`memory.swap.current`) and `manuspectrum_container_swap_allowed` (1 when
+`memory.swap.max` is not `0`, that is when the container may swap; the host role
+keeps it `0` with a systemd drop-in). `ContainerSwapping` reads the first and
+`ContainerSwapAllowed` the second; neither series exists for a container whose
+cgroup file is unreadable.
 `manuspectrum_container_oom_cgroup` is 1 when a container's OOM kills are counted
 from the cgroup v2 `memory.events` file (a kill of a child process included) and 0
 when the collector fell back on Docker's `OOMKilled` flag, which misses most kills;
