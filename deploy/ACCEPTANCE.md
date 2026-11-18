@@ -1475,7 +1475,7 @@ Create the test accounts in the admin and delete them afterwards.
   save lands on the change page, and Mailpit holds one message
   with the subject prefix `[ManuSpectrum][Account]` and the header `X-ManuSpectrum-Category: Account`, English then French.
 - [ ] Open the link (read it as in « Reading a mail link » of step 7: a link cut at a line break answers `410`):
-  a « Continue » page, then the terms of use with a required checkbox; submitting without it is refused; with it, set
+  the terms of use open directly, with a required checkbox; submitting without it is refused; with it, set
   a password (an 11-character or common one is refused), then enrol an authenticator at `/en/account/two-factor`.
   The admin lists the acceptance (version, date) under "Terms acceptances".
 - [ ] Sign out and in again with the code. A POST to `/en/account/two-factor` and `/en/account/terms` repeated 7 times in
@@ -1484,9 +1484,15 @@ Create the test accounts in the admin and delete them afterwards.
   version, not the administrator who set the stack up: the next page after sign-in is the acceptance page. A person
   who has not accepted yet sees the terms at activation instead, and the acceptance page does not appear
   for an account that already accepted the current version.
-- [ ] The activation link answers a « Continue » page that stores nothing (opening the link again still works);
-  « Continue » leads to a URL without the token (`.../set-password`), and the nginx access log shows `[redacted]`
-  for the activation path in both `uri` and `referer`.
+- [ ] The activation link redirects at once to a URL without the token (`.../set-password`) that shows the form; it
+  stores nothing and consumes nothing (opening the link again still works). The response to the link sets a cookie
+  `ms_activation_link_en` and `_fr` (DevTools, Application, Cookies, or the response headers) with `HttpOnly`,
+  `Secure`, `SameSite=Lax`, a `Path` limited to `/<lang>/account/activate/<uid>/` and `Max-Age=900`; the response
+  to the successful form post deletes them (`Max-Age=0`). The nginx access log shows `[redacted]` for the activation
+  path in both `uri` and `referer`.
+- [ ] Open an activation link, delete its `ms_activation_link_en` cookie in DevTools (as after 15 minutes) and submit the
+  form: « This page has expired » answers (`410`), with the advice to open the link of the e-mail again; opening it
+  again shows the form.
 - [ ] Click the activation link from another site, as from a webmail: the Mailpit web page. Mailpit publishes no port;
   *(service account)* `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$(dc ps -q mailpit)"`
   prints its addresses, then *(host)* `ssh -L 8025:<one of them>:8025 <admin>@192.168.123.10` and open
@@ -1494,16 +1500,17 @@ Create the test accounts in the admin and delete them afterwards.
   `<site>`): the same host name on another port is the same site, and the click would prove nothing (the code before
   the fix passed it too). With the browser developer tools recording the network in the tab that the click opens
   (Chromium: DevTools settings, « Auto-open DevTools for popups »), click the link: the first request shows
-  `Sec-Fetch-Site: cross-site`, otherwise the check does not count. The « Continue » page answers, not « This link is
-  not valid », and « Continue » leads to the terms. The same for a password-reset link (the new password form) and,
-  below, the two-factor re-enrolment link (the password field).
+  `Sec-Fetch-Site: cross-site`, otherwise the check does not count. The form opens directly, without an intermediate
+  page, not « This link is not valid »: the terms for the activation link. The same for a password-reset link (the
+  new password form, cookie `ms_reset_link_<lang>`) and, below, the two-factor re-enrolment link (the password field,
+  cookie `ms_two_factor_link_<lang>`).
 - [ ] Set `FORCE_TWO_FACTOR_AUTHENTICATION=true` in `.env`, recreate `web`. Invite and activate a second test user:
   after the password the browser lands on `/en/account/two-factor` and any other page sends it back there until a
   code is confirmed. Check in the browser that the enrolment page works fully (QR code, manual key, confirmation)
   for that not-yet-enrolled user. An enrolled user signs in with the code.
 - [ ] Lost phone, with forced two-factor still on: as a superuser, run **Reset two-factor authentication (superuser)**
   in the admin Users list (tick the account, choose the action; the User page shows the « Account » section).
-  Mailpit holds the re-enrolment mail; the link shows a « Continue » page, then asks for the password (a wrong one
+  Mailpit holds the re-enrolment mail; the link opens the password page directly, which asks for the password (a wrong one
   counts as a failed sign-in), then a new code, then signs the user in. Opening the link a second time is refused.
 - [ ] `make -C deploy manage ARGS="check --database default"` raises no `manuspectrum.W004` (no OAuth application with the
   password grant). Put `FORCE_TWO_FACTOR_AUTHENTICATION` back to `false` if the rehearsal continues without it.
