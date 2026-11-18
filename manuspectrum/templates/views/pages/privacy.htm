@@ -127,6 +127,7 @@
         <tr><td><code>{{ session_cookie_name }}</code></td><td>{% trans "Keeps you signed in." %}</td></tr>
         <tr><td><code>{{ csrf_cookie_name }}</code></td><td>{% trans "Protects forms against forged requests." %}</td></tr>
         <tr><td><code>{{ language_cookie_name }}</code></td><td>{% trans "Remembers the language you chose." %}</td></tr>
+        <tr><td><code>ms_activation_link_&lt;language&gt;</code>, <code>ms_reset_link_&lt;language&gt;</code>, <code>ms_two_factor_link_&lt;language&gt;</code></td><td>{% trans "Carries the token of a link received by e-mail to its form, for 15 minutes; deleted once the form is sent." %}</td></tr>
     </tbody>
 </table>
 <p>{% trans "There is no tracker, no analytics service and no advertising cookie. The Data Lab keeps your selection and layout in your browser's local storage; they are never sent to the server." %}</p>
