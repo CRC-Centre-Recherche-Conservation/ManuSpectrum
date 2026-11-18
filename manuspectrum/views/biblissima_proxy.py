@@ -104,7 +104,15 @@ from manuspectrum.accounts.workflows import (
     WorkflowTransactionError,
     workflow_transaction,
 )
-from manuspectrum.iiif.units import zone_unit
+from manuspectrum.iiif.frames import leaflet_round
+from manuspectrum.iiif.units import (
+    REFUSED,
+    ImageInfo,
+    frame_assumed,
+    frame_from_info,
+    image_info,
+    zone_unit,
+)
 from manuspectrum.observability import metrics
 from manuspectrum.utils.budget import (
     BudgetSpent,
@@ -4944,6 +4952,12 @@ class BiblissimaCreateResourceView(View):
 
         Attention: ``folio`` lives **only** in Location appellation, not
         in Context of Component (which has no Biblissima source).
+
+        The whole-page zone is stamped with its image frame (``Frame.stamp``):
+        read from the image service's info.json, else estimated. That read is
+        the one network call allowed inside the creation transaction (bounded
+        by ``image_info``'s own timeout, memoised); a size no ``Frame`` accepts
+        writes the zone unstamped.
         """
         i18n = self._i18n_string
         clist = self._concept_list
@@ -5193,23 +5207,38 @@ class BiblissimaCreateResourceView(View):
             height = int(bbma_data.get("canvasHeight") or 0) or 5000
 
             # Arches stores annotations in the Leaflet CRS.Simple units of
-            # the image layer its viewer draws (y upwards); `zone_unit` gives
-            # the canvas pixels of one unit, read from the image service.
-            unit = zone_unit(bbma_data.get("imageServiceUrl"), width, height)
-            if not unit.read:
+            # the image layer its viewer draws (y upwards): the zone carries
+            # the frame (unit and image size) it is written in.
+            service = bbma_data.get("imageServiceUrl")
+            info = image_info(service) if service else REFUSED
+            frame = None
+            try:
+                if isinstance(info, ImageInfo):
+                    frame = frame_from_info(info)
+                else:
+                    frame = frame_assumed(service, width, height)
+            except ValueError:
+                logger.warning(
+                    "Whole-page zone on image service %s written without a frame",
+                    urlsplit(service or "").netloc or "?",
+                )
+            if frame is None:
+                unit = zone_unit(service, width, height)
+                unit_x, unit_y, stamp = unit.x, unit.y, {}
+                read = unit.read
+            else:
+                unit_x = frame.unit * width / frame.width
+                unit_y = frame.unit * height / frame.height
+                stamp = frame.stamp()
+                read = frame.measured
+            if not read:
                 logger.warning(
                     "Whole-page zone on image service %s written with an assumed unit",
-                    urlsplit(bbma_data.get("imageServiceUrl") or "").netloc or "?",
+                    urlsplit(service or "").netloc or "?",
                 )
-            polygon_coords = [
-                [
-                    [0, 0],
-                    [width / unit.x, 0],
-                    [width / unit.x, -height / unit.y],
-                    [0, -height / unit.y],
-                    [0, 0],
-                ]
-            ]
+            x_max = leaflet_round(width / unit_x)
+            y_max = leaflet_round(-height / unit_y)
+            polygon_coords = [[[0, 0], [x_max, 0], [x_max, y_max], [0, y_max], [0, 0]]]
             annotation_data = {
                 "type": "FeatureCollection",
                 "features": [
@@ -5230,6 +5259,7 @@ class BiblissimaCreateResourceView(View):
                             "opacity": 1,
                             "fillColor": "#3388ff",
                             "fillOpacity": 0.2,
+                            **stamp,
                         },
                     }
                 ],
