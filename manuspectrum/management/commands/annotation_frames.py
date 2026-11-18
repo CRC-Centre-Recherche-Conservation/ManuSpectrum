@@ -41,6 +41,7 @@ import errno
 import json
 import logging
 import os
+import sys
 import uuid
 from collections import Counter, defaultdict
 from types import SimpleNamespace
@@ -395,27 +396,33 @@ def read_journal(path, warn=logger.warning):
     number. An unterminated last segment (a write cut short by a crash) belongs
     to a batch that never committed, as a committed batch ends with a newline
     fsynced before the commit: it is skipped and *warn* is called with a message
-    naming its line.
+    naming its line, unless it parses as a journal line (an editor may have
+    dropped the final newline of a complete journal), which is kept.
     """
     grouped = defaultdict(list)
+    number = 0
     try:
         with open(path, encoding="utf-8", newline="\n") as handle:
             for number, text in enumerate(handle, 1):
-                if not text.endswith("\n"):
-                    if text.strip():
-                        warn(
-                            f"{path}: line {number} is cut short (an unfinished write); skipped"
-                        )
-                    continue
+                terminated = text.endswith("\n")
                 if not text.strip():
                     continue
                 try:
                     line = _journal_line(text)
                 except (ValueError, KeyError, TypeError) as error:
+                    if not terminated:
+                        warn(
+                            f"{path}: line {number} is cut short (an unfinished write); skipped"
+                        )
+                        continue
                     raise CommandError(
                         f"{path}: line {number} is not a journal line ({error})"
                     ) from error
                 grouped[uuid.UUID(line["tile"])].append(line)
+    except UnicodeDecodeError as error:
+        raise CommandError(
+            f"{path}: not UTF-8 text (at or after line {number + 1}); the journal is unreadable"
+        ) from error
     except OSError as error:
         raise CommandError(f"cannot read the journal: {error}") from error
     return grouped
@@ -450,7 +457,8 @@ def _close_journal(fd, path):
     """Close the journal *fd*, and remove the file when it is empty; never raises.
 
     A journal holding a line is kept whatever happened: a batch may have
-    committed without the caller having seen it return.
+    committed without the caller having seen it return. Returns True when the
+    file was kept with content.
     """
     try:
         empty = os.fstat(fd).st_size == 0
@@ -465,6 +473,7 @@ def _close_journal(fd, path):
             os.unlink(path)
         except OSError:
             pass
+    return not empty
 
 
 class Command(BaseCommand):
@@ -553,7 +562,12 @@ class Command(BaseCommand):
                             ) from error
         finally:
             if journal is not None:
-                _close_journal(journal, journal_path)
+                kept = _close_journal(journal, journal_path)
+                if kept and sys.exc_info()[0] is not None:
+                    self.stderr.write(
+                        f"The run stopped; the journal {journal_path} was kept. To undo what it "
+                        f"records: annotation_frames unstamp --journal {journal_path} --apply"
+                    )
         self._out("")
         if service:
             self._out(f"Only the zones of {service}.")

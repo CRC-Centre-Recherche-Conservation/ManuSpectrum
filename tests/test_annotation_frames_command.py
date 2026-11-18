@@ -703,3 +703,75 @@ class JournalDurabilityTests(AnnotationFramesCase):
         self.assertIn("line 2", warnings[0])
         out = self.run_command("unstamp", "--journal", self.journal)
         self.assertIn("1 of 1", out)
+
+
+class UndoSafetyTests(AnnotationFramesCase):
+    def stamped_journal(self):
+        self.tile(zone("a", canvas=READ_SERVICE))
+        self.run_command("stamp", "--apply", "--journal", self.journal)
+
+    def count(self, grouped):
+        return sum(len(v) for v in grouped.values())
+
+    def test_an_unterminated_last_line_that_parses_is_kept(self):
+        self.stamped_journal()
+        text = open(self.journal).read()
+        with open(self.journal, "w") as handle:
+            handle.write(text.rstrip("\n"))
+        warnings = []
+        grouped = annotation_frames.read_journal(self.journal, warnings.append)
+        self.assertEqual(self.count(grouped), 1)
+        self.assertEqual(warnings, [])
+
+    def test_an_unterminated_last_line_that_does_not_parse_is_skipped(self):
+        self.stamped_journal()
+        with open(self.journal, "a") as handle:
+            handle.write('{"tile": "')
+        warnings = []
+        grouped = annotation_frames.read_journal(self.journal, warnings.append)
+        self.assertEqual(self.count(grouped), 1)
+        self.assertEqual(len(warnings), 1)
+
+    def test_a_journal_that_is_not_utf8_is_refused_cleanly(self):
+        self.stamped_journal()
+        with open(self.journal, "ab") as handle:
+            handle.write(b"\xff\xfe\n")
+        with self.assertRaisesMessage(CommandError, "not UTF-8"):
+            annotation_frames.read_journal(self.journal)
+
+    def test_a_stopped_run_says_where_the_journal_is_and_how_to_undo(self):
+        self.tile(zone("a", canvas=READ_SERVICE))
+        real = annotation_frames.apply_batch
+
+        def committed_then_lost(batch, journal):
+            real(batch, journal)
+            raise RuntimeError("interrupted")
+
+        err = StringIO()
+        with mock.patch.object(annotation_frames, "apply_batch", committed_then_lost):
+            with self.assertRaises(RuntimeError):
+                call_command(
+                    "annotation_frames",
+                    "stamp",
+                    "--apply",
+                    "--journal",
+                    self.journal,
+                    stdout=StringIO(),
+                    stderr=err,
+                )
+        self.assertIn(self.journal, err.getvalue())
+        self.assertIn("unstamp --journal", err.getvalue())
+
+    def test_no_message_when_the_run_ends_well(self):
+        self.tile(zone("a", canvas=READ_SERVICE))
+        err = StringIO()
+        call_command(
+            "annotation_frames",
+            "stamp",
+            "--apply",
+            "--journal",
+            self.journal,
+            stdout=StringIO(),
+            stderr=err,
+        )
+        self.assertEqual(err.getvalue(), "")
