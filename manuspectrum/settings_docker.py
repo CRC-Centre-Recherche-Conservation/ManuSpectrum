@@ -277,6 +277,8 @@ STATIC_ROOT = "/app/static"
 RESOURCE_IMPORT_LOG = "/tmp/resource_import.log"
 
 CONTACT_EMAIL = get_env_variable("CONTACT_EMAIL")
+# Seconds every SMTP socket operation may block (smtplib has no limit by default).
+SMTP_TIMEOUT_SECONDS = 30
 MAILERS = {
     "default": {
         "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
@@ -284,6 +286,7 @@ MAILERS = {
             "host": get_env_variable("EMAIL_HOST"),
             "port": int(get_env_variable("EMAIL_PORT")),
             "use_tls": env_bool("EMAIL_USE_TLS", False),
+            "timeout": SMTP_TIMEOUT_SECONDS,
             "username": get_optional_env_variable("EMAIL_HOST_USER", ""),
             "password": (
                 read_secret("EMAIL_HOST_PASSWORD")
@@ -344,4 +347,7 @@ SILENCED_SYSTEM_CHECKS = [
     # SAMEORIGIN on purpose: the workflow help panel frames Arches' help_template
     # route (init-workflow.htm); nginx sends the same value and frame-ancestors 'self'.
     "security.W019",
+    # `http` redirect URIs stay allowed: native OAuth clients (the planned
+    # read-only MCP tokens) call back on a loopback http URI (RFC 8252).
+    "oauth2_provider.W008",
 ]

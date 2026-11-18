@@ -238,7 +238,9 @@ INSTALLED_APPS = (
     "django_celery_results",
     "axes",
     # "silk",
-    "manuspectrum",  # Ensure the project is listed before any other arches applications
+    # Stays after "arches": admin.py unregisters an Arches admin registration.
+    # The arches.extensions.* apps above own the `packages`/`validate` commands.
+    "manuspectrum",
     "pgtrigger",
     "django_migrate_sql",
     "rest_framework",
@@ -494,6 +496,22 @@ GRAPH_MODEL_CACHE_TIMEOUT = None
 
 OAUTH_CLIENT_ID = ""  #'9JCibwrWQ4hwuGn5fu2u1oRZSs9V6gK8Vu8hpRC4'
 
+# OAuth is authorization code + PKCE only: django-oauth-toolkit's RFC 9700
+# gates are on (no implicit or password grant, no plain PKCE, no token in the
+# query string, `iss` in the authorization response, hashed tokens, refresh
+# token replay revokes the family). `http` redirect URIs stay allowed for
+# native clients' loopback callbacks (RFC 8252); see settings_docker.py.
+OAUTH2_PROVIDER = {
+    **OAUTH2_PROVIDER,
+    "COMPLIANT_BCP_RFC9700_IMPLICIT_GRANT": True,
+    "COMPLIANT_BCP_RFC9700_PASSWORD_GRANT": True,
+    "COMPLIANT_BCP_RFC9700_PKCE_METHOD": True,
+    "COMPLIANT_BCP_RFC9700_ACCESS_TOKEN_TRANSPORT": True,
+    "COMPLIANT_BCP_RFC9700_AUTHZ_RESPONSE_ISS": True,
+    "COMPLIANT_BCP_RFC9700_TOKEN_STORAGE": True,
+    "REFRESH_TOKEN_REUSE_PROTECTION": True,
+}
+
 APP_TITLE = "ManuSpectrum"
 COPYRIGHT_TEXT = "All Rights Reserved."
 COPYRIGHT_YEAR = "2019"
@@ -516,6 +534,7 @@ MAILERS = {
     "default": {
         "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
         "OPTIONS": {
+            "host": "localhost",
             "use_tls": True,
             # "host": "smtp.gmail.com",
             # "port": 587,

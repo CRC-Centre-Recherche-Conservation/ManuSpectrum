@@ -411,6 +411,7 @@ class SettingsDockerTests(SimpleTestCase):
             (options["host"], options["port"]), ("smtp.manuspectrum.test", 25)
         )
         self.assertIs(options["use_tls"], False)
+        self.assertEqual(options["timeout"], 30)
         self.assertEqual((options["username"], options["password"]), ("", ""))
         self.assertEqual(values["DEFAULT_FROM_EMAIL"], "noreply@manuspectrum.test")
         self.assertEqual(values["SERVER_EMAIL"], "noreply@manuspectrum.test")
@@ -578,7 +579,13 @@ CHECK_PROBE = textwrap.dedent("""
     sys.modules["settings_local"] = None
     import django
     django.setup()
+    from django.conf import settings
+    from django.contrib.gis.gdal import GDAL_VERSION
     from django.core.management import call_command
+    # gis.W001 follows the host's GDAL: the image ships 3.10, the dev VM and
+    # the CI runner an older one.
+    if GDAL_VERSION < (3, 9):
+        settings.SILENCED_SYSTEM_CHECKS = [*settings.SILENCED_SYSTEM_CHECKS, "gis.W001"]
     call_command("check", "--deploy", "--tag", "security", "--fail-level", "WARNING")
     """)
 
