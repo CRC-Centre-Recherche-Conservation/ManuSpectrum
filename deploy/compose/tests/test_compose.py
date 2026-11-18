@@ -324,6 +324,10 @@ class ComposeStackTests(unittest.TestCase):
         environment = self.base["services"]["cantaloupe"]["environment"]
         self.assertEqual(environment["CANTALOUPE_CACHE_SERVER_WORKER_ENABLED"], "true")
 
+    def test_cantaloupe_serves_jpeg_at_quality_90(self):
+        environment = self.base["services"]["cantaloupe"]["environment"]
+        self.assertEqual(environment["CANTALOUPE_PROCESSOR_JPG_QUALITY"], "90")
+
     def test_every_service_restarts_logs_and_drops_privileges(self):
         for label, name, service in self.each_service():
             with self.subTest(stack=label, service=name):
