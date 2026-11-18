@@ -14,6 +14,8 @@
 #                                                    0 when it falls back to State.OOMKilled
 #   manuspectrum_container_memory_working_set_bytes  docker stats (usage minus inactive file cache)
 #   manuspectrum_container_memory_unreclaimable_bytes  anon + shmem of the cgroup v2 memory.stat
+#   manuspectrum_container_memory_swap_bytes         memory.swap.current of a running container
+#   manuspectrum_container_swap_allowed              1 when memory.swap.max is not 0 (it may swap)
 #   manuspectrum_container_memory_limit_bytes        HostConfig.Memory, 0 = no limit
 #   manuspectrum_container_metrics_errors            services skipped or without a working set
 #   manuspectrum_container_metrics_last_run_timestamp_seconds
@@ -139,6 +141,17 @@ cgroup_oom_kills() {
   awk '$1 == "oom_kill" && $2 ~ /^[0-9]+$/ {print $2; exit}' "$file"
 }
 
+# cgroup_number ID NAME: the single integer of a running container's cgroup v2
+# file NAME, or `max`; empty when the file is unreadable or holds anything else.
+cgroup_number() {
+  local file value
+  file="$(cgroup_file "$1" "$2")"
+  [ -n "$file" ] || return 0
+  value="$(head -n 1 "$file" 2>/dev/null)" || return 0
+  [[ "$value" =~ ^([0-9]+|max)$ ]] && printf '%s\n' "$value"
+  return 0
+}
+
 # cgroup_unreclaimable ID: anon + shmem bytes of a running container, empty
 # when no memory.stat is readable or either line is missing.
 cgroup_unreclaimable() {
@@ -161,7 +174,7 @@ oom_events_since() {
 }
 
 containers() {
-  local ids inspect stats errors=0 id svc running health restarts oom finished limit short mem now run_start unrec
+  local ids inspect stats errors=0 id svc running health restarts oom finished limit short mem now run_start unrec swap
   local state="$out_dir/.manuspectrum-container-oom.state"
   local raw delta ev cgroup_ok=0 reset s_total s_raw s_id s_restarts s_finished s_epoch
   declare -A mem_used raw_of
@@ -206,7 +219,7 @@ containers() {
 
   metrics_open "$out_dir/manuspectrum_container.prom"
   metric_family manuspectrum_container_up gauge "1 when the container is running"
-  local lines_up="" lines_healthy="" lines_restarts="" lines_oom="" lines_mem="" lines_limit="" lines_unrec=""
+  local lines_up="" lines_healthy="" lines_restarts="" lines_oom="" lines_mem="" lines_limit="" lines_unrec="" lines_swap="" lines_swap_ok=""
   while IFS='|' read -r id svc running health restarts oom finished limit; do
     [ -n "$id" ] || continue
     if ! [[ "$svc" =~ ^[a-z0-9_-]+$ && "$restarts" =~ ^[0-9]+$ && "$limit" =~ ^[0-9]+$ ]]; then
@@ -220,6 +233,10 @@ containers() {
       if [ -n "${mem_used[$short]:-}" ]; then lines_mem+="$svc ${mem_used[$short]}"$'\n'; else errors=$((errors + 1)); fi
       unrec="$(cgroup_unreclaimable "$id")"
       [ -z "$unrec" ] || lines_unrec+="$svc $unrec"$'\n'
+      swap="$(cgroup_number "$id" memory.swap.current)"
+      [[ "$swap" =~ ^[0-9]+$ ]] && lines_swap+="$svc $swap"$'\n'
+      swap="$(cgroup_number "$id" memory.swap.max)"
+      if [ "$swap" = 0 ]; then lines_swap_ok+="$svc 0"$'\n'; elif [ -n "$swap" ]; then lines_swap_ok+="$svc 1"$'\n'; fi
     else
       lines_up+="$svc 0"$'\n'
     fi
@@ -275,6 +292,8 @@ containers() {
   emit manuspectrum_container_oom_kills counter "Kernel OOM kills in the container, kept across restarts" "$lines_oom"
   emit manuspectrum_container_memory_working_set_bytes gauge "Working set in bytes" "$lines_mem"
   emit manuspectrum_container_memory_unreclaimable_bytes gauge "Bytes the kernel cannot drop: anon and shmem of memory.stat" "$lines_unrec"
+  emit manuspectrum_container_memory_swap_bytes gauge "Bytes of the container held in swap (memory.swap.current)" "$lines_swap"
+  emit manuspectrum_container_swap_allowed gauge "1 when the container may swap (memory.swap.max is not 0)" "$lines_swap_ok"
   emit manuspectrum_container_memory_limit_bytes gauge "Memory limit in bytes, 0 for none" "$lines_limit"
   metric_family manuspectrum_container_oom_cgroup gauge "1 when OOM kills come from the cgroup counter, 0 for the State.OOMKilled fallback"
   metric_sample manuspectrum_container_oom_cgroup "$cgroup_ok"

@@ -12,7 +12,8 @@
 # Elasticsearch: heap 2g, about 3.4 GiB resident with 12k resources loaded
 # (direct memory, metaspace, threads, page cache), hence a 5g limit.
 # memswap_limit equals the memory limit everywhere: a container never swaps, a
-# leaking one is killed and restarted instead of crawling.
+# leaking one is killed and restarted instead of crawling. It does not hold
+# alone across a systemd reload: the host role's docker-.scope.d drop-in does.
 services:
   postgres:
     command: ["postgres",

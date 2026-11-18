@@ -373,6 +373,13 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   (a container never swaps).
   - On failure: a limit shown as the whole host memory means `compose.prod.yaml` was not
     applied: the `-f` list or `make` was bypassed.
+- [ ] *(service account)* `for d in /sys/fs/cgroup/system.slice/docker-*.scope; do echo "$(cat $d/memory.swap.max) $d"; done`
+  → every line starts with `0` (the kernel limit, not only Docker's `MemorySwap`). Then
+  `sudo systemctl daemon-reload` from the admin account, and the same command again as the service account: still `0`
+  everywhere. For one container,
+  `systemctl show docker-<id>.scope -p MemorySwapMax` → `MemorySwapMax=0`.
+  - On failure: `/etc/systemd/system/docker-.scope.d/10-manuspectrum-no-swap.conf` is missing or
+    overridden; re-run the Ansible `host` role (`ContainerSwapAllowed` runbook).
 - [ ] *(service account)* `docker top manuspectrum-web-1 | grep -c 'gunicorn'` → `6` (master and 5 workers;
   each worker runs 4 threads: 20 concurrent requests, `GUNICORN_WORKERS`/`GUNICORN_THREADS`).
 - [ ] *(service account)* `docker exec manuspectrum-web-1 sh -c 'echo $GUNICORN_WORKERS $GUNICORN_THREADS'` → `5 4`.
