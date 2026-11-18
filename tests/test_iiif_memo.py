@@ -437,7 +437,7 @@ class GuardOnceTests(IIIFCase):
                 )
 
     def test_an_annotation_build_reads_the_annotated_row_once(self):
-        analysis = str(self.analyses["open"].pk)
+        analysis = self.analyses["open"].pk.hex
         for url in (self.annotation, self.content_state):
             with self.subTest(url=url):
                 cache.clear()
