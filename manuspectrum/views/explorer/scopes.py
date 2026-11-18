@@ -314,7 +314,7 @@ def resolve_scope(query, language):
         kind=kind,
         key=key,
         params=tuple(params),
-        digest=hashlib.sha1(key.encode(), usedforsecurity=False).hexdigest()[:12],
+        digest=hashlib.sha256(key.encode(), usedforsecurity=False).hexdigest()[:12],
         subject=None if kind == "ids" else value,
         analyses=analyses,
         characterizations=characterizations,
