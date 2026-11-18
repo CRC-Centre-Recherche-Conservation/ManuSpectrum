@@ -220,23 +220,18 @@ let adjustment: Adjustment | null = null;
 const hasImage = computed((): boolean => Boolean(props.canvas?.image.service));
 /** The unit of the page's zones (`toLatLng`). */
 const unit = computed(() => props.canvas?.zoneUnit ?? null);
-/** The unit of the page's live layer once its info.json is read; null until then, and when it cannot be. */
-const live = ref<ZoneUnit | null>(null);
+/** What the page's live layer gave once its info.json is read, with the canvas it was laid for; null until then. */
+const live = ref<LiveReport | null>(null);
 
 /** The unit `zone` is placed with: its own, else the live layer's, else the canvas's (`zoneUnitFor`). */
 function placedWith(zone: { unit: ZoneUnit | null }): ZoneUnit | null {
-    return zoneUnitFor(zone, live.value, unit.value);
+    return zoneUnitFor(zone, live.value?.unit ?? null, unit.value);
 }
 
 watch(() => props.canvas?.id, drawPage);
 /** What the zones are placed with, as a key: a frame that gives the unit already used redraws nothing. */
-const placedKey = computed(() => unitKey(live.value ?? unit.value));
-watch(live, () =>
-    emit("live-unit", {
-        canvas: props.canvas?.id ?? null,
-        unit: live.value,
-    }),
-);
+const placedKey = computed(() => unitKey(live.value?.unit ?? unit.value));
+watch(live, () => emit("live-unit", live.value));
 watch(
     () => [
         props.annotations,
@@ -510,10 +505,10 @@ function drawPage(): void {
     page = laid;
     void followLiveUnit(
         laid,
-        props.canvas.image,
+        { id: props.canvas.id, ...props.canvas.image },
         () => page === laid,
-        (resolved) => {
-            live.value = resolved;
+        (report) => {
+            live.value = report;
         },
     );
 }

@@ -25,15 +25,17 @@ export function unitKey(unit: ZoneUnit | null): string {
 }
 
 /**
- * Reports the live unit of `page` to `set` once its frame is known, unless
- * `isCurrent` says another page has replaced it by then.
+ * Reports the live unit of `page`, laid for `canvas`, to `set` once its frame
+ * is known, unless `isCurrent` says another page has replaced it by then. The
+ * report names `canvas.id` as it was when the page was laid.
  */
 export async function followLiveUnit(
     page: PageLayer,
-    canvas: { width: number; height: number },
+    canvas: { id: string; width: number; height: number },
     isCurrent: () => boolean,
-    set: (unit: ZoneUnit | null) => void,
+    set: (report: LiveReport) => void,
 ): Promise<void> {
+    const id = canvas.id;
     const unit = await liveUnitOf(page, canvas);
-    if (isCurrent()) set(unit);
+    if (isCurrent()) set({ canvas: id, unit });
 }

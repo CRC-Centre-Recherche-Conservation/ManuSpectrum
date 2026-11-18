@@ -387,10 +387,10 @@ function drawPage(): void {
     page = laid;
     void followLiveUnit(
         laid,
-        canvas.value.image,
+        { id: canvas.value.id, ...canvas.value.image },
         () => page === laid,
-        (resolved) => {
-            live.value = resolved;
+        (report) => {
+            live.value = report.unit;
         },
     );
 }

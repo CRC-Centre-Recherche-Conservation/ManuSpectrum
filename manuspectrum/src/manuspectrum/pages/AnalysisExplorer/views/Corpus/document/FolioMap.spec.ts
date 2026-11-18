@@ -1593,6 +1593,22 @@ describe("FolioMap", () => {
         wrapper.unmount();
     });
 
+    it("reports the live unit with the canvas it was read on once the frame resolves, and null on unmount", async () => {
+        const stub = stubIiifLayer({ size: { w: 4000, h: 6000 } });
+        const make = stub.getMockImplementation() as (url: string) => object;
+        stub.mockImplementation((infoUrl: string) =>
+            Object.assign(make(infoUrl), { x: 4000, y: 6000 }),
+        );
+        const wrapper = mountFolio();
+        await flushPromises();
+        const canvas = canvasWithImage();
+        expect(wrapper.emitted("live-unit")).toEqual([
+            [{ canvas: canvas.id, unit: { x: 32, y: 32, read: true } }],
+        ]);
+        wrapper.unmount();
+        expect(wrapper.emitted("live-unit")?.at(-1)).toEqual([null]);
+    });
+
     it("fits an imageless page to its markers once, not on every redraw", async () => {
         const fitBounds = vi.spyOn(L.Map.prototype, "fitBounds");
         const wrapper = mountFolio({

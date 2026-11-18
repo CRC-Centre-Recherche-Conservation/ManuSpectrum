@@ -6,6 +6,7 @@ import {
     unitKey,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/live-unit.ts";
 
+import type { LiveReport } from "@/manuspectrum/pages/AnalysisExplorer/folio/live-unit.ts";
 import type { ZoneUnit } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { LayerFrame } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import type { PageLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
@@ -36,39 +37,57 @@ describe("unitKey", () => {
 });
 
 describe("followLiveUnit", () => {
-    const canvas = { width: 100, height: 100 };
+    const canvas = { id: "c1", width: 100, height: 100 };
 
     it("reports the unit of a current page", async () => {
-        const seen: (ZoneUnit | null)[] = [];
+        const seen: LiveReport[] = [];
         await followLiveUnit(
             pageOf(Promise.resolve({ zoom: 4, width: 100, height: 100 })),
             canvas,
             () => true,
-            (unit) => seen.push(unit),
+            (report) => seen.push(report),
         );
-        expect(seen).toEqual([UNIT]);
+        expect(seen).toEqual([{ canvas: "c1", unit: UNIT }]);
     });
 
     it("ignores the frame of a page that is no longer the current one, even when it answers last", async () => {
         let current = "a";
-        const seen: (ZoneUnit | null)[] = [];
+        const seen: LiveReport[] = [];
         let answerA: (frame: LayerFrame | null) => void = () => undefined;
         const a = followLiveUnit(
             pageOf(new Promise((resolve) => (answerA = resolve))),
             canvas,
             () => current === "a",
-            (unit) => seen.push(unit),
+            (report) => seen.push(report),
         );
         current = "b";
         const b = followLiveUnit(
             pageOf(Promise.resolve({ zoom: 5, width: 100, height: 100 })),
             canvas,
             () => current === "b",
-            (unit) => seen.push(unit),
+            (report) => seen.push(report),
         );
         await b;
         answerA({ zoom: 4, width: 100, height: 100 });
         await a;
-        expect(seen).toEqual([{ x: 32, y: 32, read: true }]);
+        expect(seen).toEqual([
+            { canvas: "c1", unit: { x: 32, y: 32, read: true } },
+        ]);
+    });
+
+    it("names the canvas the page was laid for, whatever the current canvas is when the frame resolves", async () => {
+        const shown = { ...canvas };
+        const seen: LiveReport[] = [];
+        let answer: (frame: LayerFrame | null) => void = () => undefined;
+        const done = followLiveUnit(
+            pageOf(new Promise((resolve) => (answer = resolve))),
+            shown,
+            () => true,
+            (report) => seen.push(report),
+        );
+        shown.id = "c2";
+        answer({ zoom: 4, width: 100, height: 100 });
+        await done;
+        expect(seen).toEqual([{ canvas: "c1", unit: UNIT }]);
     });
 });
