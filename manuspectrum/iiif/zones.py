@@ -13,26 +13,20 @@ from django.db.models.expressions import RawSQL
 
 from arches.app.models.models import TileModel
 
-from manuspectrum.iiif.units import UNKNOWN_UNIT
 from manuspectrum.views.explorer.values import rewrite_legacy_url, shape_of
-
-
-def _unit_of(dims, stored):
-    unit = getattr(dims, "unit", None)
-    return unit(stored) if unit else UNKNOWN_UNIT
 
 
 def canvas_and_convert(feature, dims):
     """Canvas id of one annotation feature and the function giving its pixel ``Shape``; ``("", None)`` when unresolved.
 
-    *dims* is a ``canvas_index``: the stored name (canvas id or image service)
+    *dims* is a ``CanvasIndex``: the stored name (canvas id or image service)
     becomes the manifest's canvas id. The shape is converted with the unit of
     that canvas (``CanvasIndex.unit``), which is read when the function is
     called: a zone whose shape is never asked costs no request. A shape is
     brought inside its canvas when the unit was read from the image's
     description. With an assumed unit, or on a canvas missing from the index
-    (which keeps its stored name), it is not clamped: its coordinates are the
-    stored ones times the unit.
+    (which keeps its stored name), it is not clamped to the canvas: its
+    coordinates are the stored ones times the unit, negatives brought to 0.
     """
     feature = feature or {}
     stored = rewrite_legacy_url((feature.get("properties") or {}).get("canvas") or "")
@@ -43,7 +37,7 @@ def canvas_and_convert(feature, dims):
         return "", None
 
     def convert():
-        unit = _unit_of(dims, name)
+        unit = dims.unit(name)
         return shape_of(
             geometry,
             unit.width or sys.maxsize,
@@ -134,10 +128,12 @@ def _by_feature_id(row):
 
 
 def first_zone(node, resource_ids, dims, readable):
-    """``{resource id: {"canvas", "shape"}}`` from the first annotation feature of *node*; ``{}`` when its nodegroup is not in *readable*."""
+    """``{resource id: {"canvas", "shape"}}`` from the first annotation feature of *node*; ``{}`` when its nodegroup is not in *readable*.
+
+    Only the kept feature is converted: a discarded one reads no image description.
+    """
     zones = {}
-    for rid, _, canvas, shape in annotation_features(
-        node, resource_ids, dims, readable
-    ):
-        zones.setdefault(rid, {"canvas": canvas, "shape": shape})
+    for rid, _, canvas, convert in located_features(node, resource_ids, dims, readable):
+        if rid not in zones:
+            zones[rid] = {"canvas": canvas, "shape": convert()}
     return zones

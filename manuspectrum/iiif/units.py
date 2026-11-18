@@ -12,9 +12,14 @@ size.
 
 An info.json that cannot be read leaves an assumed unit: the canvas size
 taken as the image's and the tile width of ``IIIF_IMAGE_TILE_HINTS`` for the
-host, else leaflet-iiif's own default. A host that refuses this server
+host, else leaflet-iiif's own default (an image served by this platform's own
+image server is assumed tiled at ``IIIF_OWN_IMAGE_TILE``). A host that refuses this server
 (``REFUSED``) gives a stable answer; a failed read (``UNAVAILABLE``) is a
 symptom and marks the IIIF memo build degraded.
+
+The conversion holds for the tiling served when the zone was drawn:
+re-encoding an image or changing Cantaloupe's tile size moves its existing
+zones, and a read is kept ``IIIF_IMAGE_INFO_CACHE_TTL`` seconds.
 """
 
 import logging
@@ -30,7 +35,7 @@ from django.core.cache import cache
 from manuspectrum.iiif import memo
 from manuspectrum.utils.budget import BudgetSpent, current_budget, upstream_budget
 from manuspectrum.utils.cache import stable_cache_key
-from manuspectrum.utils.http import safe_fetch
+from manuspectrum.utils.http import UnsafeURLError, safe_fetch
 from manuspectrum.utils.iiif_tools import own_cantaloupe_target
 
 logger = logging.getLogger(__name__)
@@ -40,6 +45,10 @@ DEFAULT_TILE = 256
 
 # The unit of a zone whose canvas is unknown: no size to derive it from.
 UNKNOWN_SCALE = 32
+
+# The tile width assumed for this platform's own image server (Cantaloupe 5's
+# ``endpoint.iiif.min_tile_size``).
+DEFAULT_OWN_TILE = 512
 
 REFUSED = "refused"
 UNAVAILABLE = "unavailable"
@@ -99,11 +108,16 @@ def tile_width(info):
     tiles = info.get("tiles")
     first = tiles[0] if isinstance(tiles, list) and tiles else None
     found = first.get("width") if isinstance(first, dict) else info.get("tile_width")
-    return found if _positive(found) else DEFAULT_TILE
+    return int(found) if _whole(found) else DEFAULT_TILE
 
 
-def _positive(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
+def _whole(value):
+    """True for a finite whole number of at least 1 (not a bool)."""
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return value >= 1
+    return isinstance(value, float) and value.is_integer() and value >= 1
 
 
 def _setting(name, default):
@@ -122,7 +136,8 @@ def _fetch(service, seconds):
     """The info.json response of *service*, within *seconds* unless the caller already runs under a budget.
 
     This server's own image service is read from its internal endpoint
-    (``own_cantaloupe_target``); any other URL stays under the SSRF guard.
+    (``own_cantaloupe_target``) without the per-host throttle; any other URL
+    stays under the SSRF guard and the throttle.
     """
     target, extra = own_cantaloupe_target(f"{service}/info.json")
     timeout = _setting("IIIF_IMAGE_INFO_TIMEOUT", 4)
@@ -133,7 +148,7 @@ def _fetch(service, seconds):
             purpose="image_info",
             timeout=(timeout, timeout),
             max_bytes=_INFO_MAX_BYTES,
-            throttle=False,
+            throttle=not extra,
             **extra,
         )
 
@@ -152,9 +167,9 @@ def _parsed(response):
     if not isinstance(info, dict):
         return None
     width, height = info.get("width"), info.get("height")
-    if not (_positive(width) and _positive(height)):
+    if not (_whole(width) and _whole(height)):
         return None
-    return ImageInfo(int(width), int(height), int(tile_width(info)))
+    return ImageInfo(int(width), int(height), tile_width(info))
 
 
 def image_info(service, deadline=None):
@@ -166,9 +181,13 @@ def image_info(service, deadline=None):
     asked once per period, not once per image), for the one service after any
     other answer that is not an image description, or a URL the SSRF guard
     rejects. ``UNAVAILABLE`` is a failure (transport error, timeout, 429,
-    5xx): the host is left alone ``IIIF_IMAGE_INFO_DOWN_TTL`` seconds and
-    nothing is kept for the service. *deadline* (``time.monotonic()``) bounds
-    the read; past it the answer is ``UNAVAILABLE`` without a request. With
+    5xx, a host name that does not resolve): the host is left alone
+    ``IIIF_IMAGE_INFO_DOWN_TTL`` seconds and nothing is kept for the service.
+    A failure caused by this server's own time cap (``BudgetSpent``, or a
+    timeout under a read bound shorter than ``IIIF_IMAGE_INFO_TIMEOUT``) is
+    ``UNAVAILABLE`` without a verdict on the host. *deadline*
+    (``time.monotonic()``) bounds the read; past it the answer is
+    ``UNAVAILABLE`` without a request. With
     ``IIIF_IMAGE_INFO_READ`` off nothing is requested and every service is
     ``REFUSED``.
     """
@@ -188,14 +207,28 @@ def image_info(service, deadline=None):
         if left <= 0:
             return UNAVAILABLE
     refused_ttl = _setting("IIIF_IMAGE_INFO_REFUSED_TTL", 3600)
+    timeout = _setting("IIIF_IMAGE_INFO_TIMEOUT", 4)
+    ambient = current_budget()
+    capped = left < timeout or (ambient is not None and ambient.left() < timeout)
+    down_ttl = _setting("IIIF_IMAGE_INFO_DOWN_TTL", 120)
     try:
         response = _fetch(service, left)
-    except (BudgetSpent, requests.exceptions.RequestException) as exc:
-        logger.warning("info.json of %s not read: %s", _origin(service), exc)
-        cache.set(
-            _host_key(service), UNAVAILABLE, _setting("IIIF_IMAGE_INFO_DOWN_TTL", 120)
-        )
+    except BudgetSpent:
+        logger.warning("info.json of %s not read: time budget spent", _origin(service))
         return UNAVAILABLE
+    except requests.exceptions.RequestException as exc:
+        logger.warning("info.json of %s not read: %s", _origin(service), exc)
+        if not (capped and isinstance(exc, requests.exceptions.Timeout)):
+            cache.set(_host_key(service), UNAVAILABLE, down_ttl)
+        return UNAVAILABLE
+    except UnsafeURLError as exc:
+        if exc.reason == "dns":
+            logger.warning("info.json of %s not read: %s", _origin(service), exc)
+            cache.set(_host_key(service), UNAVAILABLE, down_ttl)
+            return UNAVAILABLE
+        logger.warning("info.json of %s refused: %s", _origin(service), exc)
+        cache.set(key, False, refused_ttl)
+        return REFUSED
     except Exception as exc:
         logger.warning("info.json of %s refused: %s", _origin(service), exc)
         cache.set(key, False, refused_ttl)
@@ -203,9 +236,7 @@ def image_info(service, deadline=None):
     status = response.status_code
     if status == 429 or status >= 500:
         logger.warning("info.json of %s answered %s", _origin(service), status)
-        cache.set(
-            _host_key(service), UNAVAILABLE, _setting("IIIF_IMAGE_INFO_DOWN_TTL", 120)
-        )
+        cache.set(_host_key(service), UNAVAILABLE, down_ttl)
         return UNAVAILABLE
     if status == 403:
         logger.warning("info.json refused by %s (403)", _origin(service))
@@ -226,7 +257,12 @@ def image_info(service, deadline=None):
 def _hinted_tile(service):
     hints = _setting("IIIF_IMAGE_TILE_HINTS", {}) or {}
     found = hints.get(urlsplit(service or "").hostname or "")
-    return found if _positive(found) else DEFAULT_TILE
+    if _whole(found):
+        return int(found)
+    own = (getattr(settings, "CANTALOUPE_HTTP_ENDPOINT", "") or "").rstrip("/") + "/"
+    if own != "/" and (service or "").startswith(own):
+        return _setting("IIIF_OWN_IMAGE_TILE", DEFAULT_OWN_TILE)
+    return DEFAULT_TILE
 
 
 def assumed_unit(width, height, service=None):

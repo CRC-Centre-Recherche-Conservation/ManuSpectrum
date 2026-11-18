@@ -5179,6 +5179,11 @@ class BiblissimaCreateResourceView(View):
             # the image layer its viewer draws (y upwards); `zone_unit` gives
             # the canvas pixels of one unit, read from the image service.
             unit = zone_unit(bbma_data.get("imageServiceUrl"), width, height)
+            if not unit.read:
+                logger.warning(
+                    "Whole-page zone on image service %s written with an assumed unit",
+                    urlsplit(bbma_data.get("imageServiceUrl") or "").netloc or "?",
+                )
             polygon_coords = [
                 [
                     [0, 0],

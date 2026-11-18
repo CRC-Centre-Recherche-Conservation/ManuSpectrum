@@ -198,8 +198,8 @@ def _zone_region_url(annotation, manifests):
     manifest by id or image service, and the region is asked of that canvas's
     image service (the stored name when the canvas is unknown or has none),
     in the pixels of that image (``_image_frame``). A canvas missing from the
-    manifest does not clamp the region. A zone drawn outside a known image
-    gives None.
+    manifest is bounded only when the stored service's info.json is read. A
+    zone drawn outside a bounded image gives None.
     """
     feature = annotation.feature or {}
     properties = feature.get("properties") or {}

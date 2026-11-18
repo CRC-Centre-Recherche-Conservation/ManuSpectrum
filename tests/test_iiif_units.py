@@ -14,7 +14,13 @@ from django.test import SimpleTestCase, override_settings
 
 from manuspectrum.iiif import memo, units
 from manuspectrum.iiif.sources import canvas_index
-from manuspectrum.iiif.zones import FeatureRows, canvas_and_convert, canvas_and_shape
+from manuspectrum.iiif.zones import (
+    FeatureRows,
+    canvas_and_convert,
+    canvas_and_shape,
+    first_zone,
+)
+from manuspectrum.utils.budget import BudgetSpent, upstream_budget
 from manuspectrum.utils.http import FetchedResponse, UnsafeURLError
 
 SERVICE = "https://images.example/iiif/2/folio-1"
@@ -100,6 +106,12 @@ class NativeZoomTests(SimpleTestCase):
         self.assertEqual(units.tile_width({"sizes": [{"width": 100}]}), 256)
         self.assertEqual(units.tile_width({"tiles": []}), 256)
 
+    def test_a_tile_width_that_is_not_a_whole_number_falls_back_to_256(self):
+        for bad in (0, 0.5, -512, True, float("nan"), float("inf"), "512", None):
+            with self.subTest(tile=bad):
+                self.assertEqual(units.tile_width({"tiles": [{"width": bad}]}), 256)
+        self.assertEqual(units.tile_width({"tiles": [{"width": 512.0}]}), 512)
+
 
 class ImageInfoTests(UnitCase):
     def test_an_info_json_is_read_once_and_kept(self):
@@ -140,6 +152,26 @@ class ImageInfoTests(UnitCase):
                 self.serve(body)
                 self.assertEqual(units.image_info(SERVICE), units.REFUSED)
 
+    def test_a_size_that_is_not_a_whole_number_describes_no_image(self):
+        for bad in (0.5, 0, -1, True, float("inf"), float("nan"), "100"):
+            for field in ("width", "height"):
+                with self.subTest(bad=bad, field=field):
+                    cache.clear()
+                    body = {"width": 100, "height": 100, field: bad}
+                    self.fetch.side_effect = [
+                        FetchedResponse(
+                            f"{SERVICE}/info.json",
+                            200,
+                            {},
+                            json.dumps(body, allow_nan=True).encode(),
+                        )
+                    ]
+                    self.assertEqual(units.image_info(SERVICE), units.REFUSED)
+
+    def test_a_whole_float_size_is_read(self):
+        self.serve({"width": 4913.0, "height": 6609.0, "tiles": [{"width": 512.0}]})
+        self.assertEqual(units.image_info(SERVICE), units.ImageInfo(4913, 6609, 512))
+
     def test_a_url_the_guard_rejects_is_refused(self):
         self.serve(UnsafeURLError("private address"))
         self.assertEqual(units.image_info(SERVICE), units.REFUSED)
@@ -147,6 +179,45 @@ class ImageInfoTests(UnitCase):
     def test_a_timeout_is_unavailable_and_leaves_the_host_alone(self):
         self.serve(requests.exceptions.ConnectTimeout())
         self.assertEqual(units.image_info(SERVICE), units.UNAVAILABLE)
+        self.assertEqual(units.image_info(OTHER), units.UNAVAILABLE)
+        self.assertEqual(self.fetch.call_count, 1)
+
+    def test_a_name_that_does_not_resolve_is_a_failure_not_a_refusal(self):
+        self.serve(UnsafeURLError("no address", reason="dns"))
+        self.assertEqual(units.image_info(SERVICE), units.UNAVAILABLE)
+        self.assertEqual(units.image_info(OTHER), units.UNAVAILABLE)
+        self.assertEqual(self.fetch.call_count, 1)
+
+    def test_another_guard_reason_is_still_a_refusal_of_that_service(self):
+        self.serve(UnsafeURLError("private", reason="private"), info_json(10, 10, 256))
+        self.assertEqual(units.image_info(SERVICE), units.REFUSED)
+        self.assertEqual(units.image_info(OTHER), units.ImageInfo(10, 10, 256))
+
+    def test_a_spent_budget_is_no_verdict_on_the_host(self):
+        self.serve(BudgetSpent(), info_json(10, 10, 256))
+        self.assertEqual(units.image_info(SERVICE), units.UNAVAILABLE)
+        self.assertEqual(units.image_info(OTHER), units.ImageInfo(10, 10, 256))
+
+    def test_a_timeout_under_a_shortened_read_is_no_verdict_on_the_host(self):
+        self.serve(requests.exceptions.ReadTimeout(), info_json(10, 10, 256))
+        self.assertEqual(
+            units.image_info(SERVICE, deadline=time.monotonic() + 1),
+            units.UNAVAILABLE,
+        )
+        self.assertEqual(units.image_info(OTHER), units.ImageInfo(10, 10, 256))
+
+    def test_a_timeout_under_a_short_ambient_budget_is_no_verdict_either(self):
+        self.serve(requests.exceptions.ReadTimeout(), info_json(10, 10, 256))
+        with upstream_budget(1):
+            self.assertEqual(units.image_info(SERVICE), units.UNAVAILABLE)
+        self.assertEqual(units.image_info(OTHER), units.ImageInfo(10, 10, 256))
+
+    def test_a_connection_error_marks_the_host_even_under_a_shortened_read(self):
+        self.serve(requests.exceptions.ConnectionError(), info_json(10, 10, 256))
+        self.assertEqual(
+            units.image_info(SERVICE, deadline=time.monotonic() + 1),
+            units.UNAVAILABLE,
+        )
         self.assertEqual(units.image_info(OTHER), units.UNAVAILABLE)
         self.assertEqual(self.fetch.call_count, 1)
 
@@ -183,6 +254,18 @@ class ImageInfoTests(UnitCase):
         self.assertIs(call.kwargs["allow_private"], True)
         units.image_info(SERVICE)
         self.assertNotIn("allow_private", self.fetch.call_args_list[1].kwargs)
+
+    @override_settings(
+        CANTALOUPE_HTTP_ENDPOINT="https://manuspectrum.test/iiifserver/",
+        CANTALOUPE_INTERNAL_ENDPOINT="http://cantaloupe:8182/",
+    )
+    def test_only_the_own_image_server_skips_the_host_throttle(self):
+        self.serve(info_json(100, 100), info_json(100, 100))
+        units.image_info("https://manuspectrum.test/iiifserver/iiif/2/A.png")
+        units.image_info(SERVICE)
+        own, other = self.fetch.call_args_list
+        self.assertIs(own.kwargs["throttle"], False)
+        self.assertIs(other.kwargs["throttle"], True)
 
 
 class ZoneUnitTests(UnitCase):
@@ -221,6 +304,26 @@ class ZoneUnitTests(UnitCase):
         self.serve(answered(b"", status=403))
         unit = units.zone_unit(SERVICE, 4219, 5715)
         self.assertEqual((unit.x, unit.read), (8, False))
+
+    @override_settings(
+        CANTALOUPE_HTTP_ENDPOINT="https://manuspectrum.test/iiifserver/",
+        IIIF_IMAGE_TILE_HINTS={"hinted.example": 1024},
+    )
+    def test_an_unread_image_of_the_own_server_is_assumed_at_512(self):
+        own = "https://manuspectrum.test/iiifserver/iiif/2/A.png"
+        unit = units.assumed_unit(4913, 6609, own)
+        self.assertEqual(unit.x, 16)
+        self.assertEqual(units.assumed_unit(4913, 6609, SERVICE).x, 32)
+        self.assertEqual(
+            units.assumed_unit(4913, 6609, "https://manuspectrum.test/iiifserverx/a").x,
+            32,
+        )
+        with override_settings(
+            IIIF_IMAGE_TILE_HINTS={"manuspectrum.test": 1024}, IIIF_OWN_IMAGE_TILE=256
+        ):
+            self.assertEqual(units.assumed_unit(4913, 6609, own).x, 8)
+        with override_settings(IIIF_OWN_IMAGE_TILE=256):
+            self.assertEqual(units.assumed_unit(4913, 6609, own).x, 32)
 
     def test_a_canvas_without_a_service_is_assumed_without_a_request(self):
         unit = units.zone_unit(None, 4913, 6609)
@@ -333,18 +436,28 @@ class ZoneConversionTests(UnitCase):
         self.fetch.assert_not_called()
 
     def test_the_canvases_of_one_manifest_share_one_deadline(self):
-        self.serve(info_json(4913, 6609, 512))
         listed = [
             canvas(),
             canvas(service=OTHER, canvas_id=f"{CANVAS}-b", width=1866, height=2696),
         ]
         dims = canvas_index(listed)
-        with override_settings(IIIF_IMAGE_INFO_DEADLINE=0):
+        now = [100.0]
+        read = answered(info_json(4913, 6609, 512))
+
+        def slow_read(*args, **kwargs):
+            now[0] = 107.0
+            return read
+
+        self.fetch.side_effect = slow_read
+        with (
+            override_settings(IIIF_IMAGE_INFO_DEADLINE=6),
+            mock.patch("manuspectrum.iiif.units.time.monotonic", lambda: now[0]),
+        ):
             first = dims.unit(SERVICE)
             second = dims.unit(OTHER)
-        self.assertFalse(first.read)
+        self.assertTrue(first.read)
         self.assertEqual((second.x, second.read), (16, False))
-        self.fetch.assert_not_called()
+        self.assertEqual(self.fetch.call_count, 1)
 
     def test_located_rows_read_only_the_canvases_whose_shape_is_asked(self):
         self.serve(info_json(1866, 2696, 256))
@@ -363,3 +476,68 @@ class ZoneConversionTests(UnitCase):
         self.assertEqual(located[1][3](), {"type": "point", "x": 160, "y": 320})
         self.assertEqual(self.fetch.call_count, 1)
         self.assertEqual(self.fetch.call_args.args[0], f"{OTHER}/info.json")
+
+
+class KeptZoneTests(UnitCase):
+    def rows(self):
+        rows = FeatureRows(None, [], set())
+        rows._by_resource["r"] = [
+            (0, "r", feature(point(10, -20))),
+            (1, "r", feature(point(10, -20), stored=OTHER)),
+        ]
+        return rows
+
+    def listed(self):
+        return [
+            canvas(),
+            canvas(service=OTHER, canvas_id=f"{CANVAS}-b", width=1866, height=2696),
+        ]
+
+    def test_first_zone_reads_only_the_unit_of_the_zone_it_keeps(self):
+        self.serve(info_json(4913, 6609, 512))
+        dims = canvas_index(self.listed())
+        with mock.patch(
+            "manuspectrum.iiif.zones.FeatureRows", return_value=self.rows()
+        ):
+            zones = first_zone(mock.Mock(), ["r"], dims, set())
+        self.assertEqual(
+            zones,
+            {"r": {"canvas": CANVAS, "shape": {"type": "point", "x": 160, "y": 320}}},
+        )
+        self.assertEqual(self.fetch.call_count, 1)
+        self.assertEqual(self.fetch.call_args.args[0], f"{SERVICE}/info.json")
+        self.assertIsNone(dims.unit_used(f"{CANVAS}-b"))
+
+    def test_analysis_zones_reads_only_the_unit_of_the_zone_it_keeps(self):
+        from manuspectrum.views.explorer import export
+
+        self.serve(info_json(4913, 6609, 512))
+        listed = self.listed()
+        scope = mock.Mock(
+            documents=["d"],
+            analyses=["r"],
+            nodegroups=set(),
+        )
+        scope.bundle.chains = {"r": ("d",)}
+        scope.read_manifest.return_value = {}
+        labels = {c["id"]: c["label"] for c in listed}
+        built = {}
+
+        def index(canvases):
+            built["dims"] = canvas_index(canvases)
+            return built["dims"]
+
+        with (
+            mock.patch.object(export, "Values") as values,
+            mock.patch.object(export, "role_node"),
+            mock.patch.object(export, "canvases_of", return_value=listed),
+            mock.patch.object(export, "canvas_index", index),
+            mock.patch("manuspectrum.iiif.zones.FeatureRows", return_value=self.rows()),
+        ):
+            values.return_value.first.return_value = "https://docs.example/m"
+            zones = export.analysis_zones(scope)
+        self.assertEqual(zones["r"]["canvas"], CANVAS)
+        self.assertEqual(zones["r"]["label"], labels[CANVAS])
+        self.assertEqual(zones["r"]["shape"], {"type": "point", "x": 160, "y": 320})
+        self.assertEqual(self.fetch.call_count, 1)
+        self.assertIsNone(built["dims"].unit_used(f"{CANVAS}-b"))

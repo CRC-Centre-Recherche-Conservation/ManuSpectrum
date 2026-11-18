@@ -843,6 +843,9 @@ IIIF_IMAGE_INFO_DEADLINE = 6
 # in `tiles[0].width` (`tile_width` in Image API 1.1) there. Without an entry
 # an unread image is assumed to be tiled at 256.
 IIIF_IMAGE_TILE_HINTS = {}
+# Tile width assumed for an unread image of this platform's own image server;
+# it follows Cantaloupe's `endpoint.iiif.min_tile_size` (512 by default in Cantaloupe 5).
+IIIF_OWN_IMAGE_TILE = 512
 
 # max-age advertised on a search thumbnail. Each miss costs a manifest fetch
 # plus an image fetch from the provider, so the browser and any intermediary
