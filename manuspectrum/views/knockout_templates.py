@@ -50,11 +50,10 @@ SHARED_PREFIXES = (
     "views/resource/related-resources/",
 )
 
-# Distributions whose templates and catalogues a shared template renders.
+# Distributions whose templates and catalogues a shared template renders. The
+# controlled lists and Vue components apps ship inside ``arches`` (8.2).
 STAMPED_DISTRIBUTIONS = (
     "arches",
-    "arches-controlled-lists",
-    "arches-vue-components",
     "django",
 )
 
