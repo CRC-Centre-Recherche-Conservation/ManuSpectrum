@@ -122,6 +122,8 @@ REQUIRED_TESTED = {
     "ContainerRestartLoop",
     "ContainerOOMKilled",
     "WebMemoryNearLimit",
+    "ContainerSwapAllowed",
+    "ContainerSwapping",
     "ErrorRateHigh",
     "HostRebooted",
     "RecentlyRebooted",

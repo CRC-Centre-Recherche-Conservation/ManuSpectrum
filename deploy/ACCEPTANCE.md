@@ -375,7 +375,8 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
     applied: the `-f` list or `make` was bypassed.
 - [ ] *(service account)* `for d in /sys/fs/cgroup/system.slice/docker-*.scope; do echo "$(cat $d/memory.swap.max) $d"; done`
   → every line starts with `0` (the kernel limit, not only Docker's `MemorySwap`). Then
-  `sudo systemctl daemon-reload` and the same command: still `0` everywhere. For one container,
+  `sudo systemctl daemon-reload` from the admin account, and the same command again as the service account: still `0`
+  everywhere. For one container,
   `systemctl show docker-<id>.scope -p MemorySwapMax` → `MemorySwapMax=0`.
   - On failure: `/etc/systemd/system/docker-.scope.d/10-manuspectrum-no-swap.conf` is missing or
     overridden; re-run the Ansible `host` role (`ContainerSwapAllowed` runbook).

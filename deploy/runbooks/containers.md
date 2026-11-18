@@ -115,7 +115,7 @@ Severity: warning. A container may swap: the kernel limit `memory.swap.max` is n
 
 ### Prerequisites
 
-SSH access to the host as the service account, from the repository checkout, and `sudo` for the Ansible run.
+SSH access to the host as the service account, from the repository checkout. For the remediation, an admin account with sudo on the host and a laptop checkout at the running tag (`git switch --detach vX.Y.Z`).
 
 ### Symptom
 
@@ -137,7 +137,7 @@ A missing `10-manuspectrum-no-swap.conf`, or a later file that sets another `Mem
 
 ### Remediation
 
-Re-run the Ansible host role from the administrator's laptop (`ansible-playbook -i inventories/<host> site.yml --tags host --ask-become-pass`, see `deploy/ansible/README.md`): it restores the drop-in and reloads systemd, which applies the value to the running containers without restarting Docker. Check the three commands above again. Pages already in swap stay there: see `ContainerSwapping`.
+Re-run the Ansible host role from the laptop checkout at the running tag (`ansible-playbook -i inventories/<host> site.yml --tags host --ask-become-pass`, see `deploy/ansible/README.md`): it restores the drop-in and reloads systemd, which applies the value to the running containers without restarting Docker. Check the three commands above again. Pages already in swap stay there: see `ContainerSwapping`.
 
 ### Escalation
 
