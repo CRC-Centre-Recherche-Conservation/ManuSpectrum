@@ -10,10 +10,10 @@ import {
     watch,
 } from "vue";
 import { useMediaQuery } from "@vueuse/core";
-import Drawer from "primevue/drawer";
+import Drawer from "openvue/drawer";
 import { useGettext } from "vue3-gettext";
 
-import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
+import { generateArchesURL } from "@/arches_vue_components/application/generate-arches-url.ts";
 
 import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
 import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";

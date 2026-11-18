@@ -1,6 +1,6 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import PrimeVue from "primevue/config";
+import OpenVue from "openvue/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import SpectrumPreview from "@/manuspectrum/pages/AnalysisExplorer/viewers/SpectrumPreview.vue";
@@ -66,7 +66,7 @@ function mountPreview(files: FileEntry[], answers: (url: string) => Response) {
     const analysis = analysisPayload({ files });
     const wrapper = mount(SpectrumPreview, {
         props: { file: files[0], analysis },
-        global: { plugins: [pinia, PrimeVue] },
+        global: { plugins: [pinia, OpenVue] },
     });
     return { wrapper, store: useExplorerStore() };
 }

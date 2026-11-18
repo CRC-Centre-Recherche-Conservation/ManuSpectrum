@@ -1,6 +1,6 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import PrimeVue from "primevue/config";
+import OpenVue from "openvue/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { h } from "vue";
 
@@ -29,7 +29,7 @@ afterEach(() => {
     window.localStorage.clear();
 });
 
-/** `transitions`: run PrimeVue's own transitions, whose enter hook binds Escape. */
+/** `transitions`: run OpenVue's own transitions, whose enter hook binds Escape. */
 function mountPanel(transitions = false, railWidth: RailWidth | null = null) {
     return mount(RailPanel, {
         attachTo: document.body,
@@ -38,7 +38,7 @@ function mountPanel(transitions = false, railWidth: RailWidth | null = null) {
             default: () => h("input", { type: "checkbox", class: "filter" }),
         },
         global: {
-            plugins: [PrimeVue],
+            plugins: [OpenVue],
             provide: railWidth ? { [RAIL_WIDTH_KEY as symbol]: railWidth } : {},
             stubs: transitions ? { transition: false } : {},
         },

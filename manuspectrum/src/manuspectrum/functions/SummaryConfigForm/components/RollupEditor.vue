@@ -2,15 +2,15 @@
 import { computed } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Button from "primevue/button";
-import InputNumber from "primevue/inputnumber";
-import InputText from "primevue/inputtext";
-// PrimeVue's Select is imported under a name that is not an HTML element.
+import Button from "openvue/button";
+import InputNumber from "openvue/inputnumber";
+import InputText from "openvue/inputtext";
+// OpenVue's Select is imported under a name that is not an HTML element.
 // `vue-gettext-extract` parses this template with parse5, which lowercases the
 // tag to `select` and ignores the XML self-closing slash; the parser then
 // enters its "in select" insertion mode and drops every following start tag —
 // with all its translatable strings — until the next one.
-import PrimeSelect from "primevue/select";
+import PrimeSelect from "openvue/select";
 
 import {
     DEFAULT_DISTINCT_LIMIT,

@@ -1,10 +1,10 @@
-import { definePreset, palette } from "@primeuix/themes";
+import { definePreset, palette } from "@openvue/themes";
 
 import { ArchesPreset } from "@/arches_vue_components/themes/default.ts";
 
 import type { ArchesThemeConfiguration } from "@/arches_vue_components/themes";
 
-// The one place where public pages give PrimeVue raw colours: the values of
+// The one place where public pages give OpenVue raw colours: the values of
 // --ink and --blue-text in _ms-chrome.scss (public-theme.spec.ts pins --ink).
 export const PUBLIC_INK = "#1a1a2e";
 const PUBLIC_FOCUS = "#1d4ed8";
@@ -48,7 +48,7 @@ export const PUBLIC_THEME: ArchesThemeConfiguration = {
             // as a class on <html> when the OS prefers dark: "none" yields an
             // inert class "one".
             darkModeSelector: "none",
-            // The public chrome's reset is unlayered; layered PrimeVue rules
+            // The public chrome's reset is unlayered; layered OpenVue rules
             // would lose to it at any specificity.
             cssLayer: false,
         },

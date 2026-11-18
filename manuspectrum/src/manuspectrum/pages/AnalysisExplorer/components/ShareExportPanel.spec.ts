@@ -1,6 +1,6 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import PrimeVue from "primevue/config";
+import OpenVue from "openvue/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
@@ -18,7 +18,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/responses.ts";
 
-vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+vi.mock("@/arches_vue_components/application/generate-arches-url.ts", () => ({
     generateArchesURL: (route: string) => {
         const routes: Record<string, string> = {
             "django:about-data": "/en/about/data",
@@ -69,7 +69,7 @@ function mountPanel({
     const wrapper = mount(ShareExportPanel, {
         attachTo: document.body,
         global: {
-            plugins: [pinia, PrimeVue],
+            plugins: [pinia, OpenVue],
             stubs: { transition: false },
             provide: { [MIRADOR_URL_KEY as symbol]: mirador },
         },

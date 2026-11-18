@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import PrimeVue from "primevue/config";
+import OpenVue from "openvue/config";
 
 import FacetRail from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/components/FacetRail.vue";
 
@@ -18,7 +18,7 @@ import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/resp
 
 import type { Facet } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
-vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+vi.mock("@/arches_vue_components/application/generate-arches-url.ts", () => ({
     generateArchesURL: (
         name: string,
         parameters: Record<string, string> = {},
@@ -26,7 +26,7 @@ vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
 }));
 
 function mountRail(props: InstanceType<typeof FacetRail>["$props"]) {
-    return mount(FacetRail, { props, global: { plugins: [PrimeVue] } });
+    return mount(FacetRail, { props, global: { plugins: [OpenVue] } });
 }
 
 beforeEach(() => {

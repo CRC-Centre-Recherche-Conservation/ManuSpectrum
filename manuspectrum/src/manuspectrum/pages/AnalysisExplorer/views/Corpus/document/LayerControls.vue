@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import Slider from "primevue/slider";
+import Slider from "openvue/slider";
 
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";
 

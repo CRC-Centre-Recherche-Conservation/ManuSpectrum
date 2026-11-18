@@ -103,7 +103,7 @@ describe("mountPublicApp", () => {
 });
 
 describe("primeVueLocale", () => {
-    it("gives the French PrimeVue strings on a French page", () => {
+    it("gives the French OpenVue strings on a French page", () => {
         expect(primeVueLocale("fr").aria).toMatchObject({ close: "Fermer" });
     });
 
