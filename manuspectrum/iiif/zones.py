@@ -94,24 +94,12 @@ class FeatureRows:
                 nodegroup_id=node.nodegroup_id,
                 resourceinstance_id__in=list(resource_ids),
             )
-            .annotate(
-                feature=RawSQL(
-                    "jsonb_array_elements(CASE WHEN"
-                    " jsonb_typeof(tiles.tiledata -> %s -> 'features') = 'array'"
-                    " THEN tiles.tiledata -> %s -> 'features' ELSE '[]'::jsonb END)",
-                    [str(node.nodeid)] * 2,
-                    JSONField(),
-                )
-            )
+            .annotate(feature=_stored_features("%s", [str(node.nodeid)]))
             .values_list("resourceinstance_id", "feature")
         )
         usable = [row for row in rows if _usable(row[1])]
         for order, (rid, feature) in enumerate(sorted(usable, key=_by_feature_id)):
             self._by_resource[str(rid)].append((order, str(rid), feature))
-
-    def zones(self, resource_id):
-        """The usable features of *resource_id*, by feature id."""
-        return [row[2] for row in self._by_resource.get(str(resource_id), ())]
 
     def located(self, resource_ids, dims):
         """``(resource id, feature id, canvas, convert)`` of every resolved feature of *resource_ids*, by feature id; ``convert()`` gives ``(shape, unit)`` (``canvas_and_convert``)."""
@@ -134,17 +122,25 @@ class FeatureRows:
 Zone = namedtuple("Zone", "feature canvas")
 
 
-def annotation_zones(nodes, resource_id):
-    """``Zone(feature, canvas name)`` of every usable annotation feature of *resource_id* on *nodes*, by feature id.
+def annotation_zones(resource_id):
+    """``Zone(feature, canvas name)`` of every usable feature of every annotation node of *resource_id*, by feature id, read in one query.
 
-    The canvas name is the stored ``properties.canvas`` when it is a string,
-    else None. Unusable features (not an object, an id that is not a UUID) are
-    left out, as ``FeatureRows`` leaves them.
+    No nodegroup permission is applied: the caller decides who may see the
+    zones. The canvas name is the stored ``properties.canvas`` when it is a
+    string, else None. Unusable features (not an object, an id that is not a
+    UUID) are left out, as ``FeatureRows`` leaves them.
     """
-    rows = []
-    for node in nodes:
-        rows += FeatureRows(node, [resource_id], {node.nodegroup_id}).zones(resource_id)
-    rows.sort(key=lambda feature: _by_feature_id((None, feature)))
+    found = (
+        TileModel.objects.filter(
+            resourceinstance_id=resource_id, nodegroup__node__datatype="annotation"
+        )
+        .annotate(feature=_stored_features("nodes.nodeid::text", []))
+        .values_list("feature", flat=True)
+    )
+    rows = sorted(
+        (feature for feature in found if _usable(feature)),
+        key=lambda feature: _by_feature_id((None, feature)),
+    )
     zones = []
     for feature in rows:
         props = feature.get("properties")
@@ -166,6 +162,17 @@ def annotation_features(node, resource_ids, dims, readable):
     """
     resource_ids = [str(r) for r in resource_ids]
     yield from FeatureRows(node, resource_ids, readable).features(resource_ids, dims)
+
+
+def _stored_features(key, params):
+    """One row per element of the ``features`` array a tile stores under the node id *key* (SQL, *params*); none when that value is not an array."""
+    return RawSQL(
+        f"jsonb_array_elements(CASE WHEN"
+        f" jsonb_typeof(tiles.tiledata -> {key} -> 'features') = 'array'"
+        f" THEN tiles.tiledata -> {key} -> 'features' ELSE '[]'::jsonb END)",
+        params * 2,
+        JSONField(),
+    )
 
 
 def _usable(feature):

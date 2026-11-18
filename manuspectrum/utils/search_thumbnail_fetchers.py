@@ -197,6 +197,10 @@ def _extent(geometry, radius, zoom):
         return None
 
 
+def _is_number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
 def _zone_region_url(annotation, manifests):
     """IIIF region URL of one annotation zone, or None when it cannot be shown.
 
@@ -206,7 +210,9 @@ def _zone_region_url(annotation, manifests):
     in the pixels of that image (``_image_frame``), or of the frame stamped on the zone. A canvas missing from the
     manifest is bounded when the zone is stamped or the stored service's
     info.json is read. A
-    zone drawn outside a bounded image gives None.
+    zone drawn outside a bounded image gives None, and so does a zone whose
+    manifest is not a string, whose coordinates cannot be read or, for a
+    Point, whose radius is not a number.
     """
     feature = annotation.feature if isinstance(annotation.feature, dict) else {}
     properties = feature.get("properties") or {}
@@ -215,9 +221,14 @@ def _zone_region_url(annotation, manifests):
         return None
     stored = rewrite_legacy_url(annotation.canvas or "")
     manifest_url = properties.get("manifest")
-    if not stored or not manifest_url or not geometry.get("coordinates"):
+    if not stored or not isinstance(manifest_url, str) or not manifest_url:
+        return None
+    if not geometry.get("coordinates"):
         return None
     if geometry.get("type") not in ("Polygon", "Point"):
+        return None
+    radius = properties.get("radius", DEFAULT_POINT_RADIUS)
+    if geometry["type"] == "Point" and not _is_number(radius):
         return None
     names = manifests.names(manifest_url)
     if names is None:
@@ -230,11 +241,10 @@ def _zone_region_url(annotation, manifests):
     service = (service or stored).rstrip("/")
 
     zoom, width, height = _image_frame(service, width, height, frame_of(feature))
-    radius = properties.get("radius", DEFAULT_POINT_RADIUS)
+    extent = _extent(geometry, radius, zoom)
+    if extent is None:
+        return None
     if width != sys.maxsize:
-        extent = _extent(geometry, radius, zoom)
-        if extent is None:
-            return None
         xmin, ymin, xmax, ymax = extent
         if xmax <= 0 or ymax <= 0 or xmin >= width or ymin >= height:
             return None
@@ -275,15 +285,16 @@ class _Manifests:
 
 
 def _annotations(resource):
-    """The annotation zones of *resource* in feature id order (``zones.annotation_zones``), read off its tiles."""
-    from arches.app.models.models import Node
+    """The annotation zones of *resource* in feature id order, read off its tiles in one query (``zones.annotation_zones``).
 
-    nodes = Node.objects.filter(graph_id=resource.graph_id, datatype="annotation")
-    return annotation_zones(nodes, str(resource.resourceinstanceid))
+    No nodegroup permission is applied: the resource-level read is checked by
+    ``CachedThumbnailView`` before any fetcher runs.
+    """
+    return annotation_zones(resource.resourceinstanceid)
 
 
-def _zone_payload(resource):
-    """The image of the first zone of *resource* that has a region, or None.
+def _zone_payload(zones):
+    """The image of the first of *zones* (``_annotations``) that has a region, or None.
 
     Zones are taken in feature id order, the Explorer's first zone. Only that
     zone's image is requested: its failure ends the search, and so does a
@@ -291,7 +302,7 @@ def _zone_payload(resource):
     """
     manifests = _Manifests()
 
-    for annotation in _annotations(resource):
+    for annotation in zones:
         url = _zone_region_url(annotation, manifests)
         if url:
             return _cached_image(url)
@@ -399,9 +410,8 @@ class ComponentThumbnailFetcher(_SourceFetcher):
         return _has_zone(self.resource)
 
     def _payload(self):
-        if not _has_zone(self.resource):
-            return _NO_SOURCE
-        return _zone_payload(self.resource)
+        zones = _annotations(self.resource)
+        return _zone_payload(zones) if zones else _NO_SOURCE
 
 
 @SearchThumbnailFetcherFactory.register("60c85aba-f079-45bc-997f-21cdd4f77b6d")
@@ -429,6 +439,7 @@ class AnalysisThumbnailFetcher(_SourceFetcher):
                 payload = None
             if payload:
                 return payload
-        if not _has_zone(self.resource):
+        zones = _annotations(self.resource)
+        if not zones:
             return None if manifest_url else _NO_SOURCE
-        return _zone_payload(self.resource)
+        return _zone_payload(zones)

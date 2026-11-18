@@ -4,9 +4,10 @@ Usage:
     python manage.py test tests.test_explorer_places --settings="tests.test_settings"
 """
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from manuspectrum.views.explorer.service import _canvas_of
+from manuspectrum.views.explorer.values import rewrite_legacy_url
 from manuspectrum.views.explorer.places import (
     authorities_of,
     derived_only,
@@ -132,3 +133,16 @@ class StoredShapeTests(SimpleTestCase):
         }
         self.assertEqual(_canvas_of(collection), "c1")
         self.assertIsNone(_canvas_of(None))
+
+    @override_settings(EXPLORER_LEGACY_HOSTS=("legacy.example",))
+    def test_a_canvas_that_is_not_a_string_is_skipped(self):
+        for bad in (5, True, ["c1"], {"id": "c1"}):
+            with self.subTest(canvas=bad):
+                collection = {
+                    "features": [
+                        {"properties": {"canvas": bad}},
+                        {"properties": {"canvas": "c2"}},
+                    ]
+                }
+                self.assertEqual(_canvas_of(collection), "c2")
+                self.assertEqual(rewrite_legacy_url(_canvas_of(collection) or ""), "c2")

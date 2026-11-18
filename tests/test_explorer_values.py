@@ -232,6 +232,17 @@ class AxisAndShapeTests(SimpleTestCase):
         )
         self.assertIsNone(shape_of({"type": "Point", "coordinates": ["a", 1]}, 9, 9))
 
+    def test_coordinates_that_are_not_lists_of_points_give_no_shape(self):
+        polygons = (5, True, 3.5, {"a": 1}, "ab", [5], [True], ["ab"], [{"a": 1}])
+        points = (5, True, 3.5, {"a": 1}, "ab", [[1, 2]], [{"a": 1}, 2])
+        for kind, values in (("Polygon", polygons), ("Point", points)):
+            for bad in values:
+                with self.subTest(kind=kind, coordinates=bad):
+                    geometry = {"type": kind, "coordinates": bad}
+                    self.assertIsNone(shape_of(geometry, 4000, 5000))
+        self.assertIsNone(shape_of("x", 4000, 5000))
+        self.assertIsNone(shape_of([1], 4000, 5000))
+
 
 @override_settings(
     RAW_INSTRUMENT_EXTENSIONS=(".mca", ".asd"),

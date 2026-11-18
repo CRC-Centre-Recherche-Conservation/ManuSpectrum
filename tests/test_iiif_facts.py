@@ -287,18 +287,48 @@ class MalformedZoneTests(FactsCase):
         self.assertEqual(found[:2], [a, b])
         self.assertEqual(len(found), 2)
 
+    def test_geometries_whose_coordinates_cannot_be_read_are_skipped(self):
+        a, b = sorted(str(uuid.uuid4()) for _ in range(2))
+        odd = [
+            {"type": "Polygon", "coordinates": bad}
+            for bad in (5, True, {"a": 1}, [5], [True], "ab", [[5]], [])
+        ] + [
+            {"type": "Point", "coordinates": bad}
+            for bad in (5, True, {"a": 1}, "ab", [[1, 2]])
+        ]
+        self.tile_of(
+            [self.feature(b)]
+            + [self.feature(str(uuid.uuid4()), geometry=g) for g in odd]
+            + [self.feature(a)]
+        )
+
+        found = [str(feature) for _, feature, _, _ in self.read()]
+        doc = self.facts()
+        zones = next(a for a in doc.analyses if a.id == str(self.analysis.pk)).zones
+
+        self.assertEqual(found, [a, b])
+        self.assertEqual([zone.feature for zone in zones], [a, b])
+
     def test_annotation_zones_skip_the_unusable_and_keep_feature_id_order(self):
         a, b = sorted(str(uuid.uuid4()) for _ in range(2))
         self.tile_of([self.feature(b), self.feature("x"), 3, self.feature(a)])
-        zones = annotation_zones([self.node], str(self.analysis.pk))
+        zones = annotation_zones(str(self.analysis.pk))
         self.assertEqual([z.feature["id"] for z in zones], [a, b])
         self.assertEqual({z.canvas for z in zones}, {CANVAS})
 
-    def test_the_thumbnail_zones_come_from_the_tiles_beside_a_malformed_tile(self):
+    def test_annotation_zones_are_read_beside_unreadable_tiles_in_one_query(self):
         valid = str(uuid.uuid4())
-        self.tile_of([self.feature(valid)])
-        zones = annotation_zones([self.node], str(self.analysis.pk))
-        self.assertEqual([z.feature["id"] for z in zones], [valid])
+        self.tile_of([self.feature(valid, properties={"canvas": 5})])
+        for bad in ({"features": 1}, {}, {"features": {}}, None):
+            self.tile(self.analysis, "literal_location_of_analysis", bad)
+        self.tile(self.analysis, "literal_location_of_analysis", {"features": "x"})
+
+        with CaptureQueriesContext(connection) as queries:
+            zones = annotation_zones(str(self.analysis.pk))
+
+        self.assertEqual([(z.feature["id"], z.canvas) for z in zones], [(valid, None)])
+        self.assertEqual(len(queries), 1)
+        self.assertNotIn("vw_annotations", queries[0]["sql"])
 
 
 class SubjectTests(FactsCase):

@@ -13,11 +13,15 @@ The Arches ORM is imported inside the methods, so ``TileModel`` and
 and the guarded image fetch (``safe_fetch``) are patched on the fetchers module.
 Nothing here reaches Postgres, Elasticsearch or the network.
 
+``ZoneQueryTests`` is the exception: it reads the zones of real fixture
+resources off their tiles and counts the queries of both modes.
+
 Image payloads carry a real signature: a fetcher serves what an image server
 sent under this site's own origin, so it relays it only once the first bytes
 name an image format.
 """
 
+import uuid
 from types import SimpleNamespace
 from unittest import mock
 
@@ -25,6 +29,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.test import SimpleTestCase, override_settings
 
+from arches.app.models.models import Node, NodeGroup, TileModel
 from arches.app.utils.search_thumbnail_fetcher_factory import (
     SearchThumbnailFetcherFactory,
 )
@@ -32,12 +37,14 @@ from arches.app.utils.search_thumbnail_fetcher_factory import (
 from manuspectrum.iiif import units
 from manuspectrum.utils.cache import get_or_build, stable_cache_key
 from manuspectrum.utils.search_thumbnail_fetchers import (
+    _annotations,
     _region_size,
     _sniff_image_type,
     AnalysisThumbnailFetcher,
     ComponentThumbnailFetcher,
     DocumentThumbnailFetcher,
 )
+from tests.explorer_fixtures import CANVAS, FEATURES, RECT, IIIFCase
 
 FETCHERS = "manuspectrum.utils.search_thumbnail_fetchers"
 TILE_MODEL = "arches.app.models.models.TileModel"
@@ -1102,6 +1109,84 @@ class ZoneChoiceTests(FetcherTestCase):
 
         self.assertEqual(result, (REGION_BYTES, "image/jpeg"))
 
+    def test_a_zone_naming_its_manifest_by_a_list_or_an_object_is_skipped(
+        self, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        vw_annotation.return_value = [
+            annotation(manifest=[ANNOTATION_MANIFEST_URL]),
+            annotation(manifest={"id": ANNOTATION_MANIFEST_URL}),
+            annotation(manifest=5),
+            annotation(),
+        ]
+        fetch_manifest.return_value = v2_manifest()
+        safe_fetch.return_value = response(content=REGION_BYTES)
+
+        result = ComponentThumbnailFetcher(RESOURCE).get_thumbnail(retrieve=True)
+
+        self.assertEqual(result, (REGION_BYTES, "image/jpeg"))
+        fetch_manifest.assert_called_once_with(ANNOTATION_MANIFEST_URL)
+        safe_fetch.assert_called_once_with(
+            f"{CANVAS_SERVICE}/{POLYGON_REGION_SIZE}/0/default.jpg",
+            headers=IMAGE_HEADERS,
+            purpose="thumbnail",
+        )
+
+    def test_a_point_whose_radius_is_not_a_number_is_skipped(
+        self, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        point = {"type": "Point", "coordinates": POINT}
+        unmatched = "https://img.example.org/iiif/2/elsewhere"
+        fetch_manifest.return_value = v2_manifest()
+        safe_fetch.return_value = response(content=REGION_BYTES)
+        for radius in ("5", [5], {"r": 5}, True, None):
+            for canvas in (CANVAS_SERVICE, unmatched):
+                with self.subTest(radius=radius, canvas=canvas):
+                    cache.clear()
+                    safe_fetch.reset_mock()
+                    odd = annotation(geometry=point, canvas=canvas)
+                    odd.feature["properties"]["radius"] = radius
+                    vw_annotation.return_value = [odd, annotation()]
+
+                    result = ComponentThumbnailFetcher(RESOURCE).get_thumbnail(True)
+
+                    self.assertEqual(result, (REGION_BYTES, "image/jpeg"))
+                    safe_fetch.assert_called_once_with(
+                        f"{CANVAS_SERVICE}/{POLYGON_REGION_SIZE}/0/default.jpg",
+                        headers=IMAGE_HEADERS,
+                        purpose="thumbnail",
+                    )
+
+    def test_malformed_coordinates_on_an_unmatched_canvas_skip_to_the_next_zone(
+        self, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        unmatched = "https://img.example.org/iiif/2/elsewhere"
+        fetch_manifest.return_value = v2_manifest()
+        safe_fetch.return_value = response(content=REGION_BYTES)
+        odd = (
+            {"type": "Point", "coordinates": 5},
+            {"type": "Point", "coordinates": {"a": 1}},
+            {"type": "Polygon", "coordinates": 5},
+            {"type": "Polygon", "coordinates": [5]},
+            {"type": "Polygon", "coordinates": {"a": 1}},
+        )
+        for geometry in odd:
+            with self.subTest(geometry=geometry):
+                cache.clear()
+                safe_fetch.reset_mock()
+                vw_annotation.return_value = [
+                    annotation(geometry=geometry, canvas=unmatched),
+                    annotation(),
+                ]
+
+                result = ComponentThumbnailFetcher(RESOURCE).get_thumbnail(True)
+
+                self.assertEqual(result, (REGION_BYTES, "image/jpeg"))
+                safe_fetch.assert_called_once_with(
+                    f"{CANVAS_SERVICE}/{POLYGON_REGION_SIZE}/0/default.jpg",
+                    headers=IMAGE_HEADERS,
+                    purpose="thumbnail",
+                )
+
     def test_a_zone_drawn_outside_the_image_is_skipped_for_the_next_one(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
@@ -1629,3 +1714,116 @@ class RegistryTests(FetcherTestCase):
             registry["60c85aba-f079-45bc-997f-21cdd4f77b6d"], AnalysisThumbnailFetcher
         )
         self.assertNotIn("72ac748a-7368-41e7-9f54-99be41319fac", registry)
+
+
+class ZoneQueryTests(IIIFCase):
+    """Zones of real fixture resources: one query reads them, whatever the annotation nodes and tiles."""
+
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        patcher = mock.patch(SAFE_FETCH, return_value=response(content=REGION_BYTES))
+        self.safe_fetch = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.component = self.components["open"]
+        self.zone(
+            self.component,
+            [(str(uuid.uuid4()), CANVAS, RECT)],
+            alias="location_in_document",
+        )
+
+    @staticmethod
+    def collection(feature_id):
+        return {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "id": feature_id,
+                    "type": "Feature",
+                    "geometry": {"type": "Polygon", "coordinates": POLYGON},
+                    "properties": {"canvas": CANVAS},
+                }
+            ],
+        }
+
+    def annotation_node(self, alias, nodegroup_id):
+        return Node.objects.create(
+            nodeid=uuid.uuid4(),
+            graph=self.graphs["analysis"],
+            nodegroup_id=nodegroup_id,
+            name=alias,
+            alias=alias,
+            datatype="annotation",
+            istopnode=False,
+        )
+
+    def test_a_component_probe_reads_its_zones_in_one_query(self):
+        with self.assertNumQueries(1):
+            found = ComponentThumbnailFetcher(self.component).get_thumbnail(False)
+
+        self.assertTrue(found)
+
+    def test_a_component_retrieval_reads_its_zones_in_one_query(self):
+        with self.assertNumQueries(1):
+            found = ComponentThumbnailFetcher(self.component).get_thumbnail(True)
+
+        self.assertEqual(found, (REGION_BYTES, "image/jpeg"))
+        self.safe_fetch.assert_called_once()
+
+    def test_an_analysis_reads_its_manifest_tiles_then_its_zones(self):
+        fetcher = AnalysisThumbnailFetcher(self.analyses["open"])
+
+        with self.assertNumQueries(2):
+            self.assertTrue(fetcher.get_thumbnail(False))
+        with self.assertNumQueries(2):
+            found = fetcher.get_thumbnail(True)
+
+        self.assertEqual(found, (REGION_BYTES, "image/jpeg"))
+
+    def test_only_unreadable_zone_values_mean_no_thumbnail(self):
+        component = self.components["embargoed"]
+        for bad in ({"features": 1}, {}, {"features": {}}, None):
+            self.tile(component, "location_in_document", bad)
+
+        with self.assertNumQueries(1):
+            found = ComponentThumbnailFetcher(component).get_thumbnail(False)
+
+        self.assertIsNone(found)
+        self.assertEqual(_annotations(component), [])
+
+    def test_every_annotation_node_is_read_in_one_query_past_unreadable_values(self):
+        analysis = self.analyses["open"]
+        zone_node = self.nodes[("analysis", "literal_location_of_analysis")]
+        beside = self.annotation_node("beside", zone_node.nodegroup_id)
+        group = NodeGroup.objects.create(nodegroupid=uuid.uuid4(), cardinality="n")
+        elsewhere = self.annotation_node("elsewhere", group.pk)
+        first, second = (str(uuid.uuid4()) for _ in range(2))
+        TileModel.objects.create(
+            resourceinstance=analysis,
+            nodegroup_id=zone_node.nodegroup_id,
+            data={
+                str(zone_node.nodeid): {"features": 1},
+                str(beside.nodeid): self.collection(first),
+            },
+        )
+        TileModel.objects.create(
+            resourceinstance=analysis,
+            nodegroup=group,
+            data={str(elsewhere.nodeid): self.collection(second)},
+        )
+        for bad in ({"features": 1}, {}, {"features": {}}, None):
+            TileModel.objects.create(
+                resourceinstance=analysis,
+                nodegroup=group,
+                data={str(elsewhere.nodeid): bad},
+            )
+        TileModel.objects.create(resourceinstance=analysis, nodegroup=group, data={})
+
+        with self.assertNumQueries(1):
+            zones = _annotations(analysis)
+
+        self.assertEqual(
+            [zone.feature["id"] for zone in zones],
+            sorted([FEATURES["open"], first, second], key=uuid.UUID),
+        )
+        self.assertEqual({zone.canvas for zone in zones}, {CANVAS})

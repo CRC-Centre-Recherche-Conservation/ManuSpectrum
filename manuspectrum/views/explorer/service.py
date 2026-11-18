@@ -515,7 +515,7 @@ def _canvas_of(annotation):
     for feature in features if isinstance(features, list) else ():
         props = feature.get("properties") if isinstance(feature, dict) else None
         canvas = props.get("canvas") if isinstance(props, dict) else None
-        if canvas:
+        if isinstance(canvas, str) and canvas:
             return canvas
     return None
 
