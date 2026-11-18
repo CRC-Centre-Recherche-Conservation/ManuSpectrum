@@ -572,7 +572,7 @@ class DocumentRouteTests(CorpusCase):
                         "msFrame": source,
                     }
                 )
-            tile.save()
+            TileModel.objects.filter(pk=tile.pk).update(data=tile.data)
 
     def test_stamped_document_reads_no_image_description(self):
         for key in ("open", "on_document", "draft"):

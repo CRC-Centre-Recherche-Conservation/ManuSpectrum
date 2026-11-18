@@ -89,7 +89,9 @@ class ZoneFrameCase(reg.AnnotationFixtures):
             "widgets": [],
         }
 
-    def write(self, features, tile_id=None, user=None, trusted=False, request=None):
+    def write(
+        self, features, tile_id=None, user=None, trusted=False, request=None, value=None
+    ):
         """Save the zones as the annotation tile *tile_id* (new when None); callbacks are captured, not run."""
         tile = Tile.objects.filter(pk=tile_id).first() if tile_id else None
         if tile is None:
@@ -99,7 +101,7 @@ class ZoneFrameCase(reg.AnnotationFixtures):
                 nodegroup_id=self.nodegroup.pk,
                 data={self.node(): None, str(self.other.pk): None},
             )
-        tile.data[self.node()] = collection(*features)
+        tile.data[self.node()] = value or collection(*features)
         tile.serialized_graph = self.serialized()
         guard = mock.patch(
             "manuspectrum.iiif.frames.current_request",
@@ -356,6 +358,48 @@ class FailClosedTests(ZoneFrameCase):
 
 
 @override_settings(IIIF_IMAGE_INFO_READ=True)
+class ReaderShapeTests(ZoneFrameCase):
+    def test_a_typeless_collection_is_stamped_like_any_other(self):
+        for kind in (None, "featurecollection", "Collection"):
+            with self.subTest(kind=kind):
+                TileModel.objects.filter(nodegroup_id=self.nodegroup.pk).delete()
+                value = {"features": [zone("z1", stamp=FORGED)]}
+                if kind:
+                    value["type"] = kind
+                tile, _ = self.write([], value=value)
+                self.assertNotIn("msUnit", self.stored(tile, "z1"))
+
+    def test_a_typeless_collection_is_stamped_from_a_known_image(self):
+        remember_info()
+        tile, _ = self.write([], value={"features": [zone("z1", stamp=FORGED)]})
+        self.assertEqual(self.stored(tile, "z1")["msUnit"], 16)
+
+    def test_a_stored_non_array_features_does_not_block_later_saves(self):
+        for bad in (1, True, 3.5, {}):
+            with self.subTest(bad=bad):
+                TileModel.objects.filter(nodegroup_id=self.nodegroup.pk).delete()
+                tile, _ = self.write([zone("z0")], trusted=True)
+                row = TileModel.objects.get(pk=tile.pk)
+                row.data[self.node()] = {"features": bad}
+                TileModel.objects.filter(pk=tile.pk).update(
+                    data=row.data,
+                    provisionaledits={"u": {"value": {self.node(): {"features": bad}}}},
+                )
+                remember_info()
+                self.write([zone("z1")], tile_id=tile.pk)
+                self.assertEqual(self.stored(tile, "z1")["msFrame"], "read")
+
+    def test_a_stored_feature_with_odd_properties_keeps_the_others_stamps(self):
+        stamp = READ.stamp()
+        tile, _ = self.write([zone("a", stamp=stamp), zone("b", x=5.0)], trusted=True)
+        row = TileModel.objects.get(pk=tile.pk)
+        row.data[self.node()]["features"][1]["properties"] = "odd"
+        TileModel.objects.filter(pk=tile.pk).update(data=row.data)
+        self.write([zone("a"), zone("b", x=5.0)], tile_id=tile.pk)
+        self.assertEqual(self.stored(tile, "a")["msFrame"], "read")
+
+
+@override_settings(IIIF_IMAGE_INFO_READ=True)
 class ScheduleTests(ZoneFrameCase):
     def run_callbacks(self, callbacks):
         for callback in callbacks:
@@ -372,13 +416,13 @@ class ScheduleTests(ZoneFrameCase):
 
     def test_resource_copy_keeps_the_stamps_it_copies(self):
         request = SimpleNamespace(
-            resolver_match=SimpleNamespace(url_name="resource_copy")
+            resolver_match=SimpleNamespace(view_name="resource_copy")
         )
         tile, callbacks = self.write([zone("z1", stamp=FORGED)], request=request)
         self.assertEqual(self.stored(tile, "z1")["msUnit"], 2)
 
     def test_another_route_does_not_keep_incoming_stamps(self):
-        request = SimpleNamespace(resolver_match=SimpleNamespace(url_name="tile"))
+        request = SimpleNamespace(resolver_match=SimpleNamespace(view_name="tile"))
         tile, _ = self.write([zone("z1", stamp=FORGED)], request=request)
         self.assertNotIn("msUnit", self.stored(tile, "z1"))
 

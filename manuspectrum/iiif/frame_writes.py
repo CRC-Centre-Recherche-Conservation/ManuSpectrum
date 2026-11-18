@@ -86,11 +86,8 @@ def frame_for_service(service, manifest_url, stored_name):
 
 
 def _is_collection(value):
-    return (
-        isinstance(value, dict)
-        and value.get("type") == "FeatureCollection"
-        and isinstance(value.get("features"), list)
-    )
+    """True for a dict whose ``features`` is a list: what the readers (``zones.FeatureRows``, the thumbnails) take as a collection, whatever its ``type``."""
+    return isinstance(value, dict) and isinstance(value.get("features"), list)
 
 
 def holders(instance):

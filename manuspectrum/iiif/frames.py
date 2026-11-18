@@ -57,7 +57,7 @@ def is_trusted():
     if request is None:
         return True
     match = getattr(request, "resolver_match", None)
-    return getattr(match, "url_name", None) == "resource_copy"
+    return getattr(match, "view_name", None) == "resource_copy"
 
 
 def _whole(value):
@@ -66,7 +66,7 @@ def _whole(value):
 
 def frame_of(feature):
     """The ``Frame`` stamped on *feature*, or None when the stamp is absent or invalid (types, power of two, bounds of ``Frame``)."""
-    props = (feature or {}).get("properties")
+    props = feature.get("properties") if isinstance(feature, dict) else None
     if not isinstance(props, dict) or any(k not in props for k in STAMP_KEYS):
         return None
     unit, width, height, source = (props[k] for k in STAMP_KEYS)
@@ -140,7 +140,8 @@ def valid_id(value):
 
 def canvas_of(feature):
     """The normalised canvas name of *feature*: legacy host rewritten, no trailing slash."""
-    canvas = ((feature or {}).get("properties") or {}).get("canvas")
+    props = feature.get("properties") if isinstance(feature, dict) else None
+    canvas = props.get("canvas") if isinstance(props, dict) else None
     return rewrite_legacy_url(canvas).rstrip("/") if isinstance(canvas, str) else ""
 
 
@@ -180,7 +181,11 @@ class PreviousFeatures:
 
 def _features(collection):
     features = collection.get("features") if isinstance(collection, dict) else None
-    return [f for f in features or () if isinstance(f, dict)]
+    return (
+        [f for f in features if isinstance(f, dict)]
+        if isinstance(features, list)
+        else []
+    )
 
 
 def _without_stamp(properties):

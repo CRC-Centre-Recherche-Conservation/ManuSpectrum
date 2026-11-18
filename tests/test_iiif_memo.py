@@ -413,7 +413,7 @@ class MemoTests(IIIFCase):
                         "msFrame": "browser",
                     }
                 )
-            tile.save()
+            TileModel.objects.filter(pk=tile.pk).update(data=tile.data)
 
     def test_page_of_stamped_zones_reads_nothing_and_is_not_degraded(self):
         url = self.with_image_services()

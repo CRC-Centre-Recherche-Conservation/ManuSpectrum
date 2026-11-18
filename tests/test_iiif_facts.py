@@ -211,6 +211,25 @@ class ZoneTests(FactsCase):
         self.assertNotIn("vw_annotations", queries[0]["sql"])
 
 
+class UnreadableFeaturesTests(FactsCase):
+    def test_a_non_array_features_value_does_not_hide_the_valid_zones(self):
+        node = self.nodes[("analysis", "literal_location_of_analysis")]
+        analysis = self.analyses["open"]
+        TileModel.objects.filter(
+            resourceinstance=analysis, nodegroup_id=node.nodegroup_id
+        ).delete()
+        valid = uuid.uuid4()
+        self.zone(analysis, [(str(valid), CANVAS, POINT)])
+        for bad in (1, {}):
+            self.tile(analysis, "literal_location_of_analysis", {"features": bad})
+        found = list(
+            annotation_features(
+                node, [str(analysis.pk)], canvas_index([]), {node.nodegroup_id}
+            )
+        )
+        self.assertEqual([feature for _, feature, _, _ in found], [valid])
+
+
 class SubjectTests(FactsCase):
     def test_a_component_reads_its_documents_manifest(self):
         doc = self.facts(self.components["open"])

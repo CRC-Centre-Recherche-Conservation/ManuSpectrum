@@ -91,8 +91,10 @@ class FeatureRows:
             )
             .annotate(
                 feature=RawSQL(
-                    "jsonb_array_elements(tiles.tiledata -> %s -> 'features')",
-                    [str(node.nodeid)],
+                    "jsonb_array_elements(CASE WHEN"
+                    " jsonb_typeof(tiles.tiledata -> %s -> 'features') = 'array'"
+                    " THEN tiles.tiledata -> %s -> 'features' ELSE '[]'::jsonb END)",
+                    [str(node.nodeid)] * 2,
                     JSONField(),
                 )
             )

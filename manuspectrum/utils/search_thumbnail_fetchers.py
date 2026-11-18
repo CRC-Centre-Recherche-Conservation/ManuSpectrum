@@ -207,7 +207,7 @@ def _zone_region_url(annotation, manifests):
     info.json is read. A
     zone drawn outside a bounded image gives None.
     """
-    feature = annotation.feature or {}
+    feature = annotation.feature if isinstance(annotation.feature, dict) else {}
     properties = feature.get("properties") or {}
     stored = rewrite_legacy_url(annotation.canvas or "")
     manifest_url = properties.get("manifest")

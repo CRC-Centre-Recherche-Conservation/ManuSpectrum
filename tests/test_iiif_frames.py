@@ -222,13 +222,41 @@ class OddStoredShapeTests(SimpleTestCase):
         self.assertIsNone(frames.PreviousFeatures([1], None).match(feature(), NODE))
 
 
+class StoredShapeTests(SimpleTestCase):
+    def test_a_non_list_features_value_is_skipped(self):
+        for bad in (1, True, 3.5, {}, {"a": 1}, "x", None):
+            with self.subTest(bad=bad):
+                for previous in (
+                    frames.PreviousFeatures({NODE: {"features": bad}}, None),
+                    frames.PreviousFeatures(
+                        {}, {"u": {"value": {NODE: {"features": bad}}}}
+                    ),
+                ):
+                    self.assertIsNone(previous.match(feature(), NODE))
+
+    def test_a_non_dict_properties_gives_no_canvas_and_no_frame(self):
+        for bad in ("x", 1, ["a"], True):
+            with self.subTest(bad=bad):
+                odd = {"id": "f1", "properties": bad}
+                self.assertEqual(frames.canvas_of(odd), "")
+                self.assertIsNone(frames.frame_of(odd))
+        self.assertEqual(frames.canvas_of(5), "")
+        self.assertIsNone(frames.frame_of(5))
+
+    def test_a_stored_feature_with_odd_properties_does_not_stop_a_match(self):
+        previous = frames.PreviousFeatures(
+            {NODE: collection({"id": "f1", "properties": "x"}, feature("f2"))}, None
+        )
+        self.assertIsNotNone(previous.match(feature("f2"), NODE))
+
+
 class ResourceCopyTrustTests(SimpleTestCase):
-    def trusted_on(self, url_name):
+    def trusted_on(self, view_name):
         from types import SimpleNamespace
 
         from manuspectrum.accounts import lockout
 
-        request = SimpleNamespace(resolver_match=SimpleNamespace(url_name=url_name))
+        request = SimpleNamespace(resolver_match=SimpleNamespace(view_name=view_name))
         token = lockout._current_request.set(request)
         try:
             return frames.is_trusted()
@@ -239,6 +267,7 @@ class ResourceCopyTrustTests(SimpleTestCase):
         self.assertTrue(self.trusted_on("resource_copy"))
         self.assertFalse(self.trusted_on("tile"))
         self.assertFalse(self.trusted_on(None))
+        self.assertFalse(self.trusted_on("other:resource_copy"))
 
 
 class FrameHelperTests(SimpleTestCase):
