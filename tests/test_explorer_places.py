@@ -6,6 +6,7 @@ Usage:
 
 from django.test import SimpleTestCase
 
+from manuspectrum.views.explorer.service import _canvas_of
 from manuspectrum.views.explorer.places import (
     authorities_of,
     derived_only,
@@ -102,3 +103,32 @@ class HaversineTests(SimpleTestCase):
         self.assertAlmostEqual(
             haversine_km((2.3488, 48.8534), (-0.1276, 51.5072)), 343.5, delta=1.5
         )
+
+
+class StoredShapeTests(SimpleTestCase):
+    def test_a_non_list_features_value_is_read_as_no_feature(self):
+        for bad in (1, True, 3.5, {}, {"a": 1}, "x"):
+            with self.subTest(bad=bad):
+                collection = {"type": "FeatureCollection", "features": bad}
+                self.assertFalse(derived_only(collection))
+                self.assertIsNone(geometry_summary(collection))
+                self.assertIsNone(_canvas_of(collection))
+
+    def test_properties_that_are_not_an_object_are_not_derived(self):
+        point = {"type": "Point", "coordinates": [1, 2]}
+        for bad in (1, "msDerivedFrom", ["msDerivedFrom"], True):
+            with self.subTest(bad=bad):
+                collection = {"features": [{"geometry": point, "properties": bad}]}
+                self.assertFalse(derived_only(collection))
+
+    def test_the_canvas_is_the_first_one_of_a_usable_feature(self):
+        collection = {
+            "features": [
+                1,
+                {"properties": "x"},
+                {"properties": {"canvas": "c1"}},
+                {"properties": {"canvas": "c2"}},
+            ]
+        }
+        self.assertEqual(_canvas_of(collection), "c1")
+        self.assertIsNone(_canvas_of(None))

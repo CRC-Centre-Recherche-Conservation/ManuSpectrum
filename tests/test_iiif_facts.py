@@ -18,7 +18,7 @@ from arches.app.models.models import File, IIIFManifest, ResourceInstance, TileM
 
 from manuspectrum.iiif import facts
 from manuspectrum.iiif.sources import canvas_index
-from manuspectrum.iiif.zones import annotation_features
+from manuspectrum.iiif.zones import annotation_features, annotation_zones
 from tests.explorer_fixtures import (
     CANVAS,
     FEATURES,
@@ -228,6 +228,77 @@ class UnreadableFeaturesTests(FactsCase):
             )
         )
         self.assertEqual([feature for _, feature, _, _ in found], [valid])
+
+
+class MalformedZoneTests(FactsCase):
+    def setUp(self):
+        super().setUp()
+        self.node = self.nodes[("analysis", "literal_location_of_analysis")]
+        self.analysis = self.analyses["open"]
+        TileModel.objects.filter(
+            resourceinstance=self.analysis, nodegroup_id=self.node.nodegroup_id
+        ).delete()
+
+    def tile_of(self, features):
+        self.tile(
+            self.analysis,
+            "literal_location_of_analysis",
+            {"type": "FeatureCollection", "features": features},
+        )
+
+    def read(self):
+        return list(
+            annotation_features(
+                self.node,
+                [str(self.analysis.pk)],
+                canvas_index([]),
+                {self.node.nodegroup_id},
+            )
+        )
+
+    def feature(self, fid, **kwargs):
+        value = {
+            "id": fid,
+            "type": "Feature",
+            "geometry": POINT,
+            "properties": {"canvas": CANVAS},
+        }
+        value.update(kwargs)
+        return value
+
+    def test_features_that_cannot_be_read_are_skipped_and_the_order_stays(self):
+        a, b = sorted(str(uuid.uuid4()) for _ in range(2))
+        self.tile_of(
+            [
+                self.feature(b),
+                self.feature("x"),
+                self.feature(5),
+                self.feature([]),
+                1,
+                "text",
+                None,
+                self.feature(a),
+                self.feature(str(uuid.uuid4()), properties="x"),
+                self.feature(str(uuid.uuid4()), properties={"canvas": 5}),
+                self.feature(str(uuid.uuid4()), geometry=[1]),
+            ]
+        )
+        found = [str(feature) for _, feature, _, _ in self.read()]
+        self.assertEqual(found[:2], [a, b])
+        self.assertEqual(len(found), 2)
+
+    def test_annotation_zones_skip_the_unusable_and_keep_feature_id_order(self):
+        a, b = sorted(str(uuid.uuid4()) for _ in range(2))
+        self.tile_of([self.feature(b), self.feature("x"), 3, self.feature(a)])
+        zones = annotation_zones([self.node], str(self.analysis.pk))
+        self.assertEqual([z.feature["id"] for z in zones], [a, b])
+        self.assertEqual({z.canvas for z in zones}, {CANVAS})
+
+    def test_the_thumbnail_zones_come_from_the_tiles_beside_a_malformed_tile(self):
+        valid = str(uuid.uuid4())
+        self.tile_of([self.feature(valid)])
+        zones = annotation_zones([self.node], str(self.analysis.pk))
+        self.assertEqual([z.feature["id"] for z in zones], [valid])
 
 
 class SubjectTests(FactsCase):

@@ -446,6 +446,32 @@ class AnnotationFixtures(TestCase):
         return tile
 
 
+class AnnotationManifestsRuleTests(TestCase):
+    def test_a_non_list_features_value_names_nothing(self):
+        for bad in (1, True, 3.5, {}, "x", None):
+            with self.subTest(bad=bad):
+                value = {"type": "FeatureCollection", "features": bad}
+                self.assertEqual(registry.annotation_manifests({"n": value}), {})
+
+    def test_any_dict_with_a_features_list_names_its_manifests(self):
+        for kind in (None, "FeatureCollection", "featurecollection", "Other"):
+            with self.subTest(kind=kind):
+                value = feature_collection()
+                value.pop("type")
+                if kind:
+                    value["type"] = kind
+                self.assertEqual(
+                    registry.annotation_manifests({"n": value}),
+                    {"n": {URL: [SERVICE]}},
+                )
+
+    def test_a_feature_that_is_not_an_object_is_skipped(self):
+        value = {"features": [1, None, "x", feature_collection()["features"][0]]}
+        self.assertEqual(
+            registry.annotation_manifests({"n": value}), {"n": {URL: [SERVICE]}}
+        )
+
+
 class AnnotationReceiverTests(AnnotationFixtures):
     def saved(self, node, value, payload=None, **kwargs):
         """Save a tile and run the on-commit callbacks, returning the fetch patcher."""

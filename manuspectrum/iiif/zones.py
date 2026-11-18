@@ -6,7 +6,7 @@ drew; a ``canvas_index`` of the source manifest maps both to the canvas id.
 
 import sys
 import uuid
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 
 from django.db.models import JSONField
 from django.db.models.expressions import RawSQL
@@ -35,9 +35,14 @@ def canvas_and_convert(feature, dims):
     (which keeps its stored name) an unstamped zone is not clamped either, and
     a zone stamped with a measured frame is clamped to the frame's size.
     """
-    feature = feature or {}
-    stored = rewrite_legacy_url((feature.get("properties") or {}).get("canvas") or "")
+    if not isinstance(feature, dict):
+        return "", None
+    props = feature.get("properties")
+    canvas_name = props.get("canvas") if isinstance(props, dict) else None
+    stored = rewrite_legacy_url(canvas_name if isinstance(canvas_name, str) else "")
     geometry = feature.get("geometry")
+    if not isinstance(geometry, dict):
+        return "", None
     name = stored.rstrip("/")
     canvas = (dims.get(name) or (stored,))[0]
     if not canvas or shape_of(geometry, sys.maxsize, sys.maxsize) is None:
@@ -100,8 +105,13 @@ class FeatureRows:
             )
             .values_list("resourceinstance_id", "feature")
         )
-        for order, (rid, feature) in enumerate(sorted(rows, key=_by_feature_id)):
+        usable = [row for row in rows if _usable(row[1])]
+        for order, (rid, feature) in enumerate(sorted(usable, key=_by_feature_id)):
             self._by_resource[str(rid)].append((order, str(rid), feature))
+
+    def zones(self, resource_id):
+        """The usable features of *resource_id*, by feature id."""
+        return [row[2] for row in self._by_resource.get(str(resource_id), ())]
 
     def located(self, resource_ids, dims):
         """``(resource id, feature id, canvas, convert)`` of every resolved feature of *resource_ids*, by feature id; ``convert()`` gives ``(shape, unit)`` (``canvas_and_convert``)."""
@@ -121,6 +131,28 @@ class FeatureRows:
             yield rid, feature, canvas, convert()[0]
 
 
+Zone = namedtuple("Zone", "feature canvas")
+
+
+def annotation_zones(nodes, resource_id):
+    """``Zone(feature, canvas name)`` of every usable annotation feature of *resource_id* on *nodes*, by feature id.
+
+    The canvas name is the stored ``properties.canvas`` when it is a string,
+    else None. Unusable features (not an object, an id that is not a UUID) are
+    left out, as ``FeatureRows`` leaves them.
+    """
+    rows = []
+    for node in nodes:
+        rows += FeatureRows(node, [resource_id], {node.nodegroup_id}).zones(resource_id)
+    rows.sort(key=lambda feature: _by_feature_id((None, feature)))
+    zones = []
+    for feature in rows:
+        props = feature.get("properties")
+        canvas = props.get("canvas") if isinstance(props, dict) else None
+        zones.append(Zone(feature, canvas if isinstance(canvas, str) else None))
+    return zones
+
+
 def located_features(node, resource_ids, dims, readable):
     """``FeatureRows.located`` of *node* on *resource_ids*: the shapes are converted on demand."""
     resource_ids = [str(r) for r in resource_ids]
@@ -134,6 +166,20 @@ def annotation_features(node, resource_ids, dims, readable):
     """
     resource_ids = [str(r) for r in resource_ids]
     yield from FeatureRows(node, resource_ids, readable).features(resource_ids, dims)
+
+
+def _usable(feature):
+    """True for a feature object whose id is absent or a UUID string: what ``_feature_id`` can sort."""
+    if not isinstance(feature, dict):
+        return False
+    found = feature.get("id")
+    if found is None or (isinstance(found, str) and not found):
+        return True
+    try:
+        uuid.UUID(found)
+    except (ValueError, AttributeError, TypeError):
+        return False
+    return True
 
 
 def _feature_id(feature):

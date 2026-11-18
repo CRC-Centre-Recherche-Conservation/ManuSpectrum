@@ -139,9 +139,11 @@ class ReceiverTests(ZoneFrameCase):
         )
 
     def test_a_tile_without_annotations_runs_no_query(self):
-        instance = self.instance({self.node(): None, str(self.other.pk): {"a": 1}})
-        with self.assertNumQueries(0):
-            signals.stamp_annotation_frames(Tile, instance)
+        for odd in ({"a": 1}, {"features": 1}, {"features": {}}, {"features": "x"}):
+            with self.subTest(odd=odd):
+                instance = self.instance({self.node(): None, str(self.other.pk): odd})
+                with self.assertNumQueries(0):
+                    signals.stamp_annotation_frames(Tile, instance)
 
     def test_sortorder_only_save_runs_no_query(self):
         remember_info()

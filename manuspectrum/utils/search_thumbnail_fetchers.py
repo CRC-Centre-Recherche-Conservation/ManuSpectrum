@@ -21,6 +21,7 @@ from arches.app.utils.search_thumbnail_fetcher_factory import (
 )
 from manuspectrum.iiif import units
 from manuspectrum.iiif.frames import frame_of
+from manuspectrum.iiif.zones import annotation_zones
 from manuspectrum.iiif.sources import ManifestReader, canvases_of, manifest_json
 from manuspectrum.utils.http import safe_fetch
 from manuspectrum.utils.iiif_tools import (
@@ -209,9 +210,11 @@ def _zone_region_url(annotation, manifests):
     """
     feature = annotation.feature if isinstance(annotation.feature, dict) else {}
     properties = feature.get("properties") or {}
+    geometry = feature.get("geometry") or {}
+    if not isinstance(properties, dict) or not isinstance(geometry, dict):
+        return None
     stored = rewrite_legacy_url(annotation.canvas or "")
     manifest_url = properties.get("manifest")
-    geometry = feature.get("geometry") or {}
     if not stored or not manifest_url or not geometry.get("coordinates"):
         return None
     if geometry.get("type") not in ("Polygon", "Point"):
@@ -271,6 +274,14 @@ class _Manifests:
         return self._names[url]
 
 
+def _annotations(resource):
+    """The annotation zones of *resource* in feature id order (``zones.annotation_zones``), read off its tiles."""
+    from arches.app.models.models import Node
+
+    nodes = Node.objects.filter(graph_id=resource.graph_id, datatype="annotation")
+    return annotation_zones(nodes, str(resource.resourceinstanceid))
+
+
 def _zone_payload(resource):
     """The image of the first zone of *resource* that has a region, or None.
 
@@ -278,13 +289,9 @@ def _zone_payload(resource):
     zone's image is requested: its failure ends the search, and so does a
     manifest that cannot be read.
     """
-    from arches.app.models.models import VwAnnotation
-
     manifests = _Manifests()
 
-    for annotation in VwAnnotation.objects.filter(resourceinstance=resource).order_by(
-        "feature_id"
-    ):
+    for annotation in _annotations(resource):
         url = _zone_region_url(annotation, manifests)
         if url:
             return _cached_image(url)
@@ -294,9 +301,7 @@ def _zone_payload(resource):
 
 
 def _has_zone(resource):
-    from arches.app.models.models import VwAnnotation
-
-    return VwAnnotation.objects.filter(resourceinstance=resource).exists()
+    return bool(_annotations(resource))
 
 
 def _manifest_url(resource):

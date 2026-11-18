@@ -511,8 +511,10 @@ def structure(visible, user, part_of=None):
 
 
 def _canvas_of(annotation):
-    for feature in (annotation or {}).get("features") or []:
-        canvas = (feature.get("properties") or {}).get("canvas")
+    features = annotation.get("features") if isinstance(annotation, dict) else None
+    for feature in features if isinstance(features, list) else ():
+        props = feature.get("properties") if isinstance(feature, dict) else None
+        canvas = props.get("canvas") if isinstance(props, dict) else None
         if canvas:
             return canvas
     return None

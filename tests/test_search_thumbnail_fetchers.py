@@ -9,7 +9,7 @@ bbox, and ``AnalysisThumbnailFetcher``'s manifest-before-annotation priority, an
 model each fetcher is registered on.
 
 The Arches ORM is imported inside the methods, so ``TileModel`` and
-``VwAnnotation`` are patched on ``arches.app.models.models``; the manifest fetch
+``_annotations`` (the zones read off the tiles) are patched; the manifest fetch
 and the guarded image fetch (``safe_fetch``) are patched on the fetchers module.
 Nothing here reaches Postgres, Elasticsearch or the network.
 
@@ -41,7 +41,7 @@ from manuspectrum.utils.search_thumbnail_fetchers import (
 
 FETCHERS = "manuspectrum.utils.search_thumbnail_fetchers"
 TILE_MODEL = "arches.app.models.models.TileModel"
-ANNOTATION_MODEL = "arches.app.models.models.VwAnnotation"
+ANNOTATIONS = f"{FETCHERS}._annotations"
 FETCH_MANIFEST = f"{FETCHERS}.CanvasIIIF.fetch_manifest"
 SAFE_FETCH = f"{FETCHERS}.safe_fetch"
 
@@ -483,7 +483,7 @@ class LocalManifestFetcherTests(FetcherTestCase):
 @mock.patch(SAFE_FETCH)
 @mock.patch(FETCH_MANIFEST)
 @mock.patch(IIIF_MANIFEST_MODEL)
-@mock.patch(ANNOTATION_MODEL)
+@mock.patch(ANNOTATIONS)
 @mock.patch(TILE_MODEL)
 class LocalManifestAnnotationFetcherTests(FetcherTestCase):
     def stored(self, iiif_manifest, manifest):
@@ -493,9 +493,7 @@ class LocalManifestAnnotationFetcherTests(FetcherTestCase):
     def test_a_component_reads_its_local_manifest_from_the_database(
         self, tile_model, vw_annotation, iiif_manifest, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(manifest=f"/manifest/{LOCAL_UUID}")]
-        )
+        vw_annotation.return_value = [annotation(manifest=f"/manifest/{LOCAL_UUID}")]
         self.stored(iiif_manifest, v2_manifest())
         safe_fetch.return_value = response(content=REGION_BYTES)
 
@@ -522,9 +520,7 @@ class LocalManifestAnnotationFetcherTests(FetcherTestCase):
         self, tile_model, vw_annotation, iiif_manifest, fetch_manifest, safe_fetch
     ):
         tile_model.objects.filter.return_value = queryset([])
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(manifest=f"/manifest/{LOCAL_UUID}")]
-        )
+        vw_annotation.return_value = [annotation(manifest=f"/manifest/{LOCAL_UUID}")]
         self.stored(iiif_manifest, v2_manifest())
         safe_fetch.return_value = response(content=REGION_BYTES)
 
@@ -539,29 +535,29 @@ class ComponentFetcherExistenceTests(FetcherTestCase):
         super().setUp()
         self.fetcher = ComponentThumbnailFetcher(RESOURCE)
 
-    @mock.patch(ANNOTATION_MODEL)
+    @mock.patch(ANNOTATIONS)
     def test_an_annotation_means_a_thumbnail_exists(self, vw_annotation):
-        vw_annotation.objects.filter.return_value = queryset(exists=True)
+        vw_annotation.return_value = [annotation()]
 
         self.assertIs(self.fetcher.get_thumbnail(), True)
-        vw_annotation.objects.filter.assert_called_once_with(resourceinstance=RESOURCE)
+        vw_annotation.assert_called_once_with(RESOURCE)
 
-    @mock.patch(ANNOTATION_MODEL)
+    @mock.patch(ANNOTATIONS)
     def test_no_annotation_means_none(self, vw_annotation):
-        vw_annotation.objects.filter.return_value = queryset(exists=False)
+        vw_annotation.return_value = []
 
         self.assertIsNone(self.fetcher.get_thumbnail())
 
-    @mock.patch(ANNOTATION_MODEL)
+    @mock.patch(ANNOTATIONS)
     def test_an_orm_failure_answers_none_instead_of_raising(self, vw_annotation):
-        vw_annotation.objects.filter.side_effect = RuntimeError("view missing")
+        vw_annotation.side_effect = RuntimeError("view missing")
 
         self.assertIsNone(self.fetcher.get_thumbnail())
 
 
 @mock.patch(SAFE_FETCH)
 @mock.patch(FETCH_MANIFEST)
-@mock.patch(ANNOTATION_MODEL)
+@mock.patch(ANNOTATIONS)
 class ComponentFetcherRetrieveTests(FetcherTestCase):
     def setUp(self):
         super().setUp()
@@ -570,7 +566,7 @@ class ComponentFetcherRetrieveTests(FetcherTestCase):
     def test_requests_the_iiif_region_of_the_annotated_polygon(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.return_value = queryset([annotation()])
+        vw_annotation.return_value = [annotation()]
         fetch_manifest.return_value = v2_manifest()
         safe_fetch.return_value = response(content=REGION_BYTES)
 
@@ -587,7 +583,7 @@ class ComponentFetcherRetrieveTests(FetcherTestCase):
     def test_a_declared_png_serving_jpeg_bytes_is_served_as_jpeg(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.return_value = queryset([annotation()])
+        vw_annotation.return_value = [annotation()]
         fetch_manifest.return_value = v2_manifest()
         safe_fetch.return_value = response(headers={"Content-Type": "image/png"})
 
@@ -598,7 +594,7 @@ class ComponentFetcherRetrieveTests(FetcherTestCase):
     def test_the_matched_canvas_dimensions_clamp_the_region(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.return_value = queryset([annotation()])
+        vw_annotation.return_value = [annotation()]
         fetch_manifest.return_value = v2_manifest(width=60, height=60)
         safe_fetch.return_value = response()
 
@@ -613,9 +609,9 @@ class ComponentFetcherRetrieveTests(FetcherTestCase):
     def test_an_unmatched_canvas_leaves_the_region_unclamped(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(geometry={"type": "Polygon", "coordinates": FAR_POLYGON})]
-        )
+        vw_annotation.return_value = [
+            annotation(geometry={"type": "Polygon", "coordinates": FAR_POLYGON})
+        ]
         fetch_manifest.return_value = v2_manifest(
             width=4000, height=4000, service="https://img.example.org/iiif/2/other"
         )
@@ -632,9 +628,9 @@ class ComponentFetcherRetrieveTests(FetcherTestCase):
     def test_malformed_coordinates_on_an_unmatched_canvas_fetch_nothing(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(geometry={"type": "Polygon", "coordinates": [["x"]]})]
-        )
+        vw_annotation.return_value = [
+            annotation(geometry={"type": "Polygon", "coordinates": [["x"]]})
+        ]
         fetch_manifest.return_value = v2_manifest(
             service="https://img.example.org/iiif/2/other"
         )
@@ -645,7 +641,7 @@ class ComponentFetcherRetrieveTests(FetcherTestCase):
     def test_returns_none_when_the_resource_has_no_annotation(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.return_value = queryset([])
+        vw_annotation.return_value = []
 
         self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
         fetch_manifest.assert_not_called()
@@ -653,7 +649,7 @@ class ComponentFetcherRetrieveTests(FetcherTestCase):
     def test_returns_none_when_the_annotation_has_no_canvas_service(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.return_value = queryset([annotation(canvas=None)])
+        vw_annotation.return_value = [annotation(canvas=None)]
 
         self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
         fetch_manifest.assert_not_called()
@@ -661,9 +657,7 @@ class ComponentFetcherRetrieveTests(FetcherTestCase):
     def test_returns_none_when_the_annotation_names_no_manifest(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(manifest=None)]
-        )
+        vw_annotation.return_value = [annotation(manifest=None)]
 
         self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
         fetch_manifest.assert_not_called()
@@ -671,16 +665,16 @@ class ComponentFetcherRetrieveTests(FetcherTestCase):
     def test_returns_none_when_the_manifest_cannot_be_fetched(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.return_value = queryset([annotation()])
+        vw_annotation.return_value = [annotation()]
         fetch_manifest.return_value = None
 
         self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
         safe_fetch.assert_not_called()
 
     def test_a_point_zone_is_accepted(self, vw_annotation, fetch_manifest, safe_fetch):
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(geometry={"type": "Point", "coordinates": POINT})]
-        )
+        vw_annotation.return_value = [
+            annotation(geometry={"type": "Point", "coordinates": POINT})
+        ]
         fetch_manifest.return_value = v2_manifest()
         safe_fetch.return_value = response(content=POINT_REGION_BYTES)
 
@@ -696,9 +690,9 @@ class ComponentFetcherRetrieveTests(FetcherTestCase):
     def test_returns_none_for_a_geometry_that_is_neither_point_nor_polygon(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(geometry={"type": "LineString", "coordinates": [[1, -1]]})]
-        )
+        vw_annotation.return_value = [
+            annotation(geometry={"type": "LineString", "coordinates": [[1, -1]]})
+        ]
         fetch_manifest.return_value = v2_manifest()
 
         self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
@@ -707,9 +701,9 @@ class ComponentFetcherRetrieveTests(FetcherTestCase):
     def test_returns_none_when_the_polygon_yields_no_bbox(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(geometry={"type": "Polygon", "coordinates": [[]]})]
-        )
+        vw_annotation.return_value = [
+            annotation(geometry={"type": "Polygon", "coordinates": [[]]})
+        ]
         fetch_manifest.return_value = v2_manifest()
 
         self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
@@ -718,7 +712,7 @@ class ComponentFetcherRetrieveTests(FetcherTestCase):
     def test_returns_none_when_the_image_response_is_not_200(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.return_value = queryset([annotation()])
+        vw_annotation.return_value = [annotation()]
         fetch_manifest.return_value = v2_manifest()
         safe_fetch.return_value = response(status=503)
 
@@ -727,7 +721,7 @@ class ComponentFetcherRetrieveTests(FetcherTestCase):
     def test_an_orm_failure_returns_none_instead_of_raising(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.side_effect = RuntimeError("view missing")
+        vw_annotation.side_effect = RuntimeError("view missing")
 
         self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
 
@@ -737,7 +731,7 @@ class AnalysisFetcherExistenceTests(FetcherTestCase):
         super().setUp()
         self.fetcher = AnalysisThumbnailFetcher(RESOURCE)
 
-    @mock.patch(ANNOTATION_MODEL)
+    @mock.patch(ANNOTATIONS)
     @mock.patch(TILE_MODEL)
     def test_a_manifest_tile_alone_means_a_thumbnail_exists(
         self, tile_model, vw_annotation
@@ -745,7 +739,7 @@ class AnalysisFetcherExistenceTests(FetcherTestCase):
         tile_model.objects.filter.return_value = queryset(
             [tile(**{MANIFEST_NODE: TILE_MANIFEST_URL})]
         )
-        vw_annotation.objects.filter.return_value = queryset(exists=False)
+        vw_annotation.return_value = []
 
         self.assertIs(self.fetcher.get_thumbnail(), True)
         tile_model.objects.filter.assert_called_once_with(
@@ -753,28 +747,28 @@ class AnalysisFetcherExistenceTests(FetcherTestCase):
         )
         # The annotation view is the expensive half of this probe and cannot
         # change the answer once a manifest tile exists.
-        vw_annotation.objects.filter.assert_not_called()
+        vw_annotation.assert_not_called()
 
-    @mock.patch(ANNOTATION_MODEL)
+    @mock.patch(ANNOTATIONS)
     @mock.patch(TILE_MODEL)
     def test_an_annotation_alone_means_a_thumbnail_exists(
         self, tile_model, vw_annotation
     ):
         tile_model.objects.filter.return_value = queryset([])
-        vw_annotation.objects.filter.return_value = queryset(exists=True)
+        vw_annotation.return_value = [annotation()]
 
         self.assertIs(self.fetcher.get_thumbnail(), True)
-        vw_annotation.objects.filter.assert_called_once_with(resourceinstance=RESOURCE)
+        vw_annotation.assert_called_once_with(RESOURCE)
 
-    @mock.patch(ANNOTATION_MODEL)
+    @mock.patch(ANNOTATIONS)
     @mock.patch(TILE_MODEL)
     def test_neither_means_none(self, tile_model, vw_annotation):
         tile_model.objects.filter.return_value = queryset([])
-        vw_annotation.objects.filter.return_value = queryset(exists=False)
+        vw_annotation.return_value = []
 
         self.assertIsNone(self.fetcher.get_thumbnail())
 
-    @mock.patch(ANNOTATION_MODEL)
+    @mock.patch(ANNOTATIONS)
     @mock.patch(TILE_MODEL)
     def test_an_orm_failure_answers_none_instead_of_raising(
         self, tile_model, vw_annotation
@@ -786,7 +780,7 @@ class AnalysisFetcherExistenceTests(FetcherTestCase):
 
 @mock.patch(SAFE_FETCH)
 @mock.patch(FETCH_MANIFEST)
-@mock.patch(ANNOTATION_MODEL)
+@mock.patch(ANNOTATIONS)
 @mock.patch(TILE_MODEL)
 class AnalysisFetcherRetrieveTests(FetcherTestCase):
     def setUp(self):
@@ -817,7 +811,7 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
             headers=IMAGE_HEADERS,
             purpose="thumbnail",
         )
-        vw_annotation.objects.filter.assert_not_called()
+        vw_annotation.assert_not_called()
 
     def test_the_manifest_content_type_comes_from_the_signature(
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
@@ -837,7 +831,7 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
     ):
         self.with_manifest_tile(tile_model)
-        vw_annotation.objects.filter.return_value = queryset([annotation()])
+        vw_annotation.return_value = [annotation()]
         fetch_manifest.return_value = v2_manifest(
             thumbnail="https://img.example.org/thumb.png"
         )
@@ -854,7 +848,7 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
     ):
         self.with_manifest_tile(tile_model)
-        vw_annotation.objects.filter.return_value = queryset([annotation()])
+        vw_annotation.return_value = [annotation()]
         fetch_manifest.side_effect = [None, v2_manifest()]
         safe_fetch.return_value = response(content=REGION_BYTES)
 
@@ -875,7 +869,7 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
     ):
         self.with_manifest_tile(tile_model)
-        vw_annotation.objects.filter.return_value = queryset([annotation()])
+        vw_annotation.return_value = [annotation()]
         fetch_manifest.side_effect = [EMPTY_MANIFEST, v2_manifest()]
         safe_fetch.return_value = response(content=REGION_BYTES)
 
@@ -892,7 +886,7 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
     ):
         self.with_manifest_tile(tile_model)
-        vw_annotation.objects.filter.return_value = queryset([annotation()])
+        vw_annotation.return_value = [annotation()]
         fetch_manifest.return_value = v2_manifest()
         safe_fetch.side_effect = [response(status=404), response(content=REGION_BYTES)]
 
@@ -913,7 +907,7 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
         tile_model.objects.filter.return_value = queryset(
             [tile(**{MANIFEST_NODE: "https://example.org/iiif/2/book1/info.json"})]
         )
-        vw_annotation.objects.filter.return_value = queryset([annotation()])
+        vw_annotation.return_value = [annotation()]
         fetch_manifest.return_value = v2_manifest()
         safe_fetch.return_value = response(content=REGION_BYTES)
 
@@ -926,9 +920,9 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
     ):
         tile_model.objects.filter.return_value = queryset([])
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(geometry={"type": "Point", "coordinates": POINT})]
-        )
+        vw_annotation.return_value = [
+            annotation(geometry={"type": "Point", "coordinates": POINT})
+        ]
         fetch_manifest.return_value = v2_manifest()
         safe_fetch.return_value = response(content=POINT_REGION_BYTES)
 
@@ -945,9 +939,9 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
     ):
         tile_model.objects.filter.return_value = queryset([])
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(geometry={"type": "Point", "coordinates": POINT}, radius=4)]
-        )
+        vw_annotation.return_value = [
+            annotation(geometry={"type": "Point", "coordinates": POINT}, radius=4)
+        ]
         fetch_manifest.return_value = v2_manifest()
         safe_fetch.return_value = response()
 
@@ -963,7 +957,7 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
     ):
         tile_model.objects.filter.return_value = queryset([])
-        vw_annotation.objects.filter.return_value = queryset([annotation()])
+        vw_annotation.return_value = [annotation()]
         fetch_manifest.return_value = v2_manifest()
         safe_fetch.return_value = response(content=REGION_BYTES)
 
@@ -980,7 +974,7 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
     ):
         tile_model.objects.filter.return_value = queryset([])
-        vw_annotation.objects.filter.return_value = queryset([annotation()])
+        vw_annotation.return_value = [annotation()]
         fetch_manifest.return_value = v3_manifest(width=60, height=60)
         safe_fetch.return_value = response()
 
@@ -996,7 +990,7 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
     ):
         tile_model.objects.filter.return_value = queryset([])
-        vw_annotation.objects.filter.return_value = queryset([])
+        vw_annotation.return_value = []
 
         self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
         fetch_manifest.assert_not_called()
@@ -1006,7 +1000,7 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
     ):
         tile_model.objects.filter.return_value = queryset([])
-        vw_annotation.objects.filter.return_value = queryset([annotation(canvas=None)])
+        vw_annotation.return_value = [annotation(canvas=None)]
 
         self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
         fetch_manifest.assert_not_called()
@@ -1015,9 +1009,7 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
     ):
         tile_model.objects.filter.return_value = queryset([])
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(manifest=None)]
-        )
+        vw_annotation.return_value = [annotation(manifest=None)]
 
         self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
         fetch_manifest.assert_not_called()
@@ -1026,7 +1018,7 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
     ):
         tile_model.objects.filter.return_value = queryset([])
-        vw_annotation.objects.filter.return_value = queryset([annotation()])
+        vw_annotation.return_value = [annotation()]
         fetch_manifest.return_value = None
 
         self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
@@ -1036,16 +1028,14 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
     ):
         tile_model.objects.filter.return_value = queryset([])
-        vw_annotation.objects.filter.return_value = queryset(
-            [
-                annotation(
-                    geometry={
-                        "type": "LineString",
-                        "coordinates": [[1.0, -1.0], [2.0, -2.0]],
-                    }
-                )
-            ]
-        )
+        vw_annotation.return_value = [
+            annotation(
+                geometry={
+                    "type": "LineString",
+                    "coordinates": [[1.0, -1.0], [2.0, -2.0]],
+                }
+            )
+        ]
         fetch_manifest.return_value = v2_manifest()
 
         self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
@@ -1055,9 +1045,9 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
     ):
         tile_model.objects.filter.return_value = queryset([])
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(geometry={"type": "Polygon", "coordinates": []})]
-        )
+        vw_annotation.return_value = [
+            annotation(geometry={"type": "Polygon", "coordinates": []})
+        ]
         fetch_manifest.return_value = v2_manifest()
 
         self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
@@ -1067,9 +1057,9 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
     ):
         tile_model.objects.filter.return_value = queryset([])
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(geometry={"type": "Polygon", "coordinates": [[]]})]
-        )
+        vw_annotation.return_value = [
+            annotation(geometry={"type": "Polygon", "coordinates": [[]]})
+        ]
         fetch_manifest.return_value = v2_manifest()
 
         self.assertIsNone(self.fetcher.get_thumbnail(retrieve=True))
@@ -1079,7 +1069,7 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
     ):
         tile_model.objects.filter.return_value = queryset([])
-        vw_annotation.objects.filter.return_value = queryset([annotation()])
+        vw_annotation.return_value = [annotation()]
         fetch_manifest.return_value = v2_manifest()
         safe_fetch.return_value = response(status=500)
 
@@ -1095,25 +1085,28 @@ class AnalysisFetcherRetrieveTests(FetcherTestCase):
 
 @mock.patch(SAFE_FETCH)
 @mock.patch(FETCH_MANIFEST)
-@mock.patch(ANNOTATION_MODEL)
+@mock.patch(ANNOTATIONS)
 class ZoneChoiceTests(FetcherTestCase):
-    def test_zones_are_read_in_feature_id_order(
+    def test_a_zone_whose_properties_or_geometry_is_not_an_object_is_skipped(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        rows = queryset([annotation()])
-        vw_annotation.objects.filter.return_value = rows
+        odd = annotation()
+        odd.feature["properties"] = "x"
+        odder = annotation()
+        odder.feature["geometry"] = [1]
+        vw_annotation.return_value = [odd, odder, annotation()]
         fetch_manifest.return_value = v2_manifest()
-        safe_fetch.return_value = response()
+        safe_fetch.return_value = response(content=REGION_BYTES)
 
-        ComponentThumbnailFetcher(RESOURCE).get_thumbnail(retrieve=True)
+        result = ComponentThumbnailFetcher(RESOURCE).get_thumbnail(retrieve=True)
 
-        rows.order_by.assert_called_once_with("feature_id")
+        self.assertEqual(result, (REGION_BYTES, "image/jpeg"))
 
     def test_a_zone_drawn_outside_the_image_is_skipped_for_the_next_one(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
         outside = annotation(geometry={"type": "Polygon", "coordinates": FAR_POLYGON})
-        vw_annotation.objects.filter.return_value = queryset([outside, annotation()])
+        vw_annotation.return_value = [outside, annotation()]
         fetch_manifest.return_value = v2_manifest(width=100, height=100)
         safe_fetch.return_value = response(content=REGION_BYTES)
 
@@ -1134,9 +1127,7 @@ class ZoneChoiceTests(FetcherTestCase):
     def test_only_one_image_is_requested_when_it_fails(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(), annotation()]
-        )
+        vw_annotation.return_value = [annotation(), annotation()]
         fetch_manifest.return_value = v2_manifest()
         safe_fetch.return_value = response(status=403)
 
@@ -1147,9 +1138,7 @@ class ZoneChoiceTests(FetcherTestCase):
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
         canvas_id = "https://example.org/iiif/2/book2/canvas/p1"
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(canvas=canvas_id)]
-        )
+        vw_annotation.return_value = [annotation(canvas=canvas_id)]
         fetch_manifest.return_value = v2_manifest(width=60, height=60)
         safe_fetch.return_value = response()
 
@@ -1168,7 +1157,7 @@ class ZoneChoiceTests(FetcherTestCase):
         manifest["sequences"][0]["canvases"][0]["images"][0]["resource"]["service"] = [
             {"@id": CANVAS_SERVICE}
         ]
-        vw_annotation.objects.filter.return_value = queryset([annotation()])
+        vw_annotation.return_value = [annotation()]
         fetch_manifest.return_value = manifest
         safe_fetch.return_value = response()
 
@@ -1194,9 +1183,10 @@ class ZoneChoiceTests(FetcherTestCase):
             with self.subTest(zone=label):
                 cache.clear()
                 safe_fetch.reset_mock()
-                vw_annotation.objects.filter.return_value = queryset(
-                    [annotation(geometry=geometry), annotation()]
-                )
+                vw_annotation.return_value = [
+                    annotation(geometry=geometry),
+                    annotation(),
+                ]
                 result = ComponentThumbnailFetcher(RESOURCE).get_thumbnail(True)
                 self.assertEqual(result, (REGION_BYTES, "image/jpeg"))
                 safe_fetch.assert_called_once_with(
@@ -1208,9 +1198,9 @@ class ZoneChoiceTests(FetcherTestCase):
     def test_a_point_whose_view_radius_reaches_the_image_is_kept(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(geometry={"type": "Point", "coordinates": [-1.0, -2.0]})]
-        )
+        vw_annotation.return_value = [
+            annotation(geometry={"type": "Point", "coordinates": [-1.0, -2.0]})
+        ]
         fetch_manifest.return_value = v2_manifest(width=100, height=100)
         safe_fetch.return_value = response()
 
@@ -1219,9 +1209,9 @@ class ZoneChoiceTests(FetcherTestCase):
     def test_a_trailing_slash_gives_no_double_slash(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(canvas="https://other.example/iiif/2/unknown/")]
-        )
+        vw_annotation.return_value = [
+            annotation(canvas="https://other.example/iiif/2/unknown/")
+        ]
         fetch_manifest.return_value = v2_manifest()
         safe_fetch.return_value = response()
 
@@ -1238,9 +1228,7 @@ class ZoneChoiceTests(FetcherTestCase):
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
         legacy = "http://legacy.example/iiif/2/page1"
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(canvas=legacy)]
-        )
+        vw_annotation.return_value = [annotation(canvas=legacy)]
         fetch_manifest.return_value = v2_manifest(
             service=f"{settings.PUBLIC_SERVER_ADDRESS}iiif/2/page1"
         )
@@ -1257,12 +1245,10 @@ class ZoneChoiceTests(FetcherTestCase):
     def test_an_unreadable_manifest_ends_the_search_without_an_image_fetch(
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
-        vw_annotation.objects.filter.return_value = queryset(
-            [
-                annotation(manifest="https://example.org/a/manifest.json"),
-                annotation(),
-            ]
-        )
+        vw_annotation.return_value = [
+            annotation(manifest="https://example.org/a/manifest.json"),
+            annotation(),
+        ]
         fetch_manifest.return_value = None
 
         self.assertIsNone(ComponentThumbnailFetcher(RESOURCE).get_thumbnail(True))
@@ -1273,9 +1259,7 @@ class ZoneChoiceTests(FetcherTestCase):
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
         outside = annotation(geometry={"type": "Polygon", "coordinates": FAR_POLYGON})
-        vw_annotation.objects.filter.return_value = queryset(
-            [outside, outside, annotation()]
-        )
+        vw_annotation.return_value = [outside, outside, annotation()]
         fetch_manifest.return_value = v2_manifest(width=100, height=100)
         safe_fetch.return_value = response()
 
@@ -1287,9 +1271,9 @@ class ZoneChoiceTests(FetcherTestCase):
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
         wide = [[[0.0, -0.0], [100.0, -0.0], [100.0, -25.0], [0.0, -25.0]]]
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(geometry={"type": "Polygon", "coordinates": wide})]
-        )
+        vw_annotation.return_value = [
+            annotation(geometry={"type": "Polygon", "coordinates": wide})
+        ]
         fetch_manifest.return_value = v2_manifest(width=8000, height=8000)
         safe_fetch.return_value = response()
 
@@ -1304,7 +1288,7 @@ class ZoneChoiceTests(FetcherTestCase):
 
 @mock.patch(SAFE_FETCH)
 @mock.patch(FETCH_MANIFEST)
-@mock.patch(ANNOTATION_MODEL)
+@mock.patch(ANNOTATIONS)
 class ImageFrameTests(SimpleTestCase):
     """The region of a zone is cut in the pixels its image description gives."""
 
@@ -1317,9 +1301,7 @@ class ImageFrameTests(SimpleTestCase):
         self.fetcher = ComponentThumbnailFetcher(RESOURCE)
 
     def region(self, vw_annotation, fetch_manifest, safe_fetch, info, **manifest):
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(geometry=self.ZONE)]
-        )
+        vw_annotation.return_value = [annotation(geometry=self.ZONE)]
         fetch_manifest.return_value = v2_manifest(**manifest)
         safe_fetch.return_value = response()
         with mock.patch(f"{FETCHERS}.units.image_info", return_value=info) as read:
@@ -1331,9 +1313,7 @@ class ImageFrameTests(SimpleTestCase):
         self, vw_annotation, fetch_manifest, safe_fetch
     ):
         stamp = units.Frame(16, 4913, 6609, "browser").stamp()
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(geometry=self.ZONE, **stamp)]
-        )
+        vw_annotation.return_value = [annotation(geometry=self.ZONE, **stamp)]
         fetch_manifest.return_value = v2_manifest(width=100, height=135)
         safe_fetch.return_value = response()
         with mock.patch(
@@ -1426,7 +1406,7 @@ class SniffImageTypeTests(SimpleTestCase):
 
 @mock.patch(SAFE_FETCH)
 @mock.patch(FETCH_MANIFEST)
-@mock.patch(ANNOTATION_MODEL)
+@mock.patch(ANNOTATIONS)
 @mock.patch(TILE_MODEL)
 class MissMemoryTests(FetcherTestCase):
     fetchers = (
@@ -1439,7 +1419,7 @@ class MissMemoryTests(FetcherTestCase):
         tile_model.objects.filter.return_value = queryset(
             [tile(**{MANIFEST_NODE: TILE_MANIFEST_URL})]
         )
-        vw_annotation.objects.filter.return_value = queryset([annotation()])
+        vw_annotation.return_value = [annotation()]
         fetch_manifest.return_value = v2_manifest()
 
     def test_a_failed_retrieval_is_remembered_for_both_modes(
@@ -1476,7 +1456,7 @@ class MissMemoryTests(FetcherTestCase):
         self, tile_model, vw_annotation, fetch_manifest, safe_fetch
     ):
         tile_model.objects.filter.return_value = queryset([])
-        vw_annotation.objects.filter.return_value = queryset([])
+        vw_annotation.return_value = []
         for fetcher in self.fetchers:
             with self.subTest(fetcher=fetcher.__name__):
                 self.assertIsNone(fetcher(RESOURCE).get_thumbnail(retrieve=True))
@@ -1532,18 +1512,16 @@ class MissMemoryTests(FetcherTestCase):
         self.assertIs(fetcher.get_thumbnail(), True)
         self.assertTrue(fetcher.get_thumbnail(retrieve=True))
         fetch_manifest.assert_called_once_with(TILE_MANIFEST_URL)
-        vw_annotation.objects.filter.assert_not_called()
+        vw_annotation.assert_not_called()
 
 
 @mock.patch(SAFE_FETCH)
 @mock.patch(FETCH_MANIFEST)
-@mock.patch(ANNOTATION_MODEL)
+@mock.patch(ANNOTATIONS)
 @mock.patch(TILE_MODEL)
 class ImageCacheTests(FetcherTestCase):
     def zone_setup(self, vw_annotation, fetch_manifest, geometry=None):
-        vw_annotation.objects.filter.return_value = queryset(
-            [annotation(geometry=geometry)]
-        )
+        vw_annotation.return_value = [annotation(geometry=geometry)]
         fetch_manifest.return_value = v2_manifest()
 
     def test_a_zone_image_is_fetched_upstream_once(
