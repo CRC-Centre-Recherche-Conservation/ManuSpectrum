@@ -46,6 +46,7 @@ import os
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
+from functools import cached_property
 from urllib.parse import urlsplit
 
 import nh3
@@ -129,14 +130,18 @@ class Zone:
     position: int
     found: object
 
+    @cached_property
+    def _converted(self):
+        return self.found() if callable(self.found) else (self.found, None)
+
     @property
     def shape(self):
-        return self.found()[0] if callable(self.found) else self.found
+        return self._converted[0]
 
     @property
     def unit(self):
         """The ``ZoneUnit`` the shape was converted with; None for a zone given as a shape."""
-        return self.found()[1] if callable(self.found) else None
+        return self._converted[1]
 
 
 @dataclass(frozen=True)

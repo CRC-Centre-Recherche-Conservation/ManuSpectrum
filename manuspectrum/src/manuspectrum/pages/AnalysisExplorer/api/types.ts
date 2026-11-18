@@ -340,9 +340,10 @@ export interface CertaintyScale {
 
 /**
  * Canvas pixels per stored annotation unit (Leaflet CRS.Simple) on each axis,
- * as the server converted the shapes of the canvas; `read` is false when the
- * image's info.json could not be read and the unit was assumed from the canvas
- * size (the shapes are then exact on the page image only).
+ * as the server converted the shapes of the canvas; `read` means measured (a
+ * stamp of a measured frame, or the image's info.json) and is false when the
+ * unit was estimated or assumed from the canvas size (the shapes are then
+ * exact on the page image only).
  */
 export interface ZoneUnit {
     x: number;

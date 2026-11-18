@@ -225,6 +225,12 @@ class FrameHelperTests(SimpleTestCase):
         )
         self.assertFalse(unit_of_frame(assumed, 2221, 2932).read)
 
+    def test_unit_of_frame_of_an_estimated_frame_carries_no_clamp_size(self):
+        self.assertEqual(
+            unit_of_frame(Frame(32, 4000, 5000, "estimated"), 4000, 5000),
+            ZoneUnit(32.0, 32.0, False, None, None),
+        )
+
     def test_unit_of_frame_without_canvas_size_uses_the_frame_size(self):
         self.assertEqual(
             unit_of_frame(Frame(16, 100, 200, "browser"), 0, None),

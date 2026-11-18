@@ -76,9 +76,11 @@ class ImageInfo:
 class ZoneUnit:
     """Canvas pixels per stored unit on each axis.
 
-    ``read`` tells whether the image's info.json gave them; ``width`` and
+    ``read`` tells whether the unit was measured: the image's info.json gave
+    it, or the zone carries a stamp of a measured frame. ``width`` and
     ``height`` are the canvas size a shape is clamped to, None when the unit
-    is assumed (the shape then keeps exactly what was stored, times the unit).
+    is assumed or estimated (the shape then keeps exactly what was stored,
+    times the unit).
     """
 
     x: float
@@ -348,7 +350,8 @@ def unit_of_frame(frame, canvas_width, canvas_height):
     The unit is brought to canvas pixels by the ratio of the canvas size to the
     frame's image size on each axis; a size of 0 or None counts as unknown and
     the frame's size stands for the canvas'. ``read`` tells whether the frame
-    was measured.
+    was measured. An ``estimated`` frame follows the assumed-unit rule: no
+    clamp size, so the shape keeps exactly what was stored, times the unit.
     """
     if not (canvas_width and canvas_height and canvas_width > 0 and canvas_height > 0):
         canvas_width, canvas_height = frame.width, frame.height
@@ -356,8 +359,8 @@ def unit_of_frame(frame, canvas_width, canvas_height):
         frame.unit * canvas_width / frame.width,
         frame.unit * canvas_height / frame.height,
         frame.measured,
-        canvas_width,
-        canvas_height,
+        canvas_width if frame.measured else None,
+        canvas_height if frame.measured else None,
     )
 
 
@@ -404,7 +407,11 @@ class UnitReader:
         return self._units[canvas]
 
     def note(self, canvas, unit):
-        """Record the *unit* a stamped zone was converted with; the first one noted stands, and a unit read for the canvas takes precedence in ``used``."""
+        """Record the *unit* a stamped zone was converted with.
+
+        The first one noted stands; a unit read for the canvas wins over a unit
+        noted from a stamp in ``used``.
+        """
         self._noted.setdefault(canvas, unit)
 
     def used(self, canvas):

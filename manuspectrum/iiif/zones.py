@@ -29,9 +29,11 @@ def canvas_and_convert(feature, dims):
     unstamped feature takes the unit of its canvas (``CanvasIndex.unit``),
     read when the function is called: a zone whose shape is never asked costs
     no request. A shape is brought inside its canvas when the unit was
-    measured or stamped. With an assumed unit, or on a canvas missing from the
-    index (which keeps its stored name), it is not clamped to the canvas: its
-    coordinates are the stored ones times the unit, negatives brought to 0.
+    measured, or stamped with a measured frame. With an assumed unit or an
+    ``estimated`` stamp it is not clamped: its coordinates are the stored ones
+    times the unit, negatives brought to 0. On a canvas missing from the index
+    (which keeps its stored name) an unstamped zone is not clamped either, and
+    a zone stamped with a measured frame is clamped to the frame's size.
     """
     feature = feature or {}
     stored = rewrite_legacy_url((feature.get("properties") or {}).get("canvas") or "")

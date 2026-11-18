@@ -586,6 +586,23 @@ class StampedZoneTests(UnitCase):
         )
         self.assertFalse(convert()[1].read)
 
+    def test_an_estimated_zone_beyond_the_canvas_is_not_clamped(self):
+        far = box(100, -100, 200, -200)
+        dims = canvas_index([canvas(width=4000, height=5000)])
+        _, convert = canvas_and_convert(
+            stamped(far, 32, 4000, 5000, source="estimated"), dims
+        )
+        shape, unit = convert()
+        self.fetch.side_effect = requests.exceptions.ConnectTimeout()
+        _, plain = canvas_and_convert(
+            feature(far), canvas_index([canvas(width=4000, height=5000)])
+        )
+        self.assertEqual(shape, plain()[0])
+        self.assertEqual(
+            shape, {"type": "rect", "x": 3200, "y": 3200, "w": 3200, "h": 3200}
+        )
+        self.assertIsNone(unit.width)
+
     def test_a_stamp_is_brought_to_the_canvas_size(self):
         dims = canvas_index([canvas(width=2000, height=3000)])
         _, convert = canvas_and_convert(stamped(point(2, -2), 16, 4000, 6000), dims)
