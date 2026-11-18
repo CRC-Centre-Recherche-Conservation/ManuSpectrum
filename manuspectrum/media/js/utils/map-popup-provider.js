@@ -6,7 +6,7 @@
  *     copy of the core logic
  *   - `getPopupTemplate` serves the project template `ms-map-popup.htm`
  *     (`map-popup.htm` extended with the summary component on the search map)
- *   - `processData` gives the Mapbox popup the teardown Arches never runs and
+ *   - `processData` gives the MapLibre popup the teardown Arches never runs and
  *     warms the summary cache for the resources of the click
  *   - imports `views/components/ms-summary-popup`, which registers the
  *     'ms-summary-popup' component the template mounts
@@ -15,7 +15,7 @@
 import ko from 'knockout';
 import coreProvider from 'arches/arches/app/media/js/utils/map-popup-provider';
 import popupTemplate from 'templates/views/components/ms-map-popup.htm';
-import { attachMapboxPopupCleanup, warmSummaryCache } from 'utils/summary-popup';
+import { attachMapLibrePopupCleanup, warmSummaryCache } from 'utils/summary-popup';
 import 'views/components/ms-summary-popup';
 
 const provider = {
@@ -45,7 +45,7 @@ const provider = {
      * whole click so stepping through several features costs one request.
      */
     processData: function (data) {
-        attachMapboxPopupCleanup(data);
+        attachMapLibrePopupCleanup(data);
         warmSummaryCache(
             ((data && data.popupFeatures) || [])
                 .map((feature) => ko.unwrap(feature.resourceinstanceid))

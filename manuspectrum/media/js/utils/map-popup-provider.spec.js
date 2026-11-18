@@ -14,7 +14,7 @@ import ko from 'knockout';
 
 const TEMPLATE_URL = 'templates/views/components/ms-map-popup.htm';
 
-const { coreProvider, attachMapboxPopupCleanup, warmSummaryCache } = vi.hoisted(() => ({
+const { coreProvider, attachMapLibrePopupCleanup, warmSummaryCache } = vi.hoisted(() => ({
     coreProvider: {
         isFeatureClickable: vi.fn(() => true),
         getPopupTemplate: vi.fn(() => '<core-template/>'),
@@ -25,7 +25,7 @@ const { coreProvider, attachMapboxPopupCleanup, warmSummaryCache } = vi.hoisted(
         },
         findPopupFeatureById: vi.fn(() => null),
     },
-    attachMapboxPopupCleanup: vi.fn((data) => data),
+    attachMapLibrePopupCleanup: vi.fn((data) => data),
     warmSummaryCache: vi.fn(),
 }));
 
@@ -38,7 +38,7 @@ vi.mock('templates/views/components/ms-map-popup.htm', () => ({
 }));
 
 vi.mock('utils/summary-popup', () => ({
-    attachMapboxPopupCleanup,
+    attachMapLibrePopupCleanup,
     warmSummaryCache,
 }));
 
@@ -99,9 +99,9 @@ describe('processData', () => {
     it('gives the popup its teardown before warming the cache', () => {
         provider.processData({ popupFeatures: [feature('a'), feature('b')] });
 
-        expect(attachMapboxPopupCleanup).toHaveBeenCalledTimes(1);
+        expect(attachMapLibrePopupCleanup).toHaveBeenCalledTimes(1);
         expect(warmSummaryCache).toHaveBeenCalledTimes(1);
-        expect(attachMapboxPopupCleanup.mock.invocationCallOrder[0]).toBeLessThan(
+        expect(attachMapLibrePopupCleanup.mock.invocationCallOrder[0]).toBeLessThan(
             warmSummaryCache.mock.invocationCallOrder[0],
         );
     });
@@ -111,7 +111,7 @@ describe('processData', () => {
 
         provider.processData(data);
 
-        expect(attachMapboxPopupCleanup).toHaveBeenCalledWith(data);
+        expect(attachMapLibrePopupCleanup).toHaveBeenCalledWith(data);
     });
 
     it('warms the cache with the ids of the features of the click', () => {
