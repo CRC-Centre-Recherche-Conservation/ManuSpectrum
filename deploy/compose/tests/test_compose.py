@@ -486,7 +486,11 @@ class ComposeStackTests(unittest.TestCase):
         for label, stack in self.stacks.items():
             postgres = stack["services"]["postgres"]
             with self.subTest(stack=label):
-                self.assertIn("standard_conforming_strings=off", postgres["command"])
+                # Arches 8.2's db_data.sql escapes quotes with backslashes in
+                # ordinary literals: only the default (on) reads them.
+                self.assertNotIn(
+                    "standard_conforming_strings", " ".join(postgres.get("command") or [])
+                )
                 self.assertEqual(
                     postgres["environment"]["POSTGRES_INITDB_ARGS"],
                     "--encoding=UTF8 --locale=en_US.utf8",
@@ -557,7 +561,6 @@ class ComposeStackTests(unittest.TestCase):
             item.split("=", 1) for item in command if re.match(r"^[a-z_.]+=", item)
         )
         for key, value in {
-            "standard_conforming_strings": "off",
             "shared_buffers": "1GB",
             "effective_cache_size": "3GB",
             "work_mem": "16MB",

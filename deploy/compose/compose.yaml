@@ -65,7 +65,6 @@ services:
   postgres:
     <<: *service
     image: postgis/postgis:17-3.5@sha256:01a6a70e41e6c4467c8f55f6063555ed72db2d6662cd0d571040d42eadaeb6f6
-    command: ["postgres", "-c", "standard_conforming_strings=off"]
     environment:
       POSTGRES_USER: ${PGUSERNAME:?set PGUSERNAME in .env}
       POSTGRES_PASSWORD_FILE: /run/secrets/pg_password

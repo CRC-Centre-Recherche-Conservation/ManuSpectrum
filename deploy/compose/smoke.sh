@@ -101,7 +101,7 @@ cmd_check() {
     "$(psql_app "SELECT count(*) FROM resource_instances WHERE resourceinstanceid = 'a106c400-260c-11e7-a604-14109fd34195'")"
   expect "template_postgis" "true|en_US.utf8" \
     "$(psql_app "SELECT datistemplate::text || '|' || datcollate FROM pg_database WHERE datname = 'template_postgis'")"
-  expect "standard_conforming_strings" off "$(psql_app 'SHOW standard_conforming_strings')"
+  expect "standard_conforming_strings" on "$(psql_app 'SHOW standard_conforming_strings')"
   expect "extensions" "btree_gist,plpgsql,postgis,unaccent,uuid-ossp" \
     "$(psql_app "SELECT string_agg(extname, ',' ORDER BY extname) FROM pg_extension")"
 

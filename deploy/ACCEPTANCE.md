@@ -338,7 +338,7 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   only `ok:` lines, exit 0. **(CI too)** Among them, the three that fail most
   often on a new host:
   - `ok: database collation and encoding` (`en_US.utf8|UTF8`);
-  - `ok: standard_conforming_strings` (the value is `off`: Arches needs it);
+  - `ok: standard_conforming_strings` (the value is `on`, PostgreSQL's default: Arches 8.2's own SQL needs it);
   - `ok: admin does not use Arches' default password` (the check passes when `admin`'s password is no longer `admin`);
   - `ok: /healthz for the public name` (`200`) then
     `ok: /healthz for Host localhost (not allowed)` (`400`): gunicorn answers
