@@ -89,6 +89,11 @@ DENIED = [
     ("auth/signup", "signup"),
     ("auth/confirm_signup", "confirm_signup"),
     ("two-factor-authentication-settings", "two-factor-authentication-settings"),
+    ("o/device-authorization/", "arches_device_authorization"),
+    ("o/device/", "oauth2:device"),
+    ("o/device-confirm/client/code", "oauth2:device-confirm"),
+    ("o/device-grant-status/client/code", "oauth2:device-grant-status"),
+    ("auth/device_client_id", "device_client_id"),
 ]
 BARE = [
     ("snippets/edge-rules.conf", "/healthz", "healthz"),
@@ -410,6 +415,26 @@ class EdgeContractTests(SimpleTestCase):
                 )
                 self.assertIsNotNone(body, f"{path}: location block not found")
                 self.assertEqual(body.group(1).strip(), "return 404;", path)
+
+    def test_the_device_flow_denial_leaves_the_other_oauth_routes_open(self):
+        for code, _ in settings.LANGUAGES:
+            for rest in (
+                "o/token/",
+                "o/authorize/",
+                "o/revoke_token/",
+                "o/introspect/",
+                "o/applications/",
+                "o/devices",
+                "o/deviceX/",
+            ):
+                with self.subTest(path=f"/{code}/{rest}"):
+                    pattern = first_location(
+                        read_locations("snippets/edge-rules.conf"), f"/{code}/{rest}"
+                    )
+                    self.assertTrue(
+                        pattern is None or "device" not in pattern,
+                        f"/{code}/{rest} falls to {pattern!r}",
+                    )
 
     def test_two_factor_reset_link_gets_a_static_page_and_never_reaches_django(self):
         page = (NGINX_DIR / "errors/two-factor-reset.html").read_text()
