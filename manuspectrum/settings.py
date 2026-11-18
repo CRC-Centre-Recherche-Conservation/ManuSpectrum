@@ -1087,10 +1087,10 @@ IIIF_AUTH_COOKIE_TTL = 8 * 3600
 IIIF_AUTH_TRUSTED_ORIGINS = ["https://crc-centre-recherche-conservation.github.io"]
 # Token requests per client IP (django-ratelimit); over it: « unavailable ».
 IIIF_AUTH_TOKEN_RATE = "30/m"
-# django-cors-headers leaves /iiif/ alone: every IIIF view answers its own
-# CORS (Access-Control-Allow-Origin: *, preflight with Authorization, on
-# every status) and the auth pages answer none.
-CORS_URLS_REGEX = r"^(?!/iiif/).*$"
+# django-cors-headers leaves /iiif/ and the bare /manifest/<uuid> redirect
+# alone: every IIIF view answers its own CORS (Access-Control-Allow-Origin: *,
+# preflight with Authorization, on every status) and the auth pages answer none.
+CORS_URLS_REGEX = r"^(?!/iiif/|/manifest/).*$"
 
 ####### PASSWORDS #######
 # Argon2 first. A PBKDF2 hash stays valid and is rehashed at the next sign-in;

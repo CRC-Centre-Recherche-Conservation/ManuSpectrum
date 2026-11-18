@@ -43,7 +43,7 @@ from manuspectrum.views.iiif.auth import (
 )
 from manuspectrum.views.iiif.content_state import ContentStateView
 from manuspectrum.views.iiif.data import RawDataView, SeriesDataView
-from manuspectrum.views.iiif.manifests import StoredManifestView
+from manuspectrum.views.iiif.manifests import LegacyManifestView, StoredManifestView
 from manuspectrum.views.iiif.annotations import (
     AnnotationView,
     AnnotationViewV2,
@@ -641,6 +641,16 @@ urlpatterns.append(
         "iiif/manifest/<uuid:globalid>",
         StoredManifestView.as_view(),
         name="iiif-manifest",
+    )
+)
+
+### The bare path a manifest tile stores (``/manifest/<uuid>``) leads to it.
+### Arches' own ``manifest`` route stays under ``/en|fr/``.
+urlpatterns.append(
+    path(
+        "manifest/<uuid:globalid>",
+        LegacyManifestView.as_view(),
+        name="manifest-legacy",
     )
 )
 
