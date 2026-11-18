@@ -85,7 +85,11 @@ from arches.extensions.controlled_lists.management.commands.packages import (
     Command as PackagesCommand,
 )
 from arches.extensions.controlled_lists.models import List, ListItem, ListItemValue
-from arches.extensions.controlled_lists.utils.skos import ARCHES, SKOSWriter
+from arches.extensions.controlled_lists.utils.skos import (
+    ARCHES,
+    ARCHES_CONTROLLED_LISTS,
+    SKOSWriter,
+)
 
 from manuspectrum import basemaps
 from manuspectrum.models import RendererConfig
@@ -197,6 +201,7 @@ SKOS_PREFIXES = (
     ("dcterms", str(DCTERMS)),
     ("rdf", str(RDF)),
     ("arches", str(ARCHES)),
+    ("arches_controlled_lists", str(ARCHES_CONTROLLED_LISTS)),
 )
 
 

@@ -28,7 +28,10 @@ from rdflib.namespace import DCTERMS, SKOS
 
 from arches.app.models import models
 from arches.extensions.controlled_lists.models import List, ListItem, ListItemValue
-from arches.extensions.controlled_lists.utils.skos import ARCHES
+from arches.extensions.controlled_lists.utils.skos import (
+    ARCHES,
+    ARCHES_CONTROLLED_LISTS,
+)
 
 from django.apps import apps
 
@@ -625,7 +628,7 @@ class ExportPkgTests(TestCase):
         self.assertEqual(
             int(
                 parsed.value(
-                    URIRef(f"{ORIGIN}{items[1].id}"), URIRef(f"{ORIGIN}sortorder")
+                    URIRef(f"{ORIGIN}{items[1].id}"), ARCHES_CONTROLLED_LISTS.sortorder
                 )
             ),
             1,
