@@ -36,6 +36,7 @@ from tests.explorer_fixtures import (
 )
 from tests.test_explorer_service import AZURITE, FORS, XRF, ServiceCase
 
+from manuspectrum.utils.http import FetchedResponse
 from manuspectrum.views.explorer import service as explorer_service
 from manuspectrum.views.explorer.service import (
     PREVIEW_SIZE,
@@ -519,6 +520,43 @@ class DocumentRouteTests(CorpusCase):
         self.assertEqual(payload["techniques"][XRF]["label"]["value"], "Portable XRF")
         self.assertEqual([z["canvas"] for z in mine["zones"]], [0])
         self.assertEqual(mine["zones"][0]["shape"]["type"], "point")
+
+    def test_a_zone_is_in_the_pixels_its_image_description_gives(self):
+        info = FetchedResponse(
+            "https://example.org/iiif/image/f1v/info.json",
+            200,
+            {},
+            json.dumps(
+                {"width": 4000, "height": 5000, "tiles": [{"width": 512}]}
+            ).encode(),
+        )
+        with (
+            self.settings(IIIF_IMAGE_INFO_READ=True),
+            mock.patch(
+                "manuspectrum.iiif.units.safe_fetch", return_value=info
+            ) as fetch,
+        ):
+            payload = self.get(self.documents["open"].pk).json()
+
+        mine = self.by_id(payload)[str(self.analyses["open"].pk)]
+        self.assertEqual(
+            mine["zones"][0]["shape"], {"type": "point", "x": 160, "y": 320}
+        )
+        self.assertEqual(
+            payload["canvases"][0]["zoneUnit"], {"x": 16.0, "y": 16.0, "read": True}
+        )
+        self.assertEqual(fetch.call_count, 1)
+
+    def test_an_unread_image_gives_an_assumed_unit_the_canvas_states(self):
+        payload = self.get(self.documents["open"].pk).json()
+
+        mine = self.by_id(payload)[str(self.analyses["open"].pk)]
+        self.assertEqual(
+            mine["zones"][0]["shape"], {"type": "point", "x": 320, "y": 640}
+        )
+        self.assertEqual(
+            payload["canvases"][0]["zoneUnit"], {"x": 32.0, "y": 32.0, "read": False}
+        )
 
     def test_an_analysis_names_its_component(self):
         payload = self.get(self.documents["open"].pk).json()

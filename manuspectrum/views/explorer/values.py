@@ -24,7 +24,6 @@ from django.urls import reverse
 from manuspectrum.constants.licenses import effective_license
 from manuspectrum.constants.xy_presets import XY_PRESETS
 from manuspectrum.iiif.xy_reading import axes
-from manuspectrum.utils.iiif_tools import BBoxCalculator
 from manuspectrum.utils.spectrum_preview import is_readable
 
 FALLBACK_LANGUAGE = "en"
@@ -390,24 +389,36 @@ def file_entries(entries, *, language, configs, kind):
     return items
 
 
-def _pixel(coordinate, width, height):
-    box = BBoxCalculator.point_bbox(coordinate, width, height, radius=0)
-    return (int(box[0]), int(box[1])) if box else None
+# Canvas pixels per stored unit when the caller gives none.
+DEFAULT_ZONE_UNIT = (32, 32)
 
 
-def shape_of(geometry, width, height):
+def _pixel(coordinate, width, height, unit):
+    try:
+        x = int(coordinate[0] * unit[0])
+        y = int(-coordinate[1] * unit[1])
+    except (TypeError, IndexError, KeyError, ValueError, OverflowError):
+        return None
+    return min(max(0, x), width - 1), min(max(0, y), height - 1)
+
+
+def shape_of(geometry, width, height, unit=DEFAULT_ZONE_UNIT):
     """Contract ``Shape`` of an annotation geometry, in canvas pixels; None for an unknown or empty geometry.
 
-    Coordinates are Arches' annotation space, converted by the project's
-    ``BBoxCalculator``. A polygon of four axis-aligned corners is a ``rect``.
+    Coordinates are Arches' annotation space (Leaflet CRS.Simple, y upwards):
+    *unit* gives the canvas pixels of one stored unit on each axis
+    (``iiif.units``). Every point is brought inside *width* x *height*. A
+    polygon of four axis-aligned corners is a ``rect``.
     """
     kind = (geometry or {}).get("type")
     coordinates = (geometry or {}).get("coordinates")
     if kind == "Point" and coordinates:
-        point = _pixel(coordinates, width, height)
+        point = _pixel(coordinates, width, height, unit)
         return {"type": "point", "x": point[0], "y": point[1]} if point else None
     if kind == "Polygon" and coordinates and coordinates[0]:
-        points = [p for p in (_pixel(c, width, height) for c in coordinates[0]) if p]
+        points = [
+            p for p in (_pixel(c, width, height, unit) for c in coordinates[0]) if p
+        ]
         if points and points[0] == points[-1]:
             points = points[:-1]
         xs, ys = {p[0] for p in points}, {p[1] for p in points}

@@ -210,6 +210,8 @@ interface Adjustment {
 let adjustment: Adjustment | null = null;
 
 const hasImage = computed((): boolean => Boolean(props.canvas?.image.service));
+/** The unit of the page's zones (`toLatLng`). */
+const unit = computed(() => props.canvas?.zoneUnit ?? null);
 
 watch(() => props.canvas?.id, drawPage);
 watch(
@@ -565,7 +567,11 @@ function drawComponentZones(): L.GeoJSON {
               component.zones.flatMap((zone) => {
                   const feature =
                       zone.shape.type !== "point"
-                          ? shapeFeature(zone.shape, { id: component.id })
+                          ? shapeFeature(
+                                zone.shape,
+                                { id: component.id },
+                                unit.value,
+                            )
                           : null;
                   return feature ? [feature] : [];
               }),
@@ -616,7 +622,7 @@ function drawMarks(): void {
     });
     for (const annotation of markedZones(props.annotations)) {
         if (!isShown(annotation)) continue;
-        const centre = shapeCentre(annotation.shape);
+        const centre = shapeCentre(annotation.shape, unit.value);
         if (!centre) continue;
         const marker = L.marker(centre, {
             icon: markerIcon(annotation),
@@ -628,7 +634,9 @@ function drawMarks(): void {
     }
     const shownSamples = props.view === "samples" ? props.samples : [];
     for (const sample of shownSamples) {
-        const centre = sample.zone ? shapeCentre(sample.zone.shape) : null;
+        const centre = sample.zone
+            ? shapeCentre(sample.zone.shape, unit.value)
+            : null;
         if (!centre) continue;
         const target = `${SAMPLE_PREFIX}${sample.id}`;
         const marker = L.marker(centre, {
@@ -648,10 +656,14 @@ function drawMarks(): void {
             continue;
         }
         const style = props.styles.get(techniqueKey(annotation.technique));
-        const feature = shapeFeature(annotation.shape, {
-            analysis: annotation.analysis,
-            colour: style?.colour ?? null,
-        });
+        const feature = shapeFeature(
+            annotation.shape,
+            {
+                analysis: annotation.analysis,
+                colour: style?.colour ?? null,
+            },
+            unit.value,
+        );
         if (feature) frameFeatures.push(feature);
     }
     const wanted = pinnedTargets();
@@ -683,7 +695,11 @@ function drawMarks(): void {
         shownSamples.flatMap((sample) => {
             const feature =
                 sample.zone && sample.zone.shape.type !== "point"
-                    ? shapeFeature(sample.zone.shape, { id: sample.id })
+                    ? shapeFeature(
+                          sample.zone.shape,
+                          { id: sample.id },
+                          unit.value,
+                      )
                     : null;
             return feature ? [feature] : [];
         }),
@@ -701,7 +717,11 @@ function drawMarks(): void {
         props.view === "characterizations" && props.layers.characterizations
             ? props.characterizations.flatMap((summary) => {
                   const feature = summary.zone
-                      ? shapeFeature(summary.zone.shape, { id: summary.id })
+                      ? shapeFeature(
+                            summary.zone.shape,
+                            { id: summary.id },
+                            unit.value,
+                        )
                       : null;
                   return feature ? [feature] : [];
               })

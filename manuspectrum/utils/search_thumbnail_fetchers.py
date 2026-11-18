@@ -9,6 +9,7 @@ it stores changes the key prefix string ``search-thumbnail``.
 """
 
 import logging
+import math
 import sys
 
 from django.conf import settings
@@ -18,6 +19,7 @@ from arches.app.utils.search_thumbnail_fetcher import SearchThumbnailFetcher
 from arches.app.utils.search_thumbnail_fetcher_factory import (
     SearchThumbnailFetcherFactory,
 )
+from manuspectrum.iiif import units
 from manuspectrum.iiif.sources import ManifestReader, canvases_of, manifest_json
 from manuspectrum.utils.http import safe_fetch
 from manuspectrum.utils.iiif_tools import (
@@ -34,9 +36,7 @@ logger = logging.getLogger(__name__)
 # Longest side, in pixels, a region thumbnail is asked at.
 THUMBNAIL_SIZE = 300
 
-# Zoom of annotation coordinates (``BBoxCalculator``) and the factor of a
-# Point's view radius.
-ANNOTATION_ZOOM = 5
+# Factor of a Point's view radius.
 POINT_CONTEXT = 5
 
 # Zone point radius when the annotation states none.
@@ -156,9 +156,25 @@ def _canvas_names(manifest):
     return names
 
 
-def _extent(geometry, radius):
-    """``(xmin, ymin, xmax, ymax)`` of a Polygon or Point in canvas pixels, margins excluded; None when not computable."""
-    scale = 2**ANNOTATION_ZOOM
+def _image_frame(service, width, height):
+    """``(zoom, width, height)`` of the image a zone was drawn on: the zoom of its stored units (``units.native_zoom``) and the size a region is cut in.
+
+    From the service's info.json when it is read; else from the canvas size
+    (``units.assumed_unit``), or the zoom of ``units.UNKNOWN_SCALE`` and no
+    bound for a canvas the manifest does not list.
+    """
+    info = units.image_info(service)
+    if isinstance(info, units.ImageInfo):
+        zoom = units.native_zoom(info.width, info.height, info.tile)
+        return zoom, info.width, info.height
+    if width == sys.maxsize:
+        return int(math.log2(units.UNKNOWN_SCALE)), width, height
+    return int(math.log2(units.assumed_unit(width, height, service).x)), width, height
+
+
+def _extent(geometry, radius, zoom):
+    """``(xmin, ymin, xmax, ymax)`` of a Polygon or Point in image pixels, margins excluded; None when not computable."""
+    scale = 2**zoom
     coordinates = geometry.get("coordinates")
     try:
         if geometry.get("type") == "Polygon":
@@ -180,9 +196,10 @@ def _zone_region_url(annotation, manifests):
 
     Polygons and Points are accepted. The zone's canvas is found in its
     manifest by id or image service, and the region is asked of that canvas's
-    image service (the stored name when the canvas is unknown or has none). A
-    canvas missing from the manifest does not clamp the region. A zone drawn
-    outside a known canvas gives None.
+    image service (the stored name when the canvas is unknown or has none),
+    in the pixels of that image (``_image_frame``). A canvas missing from the
+    manifest does not clamp the region. A zone drawn outside a known image
+    gives None.
     """
     feature = annotation.feature or {}
     properties = feature.get("properties") or {}
@@ -203,19 +220,22 @@ def _zone_region_url(annotation, manifests):
     )
     service = (service or stored).rstrip("/")
 
+    zoom, width, height = _image_frame(service, width, height)
     radius = properties.get("radius", DEFAULT_POINT_RADIUS)
     if width != sys.maxsize:
-        extent = _extent(geometry, radius)
+        extent = _extent(geometry, radius, zoom)
         if extent is None:
             return None
         xmin, ymin, xmax, ymax = extent
         if xmax <= 0 or ymax <= 0 or xmin >= width or ymin >= height:
             return None
     if geometry["type"] == "Polygon":
-        bbox = BBoxCalculator.polygon_bbox(geometry["coordinates"], width, height)
+        bbox = BBoxCalculator.polygon_bbox(
+            geometry["coordinates"], width, height, zoom=zoom
+        )
     else:
         bbox = BBoxCalculator.point_bbox(
-            geometry["coordinates"], width, height, radius=radius
+            geometry["coordinates"], width, height, radius=radius, zoom=zoom
         )
     if not bbox or bbox[2] <= 0 or bbox[3] <= 0:
         return None

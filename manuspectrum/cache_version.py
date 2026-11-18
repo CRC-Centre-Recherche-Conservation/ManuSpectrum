@@ -50,6 +50,7 @@ CACHE_SHAPE_MODULES = (
     "iiif/language.py",
     "iiif/selectors.py",
     "iiif/sources.py",
+    "iiif/units.py",
     "iiif/zones.py",
     # The memoised IIIF pages, collections and annotations: facts, bodies,
     # annotations, pages, their v2 form, the auth services they declare, the

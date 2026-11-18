@@ -17,6 +17,7 @@ import { UNPLACED } from "@/manuspectrum/pages/AnalysisExplorer/folio/registrati
 import type {
     AnalysisPayload,
     ImageRef,
+    ZoneUnit,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
 import type { LatLng } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
@@ -141,7 +142,8 @@ export function layerImageChain(
  * its registered box, turned by its quarter, when `place.registration` is
  * for `place.canvas` and holds a box (`UNPLACED` marks an entry that holds
  * only a capture); otherwise it is stretched into the bounding box of the
- * analysis's marked zone on this page (`markedZones`; indicative), at the
+ * analysis's marked zone on this page (`markedZones`, read with the canvas's
+ * `place.unit`; indicative), at the
  * layer's own aspect ratio, centred and contained in it (`fitInside`; the
  * zone's box when the layer's size is unknown). An analysis with only a point
  * here lays nothing.
@@ -154,13 +156,17 @@ export function folioOverlays(
     analysis: AnalysisPayload | null,
     overlays: Record<string, Overlay>,
     annotations: readonly Annotation[],
-    place?: { canvas: string | null; registration: Registration | null },
+    place?: {
+        canvas: string | null;
+        registration: Registration | null;
+        unit?: ZoneUnit | null;
+    },
 ): FolioOverlay[] {
     if (!analysis) return [];
     const zone = markedZones(annotations).find(
         (entry) => entry.analysis === analysis.id,
     );
-    const bounds = zone ? shapeBounds(zone.shape) : null;
+    const bounds = zone ? shapeBounds(zone.shape, place?.unit ?? null) : null;
     if (!bounds) return [];
     const held = place?.registration ?? null;
     const registered =

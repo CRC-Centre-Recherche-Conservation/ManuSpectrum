@@ -68,6 +68,7 @@ describe("CanvasStrip", () => {
                 image: { service: null, url: null, width: 1, height: 1 },
                 analysisCount: 2,
                 characterizationCount: 0,
+                zoneUnit: null,
             }),
         );
         const counts = new Map([
@@ -149,6 +150,7 @@ describe("CanvasStrip", () => {
                 image: { service: null, url: null, width: 1, height: 1 },
                 analysisCount: index + 1,
                 characterizationCount: 0,
+                zoneUnit: null,
             }),
         );
 
