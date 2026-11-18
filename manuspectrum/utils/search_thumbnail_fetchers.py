@@ -257,7 +257,10 @@ def _zone_region_url(annotation, manifests):
 
     zoom, width, height = _image_frame(service, width, height, frame_of(feature))
     if width != sys.maxsize:
-        xmin, ymin, xmax, ymax = _extent(geometry, radius, zoom)
+        extent = _extent(geometry, radius, zoom)
+        if extent is None:
+            return None
+        xmin, ymin, xmax, ymax = extent
         if xmax <= 0 or ymax <= 0 or xmin >= width or ymin >= height:
             return None
     if geometry["type"] == "Polygon":

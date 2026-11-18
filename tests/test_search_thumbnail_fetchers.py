@@ -1447,6 +1447,34 @@ class ImageFrameTests(SimpleTestCase):
         region = safe_fetch.call_args.args[0].removeprefix(f"{CANVAS_SERVICE}/")
         self.assertEqual(region, "150,310,100,180/100,/0/default.jpg")
 
+    def test_a_point_out_of_float_range_at_its_zoom_is_skipped_for_the_next_zone(
+        self, annotations, fetch_manifest, safe_fetch
+    ):
+        far = {"type": "Point", "coordinates": [10**307, -1]}
+        annotations.return_value = [
+            annotation(
+                geometry=far,
+                radius=5.0,
+                **units.Frame(32, 4913, 6609, "browser").stamp(),
+            ),
+            annotation(
+                geometry=self.ZONE,
+                **units.Frame(16, 4913, 6609, "browser").stamp(),
+            ),
+        ]
+        fetch_manifest.return_value = v2_manifest(width=4913, height=6609)
+        safe_fetch.return_value = response()
+        with (
+            mock.patch(
+                f"{FETCHERS}.units.image_info", side_effect=AssertionError("read")
+            ),
+            self.assertNoLogs(FETCHERS, "ERROR"),
+        ):
+            self.fetcher.get_thumbnail(retrieve=True)
+
+        region = safe_fetch.call_args.args[0].removeprefix(f"{CANVAS_SERVICE}/")
+        self.assertEqual(region, "150,310,100,180/100,/0/default.jpg")
+
     def test_a_read_image_gives_the_zoom_of_its_tiles(
         self, annotations, fetch_manifest, safe_fetch
     ):
