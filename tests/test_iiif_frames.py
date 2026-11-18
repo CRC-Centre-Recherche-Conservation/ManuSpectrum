@@ -208,6 +208,39 @@ class TrustTests(SimpleTestCase):
         self.assertTrue(frames.is_trusted())
 
 
+class OddStoredShapeTests(SimpleTestCase):
+    def test_odd_stored_shapes_are_skipped(self):
+        for edits in (
+            {"u": {"value": [1]}},
+            ["x"],
+            {"u": {"value": {NODE: 3}}},
+            {"u": 5},
+        ):
+            with self.subTest(edits=edits):
+                previous = frames.PreviousFeatures({NODE: collection(feature())}, edits)
+                self.assertIsNotNone(previous.match(feature(), NODE))
+        self.assertIsNone(frames.PreviousFeatures([1], None).match(feature(), NODE))
+
+
+class ResourceCopyTrustTests(SimpleTestCase):
+    def trusted_on(self, url_name):
+        from types import SimpleNamespace
+
+        from manuspectrum.accounts import lockout
+
+        request = SimpleNamespace(resolver_match=SimpleNamespace(url_name=url_name))
+        token = lockout._current_request.set(request)
+        try:
+            return frames.is_trusted()
+        finally:
+            lockout._current_request.reset(token)
+
+    def test_only_resource_copy_is_trusted(self):
+        self.assertTrue(self.trusted_on("resource_copy"))
+        self.assertFalse(self.trusted_on("tile"))
+        self.assertFalse(self.trusted_on(None))
+
+
 class FrameHelperTests(SimpleTestCase):
     def test_frame_helpers(self):
         self.assertEqual(

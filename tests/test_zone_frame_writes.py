@@ -6,6 +6,7 @@ Usage:
 
 import copy
 import uuid
+from types import SimpleNamespace
 from unittest import mock
 
 from django.contrib.auth.models import Group, User
@@ -19,6 +20,7 @@ from arches.app.models.tile import Tile
 from manuspectrum import signals
 from manuspectrum.iiif import frame_writes, frames, units
 from manuspectrum.iiif.units import Frame
+from manuspectrum.utils.budget import current_budget, upstream_budget
 from manuspectrum.utils.cache import stable_cache_key
 
 from tests import test_manifest_registry as reg
@@ -87,7 +89,7 @@ class ZoneFrameCase(reg.AnnotationFixtures):
             "widgets": [],
         }
 
-    def write(self, features, tile_id=None, user=None, trusted=False):
+    def write(self, features, tile_id=None, user=None, trusted=False, request=None):
         """Save the zones as the annotation tile *tile_id* (new when None); callbacks are captured, not run."""
         tile = Tile.objects.filter(pk=tile_id).first() if tile_id else None
         if tile is None:
@@ -101,7 +103,7 @@ class ZoneFrameCase(reg.AnnotationFixtures):
         tile.serialized_graph = self.serialized()
         guard = mock.patch(
             "manuspectrum.iiif.frames.current_request",
-            return_value=None if trusted else object(),
+            return_value=None if trusted else (request or object()),
         )
         with guard, self.captureOnCommitCallbacks(execute=False) as callbacks:
             tile.save(index=False, user=user)
@@ -324,6 +326,101 @@ class ReceiverTests(ZoneFrameCase):
         self.assertEqual(len(callbacks), 1)
 
 
+FORGED = Frame(2, 10, 10, "browser").stamp()
+
+
+def bare_zone(fid):
+    return {
+        "id": fid,
+        "type": "Feature",
+        "properties": {"canvas": SERVICE},
+        "geometry": {"type": "Point", "coordinates": [1.0, -1.0]},
+    }
+
+
+@override_settings(IIIF_IMAGE_INFO_READ=True)
+class FailClosedTests(ZoneFrameCase):
+    def test_an_unhashable_feature_id_does_not_let_a_forged_stamp_through(self):
+        tile, _ = self.write([zone("z1", stamp=FORGED), bare_zone([])])
+        self.assertNotIn("msUnit", self.stored(tile, "z1"))
+
+    def test_a_failing_lookup_strips_the_stamps_of_an_untrusted_writer(self):
+        with mock.patch.object(units, "known_info", side_effect=RuntimeError("cache")):
+            tile, _ = self.write([zone("z1", stamp=FORGED), "junk", {"id": "q"}])
+        self.assertNotIn("msUnit", self.stored(tile, "z1"))
+
+    def test_a_failing_lookup_leaves_a_trusted_writers_stamps(self):
+        with mock.patch.object(units, "known_info", side_effect=RuntimeError("cache")):
+            tile, _ = self.write([zone("z1", stamp=FORGED)], trusted=True)
+        self.assertEqual(self.stored(tile, "z1")["msUnit"], 2)
+
+
+@override_settings(IIIF_IMAGE_INFO_READ=True)
+class ScheduleTests(ZoneFrameCase):
+    def run_callbacks(self, callbacks):
+        for callback in callbacks:
+            callback()
+
+    def test_a_refused_host_is_estimated_after_its_manifest_is_registered(self):
+        IIIFManifest.objects.filter(url=URL).delete()
+        self.fetch.side_effect = [answered({}, status=403)]
+        tile, callbacks = self.write([zone("z1")])
+        with reg.fetching(sized_manifest()):
+            self.run_callbacks(callbacks)
+        self.assertEqual(self.stored(tile, "z1")["msFrame"], "estimated")
+        self.assertEqual(self.stored(tile, "z1")["msImageWidth"], 4000)
+
+    def test_resource_copy_keeps_the_stamps_it_copies(self):
+        request = SimpleNamespace(
+            resolver_match=SimpleNamespace(url_name="resource_copy")
+        )
+        tile, callbacks = self.write([zone("z1", stamp=FORGED)], request=request)
+        self.assertEqual(self.stored(tile, "z1")["msUnit"], 2)
+
+    def test_another_route_does_not_keep_incoming_stamps(self):
+        request = SimpleNamespace(resolver_match=SimpleNamespace(url_name="tile"))
+        tile, _ = self.write([zone("z1", stamp=FORGED)], request=request)
+        self.assertNotIn("msUnit", self.stored(tile, "z1"))
+
+    def test_nothing_is_scheduled_outside_a_transaction(self):
+        instance = Tile(
+            tileid=uuid.uuid4(),
+            resourceinstance_id=self.resource.pk,
+            nodegroup_id=self.nodegroup.pk,
+            data={self.node(): collection(zone("z1"))},
+        )
+        out = mock.Mock(in_atomic_block=False)
+        with (
+            in_a_request(),
+            mock.patch.object(signals.transaction, "get_connection", return_value=out),
+            mock.patch.object(signals.transaction, "on_commit") as on_commit,
+        ):
+            signals.stamp_annotation_frames(Tile, instance)
+        on_commit.assert_not_called()
+        self.assertNotIn("_ms_pending_frames", instance.__dict__)
+
+    def test_a_model_saved_directly_goes_through_the_receiver(self):
+        remember_info()
+        row = TileModel(
+            tileid=uuid.uuid4(),
+            resourceinstance_id=self.resource.pk,
+            nodegroup_id=self.nodegroup.pk,
+            data={
+                self.node(): collection(
+                    zone("z1"), zone("z2", x=5.0, canvas="https://img.example/b")
+                )
+            },
+        )
+        self.fetch.side_effect = [answered({}, status=403)]
+        with in_a_request(), self.captureOnCommitCallbacks(execute=False) as callbacks:
+            row.save()
+        stored = TileModel.objects.get(pk=row.pk).data[self.node()]["features"]
+        self.assertEqual(props_of(stored, "z1")["msFrame"], "read")
+        self.assertEqual(len(callbacks), 1)
+        self.run_callbacks(callbacks)
+        self.fetch.assert_called_once()
+
+
 @override_settings(IIIF_IMAGE_INFO_READ=True)
 class ResolvePendingTests(ZoneFrameCase):
     def key(self, fid, node=None, user=None):
@@ -374,6 +471,39 @@ class ResolvePendingTests(ZoneFrameCase):
     def test_resolve_pending_on_a_deleted_tile_is_a_no_op(self):
         pending = {self.key("z1"): "digest"}
         self.assertEqual(frame_writes.resolve_pending(str(uuid.uuid4()), pending), 0)
+
+    def test_the_write_uses_the_locked_reread(self):
+        feature = zone("z1")
+        tile, _ = self.write([feature], trusted=True)
+        other = str(self.other.pk)
+
+        def meanwhile(*args, **kwargs):
+            row = TileModel.objects.get(pk=tile.pk)
+            row.data[other] = {"changed": True}
+            TileModel.objects.filter(pk=tile.pk).update(data=row.data)
+            return READ
+
+        pending = {self.key("z1"): self.digest(feature)}
+        with mock.patch.object(frame_writes, "frame_for_service", meanwhile):
+            self.assertEqual(frame_writes.resolve_pending(str(tile.pk), pending), 1)
+        row = TileModel.objects.get(pk=tile.pk)
+        self.assertEqual(row.data[other], {"changed": True})
+        self.assertEqual(self.stored(tile, "z1")["msFrame"], "read")
+
+    def test_the_budget_never_exceeds_an_ambient_one(self):
+        feature = zone("z1")
+        tile, _ = self.write([feature], trusted=True)
+        seen = []
+
+        def spy(*args, **kwargs):
+            seen.append(current_budget().left())
+            return READ
+
+        pending = {self.key("z1"): self.digest(feature)}
+        with mock.patch.object(frame_writes, "frame_for_service", spy):
+            with upstream_budget(5):
+                frame_writes.resolve_pending(str(tile.pk), pending)
+        self.assertLessEqual(seen[0], 5)
 
     def test_resolve_pending_reads_the_image_before_it_opens_the_transaction(self):
         feature = zone("z1")
@@ -428,6 +558,11 @@ class FrameForServiceTests(ZoneFrameCase):
         ):
             with self.subTest(url=url, name=name):
                 self.assertIsNone(frame_writes.frame_for_service(SERVICE, url, name))
+
+    def test_a_malformed_registered_manifest_gives_none(self):
+        cache.set(stable_cache_key(units._INFO_PREFIX, SERVICE), False, 600)
+        with mock.patch.object(frame_writes, "canvases_of", side_effect=AttributeError):
+            self.assertIsNone(frame_writes.frame_for_service(SERVICE, URL, SERVICE))
 
     def test_an_info_that_cannot_make_a_frame_gives_none(self):
         remember_info(size=(2_000_000, 100, 256))

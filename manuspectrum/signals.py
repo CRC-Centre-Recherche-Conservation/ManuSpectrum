@@ -222,6 +222,7 @@ def stamp_annotation_frames(sender, instance, raw=False, update_fields=None, **k
     of an unexpected shape is left as it came.
     """
     instance.__dict__.pop("_ms_annotation_nodes", None)
+    instance.__dict__.pop("_ms_pending_frames", None)
     if raw:
         return
     if update_fields is not None and not {"data", "provisionaledits"} & set(
@@ -238,7 +239,20 @@ def stamp_annotation_frames(sender, instance, raw=False, update_fields=None, **k
     pending = frame_writes.stamp_instance(instance, holders)
     if not pending:
         return
-    tile_id = str(instance.pk)
+    if not transaction.get_connection().in_atomic_block:
+        logger.debug(
+            "zones of tile %s left for the command: no transaction", instance.pk
+        )
+        return
+    if isinstance(instance, Tile):
+        instance._ms_pending_frames = pending
+        return
+    schedule_frame_resolution(instance.pk, pending)
+
+
+def schedule_frame_resolution(tile_id, pending):
+    """Resolve the frames of *pending* once the transaction commits."""
+    tile_id = str(tile_id)
     transaction.on_commit(
         lambda: frame_writes.resolve_pending(tile_id, pending), robust=True
     )
@@ -284,3 +298,16 @@ def register_manifests_of_annotations(sender, instance, raw=False, **kwargs):
         lambda: register_annotation_manifests(tile_id, user_id, manifests),
         robust=True,
     )
+
+
+@receiver(post_save, sender=Tile)
+def resolve_frames_of_annotations(sender, instance, raw=False, **kwargs):
+    """Schedule the frame resolution ``stamp_annotation_frames`` left for this tile.
+
+    Connected after ``register_manifests_of_annotations``, so on commit the
+    manifests are registered before a refused image host is estimated from
+    its registered canvas size.
+    """
+    pending = instance.__dict__.pop("_ms_pending_frames", None)
+    if pending and not raw:
+        schedule_frame_resolution(instance.pk, pending)

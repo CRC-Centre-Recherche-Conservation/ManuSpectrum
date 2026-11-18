@@ -46,8 +46,18 @@ def trusted_writes():
 
 
 def is_trusted():
-    """True inside ``trusted_writes`` or outside any request."""
-    return _trusted.get() or current_request() is None
+    """True inside ``trusted_writes``, outside any request, or in Arches' ``resource_copy`` route.
+
+    ``resource_copy`` copies stored tiles server-side and takes no tile data
+    from the client, so the stamps it carries are the stored ones.
+    """
+    if _trusted.get():
+        return True
+    request = current_request()
+    if request is None:
+        return True
+    match = getattr(request, "resolver_match", None)
+    return getattr(match, "url_name", None) == "resource_copy"
 
 
 def _whole(value):
@@ -139,13 +149,17 @@ class PreviousFeatures:
 
     def __init__(self, data, provisionaledits):
         self._by_id = {}
-        values = [data] + [
-            edit.get("value")
-            for edit in (provisionaledits or {}).values()
-            if isinstance(edit, dict)
-        ]
+        values = [data]
+        if isinstance(provisionaledits, dict):
+            values += [
+                edit.get("value")
+                for edit in provisionaledits.values()
+                if isinstance(edit, dict)
+            ]
         for value in values:
-            for node_id, collection in (value or {}).items():
+            if not isinstance(value, dict):
+                continue
+            for node_id, collection in value.items():
                 for feature in _features(collection):
                     fid = feature.get("id")
                     if valid_id(fid):

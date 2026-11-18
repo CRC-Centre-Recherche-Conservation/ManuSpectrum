@@ -24,7 +24,7 @@ from arches.app.models.models import Node, TileModel
 
 from manuspectrum.iiif import frames, units
 from manuspectrum.iiif.sources import canvas_index, canvases_of
-from manuspectrum.utils.budget import upstream_budget
+from manuspectrum.utils.budget import current_budget, upstream_budget
 from manuspectrum.utils.manifest_registry import find_registered
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,13 @@ def _registered_canvas_size(manifest_url, stored_name):
     manifest = getattr(row, "manifest", None)
     if not isinstance(manifest, dict):
         return None
-    return canvas_index(canvases_of(manifest)).size((stored_name or "").rstrip("/"))
+    try:
+        return canvas_index(canvases_of(manifest)).size((stored_name or "").rstrip("/"))
+    except Exception:
+        logger.warning(
+            "registered manifest unreadable: %s", manifest_url, exc_info=True
+        )
+        return None
 
 
 def frame_for_service(service, manifest_url, stored_name):
@@ -137,12 +143,28 @@ def annotation_nodes(instance, holders):
     return found
 
 
+def _without_stamps(collection):
+    """*collection* with the stamp keys removed from every feature that has properties; cannot raise on a FeatureCollection."""
+    features = []
+    for feature in collection["features"]:
+        props = feature.get("properties") if isinstance(feature, dict) else None
+        if isinstance(props, dict):
+            feature = {
+                **feature,
+                "properties": {
+                    k: v for k, v in props.items() if k not in frames.STAMP_KEYS
+                },
+            }
+        features.append(feature)
+    return {**collection, "features": features}
+
+
 def _pending_digests(stamped, unresolved):
     """``{feature id: geometry digest}`` of the *unresolved* features of *stamped*, left out when the geometry is invalid."""
     digests = {}
     for feature in stamped["features"]:
         fid = feature.get("id") if isinstance(feature, dict) else None
-        if fid not in unresolved or fid in digests:
+        if not frames.valid_id(fid) or fid not in unresolved or fid in digests:
             continue
         geometry = feature.get("geometry")
         if frames.same_geometry(geometry, geometry):
@@ -177,8 +199,14 @@ def stamp_instance(instance, holders):
                 )
                 digests = _pending_digests(stamped, unresolved)
             except Exception:
-                logger.debug("zones of %s not stamped", node_id, exc_info=True)
-                continue
+                digests = {}
+                stamped = collection if trusted else _without_stamps(collection)
+                logger.warning(
+                    "zones of %s not stamped%s",
+                    node_id,
+                    "" if trusted else ", stamp keys dropped",
+                    exc_info=True,
+                )
             if user_id is None:
                 data = {**data, node_id: stamped}
             else:
@@ -235,6 +263,10 @@ def resolve_pending(tile_id, pending):
     still unstamped and still has that geometry; a feature edited meanwhile is
     left to its own save. The stamp reaches Elasticsearch at the tile's next
     save or reindex.
+
+    A full-row ``Tile.save`` that read the tile before this job committed
+    writes its own copy back and can overwrite the stamp; the zone then stays
+    unstamped until the command stamps it.
     """
     if not pending:
         return 0
@@ -247,7 +279,9 @@ def resolve_pending(tile_id, pending):
         return 0
     data, edits = row
     resolved = {}
-    with upstream_budget(RESOLVE_BUDGET, kind="write"):
+    ambient = current_budget()
+    seconds = RESOLVE_BUDGET if ambient is None else min(RESOLVE_BUDGET, ambient.left())
+    with upstream_budget(seconds, kind="write"):
         for (node_id, user_id, fid), digest in pending.items():
             value = _value_of(data, edits, user_id)
             for feature in _features_of(value, node_id, fid, digest):
