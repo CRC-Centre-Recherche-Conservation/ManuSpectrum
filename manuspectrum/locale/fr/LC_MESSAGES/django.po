@@ -1305,14 +1305,6 @@ msgstr ""
 msgid "Accept and choose your password"
 msgstr "Accepter et choisir votre mot de passe"
 
-#: templates/accounts/activate_continue.htm:10
-msgid ""
-"Your invitation link is valid. Continue to read the terms of use and choose "
-"your password."
-msgstr ""
-"Votre lien d'invitation est valide. Continuez pour lire les conditions "
-"d'utilisation et choisir votre mot de passe."
-
 #: templates/accounts/activation_invalid.htm:3
 #: templates/accounts/activation_invalid.htm:4
 #: templates/accounts/two_factor_reset_invalid.htm:3
@@ -1503,14 +1495,6 @@ msgstr "Mot de passe"
 #: templates/accounts/two_factor_reset.htm:46
 msgid "Continue"
 msgstr "Continuer"
-
-#: templates/accounts/two_factor_reset_continue.htm:14
-msgid ""
-"Your link is valid. Continue to type your password and set up your "
-"authenticator again."
-msgstr ""
-"Votre lien est valide. Continuez pour saisir votre mot de passe et "
-"configurer à nouveau votre application d'authentification."
 
 #: templates/accounts/two_factor_reset_invalid.htm:7
 msgid "The link has expired, has already been used or is incorrect."
@@ -3950,10 +3934,6 @@ msgid ""
 msgstr ""
 "ManuSpectrum — base de données interopérable pour l'analyse physico-chimique"
 " du patrimoine culturel écrit."
-
-#: templates/registration/password_reset_continue.html:3
-msgid "Your link is valid. Continue to choose a new password."
-msgstr "Votre lien est valide. Continuez pour choisir un nouveau mot de passe."
 
 #: templates/registration/password_reset_email_html.html:17
 #, python-format
@@ -7905,3 +7885,30 @@ msgstr "La création de la ressource a échoué."
 #: views/biblissima_proxy.py
 msgid "Creation failed for this item."
 msgstr "La création de cet élément a échoué."
+
+#: templates/accounts/activation_invalid.htm:3
+#: templates/accounts/activation_invalid.htm:4
+#: templates/accounts/activation_invalid.htm:5
+#: templates/accounts/two_factor_reset_invalid.htm:3
+#: templates/accounts/two_factor_reset_invalid.htm:4
+#: templates/accounts/two_factor_reset_invalid.htm:5
+msgid "This page has expired"
+msgstr "Cette page a expiré"
+
+#: templates/accounts/activation_invalid.htm:8
+#: templates/accounts/two_factor_reset_invalid.htm:8
+#, python-format
+msgid ""
+"A page opened from a link in an e-mail stays open for %(minutes)s minutes. "
+"Open the link in your e-mail again."
+msgstr ""
+"Une page ouverte depuis un lien reçu par e-mail reste ouverte %(minutes)s "
+"minutes. Rouvrez le lien de votre e-mail."
+
+#: templates/views/pages/privacy.htm:130
+msgid ""
+"Carries the token of a link received by e-mail to its form, for 15 minutes; "
+"deleted once the form is sent."
+msgstr ""
+"Porte le jeton d'un lien reçu par e-mail jusqu'à son formulaire, pendant 15 "
+"minutes ; supprimé une fois le formulaire envoyé."

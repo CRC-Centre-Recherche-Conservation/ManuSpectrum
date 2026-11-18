@@ -4,12 +4,12 @@ An administrator creates an account with no password and sends the invitation
 (`send_invitation`). The mail carries a link built like Django's password
 reset: `urlsafe_base64_encode(pk)` and a `default_token_generator` token, valid
 for `PASSWORD_RESET_TIMEOUT` and dead once the password is set. The link opens
-`ActivateAccountView`, which answers a valid token with a « Continue » page;
-its post moves the token into the session and redirects to the same route with
-the placeholder `set-password` (the `mailed_links` module explains why the GET
-cannot do it with a `SameSite=Strict` session cookie). That page shows the
-terms, asks for their acceptance and a password, signs the user in and sends
-them to the two-factor enrolment page.
+`ActivateAccountView`, which answers a valid token with a short-lived cookie
+holding it and a redirect to the same route with the placeholder
+`set-password` (`mailed_links` describes the flow). That page reads the token
+back from the cookie, shows the terms, asks for their acceptance and a
+password, signs the user in, deletes the cookie and sends them to the
+two-factor enrolment page.
 
 `TermsAcceptance` holds one row per user and version of the terms
 (`accounts.terms.TERMS_VERSION`). `TermsAcceptanceMiddleware` sends a signed-in
@@ -46,7 +46,7 @@ from django.views.decorators.cache import never_cache
 from django_ratelimit.decorators import ratelimit
 
 from manuspectrum.accounts import notices
-from manuspectrum.accounts.mailed_links import land
+from manuspectrum.accounts.mailed_links import COOKIE_MAX_AGE, MailedLink
 from manuspectrum.accounts.password_rules import password_rule_list, password_rules
 from manuspectrum.accounts.terms import TERMS_VERSION
 from manuspectrum.models import TermsAcceptance
@@ -57,7 +57,9 @@ logger = logging.getLogger(__name__)
 LOGIN_BACKEND = "django.contrib.auth.backends.ModelBackend"
 SESSION_KEY = "ms_terms_accepted_version"
 TOKEN_PLACEHOLDER = "set-password"
-SESSION_TOKEN_KEY = "_ms_activation_token"
+LINK = MailedLink(
+    cookie="ms_activation_link", route="account-activate", placeholder=TOKEN_PLACEHOLDER
+)
 
 
 def can_be_invited(user):
@@ -193,25 +195,28 @@ class ActivateAccountView(_TermsPage):
 
     def _dispatch(self, request, *args, **kwargs):
         uidb64, token = kwargs["uidb64"], kwargs["token"]
+        expired = False
         if token == TOKEN_PLACEHOLDER:
-            token = request.session.get(SESSION_TOKEN_KEY, "")
+            token = LINK.token(request)
+            expired = not token
         elif user_for_link(uidb64, token) is not None:
-            return land(
-                request,
-                token=token,
-                session_key=SESSION_TOKEN_KEY,
-                target=reverse(
-                    "account-activate",
-                    kwargs={"uidb64": uidb64, "token": TOKEN_PLACEHOLDER},
-                ),
-                template_name="accounts/activate_continue.htm",
-                context={"robots_noindex": True},
-            )
+            return LINK.land(request, token, uidb64=uidb64)
         self.account = user_for_link(uidb64, token) if token else None
         if self.account is None:
             self.template_name = "accounts/activation_invalid.htm"
-            return self.render_to_response(self.get_context_data(), status=410)
-        return super().dispatch(request, *args, **kwargs)
+            response = self.render_to_response(
+                self.get_context_data(expired=expired, minutes=COOKIE_MAX_AGE // 60),
+                status=410,
+            )
+            LINK.forget(response, uidb64=uidb64)
+            return response
+        self.done = False
+        response = super().dispatch(request, *args, **kwargs)
+        if self.done:
+            LINK.forget(response, uidb64=uidb64)
+        else:
+            LINK.remember(response, token, uidb64=uidb64)
+        return response
 
     def get(self, request, *args, **kwargs):
         return self.render_to_response(
@@ -247,9 +252,9 @@ class ActivateAccountView(_TermsPage):
         # `authenticate()` sets.
         user.backend = LOGIN_BACKEND
         login(request, user)
-        request.session.pop(SESSION_TOKEN_KEY, None)
         request.session[SESSION_KEY] = TERMS_VERSION
         logger.info("Account activated for user %s", user.pk)
+        self.done = True
         return redirect("account-two-factor")
 
 

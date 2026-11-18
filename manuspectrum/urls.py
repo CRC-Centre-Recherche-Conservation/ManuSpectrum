@@ -123,8 +123,9 @@ urlpatterns = [
         CachedThumbnailView.as_view(),
         name="thumbnail",
     ),
-    # The mailed password-reset link opens a « Continue » page first: a
-    # redirect started from a webmail loses the SameSite=Strict session cookie.
+    # The mailed password-reset link sets a short-lived SameSite=Lax cookie
+    # with its token and redirects to the form: a redirect started from a
+    # webmail would lose the SameSite=Strict session cookie.
     path(
         "reset/<uidb64>/<token>/",
         PasswordResetConfirmView.as_view(),

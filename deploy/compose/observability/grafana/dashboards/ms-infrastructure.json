@@ -725,7 +725,7 @@
       "id": 13,
       "type": "timeseries",
       "title": "Swap used",
-      "description": "Swap in use; sustained use means memory pressure.",
+      "description": "Swap in use on the host, and the share each container holds; sustained use means memory pressure. Containers should hold none.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -745,6 +745,17 @@
           },
           "expr": "node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes",
           "legendFormat": "swap",
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "manuspectrum_container_memory_swap_bytes",
+          "legendFormat": "{{container}}",
           "instant": false,
           "range": true
         }
