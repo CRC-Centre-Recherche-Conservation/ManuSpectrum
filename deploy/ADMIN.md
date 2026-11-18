@@ -467,15 +467,19 @@ completed workflows are never touched.
 A zone of an annotation (IIIF viewer, Data Lab) is stored in the units of the image
 it was drawn on; since release 1.1.0 each zone carries that frame (`msUnit`,
 `msImageWidth`, `msImageHeight`, `msFrame`). Zones saved before it are stamped by a command, never
-at read time. `msFrame` is `browser`, `read` or `import-legacy` (measured) or `estimated` (assumed
-from the registered manifest's canvas size when the image host refuses this server).
+at read time. `msFrame` is `browser`, `read` or `import-legacy` (measured) or `estimated` (assumed:
+from the registered manifest's canvas size when the image host refuses this server, or, for a zone
+the Biblissima import writes, from the canvas size Biblissima gives when the host refuses or cannot
+be reached).
 
 - **Count.** `make -C deploy manage ARGS="annotation_frames check"` prints the zones per state
   (also the gauge `manuspectrum_annotation_zones`) and the images of the unstamped ones. It reads
   the database only.
-- **Dry run.** `make -C deploy manage ARGS="annotation_frames stamp"` reads the info.json of each
-  image service (one request per service, throttled per host) and lists what it would stamp and
-  the services it could not read. It writes nothing.
+- **Dry run.** `make -C deploy manage ARGS="annotation_frames stamp"` reads a fresh info.json of
+  each image service, at most once per service per run (throttled per host): a description this
+  server read within the last hour (`IIIF_IMAGE_INFO_STAMP_MAX_AGE`) is reused, an older one is read
+  again, and a host noted as refusing or down is not asked until that note expires. It lists what
+  it would stamp and the services it could not read, and writes nothing.
 - **Stamp.** `make -C deploy manage ARGS="annotation_frames stamp --apply --journal /srv/media/annotation-frames-YYYYMMDD.jsonl"`.
   The journal is required, must be a new file in a directory the container can write (the media
   directory; `/tmp` is lost with the container), and is created before anything is read. Keep it:

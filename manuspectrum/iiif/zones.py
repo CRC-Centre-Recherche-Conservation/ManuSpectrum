@@ -71,18 +71,12 @@ def assumed_unit_payload(unit):
     return unit.payload() if unit is not None and not unit.read else None
 
 
-def canvas_and_shape(feature, dims):
-    """Canvas id and pixel ``Shape`` of one annotation feature (``canvas_and_convert``); canvas empty and shape None when unresolved."""
-    canvas, convert = canvas_and_convert(feature, dims)
-    return (canvas, convert()[0]) if convert else ("", None)
-
-
 class FeatureRows:
     """The annotation features of *node* on *resource_ids*, read in one query and resolved per manifest.
 
     Nothing is read when the node is unresolved or its nodegroup is not in
-    *readable*. ``features`` resolves a subset against one manifest's
-    ``canvas_index``, in the order ``annotation_features`` gives.
+    *readable*. ``located`` resolves a subset against one manifest's
+    ``canvas_index``, by feature id.
     """
 
     def __init__(self, node, resource_ids, readable):
@@ -113,17 +107,12 @@ class FeatureRows:
             if canvas and convert:
                 yield rid, _feature_id(feature), canvas, convert
 
-    def features(self, resource_ids, dims):
-        """``(resource id, feature id, canvas, shape)`` of every resolved feature of *resource_ids*, by feature id."""
-        for rid, feature, canvas, convert in self.located(resource_ids, dims):
-            yield rid, feature, canvas, convert()[0]
 
-
-Zone = namedtuple("Zone", "feature canvas")
+StoredZone = namedtuple("StoredZone", "feature canvas")
 
 
 def annotation_zones(resource_id):
-    """``Zone(feature, canvas name)`` of every usable feature of every annotation node of *resource_id*, by feature id, read in one query.
+    """``StoredZone(feature, canvas name)`` of every usable feature of every annotation node of *resource_id*, by feature id, read in one query.
 
     No nodegroup permission is applied: the caller decides who may see the
     zones. The canvas name is the stored ``properties.canvas`` when it is a
@@ -145,7 +134,7 @@ def annotation_zones(resource_id):
     for feature in rows:
         props = feature.get("properties")
         canvas = props.get("canvas") if isinstance(props, dict) else None
-        zones.append(Zone(feature, canvas if isinstance(canvas, str) else None))
+        zones.append(StoredZone(feature, canvas if isinstance(canvas, str) else None))
     return zones
 
 
@@ -153,15 +142,6 @@ def located_features(node, resource_ids, dims, readable):
     """``FeatureRows.located`` of *node* on *resource_ids*: the shapes are converted on demand."""
     resource_ids = [str(r) for r in resource_ids]
     yield from FeatureRows(node, resource_ids, readable).located(resource_ids, dims)
-
-
-def annotation_features(node, resource_ids, dims, readable):
-    """``(resource id, feature id, canvas, shape)`` of every resolved annotation feature of *node*, by feature id.
-
-    Nothing when the node is unresolved or its nodegroup is not in *readable*.
-    """
-    resource_ids = [str(r) for r in resource_ids]
-    yield from FeatureRows(node, resource_ids, readable).features(resource_ids, dims)
 
 
 class _StoredFeatures(Func):

@@ -838,6 +838,8 @@ IIIF_IMAGE_INFO_REFUSED_TTL = 60 * 60
 IIIF_IMAGE_INFO_DOWN_TTL = 120
 IIIF_IMAGE_INFO_TIMEOUT = 4
 IIIF_IMAGE_INFO_DEADLINE = 6
+# A frame stamped on a zone is taken from a read at most this many seconds old.
+IIIF_IMAGE_INFO_STAMP_MAX_AGE = 60 * 60
 # Tile width, by host name, of image services whose info.json this server
 # cannot read (a host that blocks server-side requests): what a browser reads
 # in `tiles[0].width` (`tile_width` in Image API 1.1) there. Without an entry

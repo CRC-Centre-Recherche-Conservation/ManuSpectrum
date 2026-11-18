@@ -3,7 +3,8 @@
 ``stamp_instance`` runs in the tile's ``pre_save`` (``signals.stamp_annotation_frames``):
 it applies ``frames.stamp_collection`` to the annotation collections of the
 tile's data and of every provisional value, with the frames already known
-(``units.known_info``: the cache, no request). The features a non-trusted
+(``known_frame``: the cache, no request, a read at most
+``IIIF_IMAGE_INFO_STAMP_MAX_AGE`` seconds old). The features a non-trusted
 writer drew on an image not known yet are listed, and ``resolve_pending``
 stamps them once the save commits: the image description is read outside any
 transaction, then the tile is locked and only the features still unstamped
@@ -11,13 +12,16 @@ and unchanged are written. The write is a guarded ``.update()``: no edit log
 and no indexing, so a stamp reaches Elasticsearch at the tile's next save or at
 the next reindex.
 
-``frame_for_service`` is the one rule that gives the frame of an image service.
+``frame_for_service`` gives the frame of an image service for the receiver
+and the ``annotation_frames`` command; the Biblissima import builds its frame
+with the same helpers (``units.frame_from_info``, ``units.frame_assumed``).
 """
 
 import copy
 import logging
 import uuid
 
+from django.conf import settings
 from django.db import transaction
 
 from arches.app.models.models import Node, TileModel
@@ -29,12 +33,14 @@ from manuspectrum.utils.manifest_registry import find_registered
 
 logger = logging.getLogger(__name__)
 
-RESOLVE_BUDGET = 30
-
 
 def known_frame(service):
-    """The ``read`` ``Frame`` of *service* from the kept image description, or None."""
-    info = units.known_info(service)
+    """The ``read`` ``Frame`` of *service* from the kept image description, or None.
+
+    A description read more than ``IIIF_IMAGE_INFO_STAMP_MAX_AGE`` seconds ago
+    counts as not kept.
+    """
+    info = units.known_info(service, max_age=units.stamp_max_age())
     if info is None:
         return None
     try:
@@ -94,18 +100,25 @@ def size_lookup():
     return lookup
 
 
-def frame_for_service(service, manifest_url, stored_name, size_of=None):
+def fresh_info(service):
+    """``units.image_info`` of *service*, read again when the kept read is older than ``IIIF_IMAGE_INFO_STAMP_MAX_AGE`` seconds."""
+    return units.image_info(service, max_age=units.stamp_max_age())
+
+
+def frame_for_service(service, manifest_url, stored_name, size_of=None, info_of=None):
     """The ``Frame`` of the image *service* a zone was stored under *stored_name* in the manifest *manifest_url*, or None.
 
     A readable info.json gives a ``read`` frame. A host that refuses this
     server gives an ``estimated`` frame from the canvas size of the registered
     manifest row (never fetched); no such size, or a failed read, gives None.
     An info.json or a size no ``Frame`` accepts gives None. Reads the image
-    description over the network when it is not kept: never call it inside a
-    transaction. *size_of* replaces the lookup of the registered canvas size
-    (``size_lookup()``), for a caller that resolves many zones.
+    description over the network when the kept read is missing or older than
+    ``IIIF_IMAGE_INFO_STAMP_MAX_AGE`` seconds (``fresh_info``): never call it
+    inside a transaction. *size_of* replaces the lookup of the registered
+    canvas size (``size_lookup()``) and *info_of* the read (``fresh_info``),
+    for a caller that resolves many zones.
     """
-    info = units.image_info(service)
+    info = (info_of or fresh_info)(service)
     try:
         if isinstance(info, units.ImageInfo):
             return units.frame_from_info(info)
@@ -204,8 +217,9 @@ def _pending_digests(stamped, unresolved):
 def stamp_instance(instance, holders):
     """Stamp the zones of *instance* in place; return ``{(node id, user id or None, feature id): geometry digest}`` to resolve on commit.
 
-    *holders* is ``holders(instance)``. The previous row is read once. A value
-    of an unexpected shape is skipped; a database error is not caught.
+    *holders* is ``holders(instance)``. The previous row is read once, and the
+    kept frame of each image service is looked up once. A value of an
+    unexpected shape is skipped; a database error is not caught.
     """
     nodes = annotation_nodes(instance, holders)
     if not nodes:
@@ -217,6 +231,13 @@ def stamp_instance(instance, holders):
     )
     previous = frames.PreviousFeatures(*(row if row else ({}, None)))
     trusted = frames.is_trusted()
+    known = {}
+
+    def frame_for(service):
+        if service not in known:
+            known[service] = known_frame(service)
+        return known[service]
+
     data, edits, pending = instance.data, instance.provisionaledits, {}
     for user_id, values in holders:
         for node_id, collection in values.items():
@@ -224,7 +245,7 @@ def stamp_instance(instance, holders):
                 continue
             try:
                 stamped, unresolved = frames.stamp_collection(
-                    collection, previous, node_id, known_frame, trusted
+                    collection, previous, node_id, frame_for, trusted
                 )
                 digests = _pending_digests(stamped, unresolved)
             except Exception:
@@ -287,7 +308,9 @@ def resolve_pending(tile_id, pending):
     *pending* maps ``(node id, provisional user id or None, feature id)`` to
     the geometry digest (``frames.geometry_digest``) the feature had when it
     was listed. The image of each feature is resolved first, under one
-    ``upstream_budget`` and no transaction (``frame_for_service``). The tile is
+    ``upstream_budget`` of ``IIIF_IMAGE_INFO_DEADLINE`` seconds (less when the
+    caller's budget has less left: the job holds the editor's request thread)
+    and no transaction (``frame_for_service``). The tile is
     then locked and re-read: a feature is stamped only when it is still there,
     still unstamped and still has that geometry; a feature edited meanwhile is
     left to its own save. The stamp reaches Elasticsearch at the tile's next
@@ -308,8 +331,10 @@ def resolve_pending(tile_id, pending):
         return 0
     data, edits = row
     resolved = {}
+    seconds = getattr(settings, "IIIF_IMAGE_INFO_DEADLINE", 6)
     ambient = current_budget()
-    seconds = RESOLVE_BUDGET if ambient is None else min(RESOLVE_BUDGET, ambient.left())
+    if ambient is not None:
+        seconds = min(seconds, ambient.left())
     with upstream_budget(seconds, kind="write"):
         for (node_id, user_id, fid), digest in pending.items():
             value = _value_of(data, edits, user_id)

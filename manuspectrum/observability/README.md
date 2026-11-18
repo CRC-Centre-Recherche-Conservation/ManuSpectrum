@@ -136,7 +136,8 @@ Metrics (`metrics.py`, a counter is exposed with the `_total` suffix):
 - Activity (`observability/activity.py`, refreshed hourly by `manuspectrum.record_activity` and at
   worker start): `manuspectrum_resources{model}`, `manuspectrum_resource_changes{model,kind}` (last
   24 hours), `manuspectrum_workflows{kind,state}`, `manuspectrum_annotation_zones{state}` (annotation zones stamped `measured`,
-  `estimated` or `unstamped`, `data` only; `state` from `ZONE_STATES`), `manuspectrum_activity_timestamp_seconds`. `model`
+  `estimated` or `unstamped`, `data` only; `state` from `ZONE_STATES`; read by the Activity panel « Annotation zones
+  without a measured frame »), `manuspectrum_activity_timestamp_seconds`. `model`
   comes from `RESOURCE_MODELS`, `kind` from `CHANGE_KINDS` (`cleaned` counts the resources deleted by the workflow cleanup, which `deleted` leaves out) or `WORKFLOW_KINDS`, `state` from
   `WORKFLOW_STATES`; anything else is `other`. The same module feeds `manage.py activity_summary
   --month YYYY-MM` (aggregates as JSON, read-only) for the monthly report.

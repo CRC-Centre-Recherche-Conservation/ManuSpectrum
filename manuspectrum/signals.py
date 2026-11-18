@@ -229,11 +229,7 @@ def stamp_annotation_frames(sender, instance, raw=False, update_fields=None, **k
         update_fields
     ):
         return
-    try:
-        holders = frame_writes.holders(instance)
-    except Exception:
-        logger.debug("tile holds no readable zones", exc_info=True)
-        return
+    holders = frame_writes.holders(instance)
     if not holders:
         return
     pending = frame_writes.stamp_instance(instance, holders)

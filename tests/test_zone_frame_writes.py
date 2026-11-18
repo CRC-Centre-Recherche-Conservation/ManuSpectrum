@@ -5,6 +5,7 @@ Usage:
 """
 
 import copy
+import time
 import uuid
 from types import SimpleNamespace
 from unittest import mock
@@ -24,7 +25,7 @@ from manuspectrum.utils.budget import current_budget, upstream_budget
 from manuspectrum.utils.cache import stable_cache_key
 
 from tests import test_manifest_registry as reg
-from tests.test_iiif_units import answered, info_json
+from tests.test_iiif_units import answered, info_json, later
 
 SERVICE = reg.SERVICE
 URL = reg.URL
@@ -57,7 +58,7 @@ def props_of(features, fid):
 
 
 def remember_info(service=SERVICE, size=(4913, 6609, 512)):
-    cache.set(stable_cache_key(units._INFO_PREFIX, service), size, 600)
+    cache.set(stable_cache_key(units._INFO_PREFIX, service), (*size, time.time()), 600)
 
 
 def in_a_request():
@@ -342,6 +343,65 @@ def bare_zone(fid):
     }
 
 
+@override_settings(IIIF_IMAGE_INFO_READ=True, IIIF_IMAGE_INFO_STAMP_MAX_AGE=3600)
+class StampFreshnessTests(ZoneFrameCase):
+    def read_once(self, width=4913, height=6609, tile=512):
+        self.fetch.side_effect = [answered(info_json(width, height, tile))]
+        units.image_info(SERVICE)
+        self.fetch.reset_mock()
+        self.fetch.side_effect = AssertionError("no request expected")
+
+    def test_a_read_within_the_bound_stamps_before_commit_without_a_request(self):
+        self.read_once()
+        with later(600):
+            tile, _ = self.write([zone("z1")])
+        self.assertEqual(self.stored(tile, "z1")["msFrame"], "read")
+        self.fetch.assert_not_called()
+
+    def test_a_read_older_than_the_bound_is_read_again_on_commit(self):
+        self.read_once()
+        with later(7200):
+            tile, callbacks = self.write([zone("z1")])
+            self.assertNotIn("msUnit", self.stored(tile, "z1"))
+            self.fetch.side_effect = [answered(info_json(4913, 6609, 1024))]
+            for callback in callbacks:
+                callback()
+            self.assertEqual(self.fetch.call_count, 1)
+            self.assertEqual(
+                {
+                    k: v
+                    for k, v in self.stored(tile, "z1").items()
+                    if k.startswith("ms")
+                },
+                Frame(8, 4913, 6609, "read").stamp(),
+            )
+            self.assertEqual(
+                units.known_info(SERVICE, max_age=3600),
+                units.ImageInfo(4913, 6609, 1024),
+            )
+
+    def test_a_read_older_than_the_bound_still_converts_reads(self):
+        self.read_once()
+        with later(7200):
+            self.assertEqual(units.zone_unit(SERVICE, 4913, 6609).x, 16)
+        self.fetch.assert_not_called()
+
+    def test_frame_for_service_reads_an_old_image_description_again(self):
+        self.read_once()
+        self.fetch.side_effect = [answered(info_json(4913, 6609, 1024))]
+        with later(7200):
+            frame = frame_writes.frame_for_service(SERVICE, URL, SERVICE)
+        self.assertEqual(frame, Frame(8, 4913, 6609, "read"))
+
+    def test_a_save_looks_up_each_image_once(self):
+        self.read_once()
+        spy = mock.patch.object(units, "known_info", wraps=units.known_info)
+        with spy as known:
+            tile, _ = self.write([zone("z1"), zone("z2", x=4.0), zone("z3", x=8.0)])
+        self.assertEqual(known.call_count, 1)
+        self.assertEqual(self.stored(tile, "z3")["msFrame"], "read")
+
+
 @override_settings(IIIF_IMAGE_INFO_READ=True)
 class FailClosedTests(ZoneFrameCase):
     def test_an_unhashable_feature_id_does_not_let_a_forged_stamp_through(self):
@@ -352,6 +412,13 @@ class FailClosedTests(ZoneFrameCase):
         with mock.patch.object(units, "known_info", side_effect=RuntimeError("cache")):
             tile, _ = self.write([zone("z1", stamp=FORGED), "junk", {"id": "q"}])
         self.assertNotIn("msUnit", self.stored(tile, "z1"))
+
+    def test_a_failure_reading_the_tile_values_fails_the_save(self):
+        broken = mock.patch.object(
+            frame_writes, "holders", side_effect=RuntimeError("shape")
+        )
+        with broken, self.assertRaisesRegex(RuntimeError, "shape"):
+            self.write([zone("z1", stamp=FORGED)])
 
     def test_a_failing_lookup_leaves_a_trusted_writers_stamps(self):
         with mock.patch.object(units, "known_info", side_effect=RuntimeError("cache")):
@@ -550,6 +617,21 @@ class ResolvePendingTests(ZoneFrameCase):
             with upstream_budget(5):
                 frame_writes.resolve_pending(str(tile.pk), pending)
         self.assertLessEqual(seen[0], 5)
+
+    @override_settings(IIIF_IMAGE_INFO_DEADLINE=6)
+    def test_the_budget_is_the_image_info_deadline(self):
+        feature = zone("z1")
+        tile, _ = self.write([feature], trusted=True)
+        seen = []
+
+        def spy(*args, **kwargs):
+            seen.append(current_budget().left())
+            return READ
+
+        pending = {self.key("z1"): self.digest(feature)}
+        with mock.patch.object(frame_writes, "frame_for_service", spy):
+            frame_writes.resolve_pending(str(tile.pk), pending)
+        self.assertLessEqual(seen[0], 6)
 
     def test_resolve_pending_reads_the_image_before_it_opens_the_transaction(self):
         feature = zone("z1")

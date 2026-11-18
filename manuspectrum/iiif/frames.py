@@ -37,7 +37,14 @@ _trusted = ContextVar("manuspectrum_trusted_zone_writes", default=False)
 
 @contextmanager
 def trusted_writes():
-    """Mark the writes of this block as a trusted writer's (import, package load, copy, command)."""
+    """Mark the tile saves of this block as a trusted writer's: valid incoming stamps are kept.
+
+    For an importer that saves tiles through ``Tile.save`` (or
+    ``TileModel.save``) inside a request with stamps it took from a trusted
+    source; outside any request every save is trusted already
+    (``is_trusted``). A guarded ``.update()``, as the ``annotation_frames``
+    command writes, fires no signal and needs no mark.
+    """
     token = _trusted.set(True)
     try:
         yield
@@ -110,7 +117,8 @@ def _rounded(value):
 def same_geometry(a, b):
     """True when two geometries have the same type and the same coordinates after ``leaflet_round``.
 
-    A geometry holding a bool, NaN or infinity equals nothing.
+    A geometry holding a bool, NaN, an infinity or a value ``leaflet_round``
+    refuses equals nothing.
     """
     try:
         return _rounded(a) == _rounded(b)
@@ -124,7 +132,8 @@ _INVALID_DIGEST = hashlib.sha1(b"invalid geometry").hexdigest()
 def geometry_digest(geometry):
     """sha1 hex of *geometry* normalised by ``leaflet_round``: equal for geometries ``same_geometry`` equates.
 
-    A geometry holding a bool, NaN or infinity gets one fixed sentinel digest.
+    A geometry holding a bool, NaN, an infinity or a value ``leaflet_round``
+    refuses gets one fixed sentinel digest.
     """
     try:
         text = json.dumps(_rounded(geometry), sort_keys=True, separators=(",", ":"))
@@ -199,7 +208,9 @@ def stamp_collection(new, previous, node_id, frame_for, trusted):
     Returns the collection and ``{feature id: service}`` of the features left
     to resolve. A feature without a usable id (``valid_id``) or without a canvas
     is never matched, stamped or listed: its stamp keys are dropped, except a
-    trusted writer's valid stamp on a feature without a usable id.
+    trusted writer's valid stamp on a feature without a usable id. Features of
+    one new collection sharing an id overwrite each other in the resolution
+    list: the last one listed names the service.
     """
     if not isinstance(new, dict) or not isinstance(new.get("features"), list):
         return new, {}

@@ -546,7 +546,8 @@ def iiif_viewer_problems(source):
     shorthand or a write, changes a layer's options after construction
     (`setOptions`, `mergeOptions`, any `.extend(` or `.defaults(`, `assign`
     into options, a write to `options` or one of its entries) or writes a
-    `crs`. Reading these options is allowed.
+    `crs`. Reading these options, directly or through a member
+    (`canvasLayer.options.maxNativeZoom`), is allowed.
     """
     problems = []
     source = strip_comments(source)
@@ -561,8 +562,9 @@ def iiif_viewer_problems(source):
     moving = sorted({m.group(0).strip() for m in UNIT_CHANGE.finditer(source)})
     if moving:
         problems.append(
-            REVISIT + f"iiif-viewer.js now writes {moving}: options of a layer that "
-            "move the unit, or the map's CRS, are set or changed there."
+            REVISIT + f"iiif-viewer.js now writes or may write {moving}: options "
+            "of a layer that move the unit, or the map's CRS, are set or changed "
+            "there (a `.extend(`, `.defaults(` or `assign` call may write them)."
         )
     if bare("crs: L.CRS.Simple") not in bare(source):
         problems.append(
@@ -769,6 +771,18 @@ class ZoneFrameContractTests(unittest.TestCase):
             "crs bracket write": "map.options['crs'] = L.CRS.EPSG3857;",
             "write between strings holding comment marks": (
                 "var g = 'image/*'; canvasLayer.options.zoomOffset = 1; var h = 'a*/b';"
+            ),
+            "write between double-quoted strings holding comment marks": (
+                'var g = "image/*"; canvasLayer.options.zoomOffset = 1; var h = "a*/b";'
+            ),
+            "write between template literals holding comment marks": (
+                "var g = `image/*`; canvasLayer.options.zoomOffset = 1; var h = `a*/b`;"
+            ),
+            "write after a double-quoted string holding a line comment mark": (
+                'var u = "http://x"; canvasLayer.options.zoomOffset = 1;'
+            ),
+            "write after a template literal holding a line comment mark": (
+                "var u = `http://${h}`; canvasLayer.options.zoomOffset = 1;"
             ),
             "write after a regex holding a quote": (
                 "var r = /'/; var u = '//'; canvasLayer.options.zoomOffset = 1;"

@@ -950,6 +950,27 @@ class AnnotationTargetGuardTests(TestCase):
         self.assertEqual(self._corner(tiles), [307.0625, -413.0625])
         self.assertEqual(self._frame_of(tiles), self.BIG_FRAME)
 
+    def test_a_kept_read_older_than_the_stamp_bound_is_read_again(self):
+        from manuspectrum.iiif import units
+        from manuspectrum.utils.http import FetchedResponse
+        from tests.test_iiif_units import later
+
+        kept = FetchedResponse(
+            "https://example.com/iiif/image/info.json", 200, {}, self.BIG
+        )
+        with (
+            self.settings(IIIF_IMAGE_INFO_READ=True),
+            patch("manuspectrum.iiif.units.safe_fetch", return_value=kept),
+        ):
+            units.image_info("https://example.com/iiif/image")
+        with later(7200):
+            tiles = self._build_read(
+                b'{"width": 4913, "height": 6609, "tiles": [{"width": 1024}]}',
+                canvas=("4913", "6609"),
+            )
+
+        self.assertEqual(self._frame_of(tiles)["msUnit"], 8)
+
     def test_an_absurd_image_size_writes_the_zone_unstamped(self):
         with self.assertLogs("manuspectrum.views.biblissima_proxy", "WARNING") as logs:
             tiles = self._build_read(

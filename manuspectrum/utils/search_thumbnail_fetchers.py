@@ -218,14 +218,14 @@ def _zone_region_url(annotation, manifests):
 
     Polygons and Points are accepted. The zone's canvas is found in its
     manifest by id or image service, and the region is asked of that canvas's
-    image service (the stored name when the canvas is unknown or has none),
-    in the pixels of that image (``_image_frame``), or of the frame stamped on the zone. A canvas missing from the
-    manifest is bounded when the zone is stamped or the stored service's
-    info.json is read. A
-    zone drawn outside a bounded image gives None, and so does a zone whose
-    manifest is neither http(s) nor local, whose coordinates cannot be read
-    or, for a Point, whose radius is not a number; those are refused before
-    any manifest or image description is read.
+    image service (the stored name when the canvas is unknown or has none), in
+    the pixels of the frame stamped on the zone, else of that image
+    (``_image_frame``). A canvas missing from the manifest is bounded when the
+    zone is stamped or the stored service's info.json is read. A zone drawn
+    outside a bounded image gives None, and so does a zone whose manifest is
+    neither http(s) nor local, whose coordinates cannot be read or, for a
+    Point, whose radius is not a number; those are refused before any manifest
+    or image description is read.
     """
     feature = annotation.feature if isinstance(annotation.feature, dict) else {}
     properties = feature.get("properties") or {}
@@ -257,10 +257,7 @@ def _zone_region_url(annotation, manifests):
 
     zoom, width, height = _image_frame(service, width, height, frame_of(feature))
     if width != sys.maxsize:
-        extent = _extent(geometry, radius, zoom)
-        if extent is None:
-            return None
-        xmin, ymin, xmax, ymax = extent
+        xmin, ymin, xmax, ymax = _extent(geometry, radius, zoom)
         if xmax <= 0 or ymax <= 0 or xmin >= width or ymin >= height:
             return None
     if geometry["type"] == "Polygon":

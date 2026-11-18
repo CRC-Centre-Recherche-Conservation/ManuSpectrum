@@ -42,7 +42,11 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
 import type { VueWrapper } from "@vue/test-utils";
-import type { DocumentPayload } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
+import type {
+    DocumentPayload,
+    Shape,
+    ZoneUnit,
+} from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { LinkedSelection } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedSelection.ts";
 
 vi.hoisted(() => {
@@ -359,6 +363,56 @@ describe("FolioTool", () => {
         expect(width).toBeGreaterThan(Number.parseFloat(narrow.style.width));
         expect(wide.style.marginLeft).toBe(`${-width / 2}px`);
         expect(narrow.style.width).toBe("28px");
+    });
+
+    it("places a measured zone by the frame of the live layer, an unmeasured one by its own unit", async () => {
+        iiif = stubIiifLayer({ size: { w: 4000, h: 6000 } });
+        const sized = iiif.getMockImplementation() as (url: string) => object;
+        iiif.mockImplementation((infoUrl: string) =>
+            Object.assign(sized(infoUrl), { x: 4000, y: 6000 }),
+        );
+        const [first] = DOCUMENT.analyses;
+        const placed = (n: number, shape: Shape, unit: ZoneUnit | null) => ({
+            ...first,
+            id: uuid(n),
+            zones: [{ canvas: 0, unit, shape, feature: `f${n}` }],
+        });
+        const box = { type: "rect", x: 1600, y: 800, w: 320, h: 160 } as const;
+        fetchMock.mockImplementation(async () =>
+            jsonResponse({
+                ...DOCUMENT,
+                canvases: DOCUMENT.canvases.map((canvas, index) =>
+                    index === 0
+                        ? { ...canvas, zoneUnit: { x: 16, y: 16, read: false } }
+                        : canvas,
+                ),
+                analyses: [
+                    placed(101, { type: "point", x: 0, y: 0 }, null),
+                    placed(102, box, null),
+                    placed(103, box, { x: 8, y: 8, read: false }),
+                ],
+            }),
+        );
+        const view = await mountTool(
+            new Map([
+                [uuid(101), [0]],
+                [uuid(102), [1]],
+                [uuid(103), [2]],
+            ]),
+        );
+        await flushPromises();
+        const left = (text: string) =>
+            Number.parseFloat(
+                (
+                    view
+                        .findAll(".folio-tool-marker-host")
+                        .find((host) => host.text() === text)!
+                        .element as HTMLElement
+                ).style.left,
+            );
+        const origin = left("A1");
+        // The live layer: 4000 px served at maxNativeZoom 5, 32 px per unit; the unmeasured zone keeps 8.
+        expect((left("A3") - origin) / (left("A2") - origin)).toBeCloseTo(4, 2);
     });
 
     it("shows another canvas when it is picked, without reading the document again", async () => {

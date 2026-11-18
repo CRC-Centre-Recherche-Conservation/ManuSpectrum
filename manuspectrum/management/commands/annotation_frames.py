@@ -5,10 +5,13 @@ provisional edits not counted) and lists the images of the unstamped zones of
 ``data``; it reads the database only. ``stamp`` gives each unstamped zone the
 frame it was drawn in (``frames.STAMP_KEYS``). A feature of the Biblissima
 import's location node (``COMP_LOCATION_DOC_NODE``) that is the whole-page
-rectangle the import wrote before stamping existed gets ``import-legacy``; any
+rectangle the import wrote before stamping existed, at any power-of-two unit
+(32 before 1.0.3, the read or assumed unit since), gets ``import-legacy``; any
 other zone gets ``frame_writes.frame_for_service`` of its image, one call per
 distinct image service and manifest, the registered manifests loaded once per
-run. An image that cannot be read is skipped and listed. A zone already
+run. Each image description is read at most once per run, again over the
+network unless this server read it within ``IIIF_IMAGE_INFO_STAMP_MAX_AGE``
+seconds. An image that cannot be read is skipped and listed. A zone already
 carrying a valid stamp is never touched.
 
 ``stamp`` is dry by default; the dry run reads image descriptions over the
@@ -27,7 +30,12 @@ journal, ``{tile, node, provisional, feature, canvas, digest, before, after}``:
 ``frames.geometry_digest`` and ``provisional`` the user id of a provisional
 edit, or null for the tile's ``data``. The journal line is written and
 fsynced inside the transaction, after the update, so a failed journal write
-rolls the batch back.
+rolls the batch back. The lines of a batch whose COMMIT itself failed stay in
+the journal: ``unstamp`` lists them « changed since » and leaves them alone.
+The guarded ``.update()`` fires no ``Tile`` signal. A full ``Tile.save`` that
+read the tile before a batch committed can write its own copy back over the
+stamp; the zone then follows that save's own stamping rule
+(``frames.stamp_collection``).
 
 ``unstamp --journal PATH`` puts every ``before`` back, only where the zone's
 canvas, geometry digest and properties still equal the journaled ones; a zone
@@ -41,7 +49,7 @@ import errno
 import json
 import logging
 import os
-import sys
+import shlex
 import uuid
 from collections import Counter, defaultdict
 from types import SimpleNamespace
@@ -60,7 +68,6 @@ from manuspectrum.views.explorer.values import rewrite_legacy_url
 logger = logging.getLogger(__name__)
 
 LEGACY_SIZE = (4000, 5000)
-LEGACY_UNIT = 32
 BATCH = 200
 
 
@@ -107,7 +114,9 @@ def _legacy_frame(feature, node_id, plan):
 
     The page is the registered canvas size, else the import's 4000 x 5000
     default, else the size of the image description (read once per image
-    service); a size no ``Frame`` accepts is passed over.
+    service); a size no ``Frame`` accepts is passed over. The unit is the
+    power of two at which that page is exactly the stored rectangle
+    (``whole_page``, compared by ``frames.same_geometry``).
     """
     if node_id != COMP_LOCATION_DOC_NODE:
         return None
@@ -124,15 +133,17 @@ def _legacy_frame(feature, node_id, plan):
 
 
 def _page_frame(feature, width, height):
-    try:
-        frame = Frame(LEGACY_UNIT, width, height, "import-legacy")
-    except ValueError:
-        return None
-    return (
-        frame
-        if frames.same_geometry(feature.get("geometry"), whole_page(frame))
-        else None
-    )
+    """The ``import-legacy`` frame of a *width* x *height* page whose whole-page rectangle at some unit is *feature*'s geometry, or None."""
+    unit = 1
+    while unit <= units.MAX_UNIT:
+        try:
+            frame = Frame(unit, width, height, "import-legacy")
+        except ValueError:
+            return None
+        if frames.same_geometry(feature.get("geometry"), whole_page(frame)):
+            return frame
+        unit *= 2
+    return None
 
 
 class Plan:
@@ -143,24 +154,28 @@ class Plan:
         self.entries = defaultdict(list)
         self.frames = {}
         self.size_of = frame_writes.size_lookup()
-        self._infos = {}
+        self._reads = {}
         self.skipped = Counter()
         self.stamped = Counter()
         self.already = 0
         self.unusable = 0
 
+    def read(self, service):
+        """``frame_writes.fresh_info`` of *service*, once per run."""
+        if service not in self._reads:
+            self._reads[service] = frame_writes.fresh_info(service)
+        return self._reads[service]
+
     def info(self, service):
-        """The ``ImageInfo`` of *service*, read once per run, or None."""
-        if service not in self._infos:
-            found = units.image_info(service)
-            self._infos[service] = found if isinstance(found, units.ImageInfo) else None
-        return self._infos[service]
+        """The ``ImageInfo`` of *service* (``read``), or None."""
+        found = self.read(service)
+        return found if isinstance(found, units.ImageInfo) else None
 
     def frame(self, service, manifest):
         key = (service, manifest)
         if key not in self.frames:
             self.frames[key] = frame_writes.frame_for_service(
-                service, manifest, service, size_of=self.size_of
+                service, manifest, service, size_of=self.size_of, info_of=self.read
             )
         return self.frames[key]
 
@@ -544,7 +559,7 @@ class Command(BaseCommand):
         if apply_changes and not journal_path:
             raise CommandError("--apply needs --journal PATH (a new file)")
         journal = open_journal(journal_path) if apply_changes else None
-        written = 0
+        written, failed = 0, False
         try:
             nodes = annotation_nodes()
             plan = plan_stamps(nodes, service)
@@ -552,22 +567,19 @@ class Command(BaseCommand):
             if apply_changes and plan.entries:
                 items = list(plan.entries.items())
                 size = options["batch"]
-                with frames.trusted_writes():
-                    for start in range(0, len(items), size):
-                        try:
-                            written += apply_batch(items[start : start + size], journal)
-                        except OSError as error:
-                            raise CommandError(
-                                f"journal write failed: {error}"
-                            ) from error
+                for start in range(0, len(items), size):
+                    try:
+                        written += apply_batch(items[start : start + size], journal)
+                    except OSError as error:
+                        raise CommandError(f"journal write failed: {error}") from error
+        except BaseException:
+            failed = True
+            raise
         finally:
             if journal is not None:
                 kept = _close_journal(journal, journal_path)
-                if kept and sys.exc_info()[0] is not None:
-                    self.stderr.write(
-                        f"The run stopped; the journal {journal_path} was kept. To undo what it "
-                        f"records: annotation_frames unstamp --journal {journal_path} --apply"
-                    )
+                if kept and failed:
+                    self._stopped_note(journal_path)
         self._out("")
         if service:
             self._out(f"Only the zones of {service}.")
@@ -597,6 +609,18 @@ class Command(BaseCommand):
                 "and fills the image-info cache; it writes nothing else."
             )
             self._out("Pass --apply --journal PATH to write.")
+
+    def _stopped_note(self, journal_path):
+        """Tell where the journal of a stopped run is and how to undo it; never raises."""
+        path = shlex.quote(journal_path)
+        try:
+            self.stderr.write(
+                f"The run stopped; the journal {journal_path} was kept. To undo what it "
+                f"records, first run: annotation_frames unstamp --journal {path} "
+                "(dry run), then the same with --apply, then es reindex_database."
+            )
+        except Exception:
+            logger.warning("journal kept at %s", journal_path, exc_info=True)
 
     def _unstamp(self, options):
         grouped = read_journal(options["journal"], self.stderr.write)

@@ -6,6 +6,7 @@ Usage:
 
 import json
 import time
+from types import SimpleNamespace
 from unittest import mock
 
 import requests
@@ -15,12 +16,7 @@ from django.test import SimpleTestCase, override_settings
 from manuspectrum.iiif import memo, units
 from manuspectrum.iiif.frames import frame_of
 from manuspectrum.iiif.sources import canvas_index
-from manuspectrum.iiif.zones import (
-    FeatureRows,
-    canvas_and_convert,
-    canvas_and_shape,
-    first_zone,
-)
+from manuspectrum.iiif.zones import FeatureRows, canvas_and_convert, first_zone
 from manuspectrum.utils.budget import BudgetSpent, upstream_budget
 from manuspectrum.utils.http import FetchedResponse, UnsafeURLError
 
@@ -269,6 +265,69 @@ class ImageInfoTests(UnitCase):
         self.assertIs(other.kwargs["throttle"], True)
 
 
+def later(seconds):
+    """The clock of ``units`` moved *seconds* ahead."""
+    real = time.time
+    clock = SimpleNamespace(time=lambda: real() + seconds, monotonic=time.monotonic)
+    return mock.patch.object(units, "time", clock)
+
+
+class StampAgeTests(UnitCase):
+    def test_a_kept_read_older_than_max_age_is_read_again_and_replaced(self):
+        self.serve(info_json(4913, 6609, 512), info_json(4913, 6609, 1024))
+        units.image_info(SERVICE)
+        with later(7200):
+            self.assertEqual(
+                units.image_info(SERVICE, max_age=3600),
+                units.ImageInfo(4913, 6609, 1024),
+            )
+            self.assertEqual(
+                units.known_info(SERVICE, max_age=3600),
+                units.ImageInfo(4913, 6609, 1024),
+            )
+        self.assertEqual(self.fetch.call_count, 2)
+
+    def test_a_kept_read_within_max_age_is_not_read_again(self):
+        self.serve(info_json(4913, 6609, 512))
+        units.image_info(SERVICE)
+        with later(600):
+            self.assertEqual(
+                units.image_info(SERVICE, max_age=3600),
+                units.ImageInfo(4913, 6609, 512),
+            )
+        self.assertEqual(self.fetch.call_count, 1)
+
+    def test_without_max_age_an_old_read_is_still_answered(self):
+        self.serve(info_json(4913, 6609, 512))
+        units.image_info(SERVICE)
+        with later(7200):
+            self.assertEqual(
+                units.image_info(SERVICE), units.ImageInfo(4913, 6609, 512)
+            )
+            self.assertEqual(
+                units.known_info(SERVICE), units.ImageInfo(4913, 6609, 512)
+            )
+            self.assertIsNone(units.known_info(SERVICE, max_age=3600))
+        self.assertEqual(self.fetch.call_count, 1)
+
+    def test_a_kept_refusal_or_host_down_answers_without_a_request(self):
+        self.serve(answered(b"", status=404), answered(b"", status=503))
+        units.image_info(SERVICE)
+        units.image_info(OTHER)
+        with later(7200):
+            self.assertEqual(units.image_info(SERVICE, max_age=0), units.REFUSED)
+        self.assertEqual(units.image_info(OTHER, max_age=0), units.UNAVAILABLE)
+        self.assertEqual(self.fetch.call_count, 2)
+
+    def test_an_entry_without_its_fetch_time_counts_as_not_kept(self):
+        key = units.stable_cache_key(units._INFO_PREFIX, SERVICE)
+        cache.set(key, (4913, 6609, 512), 600)
+        self.assertIsNone(units.known_info(SERVICE))
+        self.serve(info_json(4913, 6609, 512))
+        self.assertEqual(units.image_info(SERVICE), units.ImageInfo(4913, 6609, 512))
+        self.assertEqual(self.fetch.call_count, 1)
+
+
 class ZoneUnitTests(UnitCase):
     def test_a_stored_unit_is_two_to_the_native_zoom_in_image_pixels(self):
         for width, height, tile, scale in (
@@ -326,6 +385,17 @@ class ZoneUnitTests(UnitCase):
         with override_settings(IIIF_OWN_IMAGE_TILE=256):
             self.assertEqual(units.assumed_unit(4913, 6609, own).x, 32)
 
+    def test_unit_of_info_is_the_rule_of_a_read_unit(self):
+        info = units.ImageInfo(4913, 6609, 512)
+        unit = units.unit_of_info(info, 1000, 1345)
+        self.assertAlmostEqual(unit.x, 16 * 1000 / 4913)
+        self.assertAlmostEqual(unit.y, 16 * 1345 / 6609)
+        self.assertEqual((unit.read, unit.width, unit.height), (True, 1000, 1345))
+        whole = units.unit_of_info(info, 0, 0)
+        self.assertEqual(
+            (whole.x, whole.y, whole.width, whole.height), (16, 16, 4913, 6609)
+        )
+
     def test_a_canvas_without_a_service_is_assumed_without_a_request(self):
         unit = units.zone_unit(None, 4913, 6609)
         self.assertEqual((unit.x, unit.read), (32, False))
@@ -347,7 +417,8 @@ class ZoneUnitTests(UnitCase):
 class ZoneConversionTests(UnitCase):
     def shape(self, geometry, listed=None, stored=SERVICE):
         dims = canvas_index(listed if listed is not None else [canvas()])
-        return canvas_and_shape(feature(geometry, stored), dims)
+        found, convert = canvas_and_convert(feature(geometry, stored), dims)
+        return (found, convert()[0]) if convert else ("", None)
 
     def test_a_zone_is_in_true_pixels_at_every_scale(self):
         for width, height, tile, scale in (

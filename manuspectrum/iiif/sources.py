@@ -323,7 +323,8 @@ class CanvasIndex(dict):
     def note_unit(self, canvas, unit):
         """Record the *unit* a stamped zone on *canvas* (a canvas id) was converted with, without reading the image.
 
-        A unit read for the canvas wins over a unit noted from a stamp.
+        A unit taken from the canvas's image description (or assumed when it
+        was not read) wins over a unit noted from a stamp.
         """
         self._read.note(canvas, unit)
 

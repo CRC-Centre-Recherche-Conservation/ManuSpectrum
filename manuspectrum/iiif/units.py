@@ -21,7 +21,8 @@ The conversion holds for the tiling served when the zone was drawn:
 re-encoding an image or changing Cantaloupe's tile size moves its existing
 unstamped zones, and the drawing of ``estimated`` ones over the live layer (a
 measured frame keeps its place); a read is kept
-``IIIF_IMAGE_INFO_CACHE_TTL`` seconds.
+``IIIF_IMAGE_INFO_CACHE_TTL`` seconds for reading zones, and a frame is stamped
+only from a read at most ``IIIF_IMAGE_INFO_STAMP_MAX_AGE`` seconds old.
 
 A ``Frame`` is the image frame a zone was drawn in, stamped on the zone: its
 unit and the image size it was measured against, so its pixel position no
@@ -239,10 +240,31 @@ def _parsed(response):
     return ImageInfo(int(width), int(height), tile_width(info))
 
 
-def image_info(service, deadline=None):
+def _kept(held, max_age):
+    """The ``ImageInfo`` of a positive cache entry *held* (width, height, tile, fetch time), or None.
+
+    None as well for an entry older than *max_age* seconds, or of another shape.
+    """
+    if not (isinstance(held, (tuple, list)) and len(held) == 4):
+        return None
+    width, height, tile, fetched = held
+    if max_age is not None and time.time() - fetched > max_age:
+        return None
+    return ImageInfo(width, height, tile)
+
+
+def stamp_max_age():
+    """The age in seconds past which a kept image description is read again before a frame is stamped from it."""
+    return _setting("IIIF_IMAGE_INFO_STAMP_MAX_AGE", 3600)
+
+
+def image_info(service, deadline=None, max_age=None):
     """``ImageInfo`` of the image service *service*, ``REFUSED`` or ``UNAVAILABLE``.
 
-    A read is kept ``IIIF_IMAGE_INFO_CACHE_TTL`` seconds. ``REFUSED`` is an
+    A read is kept ``IIIF_IMAGE_INFO_CACHE_TTL`` seconds with its fetch time;
+    with *max_age* a kept read older than *max_age* seconds is read again (the
+    new read replaces it), while a kept ``REFUSED`` or a host noted down still
+    answers without a request. ``REFUSED`` is an
     answer that will not change soon, kept ``IIIF_IMAGE_INFO_REFUSED_TTL``
     seconds: for the whole host after a 403 (a host that blocks servers is
     asked once per period, not once per image), for the one service after any
@@ -263,8 +285,11 @@ def image_info(service, deadline=None):
         return REFUSED
     key = stable_cache_key(_INFO_PREFIX, service)
     held = cache.get(key)
-    if held is not None:
-        return ImageInfo(*held) if held else REFUSED
+    if held is False:
+        return REFUSED
+    kept = _kept(held, max_age)
+    if kept is not None:
+        return kept
     host = cache.get(_host_key(service))
     if host is not None:
         return host
@@ -315,19 +340,21 @@ def image_info(service, deadline=None):
         return REFUSED
     cache.set(
         key,
-        (info.width, info.height, info.tile),
+        (info.width, info.height, info.tile, time.time()),
         _setting("IIIF_IMAGE_INFO_CACHE_TTL", 7 * 24 * 3600),
     )
     return info
 
 
-def known_info(service):
-    """The kept ``ImageInfo`` of *service*, or None: the cache is read, nothing is requested and no host is noted."""
+def known_info(service, max_age=None):
+    """The kept ``ImageInfo`` of *service*, or None: the cache is read, nothing is requested and no host is noted.
+
+    With *max_age*, a read older than *max_age* seconds counts as not kept.
+    """
     service = (service or "").rstrip("/")
     if not service:
         return None
-    held = cache.get(stable_cache_key(_INFO_PREFIX, service))
-    return ImageInfo(*held) if held else None
+    return _kept(cache.get(stable_cache_key(_INFO_PREFIX, service)), max_age)
 
 
 def _hinted_tile(service):
@@ -363,6 +390,25 @@ def frame_assumed(service, width, height):
     return Frame(unit, width, height, ESTIMATED)
 
 
+def unit_of_info(info, width, height):
+    """``ZoneUnit`` of a canvas of *width* x *height* whose image is described by *info*.
+
+    One stored unit is ``2 ** native_zoom`` image pixels, brought to canvas
+    pixels by the ratio of the two sizes on each axis; a size that is not
+    positive counts as unknown and the image's size stands for the canvas'.
+    """
+    scale = 2 ** native_zoom(info.width, info.height, info.tile)
+    if not (width > 0 and height > 0):
+        width, height = info.width, info.height
+    return ZoneUnit(
+        scale * width / info.width,
+        scale * height / info.height,
+        True,
+        width,
+        height,
+    )
+
+
 def unit_of_frame(frame, canvas_width, canvas_height):
     """``ZoneUnit`` of a canvas of *canvas_width* x *canvas_height* for a zone drawn in *frame*.
 
@@ -386,23 +432,13 @@ def unit_of_frame(frame, canvas_width, canvas_height):
 def zone_unit(service, width, height, deadline=None):
     """``ZoneUnit`` of a canvas of *width* x *height* whose image is served by *service* (None without one).
 
-    With the info.json read, one stored unit is ``2 ** native_zoom`` image
-    pixels, brought to canvas pixels by the ratio of the two sizes on each
-    axis. Otherwise the unit is assumed (``assumed_unit``); a failed read
-    marks the IIIF memo build degraded, a refusal does not.
+    With the info.json read, the unit is ``unit_of_info``. Otherwise it is
+    assumed (``assumed_unit``); a failed read marks the IIIF memo build
+    degraded, a refusal does not.
     """
     info = image_info(service, deadline) if service else REFUSED
     if isinstance(info, ImageInfo):
-        scale = 2 ** native_zoom(info.width, info.height, info.tile)
-        if not (width > 0 and height > 0):
-            width, height = info.width, info.height
-        return ZoneUnit(
-            scale * width / info.width,
-            scale * height / info.height,
-            True,
-            width,
-            height,
-        )
+        return unit_of_info(info, width, height)
     if info == UNAVAILABLE:
         memo.mark_degraded()
     return assumed_unit(width, height, service)
@@ -428,11 +464,12 @@ class UnitReader:
     def note(self, canvas, unit):
         """Record the *unit* a stamped zone was converted with.
 
-        The first one noted stands; a unit read for the canvas wins over a unit
-        noted from a stamp in ``used``.
+        The first one noted stands; in ``used``, a unit taken from the canvas's
+        image description (or assumed when it was not read) wins over a unit
+        noted from a stamp.
         """
         self._noted.setdefault(canvas, unit)
 
     def used(self, canvas):
-        """The unit given for *canvas* so far (read, else noted by a stamped zone), or None."""
+        """The unit given for *canvas* so far (taken from its image description or assumed, else noted from a stamp), or None."""
         return self._units.get(canvas) or self._noted.get(canvas)

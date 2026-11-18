@@ -108,13 +108,13 @@ from manuspectrum.iiif.frames import leaflet_round
 from manuspectrum.iiif.units import (
     REFUSED,
     ImageInfo,
-    ZoneUnit,
     assumed_unit,
     frame_assumed,
     frame_from_info,
     image_info,
-    native_zoom,
+    stamp_max_age,
     unit_of_frame,
+    unit_of_info,
 )
 from manuspectrum.observability import metrics
 from manuspectrum.utils.budget import (
@@ -269,22 +269,6 @@ def _get_biblissima_session():
 # gunicorn worker holds its own semaphore, so the upstream sees at most
 # _BIBLISSIMA_CONCURRENCY_LIMIT × workers calls at once.
 _biblissima_semaphore = threading.BoundedSemaphore(_BIBLISSIMA_CONCURRENCY_LIMIT)
-
-
-_MAX_CANVAS_SIDE = 10**9
-
-
-def _canvas_side(value, default):
-    """A canvas side in pixels: *value* when it is a positive whole number, else *default*."""
-    if isinstance(value, bool):
-        return default
-    try:
-        if isinstance(value, float) and not value.is_integer():
-            return default
-        side = int(value)
-    except (TypeError, ValueError, OverflowError):
-        return default
-    return side if 0 < side <= _MAX_CANVAS_SIDE else default
 
 
 class BiblissimaBusy(Exception):
@@ -3602,6 +3586,22 @@ class BiblissimaIlluminationDetailView(View):
         return _budgeted_answer(result, budget)
 
 
+_MAX_CANVAS_SIDE = 10**9
+
+
+def _canvas_side(value, default):
+    """A canvas side in pixels: *value* when it is a positive whole number, else *default*."""
+    if isinstance(value, bool):
+        return default
+    try:
+        if isinstance(value, float) and not value.is_integer():
+            return default
+        side = int(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    return side if 0 < side <= _MAX_CANVAS_SIDE else default
+
+
 @method_decorator(
     group_required("Resource Editor", raise_exception=True), name="dispatch"
 )
@@ -4965,9 +4965,8 @@ class BiblissimaCreateResourceView(View):
         Iconographic representation  one tile per ``descriptorLinks[i]``: ``url = desc ARK``, ``url_label = label``
         Period                       ``date`` → century concept + medieval production period
         Production                   ``date``, ``deps["productionPlace"]``, ``deps["productionActors"]``
-        Location in Document         whole-page Polygon: the image extent in stored units when its
-                                     description is read, else the canvas size from
-                                     ``canvasWidth/canvasHeight`` (fallback 4000×5000);
+        Location in Document         whole-page Polygon: the canvas size in stored units
+                                     (``canvasWidth/canvasHeight``, fallback 4000×5000);
                                      ``folio`` → Location appellation
         ============================ =========================================================================
 
@@ -4977,9 +4976,10 @@ class BiblissimaCreateResourceView(View):
         The whole-page zone is stamped with its image frame (``Frame.stamp``):
         read from the image service's info.json, else estimated. The read runs
         while the tiles are built, before the write transaction opens, under
-        the item's write budget (``BIBLISSIMA_WRITE_ITEM_DEADLINE``), and is
-        kept by ``image_info``; a size no ``Frame`` accepts writes the zone
-        unstamped.
+        the item's write budget (``BIBLISSIMA_WRITE_ITEM_DEADLINE``); a read
+        kept by ``image_info`` serves when it is at most
+        ``IIIF_IMAGE_INFO_STAMP_MAX_AGE`` seconds old. A size no ``Frame``
+        accepts writes the zone unstamped.
         """
         i18n = self._i18n_string
         clist = self._concept_list
@@ -5232,7 +5232,7 @@ class BiblissimaCreateResourceView(View):
             # the image layer its viewer draws (y upwards): the zone carries
             # the frame (unit and image size) it is written in.
             service = bbma_data.get("imageServiceUrl")
-            info = image_info(service) if service else REFUSED
+            info = image_info(service, max_age=stamp_max_age()) if service else REFUSED
             stamp = {}
             try:
                 if isinstance(info, ImageInfo):
@@ -5247,12 +5247,7 @@ class BiblissimaCreateResourceView(View):
                     urlsplit(service or "").netloc or "?",
                 )
                 if isinstance(info, ImageInfo):
-                    scale = 2 ** native_zoom(info.width, info.height, info.tile)
-                    unit = ZoneUnit(
-                        scale * width / info.width,
-                        scale * height / info.height,
-                        True,
-                    )
+                    unit = unit_of_info(info, width, height)
                 else:
                     unit = assumed_unit(width, height, service)
             unit_x, unit_y, read = unit.x, unit.y, unit.read

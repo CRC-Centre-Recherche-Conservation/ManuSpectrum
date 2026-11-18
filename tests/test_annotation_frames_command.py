@@ -8,6 +8,7 @@ import copy
 import errno
 import json
 import os
+import shlex
 import tempfile
 import uuid
 from io import StringIO
@@ -26,13 +27,13 @@ from arches.app.models.models import (
 )
 
 from manuspectrum.constants.biblissima import COMP_LOCATION_DOC_NODE
-from manuspectrum.iiif import frame_writes, frames
+from manuspectrum.iiif import frame_writes, frames, units
 from manuspectrum.management.commands import annotation_frames
 from manuspectrum.utils.data_version import data_version
 
 from tests import test_manifest_registry as reg
 from tests.test_iiif_units import answered, info_json
-from tests.test_zone_frame_writes import collection, sized_manifest, zone
+from tests.test_zone_frame_writes import collection, later, sized_manifest, zone
 
 SERVICE = reg.SERVICE
 URL = reg.URL
@@ -41,8 +42,8 @@ DOWN_SERVICE = "https://down.example/iiif/b3/page1"
 LEGACY_SERVICE = "https://legacy.example/iiif/b4/page1"
 
 
-def rectangle(width, height):
-    w, h = width / 32, height / 32
+def rectangle(width, height, unit=32):
+    w, h = width / unit, height / unit
     return {
         "type": "Polygon",
         "coordinates": [[[0, 0], [w, 0], [w, -h], [0, -h], [0, 0]]],
@@ -609,6 +610,76 @@ class LegacyFromImageTests(AnnotationFramesCase):
         )
 
 
+class LegacyUnitTests(AnnotationFramesCase):
+    def page_tile(self, geometry, canvas, manifest):
+        feature = zone("w", canvas=canvas, manifest=manifest)
+        feature["geometry"] = geometry
+        return self.tile(feature, node=COMP_LOCATION_DOC_NODE)
+
+    def frame(self, tile):
+        props = self.props(tile, "w", COMP_LOCATION_DOC_NODE)
+        return {k: v for k, v in props.items() if k.startswith("ms")}
+
+    def test_a_whole_page_at_the_read_unit_is_legacy(self):
+        tile = self.page_tile(
+            rectangle(4913, 6609, unit=16), READ_SERVICE, "https://m.example/none"
+        )
+        self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertEqual(
+            self.frame(tile), units.Frame(16, 4913, 6609, "import-legacy").stamp()
+        )
+
+    def test_a_whole_page_at_an_assumed_unit_of_the_registered_canvas_is_legacy(self):
+        tile = self.page_tile(rectangle(4000, 3000, unit=16), SERVICE, URL)
+        self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertEqual(
+            self.frame(tile), units.Frame(16, 4000, 3000, "import-legacy").stamp()
+        )
+
+    @override_settings(IIIF_IMAGE_TILE_HINTS={"legacy.example": 1024})
+    def test_a_whole_page_at_an_assumed_unit_of_the_default_size_is_legacy(self):
+        tile = self.page_tile(
+            rectangle(4000, 5000, unit=8), LEGACY_SERVICE, "https://m.example/x"
+        )
+        self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertEqual(
+            self.frame(tile), units.Frame(8, 4000, 5000, "import-legacy").stamp()
+        )
+
+    def test_a_rectangle_that_fits_one_side_only_is_not_legacy(self):
+        geometry = rectangle(4000, 3000, unit=16)
+        geometry["coordinates"][0][2][1] = geometry["coordinates"][0][3][1] = -100
+        tile = self.page_tile(geometry, SERVICE, URL)
+        self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertEqual(self.frame(tile)["msFrame"], "estimated")
+
+
+class StampAgeTests(AnnotationFramesCase):
+    def test_an_image_description_older_than_the_bound_is_read_again(self):
+        tile = self.tile(zone("a", canvas=READ_SERVICE))
+        units.image_info(READ_SERVICE)
+        with later(7200):
+            self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertEqual(len(self.calls(READ_SERVICE)), 2)
+        self.assertEqual(self.props(tile, "a")["msFrame"], "read")
+
+    def test_an_image_description_within_the_bound_is_reused(self):
+        self.tile(zone("a", canvas=READ_SERVICE))
+        units.image_info(READ_SERVICE)
+        with later(600):
+            self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertEqual(len(self.calls(READ_SERVICE)), 1)
+
+    @override_settings(IIIF_IMAGE_INFO_STAMP_MAX_AGE=-1)
+    def test_each_image_is_read_once_per_run_however_old_its_reads(self):
+        user = zone("u", x=9.0, canvas=READ_SERVICE)
+        odd = zone("w", canvas=READ_SERVICE, manifest="https://m.example/none")
+        self.tile(odd, user, node=COMP_LOCATION_DOC_NODE)
+        self.tile(zone("v", canvas=READ_SERVICE, manifest=URL))
+        self.run_command("stamp")
+        self.assertEqual(len(self.calls(READ_SERVICE)), 1)
+
+
 class JournalDurabilityTests(AnnotationFramesCase):
     def test_a_failure_after_a_commit_keeps_the_journal_of_the_committed_rows(self):
         tile = self.tile(zone("a", canvas=READ_SERVICE))
@@ -761,6 +832,63 @@ class UndoSafetyTests(AnnotationFramesCase):
                 )
         self.assertIn(self.journal, err.getvalue())
         self.assertIn("unstamp --journal", err.getvalue())
+
+    def stop(self, err, journal=None):
+        self.tile(zone("a", canvas=READ_SERVICE))
+        real = annotation_frames.apply_batch
+
+        def committed_then_lost(batch, fd):
+            real(batch, fd)
+            raise RuntimeError("interrupted")
+
+        with mock.patch.object(annotation_frames, "apply_batch", committed_then_lost):
+            call_command(
+                "annotation_frames",
+                "stamp",
+                "--apply",
+                "--journal",
+                journal or self.journal,
+                stdout=StringIO(),
+                stderr=err,
+            )
+
+    def test_the_undo_note_quotes_the_path_and_starts_with_the_dry_run(self):
+        journal = os.path.join(self.dir.name, "frames journal.jsonl")
+        err = StringIO()
+        with self.assertRaises(RuntimeError):
+            self.stop(err, journal)
+        note = err.getvalue()
+        quoted = f"unstamp --journal {shlex.quote(journal)} (dry run)"
+        self.assertIn(quoted, note)
+        self.assertLess(note.index("(dry run)"), note.index("--apply"))
+
+    def test_a_note_that_cannot_be_written_never_hides_the_error(self):
+        class Broken:
+            def write(self, text):
+                raise OSError(errno.EIO, "stderr gone")
+
+            def flush(self):
+                pass
+
+        with self.assertRaisesRegex(RuntimeError, "interrupted"):
+            self.stop(Broken())
+
+    def test_no_message_when_a_run_called_while_handling_an_error_ends_well(self):
+        self.tile(zone("a", canvas=READ_SERVICE))
+        err = StringIO()
+        try:
+            raise KeyError("outer")
+        except KeyError:
+            call_command(
+                "annotation_frames",
+                "stamp",
+                "--apply",
+                "--journal",
+                self.journal,
+                stdout=StringIO(),
+                stderr=err,
+            )
+        self.assertEqual(err.getvalue(), "")
 
     def test_no_message_when_the_run_ends_well(self):
         self.tile(zone("a", canvas=READ_SERVICE))
