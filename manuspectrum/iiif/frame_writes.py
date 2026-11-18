@@ -43,8 +43,8 @@ def known_frame(service):
         return None
 
 
-def _registered_canvas_size(manifest_url, stored_name):
-    """``(width, height)`` of the canvas *stored_name* names in the registered manifest *manifest_url*, or None.
+def _registered_index(manifest_url):
+    """The canvas index of the registered manifest *manifest_url*, or None.
 
     Reads the database only: a manifest that is not registered is not fetched.
     """
@@ -55,7 +55,7 @@ def _registered_canvas_size(manifest_url, stored_name):
     if not isinstance(manifest, dict):
         return None
     try:
-        return canvas_index(canvases_of(manifest)).size((stored_name or "").rstrip("/"))
+        return canvas_index(canvases_of(manifest))
     except Exception:
         logger.warning(
             "registered manifest unreadable: %s", manifest_url, exc_info=True
@@ -63,7 +63,38 @@ def _registered_canvas_size(manifest_url, stored_name):
         return None
 
 
-def frame_for_service(service, manifest_url, stored_name):
+def _size_in(index, stored_name):
+    if index is None:
+        return None
+    try:
+        return index.size((stored_name or "").rstrip("/"))
+    except Exception:
+        logger.warning("registered manifest canvas unreadable", exc_info=True)
+        return None
+
+
+def _registered_canvas_size(manifest_url, stored_name):
+    """``(width, height)`` of the canvas *stored_name* names in the registered manifest *manifest_url*, or None."""
+    return _size_in(_registered_index(manifest_url), stored_name)
+
+
+def size_lookup():
+    """A ``(manifest_url, stored_name) -> (width, height) | None`` that loads each registered manifest once.
+
+    The lookup keeps what it loaded (a manifest that is not registered
+    included): use one per batch run, not per process.
+    """
+    indexes = {}
+
+    def lookup(manifest_url, stored_name):
+        if manifest_url not in indexes:
+            indexes[manifest_url] = _registered_index(manifest_url)
+        return _size_in(indexes[manifest_url], stored_name)
+
+    return lookup
+
+
+def frame_for_service(service, manifest_url, stored_name, size_of=None):
     """The ``Frame`` of the image *service* a zone was stored under *stored_name* in the manifest *manifest_url*, or None.
 
     A readable info.json gives a ``read`` frame. A host that refuses this
@@ -71,14 +102,15 @@ def frame_for_service(service, manifest_url, stored_name):
     manifest row (never fetched); no such size, or a failed read, gives None.
     An info.json or a size no ``Frame`` accepts gives None. Reads the image
     description over the network when it is not kept: never call it inside a
-    transaction.
+    transaction. *size_of* replaces the lookup of the registered canvas size
+    (``size_lookup()``), for a caller that resolves many zones.
     """
     info = units.image_info(service)
     try:
         if isinstance(info, units.ImageInfo):
             return units.frame_from_info(info)
         if info == units.REFUSED:
-            size = _registered_canvas_size(manifest_url, stored_name)
+            size = (size_of or _registered_canvas_size)(manifest_url, stored_name)
             return units.frame_assumed(service, *size) if size else None
     except ValueError as exc:
         logger.debug("no frame for %s: %s", service, exc)

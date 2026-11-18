@@ -1,28 +1,39 @@
 """Check, stamp and unstamp the image frame of the annotation zones already stored.
 
-``check`` counts the zones per stamp state and lists the images of the
-unstamped ones; it reads the database only. ``stamp`` gives each unstamped
-zone the frame it was drawn in (``frames.STAMP_KEYS``): whole-page zones the
-Biblissima import wrote before stamping existed get ``import-legacy``; any
-other zone gets ``frame_writes.frame_for_service`` of its image, one read per
-distinct image service and manifest. An image that cannot be read is skipped
-and listed. A zone already carrying a valid stamp is never touched.
+``check`` counts the zones per stamp state (the gauge's counts: ``data`` only,
+provisional edits not counted) and lists the images of the unstamped zones of
+``data``; it reads the database only. ``stamp`` gives each unstamped zone the
+frame it was drawn in (``frames.STAMP_KEYS``). A feature of the Biblissima
+import's location node (``COMP_LOCATION_DOC_NODE``) that is the whole-page
+rectangle the import wrote before stamping existed gets ``import-legacy``; any
+other zone gets ``frame_writes.frame_for_service`` of its image, one call per
+distinct image service and manifest, the registered manifests loaded once per
+run. An image that cannot be read is skipped and listed. A zone already
+carrying a valid stamp is never touched.
 
-``stamp`` is dry by default. With ``--apply`` it writes by batches of tiles
-under ``transaction.atomic()``: the tiles are locked and re-read, and a zone is
-stamped only when it is still unstamped, on the same canvas and with the
-geometry it had when it was planned. The write is an ``.update()``: no edit
-log, no per-tile indexing, one ``es reindex_database`` at the end. Every
-changed zone is appended to a JSONL journal, ``{tile, node, provisional,
-feature, before, after}`` where ``before`` and ``after`` are the feature's
-``properties`` (``provisional`` is the user id of a provisional edit, or null
-for the tile's ``data``). The journal line is written inside the transaction,
-after the update, so a failed journal write rolls the batch back.
+``stamp`` is dry by default; the dry run reads image descriptions over the
+network (and fills the image-info cache) but writes nothing. With ``--apply``
+a ``--journal`` path is required and created (never overwritten) before
+anything is read; the file is removed again when nothing was written. The
+writes go by batches of tiles under ``transaction.atomic()``: the tiles are
+locked in primary-key order and re-read, and a zone is stamped only when it is
+still unstamped, on the same canvas and with the geometry it had when it was
+planned (a legacy zone is also still the whole-page rectangle). The write is an
+``.update()`` of the tile's ``data`` and ``provisionaledits`` (the whole
+value, as ``Tile.save`` writes it): no edit log, no per-tile indexing, one
+``es reindex_database`` at the end. Every changed zone is appended to a JSONL
+journal, ``{tile, node, provisional, feature, canvas, digest, before, after}``:
+``before`` and ``after`` are the feature's ``properties``, ``digest`` its
+``frames.geometry_digest`` and ``provisional`` the user id of a provisional
+edit, or null for the tile's ``data``. The journal line is written and
+fsynced inside the transaction, after the update, so a failed journal write
+rolls the batch back.
 
 ``unstamp --journal PATH`` puts every ``before`` back, only where the zone's
-current properties still equal the journaled ``after``; a zone changed since is
-listed and left alone. Restoring the whole ``properties`` object gives the
-stored ``data`` back byte for byte. Dry by default as well.
+canvas, geometry digest and properties still equal the journaled ones; a zone
+changed since is listed and left alone. Restoring the whole ``properties``
+object gives the stored ``data`` back value for value (jsonb keeps no key
+order). Dry by default as well.
 """
 
 import copy
@@ -30,7 +41,6 @@ import json
 import os
 import uuid
 from collections import Counter, defaultdict
-from datetime import datetime
 from types import SimpleNamespace
 
 from django.core.management.base import BaseCommand, CommandError
@@ -78,31 +88,35 @@ def collections_of(data, edits, nodes):
     return found
 
 
-def _legacy_frame(feature, collection, node_id):
-    """The ``import-legacy`` frame of a whole-page zone the Biblissima import wrote, or None."""
-    if node_id != COMP_LOCATION_DOC_NODE or len(collection["features"]) != 1:
+def whole_page(frame):
+    """The rectangle the Biblissima import wrote for a whole page of *frame*'s size."""
+    w, h = frame.width / frame.unit, frame.height / frame.unit
+    return {
+        "type": "Polygon",
+        "coordinates": [[[0, 0], [w, 0], [w, -h], [0, -h], [0, 0]]],
+    }
+
+
+def _legacy_frame(feature, node_id, size_of):
+    """The ``import-legacy`` frame of a whole-page zone the Biblissima import wrote, or None.
+
+    The page is the registered canvas size, else the import's 4000 x 5000
+    default; a size no ``Frame`` accepts is passed over.
+    """
+    if node_id != COMP_LOCATION_DOC_NODE:
         return None
-    props = feature["properties"]
-    manifest = props.get("manifest")
-    canvas = frames.canvas_of(feature)
-    sizes = []
-    registered = frame_writes._registered_canvas_size(
-        manifest if isinstance(manifest, str) else None, canvas
+    manifest = feature["properties"].get("manifest")
+    registered = size_of(
+        manifest if isinstance(manifest, str) else None, frames.canvas_of(feature)
     )
-    if registered:
-        sizes.append(tuple(registered))
-    sizes.append(LEGACY_SIZE)
+    sizes = ([tuple(registered)] if registered else []) + [LEGACY_SIZE]
     for width, height in sizes:
-        w, h = width / LEGACY_UNIT, height / LEGACY_UNIT
-        whole_page = {
-            "type": "Polygon",
-            "coordinates": [[[0, 0], [w, 0], [w, -h], [0, -h], [0, 0]]],
-        }
-        if frames.same_geometry(feature.get("geometry"), whole_page):
-            try:
-                return Frame(LEGACY_UNIT, width, height, "import-legacy")
-            except ValueError:
-                return None
+        try:
+            frame = Frame(LEGACY_UNIT, width, height, "import-legacy")
+        except ValueError:
+            continue
+        if frames.same_geometry(feature.get("geometry"), whole_page(frame)):
+            return frame
     return None
 
 
@@ -113,6 +127,7 @@ class Plan:
         self.service = service
         self.entries = defaultdict(list)
         self.frames = {}
+        self.size_of = frame_writes.size_lookup()
         self.skipped = Counter()
         self.stamped = Counter()
         self.already = 0
@@ -122,7 +137,7 @@ class Plan:
         key = (service, manifest)
         if key not in self.frames:
             self.frames[key] = frame_writes.frame_for_service(
-                service, manifest, service
+                service, manifest, service, size_of=self.size_of
             )
         return self.frames[key]
 
@@ -147,7 +162,8 @@ def plan_stamps(nodes, service=None):
                     continue
                 if plan.service and canvas != plan.service:
                     continue
-                frame = _legacy_frame(feature, collection, node_id)
+                frame = _legacy_frame(feature, node_id, plan.size_of)
+                legacy = frame is not None
                 if frame is None:
                     manifest = props.get("manifest")
                     frame = plan.frame(
@@ -164,33 +180,46 @@ def plan_stamps(nodes, service=None):
                         frames.geometry_digest(feature.get("geometry")),
                         canvas,
                         frame,
+                        legacy,
                     )
                 )
                 plan.stamped[frame.source] += 1
     return plan
 
 
-def _matching(value, node_id, fid, digest, canvas):
-    """The still-unstamped features of *value*'s collection *node_id* the plan entry names."""
+def _matching(value, node_id, fid, digest, canvas, legacy_frame):
+    """The still-unstamped features of *value*'s collection *node_id* the plan entry names.
+
+    A legacy entry (*legacy_frame* set) also needs the import's node and the
+    whole-page rectangle of that frame.
+    """
     return [
         f
         for f in frame_writes._features_of(value, node_id, fid, digest)
         if frames.canvas_of(f) == canvas
+        and (
+            legacy_frame is None
+            or (
+                node_id == COMP_LOCATION_DOC_NODE
+                and frames.same_geometry(f.get("geometry"), whole_page(legacy_frame))
+            )
+        )
     ]
 
 
 def apply_batch(batch, journal):
     """Stamp the planned zones of the tiles of *batch* (``[(tile id, entries)]``); return how many were written.
 
-    The tiles are locked and re-read; each journal line is flushed to disk
-    before the batch commits.
+    The tiles are locked and re-read; the journal lines are appended and
+    fsynced before the batch commits, and cut off again if that fails.
     """
-    written = 0
+    written, all_lines = 0, []
     with transaction.atomic():
         rows = {
             row[0]: row
             for row in TileModel.objects.select_for_update()
             .filter(pk__in=[tile_id for tile_id, _ in batch])
+            .order_by("pk")
             .values_list("tileid", "data", "provisionaledits")
         }
         for tile_id, entries in batch:
@@ -200,9 +229,11 @@ def apply_batch(batch, journal):
                 rows[tile_id][2]
             )
             lines, changes = [], {}
-            for node_id, user_id, fid, digest, canvas, frame in entries:
+            for node_id, user_id, fid, digest, canvas, frame, legacy in entries:
                 value = frame_writes._value_of(data, edits, user_id)
-                for feature in _matching(value, node_id, fid, digest, canvas):
+                for feature in _matching(
+                    value, node_id, fid, digest, canvas, frame if legacy else None
+                ):
                     before = copy.deepcopy(feature["properties"])
                     feature["properties"].update(frame.stamp())
                     lines.append(
@@ -211,6 +242,8 @@ def apply_batch(batch, journal):
                             "node": node_id,
                             "provisional": user_id,
                             "feature": fid,
+                            "canvas": canvas,
+                            "digest": digest,
                             "before": before,
                             "after": copy.deepcopy(feature["properties"]),
                         }
@@ -220,12 +253,27 @@ def apply_batch(batch, journal):
                     )
             if lines:
                 TileModel.objects.filter(pk=tile_id).update(**changes)
-                for line in lines:
-                    journal.write(json.dumps(line, sort_keys=True) + "\n")
+                all_lines += lines
                 written += len(lines)
+        _append(journal, all_lines)
+    return written
+
+
+def _append(journal, lines):
+    """Write *lines* to *journal* and fsync; on a failure the file is cut back to where it was and the error is raised."""
+    start = journal.tell()
+    try:
+        for line in lines:
+            journal.write(json.dumps(line, sort_keys=True) + "\n")
         journal.flush()
         os.fsync(journal.fileno())
-    return written
+    except BaseException:
+        try:
+            journal.truncate(start)
+            journal.seek(start)
+        except OSError:
+            pass
+        raise
 
 
 def restore_batch(batch, lines_by_tile, apply_changes=True):
@@ -244,6 +292,7 @@ def restore_batch(batch, lines_by_tile, apply_changes=True):
                 else TileModel.objects
             )
             .filter(pk__in=batch)
+            .order_by("pk")
             .values_list("tileid", "data", "provisionaledits")
         }
         for tile_id in batch:
@@ -271,6 +320,8 @@ def restore_batch(batch, lines_by_tile, apply_changes=True):
                         if isinstance(f, dict)
                         and f.get("id") == line["feature"]
                         and f.get("properties") == line["after"]
+                        and frames.canvas_of(f) == line["canvas"]
+                        and frames.geometry_digest(f.get("geometry")) == line["digest"]
                     ),
                     None,
                 )
@@ -287,8 +338,30 @@ def restore_batch(batch, lines_by_tile, apply_changes=True):
     return restored, changed
 
 
+def _journal_line(text):
+    """The decoded journal line *text*; ValueError when it lacks a field or has one of the wrong type."""
+    line = json.loads(text)
+    if not isinstance(line, dict):
+        raise ValueError("not an object")
+    uuid.UUID(line["tile"])
+    for key in ("node", "canvas", "digest"):
+        if not isinstance(line[key], str):
+            raise ValueError(f"{key} is not a string")
+    if not frames.valid_id(line["feature"]):
+        raise ValueError("feature is not an id")
+    if line["provisional"] is not None and not isinstance(line["provisional"], str):
+        raise ValueError("provisional is neither null nor a string")
+    for key in ("before", "after"):
+        if not isinstance(line[key], dict):
+            raise ValueError(f"{key} is not an object")
+    return line
+
+
 def read_journal(path):
-    """The lines of the JSONL journal *path*, grouped by tile id (as ``uuid.UUID``)."""
+    """The lines of the JSONL journal *path*, grouped by tile id (as ``uuid.UUID``).
+
+    A line that is not valid raises ``CommandError`` naming its number.
+    """
     grouped = defaultdict(list)
     try:
         with open(path, encoding="utf-8") as handle:
@@ -296,17 +369,23 @@ def read_journal(path):
                 if not text.strip():
                     continue
                 try:
-                    line = json.loads(text)
-                    grouped[uuid.UUID(line["tile"])].append(line)
-                    line["feature"], line["node"], line["before"], line["after"]
-                    line["provisional"]
+                    line = _journal_line(text)
                 except (ValueError, KeyError, TypeError) as error:
                     raise CommandError(
-                        f"{path}:{number}: not a journal line"
+                        f"{path}: line {number} is not a journal line ({error})"
                     ) from error
+                grouped[uuid.UUID(line["tile"])].append(line)
     except OSError as error:
         raise CommandError(f"cannot read the journal: {error}") from error
     return grouped
+
+
+def open_journal(path):
+    """The new journal file *path*, opened for writing; ``CommandError`` when it exists or cannot be created."""
+    try:
+        return open(path, "x", encoding="utf-8")
+    except OSError as error:
+        raise CommandError(f"cannot create the journal {path}: {error}") from error
 
 
 class Command(BaseCommand):
@@ -321,7 +400,8 @@ class Command(BaseCommand):
         stamp = sub.add_parser("stamp", help="Stamp the unstamped zones.")
         stamp.add_argument("--apply", action="store_true", help="Write the stamps.")
         stamp.add_argument(
-            "--journal", help="JSONL journal path (default: a new file)."
+            "--journal",
+            help="New JSONL journal file, required with --apply (a path the process can write, e.g. under the media directory).",
         )
         stamp.add_argument("--service", help="Only the zones of this image service.")
         stamp.add_argument(
@@ -344,18 +424,24 @@ class Command(BaseCommand):
     def _check(self, options):
         nodes = annotation_nodes()
         counts = activity.annotation_zone_counts()
-        self._out("Annotation zones by stamp state:")
+        self._out(
+            "Annotation zones by stamp state (data only, provisional edits not counted):"
+        )
         for state, count in counts.items():
             self._out(f"  {state}: {count}")
         unresolved = Counter()
         for _tile, data, edits in tiles_of(nodes):
-            for _user, _node, collection in collections_of(data, edits, nodes):
+            for user, _node, collection in collections_of(data, edits, nodes):
+                if user is not None:
+                    continue
                 for feature in collection["features"]:
-                    if isinstance(feature, dict) and not frames.frame_of(feature):
+                    if not isinstance(feature, dict):
+                        unresolved["(not a feature)"] += 1
+                    elif not frames.frame_of(feature):
                         unresolved[frames.canvas_of(feature) or "(no canvas)"] += 1
         self._out("")
         if unresolved:
-            self._out("Images of unstamped zones:")
+            self._out("Images of unstamped zones (data only):")
             for canvas, count in unresolved.most_common():
                 self._out(f"  {canvas}: {count}")
         else:
@@ -366,25 +452,31 @@ class Command(BaseCommand):
         service = options["service"]
         if service:
             service = rewrite_legacy_url(service).rstrip("/")
-        journal_path = options["journal"] or datetime.now().strftime(
-            "annotation-frames-%Y%m%d-%H%M%S.jsonl"
-        )
-        if apply_changes and os.path.exists(journal_path):
-            raise CommandError(f"the journal {journal_path} already exists")
-        nodes = annotation_nodes()
-        plan = plan_stamps(nodes, service)
-        total = sum(plan.stamped.values())
+        journal_path = options["journal"]
+        if apply_changes and not journal_path:
+            raise CommandError("--apply needs --journal PATH (a new file)")
+        journal = open_journal(journal_path) if apply_changes else None
         written = 0
-        if apply_changes and plan.entries:
-            batch_size = options["batch"]
-            items = list(plan.entries.items())
-            with (
-                frames.trusted_writes(),
-                open(journal_path, "x", encoding="utf-8") as journal,
-            ):
-                for start in range(0, len(items), batch_size):
-                    written += apply_batch(items[start : start + batch_size], journal)
+        try:
+            nodes = annotation_nodes()
+            plan = plan_stamps(nodes, service)
+            total = sum(plan.stamped.values())
+            if apply_changes and plan.entries:
+                items = list(plan.entries.items())
+                size = options["batch"]
+                with frames.trusted_writes():
+                    for start in range(0, len(items), size):
+                        written += apply_batch(items[start : start + size], journal)
+        except OSError as error:
+            raise CommandError(f"journal write failed: {error}") from error
+        finally:
+            if journal is not None:
+                journal.close()
+                if not written:
+                    os.unlink(journal_path)
         self._out("")
+        if service:
+            self._out(f"Only the zones of {service}.")
         for source, count in sorted(plan.stamped.items()):
             self._out(f"  {source}: {count} zone(s)")
         if plan.skipped:
@@ -399,13 +491,18 @@ class Command(BaseCommand):
         if apply_changes:
             self._out(
                 self.style.SUCCESS(
-                    f"{written} of {total} planned zone(s) stamped; journal: {journal_path}"
+                    f"{written} of {total} planned zone(s) stamped"
+                    + (f"; journal: {journal_path}" if written else "")
                 )
             )
             self._out("Now run:  python manage.py es reindex_database")
         else:
             self._out(self.style.WARNING(f"{total} zone(s) would be stamped (dry run)"))
-            self._out("Pass --apply to write.")
+            self._out(
+                "The dry run reads the info.json of each image service over the network "
+                "and fills the image-info cache; it writes nothing else."
+            )
+            self._out("Pass --apply --journal PATH to write.")
 
     def _unstamp(self, options):
         grouped = read_journal(options["journal"])

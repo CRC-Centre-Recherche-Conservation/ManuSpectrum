@@ -601,11 +601,15 @@ class GaugeTests(ActivityCase):
             return {"id": str(uuid.uuid4()), "properties": props}
 
         def tile(value):
-            TileModel.objects.create(
-                tileid=uuid.uuid4(),
-                resourceinstance=resource,
-                nodegroup=group,
-                data={str(node.pk): value},
+            TileModel.objects.bulk_create(
+                [
+                    TileModel(
+                        tileid=uuid.uuid4(),
+                        resourceinstance=resource,
+                        nodegroup=group,
+                        data={str(node.pk): value},
+                    )
+                ]
             )
 
         tile(
@@ -616,6 +620,13 @@ class GaugeTests(ActivityCase):
                     feature(**stamp, msFrame="estimated"),
                     feature(canvas="x"),
                     feature(**stamp, msFrame="bogus"),
+                    feature(**{**stamp, "msUnit": 16.0}, msFrame="read"),
+                    feature(**{**stamp, "msUnit": 3}, msFrame="read"),
+                    feature(**{**stamp, "msUnit": 2**21}, msFrame="read"),
+                    feature(**{**stamp, "msImageWidth": 0}, msFrame="read"),
+                    feature(**{**stamp, "msImageHeight": "20"}, msFrame="read"),
+                    feature(msUnit=16, msFrame="read"),
+                    feature(**{**stamp, "msUnit": 10**30}, msFrame="read"),
                     "odd",
                     {"id": "no-properties"},
                 ]
@@ -626,7 +637,7 @@ class GaugeTests(ActivityCase):
         activity.publish_gauges(NOW)
         self.assertEqual(sample("manuspectrum_annotation_zones", state="measured"), 2)
         self.assertEqual(sample("manuspectrum_annotation_zones", state="estimated"), 1)
-        self.assertEqual(sample("manuspectrum_annotation_zones", state="unstamped"), 4)
+        self.assertEqual(sample("manuspectrum_annotation_zones", state="unstamped"), 11)
 
     def test_the_last_run_time_is_set(self):
         activity.publish_gauges(NOW)

@@ -155,7 +155,17 @@ class StampTests(AnnotationFramesCase):
             sorted(line["feature"] for line in lines), ["z1", "z2", "z3", "z5"]
         )
         self.assertEqual(
-            set(lines[0]), {"tile", "node", "provisional", "feature", "before", "after"}
+            set(lines[0]),
+            {
+                "tile",
+                "node",
+                "provisional",
+                "feature",
+                "canvas",
+                "digest",
+                "before",
+                "after",
+            },
         )
 
     def test_an_unavailable_service_is_skipped_and_listed(self):
@@ -191,8 +201,8 @@ class StampTests(AnnotationFramesCase):
     def test_a_zone_moved_between_the_read_and_the_write_is_left_alone(self):
         real = frame_writes.frame_for_service
 
-        def moved(*args):
-            frame = real(*args)
+        def moved(*args, **kwargs):
+            frame = real(*args, **kwargs)
             row = self.row(self.t4)
             row.data[str(self.annotation.pk)]["features"][0]["geometry"]["coordinates"][
                 0
@@ -303,3 +313,205 @@ class CheckTests(AnnotationFramesCase):
         self.assertRegex(out, r"estimated\s*:?\s*1")
         self.assertRegex(out, r"unstamped\s*:?\s*1")
         self.assertIn(DOWN_SERVICE, out)
+
+
+class JournalGuardTests(AnnotationFramesCase):
+    def setUp(self):
+        super().setUp()
+        self.t1 = self.tile(zone("z1"), zone("z2", x=5.0))
+
+    def test_apply_needs_a_journal(self):
+        with self.assertRaisesMessage(CommandError, "--journal"):
+            self.run_command("stamp", "--apply")
+
+    def test_an_unwritable_journal_fails_before_any_read(self):
+        bad = os.path.join(self.dir.name, "missing", "journal.jsonl")
+        with mock.patch.object(
+            frame_writes, "frame_for_service", wraps=frame_writes.frame_for_service
+        ) as spy:
+            with self.assertRaisesMessage(CommandError, "cannot create the journal"):
+                self.run_command("stamp", "--apply", "--journal", bad)
+        spy.assert_not_called()
+        self.assertEqual(self.fetch.call_count, 0)
+
+    def test_an_empty_journal_is_removed(self):
+        self.run_command(
+            "stamp",
+            "--apply",
+            "--journal",
+            self.journal,
+            "--service",
+            "https://x.example/a",
+        )
+        self.assertFalse(os.path.exists(self.journal))
+
+    def test_the_summary_names_the_service_and_the_dry_run_says_it_reads(self):
+        out = self.run_command("stamp", "--service", SERVICE)
+        self.assertIn(f"Only the zones of {SERVICE}", out)
+        self.assertIn("over the network", out)
+
+    def test_a_journal_that_fails_to_sync_rolls_the_batch_back(self):
+        before = self.snapshot()
+        with mock.patch(
+            "manuspectrum.management.commands.annotation_frames.os.fsync",
+            side_effect=OSError("disk full"),
+        ):
+            with self.assertRaisesMessage(CommandError, "journal write failed"):
+                self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertEqual(self.snapshot(), before)
+        self.assertFalse(os.path.exists(self.journal))
+
+    def test_a_malformed_journal_names_its_line(self):
+        good = {
+            "tile": str(self.t1.pk),
+            "node": "n",
+            "provisional": None,
+            "feature": "z1",
+            "canvas": "c",
+            "digest": "d",
+            "before": {},
+            "after": {},
+        }
+        for broken in (
+            {**good, "before": []},
+            {**good, "provisional": 3},
+            {k: v for k, v in good.items() if k != "digest"},
+            {**good, "tile": "nope"},
+        ):
+            with open(self.journal, "w") as handle:
+                handle.write(json.dumps(good) + "\n" + json.dumps(broken) + "\n")
+            with self.subTest(broken=broken):
+                with self.assertRaisesMessage(CommandError, "line 2"):
+                    self.run_command("unstamp", "--journal", self.journal)
+        with open(self.journal, "w") as handle:
+            handle.write("not json\n")
+        with self.assertRaisesMessage(CommandError, "line 1"):
+            self.run_command("unstamp", "--journal", self.journal)
+
+
+class ReadAndBatchTests(AnnotationFramesCase):
+    def test_one_frame_call_per_distinct_service_and_manifest(self):
+        self.tile(zone("a"), zone("b", x=5.0))
+        self.tile(zone("c", x=9.0))
+        self.tile(zone("d", canvas=READ_SERVICE))
+        self.tile(zone("e", x=3.0, canvas=READ_SERVICE))
+        with mock.patch.object(
+            frame_writes, "frame_for_service", wraps=frame_writes.frame_for_service
+        ) as spy:
+            self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertEqual(
+            sorted(c.args[0] for c in spy.call_args_list),
+            sorted([READ_SERVICE, SERVICE]),
+        )
+
+    def test_batches_of_one_tile_stamp_and_restore_everything(self):
+        tiles = [self.tile(zone(f"z{i}", x=float(i))) for i in range(4)]
+        before = self.snapshot()
+        self.run_command("stamp", "--apply", "--journal", self.journal, "--batch", "1")
+        self.assertEqual(len(open(self.journal).readlines()), 4)
+        for i, tile in enumerate(tiles):
+            self.assertIn("msUnit", self.props(tile, f"z{i}"))
+        self.run_command(
+            "unstamp", "--journal", self.journal, "--apply", "--batch", "1"
+        )
+        self.assertEqual(self.snapshot(), before)
+
+    def test_a_provisional_line_is_restored(self):
+        value = {str(self.annotation.pk): collection(zone("p1", canvas=READ_SERVICE))}
+        self.tile(edits={"7": {"value": value}})
+        before = self.snapshot()
+        self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertNotEqual(self.snapshot(), before)
+        self.run_command("unstamp", "--journal", self.journal, "--apply")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_registered_manifests_are_loaded_once_per_run(self):
+        for i in range(3):
+            self.tile(
+                self.legacy_zone(f"l{i}", 4000, 3000, SERVICE, URL),
+                node=COMP_LOCATION_DOC_NODE,
+            )
+        self.tile(zone("u1"))
+        self.tile(zone("u2", x=7.0))
+        with mock.patch.object(
+            frame_writes, "find_registered", wraps=frame_writes.find_registered
+        ) as spy:
+            self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertEqual(spy.call_count, 1)
+        self.assertEqual(self.props(self.row_of("u1"), "u1")["msFrame"], "estimated")
+
+    def legacy_zone(self, fid, width, height, canvas, manifest):
+        feature = zone(fid, canvas=canvas, manifest=manifest)
+        feature["geometry"] = rectangle(width, height)
+        return feature
+
+    def row_of(self, fid):
+        return next(
+            t
+            for t in TileModel.objects.all()
+            if any(
+                f["id"] == fid
+                for v in t.data.values()
+                for f in (v or {}).get("features", [])
+            )
+        )
+
+
+class UnstampGuardTests(AnnotationFramesCase):
+    def test_a_zone_moved_and_restamped_with_the_same_frame_is_not_unstamped(self):
+        tile = self.tile(zone("z1", canvas=READ_SERVICE))
+        self.run_command("stamp", "--apply", "--journal", self.journal)
+        row = self.row(tile)
+        feature = row.data[str(self.annotation.pk)]["features"][0]
+        feature["geometry"]["coordinates"][0][0][0] = 40.0
+        TileModel.objects.filter(pk=tile.pk).update(data=row.data)
+        stamped = self.snapshot()
+        out = self.run_command("unstamp", "--journal", self.journal, "--apply")
+        self.assertIn("changed since", out)
+        self.assertEqual(self.snapshot(), stamped)
+
+
+class LegacyRuleTests(AnnotationFramesCase):
+    def legacy_zone(self, fid, width, height, canvas, manifest, x=0.0):
+        feature = zone(fid, canvas=canvas, manifest=manifest)
+        feature["geometry"] = rectangle(width, height)
+        return feature
+
+    def test_the_rectangle_is_legacy_next_to_a_user_zone_of_the_same_node(self):
+        tile = self.tile(
+            self.legacy_zone("w", 4000, 5000, LEGACY_SERVICE, "https://m.example/x"),
+            zone("u", x=9.0, canvas=READ_SERVICE),
+            node=COMP_LOCATION_DOC_NODE,
+        )
+        self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertEqual(
+            self.props(tile, "w", COMP_LOCATION_DOC_NODE)["msFrame"], "import-legacy"
+        )
+        self.assertEqual(
+            self.props(tile, "u", COMP_LOCATION_DOC_NODE)["msFrame"], "read"
+        )
+
+    def test_the_same_rectangle_on_another_node_is_not_legacy(self):
+        tile = self.tile(
+            self.legacy_zone("w", 4000, 5000, LEGACY_SERVICE, "https://m.example/x")
+        )
+        out = self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertNotIn("msUnit", self.props(tile, "w"))
+        self.assertIn(LEGACY_SERVICE, out)
+
+    def test_a_registered_size_no_frame_accepts_falls_back_to_the_default(self):
+        big = "https://example.org/iiif/big/manifest"
+        manifest = reg.v2_manifest(service=LEGACY_SERVICE)
+        canvas = manifest["sequences"][0]["canvases"][0]
+        canvas["width"], canvas["height"] = 2_000_000, 3000
+        IIIFManifest.objects.create(url=big, label="Big", manifest=manifest)
+        tile = self.tile(
+            self.legacy_zone("w", 4000, 5000, LEGACY_SERVICE, big),
+            node=COMP_LOCATION_DOC_NODE,
+        )
+        self.run_command("stamp", "--apply", "--journal", self.journal)
+        props = self.props(tile, "w", COMP_LOCATION_DOC_NODE)
+        self.assertEqual(
+            (props["msFrame"], props["msImageWidth"], props["msImageHeight"]),
+            ("import-legacy", 4000, 5000),
+        )

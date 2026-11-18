@@ -462,6 +462,29 @@ completed workflows are never touched.
   shows who will be warned.
 - Alerts: `WorkflowCleanupFailures`, `WorkflowCleanupStale`.
 
+## Annotation zone frames
+
+A zone of an annotation (IIIF viewer, Data Lab) is stored in the units of the image
+it was drawn on; since release 1.1.0 each zone carries that frame (`msUnit`,
+`msImageWidth`, `msImageHeight`, `msFrame`). Zones saved before it are stamped by a command, never
+at read time. `msFrame` is `browser`, `read` or `import-legacy` (measured) or `estimated` (assumed
+from the registered manifest's canvas size when the image host refuses this server).
+
+- **Count.** `make -C deploy manage ARGS="annotation_frames check"` prints the zones per state
+  (also the gauge `manuspectrum_annotation_zones`) and the images of the unstamped ones. It reads
+  the database only.
+- **Dry run.** `make -C deploy manage ARGS="annotation_frames stamp"` reads the info.json of each
+  image service (one request per service, throttled per host) and lists what it would stamp and
+  the services it could not read. It writes nothing.
+- **Stamp.** `make -C deploy manage ARGS="annotation_frames stamp --apply --journal /srv/media/annotation-frames-YYYYMMDD.jsonl"`.
+  The journal is required, must be a new file in a directory the container can write (the media
+  directory; `/tmp` is lost with the container), and is created before anything is read. Keep it:
+  it records every changed zone. The command writes the tiles directly (no edit log, no indexing), then
+  prints the reminder to run `make -C deploy manage ARGS="es reindex_database"`. `--service URL`
+  restricts it to one image service, `--batch N` sets the tiles per transaction.
+- **Undo.** `make -C deploy manage ARGS="annotation_frames unstamp --journal PATH"` (dry run), then
+  with `--apply`, then reindex. A zone edited since (properties, canvas or geometry) is listed and left alone.
+
 ## Updating the application
 
 A host never updates itself. An hourly watch finds the newest signed release its
