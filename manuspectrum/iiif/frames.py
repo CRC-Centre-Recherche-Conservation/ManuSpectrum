@@ -15,13 +15,14 @@ feature of a collection being saved:
    is unknown the stamp keys are dropped and the feature is listed for a later
    resolution (trusted writers list nothing).
 
-Inputs are never mutated. Geometry equality is coordinates rounded to 6
-decimals, as Leaflet's ``toGeoJSON`` writes them.
+Inputs are never mutated. Geometry equality is coordinates rounded as Leaflet's
+``toGeoJSON`` writes them (``leaflet_round``).
 """
 
 import copy
 import hashlib
 import json
+import math
 from contextlib import contextmanager
 from contextvars import ContextVar
 
@@ -50,27 +51,42 @@ def is_trusted():
 
 
 def _whole(value):
-    return isinstance(value, int) and not isinstance(value, bool) and value >= 1
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def frame_of(feature):
-    """The ``Frame`` stamped on *feature*, or None when the stamp is absent or invalid."""
+    """The ``Frame`` stamped on *feature*, or None when the stamp is absent or invalid (types, power of two, bounds of ``Frame``)."""
     props = (feature or {}).get("properties")
     if not isinstance(props, dict) or any(k not in props for k in STAMP_KEYS):
         return None
     unit, width, height, source = (props[k] for k in STAMP_KEYS)
     if not (_whole(unit) and _whole(width) and _whole(height)):
         return None
-    if unit & (unit - 1) or source not in FRAME_SOURCES:
+    try:
+        return Frame(unit, width, height, source)
+    except ValueError:
         return None
-    return Frame(unit, width, height, source)
+
+
+def leaflet_round(value):
+    """*value* rounded as Leaflet 1.6 ``formatNum`` does: ``Math.round(value * 1e6) / 1e6``, halves up, -0.0 as 0.0.
+
+    Raises ValueError for a bool, a NaN, an infinity or a value too large to scale.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"not a coordinate: {value!r}")
+    scaled = float(value) * 1e6
+    if not math.isfinite(scaled):
+        raise ValueError(f"not a finite coordinate: {value!r}")
+    floor = math.floor(scaled)
+    if scaled - floor >= 0.5:
+        floor += 1
+    return floor / 1e6 + 0.0
 
 
 def _rounded(value):
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return round(value, 6)
+    if isinstance(value, bool) or isinstance(value, (int, float)):
+        return leaflet_round(value)
     if isinstance(value, list):
         return [_rounded(v) for v in value]
     if isinstance(value, dict):
@@ -79,14 +95,34 @@ def _rounded(value):
 
 
 def same_geometry(a, b):
-    """True when two geometries have the same type and the same coordinates after rounding to 6 decimals."""
-    return _rounded(a) == _rounded(b)
+    """True when two geometries have the same type and the same coordinates after ``leaflet_round``.
+
+    A geometry holding a bool, NaN or infinity equals nothing.
+    """
+    try:
+        return _rounded(a) == _rounded(b)
+    except ValueError:
+        return False
+
+
+_INVALID_DIGEST = hashlib.sha1(b"invalid geometry").hexdigest()
 
 
 def geometry_digest(geometry):
-    """sha1 hex of *geometry* with coordinates rounded to 6 decimals: equal for geometries ``same_geometry`` equates."""
-    text = json.dumps(_rounded(geometry), sort_keys=True, separators=(",", ":"))
+    """sha1 hex of *geometry* normalised by ``leaflet_round``: equal for geometries ``same_geometry`` equates.
+
+    A geometry holding a bool, NaN or infinity gets one fixed sentinel digest.
+    """
+    try:
+        text = json.dumps(_rounded(geometry), sort_keys=True, separators=(",", ":"))
+    except ValueError:
+        return _INVALID_DIGEST
     return hashlib.sha1(text.encode()).hexdigest()
+
+
+def valid_id(value):
+    """True for a feature id the rule can key on: a str or an int (not a bool)."""
+    return isinstance(value, str) or _whole(value)
 
 
 def canvas_of(feature):
@@ -109,11 +145,13 @@ class PreviousFeatures:
             for node_id, collection in (value or {}).items():
                 for feature in _features(collection):
                     fid = feature.get("id")
-                    if fid is not None:
+                    if valid_id(fid):
                         self._by_id.setdefault((node_id, fid), []).append(feature)
 
     def match(self, feature, node_id):
         """A stored feature of the same id, canvas and geometry (one carrying a stamp first), or None."""
+        if not valid_id(feature.get("id")):
+            return None
         found = [
             old
             for old in self._by_id.get((node_id, feature.get("id")), ())
@@ -137,7 +175,9 @@ def stamp_collection(new, previous, node_id, frame_for, trusted):
 
     *frame_for(service)* gives the ``Frame`` of an image service or None.
     Returns the collection and ``{feature id: service}`` of the features left
-    to resolve.
+    to resolve. A feature without a usable id (``valid_id``) or without a canvas
+    is never matched, stamped or listed: its stamp keys are dropped, except a
+    trusted writer's valid stamp on a feature without a usable id.
     """
     if not isinstance(new, dict) or not isinstance(new.get("features"), list):
         return new, {}
@@ -149,6 +189,10 @@ def stamp_collection(new, previous, node_id, frame_for, trusted):
         props = feature.get("properties")
         if not isinstance(props, dict):
             props = feature["properties"] = {}
+        if not valid_id(feature.get("id")):
+            if not (trusted and frame_of(feature)):
+                feature["properties"] = _without_stamp(props)
+            continue
         old = previous.match(feature, node_id)
         if old is not None:
             stored = frame_of(old)

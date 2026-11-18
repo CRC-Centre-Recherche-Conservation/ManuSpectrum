@@ -94,6 +94,8 @@ class ZoneUnit:
 
 FRAME_SOURCES = ("browser", "read", "estimated", "import-legacy")
 ESTIMATED = "estimated"
+MAX_UNIT = 2**20
+MAX_FRAME_SIDE = 1_000_000
 
 
 @dataclass(frozen=True)
@@ -109,8 +111,25 @@ class Frame:
     height: int
     source: str
 
+    def __post_init__(self):
+        for name, high in (
+            ("unit", MAX_UNIT),
+            ("width", MAX_FRAME_SIDE),
+            ("height", MAX_FRAME_SIDE),
+        ):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError(f"frame {name} must be an int: {value!r}")
+            if not 1 <= value <= high:
+                raise ValueError(f"frame {name} out of range: {value}")
+        if self.unit & (self.unit - 1):
+            raise ValueError(f"frame unit must be a power of two: {self.unit}")
+        if self.source not in FRAME_SOURCES:
+            raise ValueError(f"unknown frame source: {self.source!r}")
+
     @property
     def measured(self):
+        """True unless the frame was assumed (``estimated``) rather than measured."""
         return self.source != ESTIMATED
 
     def stamp(self):

@@ -234,3 +234,166 @@ class FrameHelperTests(SimpleTestCase):
     def test_stamp_round_trips(self):
         frame = Frame(16, 10, 20, "import-legacy")
         self.assertEqual(frames.frame_of({"properties": frame.stamp()}), frame)
+
+
+def point(*coordinates):
+    return {"type": "Point", "coordinates": list(coordinates)}
+
+
+class LeafletRoundTests(SimpleTestCase):
+    def test_leaflet_round_rounds_halves_up_like_format_num(self):
+        self.assertEqual(frames.leaflet_round(0.0078125), 0.007813)
+        self.assertEqual(frames.leaflet_round(-0.0), 0.0)
+        self.assertEqual(str(frames.leaflet_round(-1e-7)), "0.0")
+        self.assertEqual(frames.leaflet_round(3), 3.0)
+
+    def test_leaflet_round_refuses_non_coordinates(self):
+        for bad in (True, float("nan"), float("inf"), 1e308, "1"):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    frames.leaflet_round(bad)
+
+    def test_client_leaflet_rounding_of_a_stored_coordinate_still_matches(self):
+        stored = feature(geometry=point(0.0078125, 1), **stamp(unit=32))
+        sent = feature(geometry=point(0.007813, 1), **stamp(unit=64))
+        out, _ = frames.stamp_collection(
+            collection(sent), previous_of(stored), NODE, Calls(), False
+        )
+        self.assertEqual(out["features"][0]["properties"]["msUnit"], 32)
+
+    def test_digest_agrees_with_same_geometry(self):
+        pairs = [
+            (point(1, 2), point(1.0, 2.0)),
+            (point(-1e-7, 0), point(0, 0)),
+            (point(0.0078125), point(0.007813)),
+        ]
+        for a, b in pairs:
+            with self.subTest(a=a, b=b):
+                self.assertTrue(frames.same_geometry(a, b))
+                self.assertEqual(frames.geometry_digest(a), frames.geometry_digest(b))
+
+    def test_invalid_coordinates_equal_nothing(self):
+        for bad in (
+            point(float("nan"), 1),
+            point(float("inf"), 1),
+            point(True, 1),
+        ):
+            with self.subTest(bad=bad):
+                self.assertFalse(frames.same_geometry(bad, bad))
+                self.assertNotEqual(
+                    frames.geometry_digest(bad), frames.geometry_digest(point(1, 1))
+                )
+
+
+class FrameBoundsTests(SimpleTestCase):
+    def test_frame_refuses_invalid_values(self):
+        for args in (
+            (12, 10, 10, "read"),
+            (0, 10, 10, "read"),
+            (True, 10, 10, "read"),
+            (2**21, 10, 10, "read"),
+            (16, 0, 10, "read"),
+            (16, 10, 1_000_001, "read"),
+            (16, 10.0, 10, "read"),
+            (16, 10, 10, "guess"),
+        ):
+            with self.subTest(args=args):
+                with self.assertRaises(ValueError):
+                    Frame(*args)
+
+    def test_frame_of_applies_the_same_bounds(self):
+        self.assertIsNone(frames.frame_of(feature(**stamp(unit=2**1100))))
+        self.assertIsNone(frames.frame_of(feature(**stamp(height=1_000_001))))
+
+    def test_helpers_fail_loudly_on_a_bad_size(self):
+        with self.assertRaises(ValueError):
+            frame_from_info(ImageInfo(0, 10, 256))
+        with self.assertRaises(ValueError):
+            frame_assumed("https://img/a", 10, 2_000_000)
+
+
+class FeatureIdTests(SimpleTestCase):
+    def run_rule(self, new, previous):
+        return frames.stamp_collection(new, previous, NODE, Calls(), False)
+
+    def test_feature_without_a_usable_id_is_neither_stamped_nor_listed(self):
+        for fid in (None, ["a"], {"a": 1}, True):
+            with self.subTest(fid=fid):
+                new = feature(**stamp(unit=64))
+                new["id"] = fid
+                out, todo = self.run_rule(collection(new), previous_of())
+                self.assertEqual(todo, {})
+                self.assertFalse(
+                    set(out["features"][0]["properties"]) & set(frames.STAMP_KEYS)
+                )
+
+    def test_stored_feature_with_a_list_id_does_not_break_a_save(self):
+        stored = feature(**stamp())
+        stored["id"] = ["x"]
+        out, todo = self.run_rule(collection(feature()), previous_of(stored))
+        self.assertEqual(todo, {})
+        self.assertEqual(out["features"][0]["properties"]["msUnit"], 16)
+
+
+class ReviewFocusTests(SimpleTestCase):
+    def test_unrelated_save_keeps_the_untouched_features_as_they_were(self):
+        stamped = feature("a", point(0.0078125, 1), **stamp(unit=32))
+        bare = feature("b", point(5, 5))
+        before = previous_of(stamped, bare)
+        sent = collection(
+            feature("a", point(0.007813, 1), **stamp(unit=64)),
+            feature("b", point(5.0000000001, 5), **stamp(unit=64)),
+            feature("c", point(9, 9)),
+        )
+        out, _ = frames.stamp_collection(sent, before, NODE, Calls(), False)
+        units = [f["properties"].get("msUnit") for f in out["features"]]
+        self.assertEqual(units, [32, None, 16])
+
+    def test_a_stamped_candidate_wins_over_an_unstamped_one(self):
+        before = previous_of(feature(), provisional=[feature(**stamp(unit=8))])
+        out, _ = frames.stamp_collection(
+            collection(feature()), before, NODE, Calls(), False
+        )
+        self.assertEqual(out["features"][0]["properties"]["msUnit"], 8)
+
+    def test_trusted_writer_without_a_stamp_asks_the_frame_and_schedules_nothing(self):
+        frame_for = Calls()
+        out, todo = frames.stamp_collection(
+            collection(feature()), previous_of(), NODE, frame_for, True
+        )
+        self.assertEqual(frame_for.services, [SERVICE])
+        self.assertEqual(todo, {})
+        self.assertEqual(out["features"][0]["properties"]["msUnit"], 16)
+        out, todo = frames.stamp_collection(
+            collection(feature()), previous_of(), NODE, lambda s: None, True
+        )
+        self.assertEqual(todo, {})
+
+    def test_two_features_of_one_canvas_keep_their_own_stamps(self):
+        before = previous_of(
+            feature("a", point(1, 1), **stamp(unit=8)),
+            feature("b", point(2, 2), **stamp(unit=32)),
+        )
+        out, _ = frames.stamp_collection(
+            collection(feature("a", point(1, 1)), feature("b", point(2, 2))),
+            before,
+            NODE,
+            Calls(),
+            False,
+        )
+        self.assertEqual([f["properties"]["msUnit"] for f in out["features"]], [8, 32])
+
+
+class TrustedIdlessTests(SimpleTestCase):
+    def test_trusted_keeps_a_valid_stamp_on_an_idless_feature_untrusted_strips_it(self):
+        new = feature(**stamp(unit=64))
+        del new["id"]
+        for trusted, expected in ((True, 64), (False, None)):
+            with self.subTest(trusted=trusted):
+                out, todo = frames.stamp_collection(
+                    collection(new), previous_of(), NODE, Calls(), trusted
+                )
+                self.assertEqual(todo, {})
+                self.assertEqual(
+                    out["features"][0]["properties"].get("msUnit"), expected
+                )
