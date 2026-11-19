@@ -487,8 +487,9 @@ be reached).
   prints the reminder to run `make -C deploy manage ARGS="es reindex_database"`. `--service URL`
   restricts it to one image service, `--batch N` sets the tiles per transaction.
   A host that fails once is skipped for a while, so the command reads the unavailable services again
-  (`--retries N`, default 2; each wait lasts about two minutes, and Ctrl-C during one stops the retrying and keeps what is written); run `annotation_frames check` afterwards, and if zones
-  remain unstamped because a host was unavailable, run `stamp --apply` again later with a new journal.
+  (`--retries N`, default 2; each wait lasts about two minutes, and Ctrl-C during one stops the
+  retrying and keeps what is written); run `annotation_frames check` afterwards, and if zones remain
+  unstamped because a host was unavailable, run `stamp --apply` again later with a new journal.
 - **Undo.** `make -C deploy manage ARGS="annotation_frames unstamp --journal PATH"` (dry run), then
   with `--apply`, then reindex. A zone edited since (properties, canvas or geometry) is listed and left alone.
 

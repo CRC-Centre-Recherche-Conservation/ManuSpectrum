@@ -307,7 +307,7 @@ def image_info(service, deadline=None, max_age=None):
     timeout = _setting("IIIF_IMAGE_INFO_TIMEOUT", 4)
     ambient = current_budget()
     capped = left < timeout or (ambient is not None and ambient.left() < timeout)
-    down_ttl = _setting("IIIF_IMAGE_INFO_DOWN_TTL", 120)
+    down_for = down_ttl()
     try:
         response = _fetch(service, left)
     except BudgetSpent:
@@ -316,12 +316,12 @@ def image_info(service, deadline=None, max_age=None):
     except requests.exceptions.RequestException as exc:
         logger.warning("info.json of %s not read: %s", _origin(service), exc)
         if not (capped and isinstance(exc, requests.exceptions.Timeout)):
-            cache.set(_host_key(service), UNAVAILABLE, down_ttl)
+            cache.set(_host_key(service), UNAVAILABLE, down_for)
         return UNAVAILABLE
     except UnsafeURLError as exc:
         if exc.reason == "dns":
             logger.warning("info.json of %s not read: %s", _origin(service), exc)
-            cache.set(_host_key(service), UNAVAILABLE, down_ttl)
+            cache.set(_host_key(service), UNAVAILABLE, down_for)
             return UNAVAILABLE
         logger.warning("info.json of %s refused: %s", _origin(service), exc)
         cache.set(key, False, refused_ttl)
@@ -333,7 +333,7 @@ def image_info(service, deadline=None, max_age=None):
     status = response.status_code
     if status == 429 or status >= 500:
         logger.warning("info.json of %s answered %s", _origin(service), status)
-        cache.set(_host_key(service), UNAVAILABLE, down_ttl)
+        cache.set(_host_key(service), UNAVAILABLE, down_for)
         return UNAVAILABLE
     if status == 403:
         logger.warning("info.json refused by %s (403)", _origin(service))

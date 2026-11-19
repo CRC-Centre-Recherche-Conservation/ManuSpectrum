@@ -176,12 +176,11 @@ class Plan:
         self.size_of = size_of or frame_writes.size_lookup()
         self._reads = {}
         self.skipped = Counter()
-        self.stamped = Counter()
         self.already = 0
         self.unusable = 0
 
     def read(self, service):
-        """``frame_writes.fresh_info`` of *service*, once per run."""
+        """``frame_writes.fresh_info`` of *service*, once per pass."""
         if service not in self._reads:
             self._reads[service] = frame_writes.fresh_info(service)
             if self._reads[service] == units.UNAVAILABLE:
@@ -254,7 +253,6 @@ def plan_stamps(nodes, service=None, only=None, size_of=None, tiles=None):
                         legacy,
                     )
                 )
-                plan.stamped[frame.source] += 1
     return plan
 
 
@@ -694,9 +692,14 @@ class Command(BaseCommand):
             for canvas in sorted(retry_left):
                 self._out(f"  {canvas}: {skipped[canvas]}")
             if apply_changes:
+                after = (
+                    f" after {passes} retry pass(es)"
+                    if passes and not interrupted
+                    else ""
+                )
                 self._out(
-                    f"{len(retry_left)} service(s) still unavailable after {passes} "
-                    "retry pass(es): run the command again later, with a new journal."
+                    f"{len(retry_left)} service(s) still unavailable{after}: "
+                    "run the command again later, with a new journal."
                 )
             elif options["retries"] > 0:
                 self._out(
