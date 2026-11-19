@@ -16,6 +16,8 @@ from unittest import mock
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
+import requests
+from django.core.cache import cache
 from django.test import override_settings
 
 from arches.app.models.models import (
@@ -72,6 +74,15 @@ class AnnotationFramesCase(reg.AnnotationFixtures):
         self.dir = tempfile.TemporaryDirectory()
         self.addCleanup(self.dir.cleanup)
         self.journal = os.path.join(self.dir.name, "journal.jsonl")
+        self.sleeps = []
+        sleeper = mock.patch.object(
+            annotation_frames.Command, "_sleep", side_effect=self.slept
+        )
+        sleeper.start()
+        self.addCleanup(sleeper.stop)
+
+    def slept(self, seconds):
+        self.sleeps.append(seconds)
 
     def answer(self, url, **kwargs):
         if url.startswith(SERVICE):
@@ -903,3 +914,79 @@ class UndoSafetyTests(AnnotationFramesCase):
             stderr=err,
         )
         self.assertEqual(err.getvalue(), "")
+
+
+class RetryTests(AnnotationFramesCase):
+    FLAKY = "https://flaky.example/iiif/b5/page1"
+
+    def setUp(self):
+        super().setUp()
+        self.flaky_up = False
+        self.t_flaky = self.tile(zone("f1", canvas=self.FLAKY))
+        self.t_flaky2 = self.tile(zone("f2", canvas=self.FLAKY + "b"))
+        self.t_read = self.tile(zone("r1", canvas=READ_SERVICE))
+        self.t_refused = self.tile(zone("x1", canvas=SERVICE))
+
+    def slept(self, seconds):
+        super().slept(seconds)
+        cache.clear()
+        self.flaky_up = True
+
+    def answer(self, url, **kwargs):
+        if url.startswith("https://flaky.example"):
+            if not self.flaky_up:
+                raise requests.exceptions.ReadTimeout("slow")
+            return answered(info_json(1000, 2000, 512))
+        if url.startswith(DOWN_SERVICE):
+            return answered({}, status=503)
+        return super().answer(url, **kwargs)
+
+    def stamped(self, tile, fid, canvas=None):
+        return "msUnit" in self.props(tile, fid)
+
+    def test_a_host_down_on_the_first_read_is_stamped_by_a_retry_in_one_journal(self):
+        out = self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertEqual(len(self.sleeps), 1)
+        self.assertTrue(self.stamped(self.t_flaky, "f1"))
+        self.assertTrue(self.stamped(self.t_flaky2, "f2"))
+        self.assertTrue(self.stamped(self.t_read, "r1"))
+        lines = [json.loads(line) for line in open(self.journal)]
+        self.assertEqual(
+            sorted(line["feature"] for line in lines), ["f1", "f2", "r1", "x1"]
+        )
+        self.assertNotIn("still unavailable", out)
+        self.assertEqual(len(self.calls(READ_SERVICE)), 1)
+
+    def test_a_host_still_down_after_every_retry_is_listed_and_the_rest_stamped(self):
+        self.tile(zone("d1", canvas=DOWN_SERVICE))
+        out = self.run_command(
+            "stamp", "--apply", "--journal", self.journal, "--retries", "2"
+        )
+        self.assertEqual(len(self.sleeps), 2)
+        self.assertEqual(len(self.calls(DOWN_SERVICE)), 3)
+        self.assertIn(DOWN_SERVICE, out)
+        self.assertIn("still unavailable", out)
+        self.assertIn("again later", out)
+
+    def test_a_refused_service_is_never_retried(self):
+        self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertEqual(len(self.calls(SERVICE)), 1)
+
+    def test_no_retry_leaves_the_unavailable_zones_as_before(self):
+        out = self.run_command(
+            "stamp", "--apply", "--journal", self.journal, "--retries", "0"
+        )
+        self.assertEqual(self.sleeps, [])
+        self.assertFalse(self.stamped(self.t_flaky, "f1"))
+        self.assertTrue(self.stamped(self.t_read, "r1"))
+        self.assertIn(self.FLAKY, out)
+
+    def test_a_dry_run_never_sleeps_and_says_what_it_would_retry(self):
+        out = self.run_command("stamp")
+        self.assertEqual(self.sleeps, [])
+        self.assertIn("would be read again", out)
+
+    def test_the_wait_is_bounded(self):
+        with override_settings(IIIF_IMAGE_INFO_DOWN_TTL=10_000):
+            self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertLessEqual(self.sleeps[0], annotation_frames.RETRY_WAIT_MAX)
