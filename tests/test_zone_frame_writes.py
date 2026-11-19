@@ -705,3 +705,59 @@ class FrameForServiceTests(ZoneFrameCase):
         cache.set(stable_cache_key(units._INFO_PREFIX, SERVICE), False, 600)
         self.assertIsNone(units.known_info(SERVICE))
         self.fetch.assert_not_called()
+
+
+class KnownFrameTests(ZoneFrameCase):
+    def test_a_kept_description_gives_its_read_frame(self):
+        remember_info()
+        self.assertEqual(frame_writes.known_frame(SERVICE), READ)
+
+    def test_nothing_kept_gives_none(self):
+        self.assertIsNone(frame_writes.known_frame(SERVICE))
+
+    def test_a_kept_description_that_cannot_make_a_frame_gives_none(self):
+        remember_info(size=(2_000_000, 100, 256))
+        self.assertIsNone(frame_writes.known_frame(SERVICE))
+        self.fetch.assert_not_called()
+
+
+class ReaderHelperTests(ZoneFrameCase):
+    def test_a_canvas_the_index_cannot_size_gives_none(self):
+        index = mock.Mock()
+        index.size.side_effect = TypeError("odd canvas")
+        self.assertIsNone(frame_writes._size_in(index, SERVICE))
+
+    def test_only_keys_that_are_uuids_name_a_node(self):
+        node = str(uuid.uuid4())
+        self.assertEqual(
+            frame_writes._node_ids({node: 1, "not-a-uuid": 2, 5: 3}), {node}
+        )
+
+    def test_a_value_without_the_collection_has_no_features(self):
+        digest = "d"
+        for value in (None, {}, {"n": {"features": "x"}}, {"n": 3}, "text"):
+            with self.subTest(value=value):
+                self.assertEqual(
+                    frame_writes._features_of(value, "n", "z1", digest), []
+                )
+
+
+class ResolvePendingGuardTests(ZoneFrameCase):
+    def test_nothing_pending_reads_nothing(self):
+        with self.assertNumQueries(0):
+            self.assertEqual(frame_writes.resolve_pending(str(uuid.uuid4()), {}), 0)
+
+    def test_a_tile_deleted_while_its_images_are_read_is_left_alone(self):
+        feature = zone("z1")
+        tile, _ = self.write([feature], trusted=True)
+
+        def deleted_meanwhile(*args, **kwargs):
+            TileModel.objects.filter(pk=tile.pk).delete()
+            return READ
+
+        pending = {
+            (self.node(), None, "z1"): frames.geometry_digest(feature["geometry"])
+        }
+        with mock.patch.object(frame_writes, "frame_for_service", deleted_meanwhile):
+            self.assertEqual(frame_writes.resolve_pending(str(tile.pk), pending), 0)
+        self.assertFalse(TileModel.objects.filter(pk=tile.pk).exists())

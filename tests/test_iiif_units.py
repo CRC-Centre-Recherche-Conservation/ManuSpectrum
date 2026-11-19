@@ -708,3 +708,19 @@ class StampedZoneTests(UnitCase):
         self.assertEqual(dims.size(CANVAS), (4913, 6609))
         self.assertIsNone(dims.size(OTHER))
         self.assertIsNone(dims.size("https://else.example/x"))
+
+
+class KnownInfoGuardTests(UnitCase):
+    def test_no_service_has_nothing_kept(self):
+        for service in ("", None, "/"):
+            with self.subTest(service=service):
+                self.assertIsNone(units.known_info(service))
+        self.fetch.assert_not_called()
+
+
+class NotAFeatureTests(SimpleTestCase):
+    def test_a_value_that_is_not_a_feature_has_no_canvas_and_no_shape(self):
+        dims = canvas_index([canvas()])
+        for value in (None, "text", [], 5):
+            with self.subTest(value=value):
+                self.assertEqual(canvas_and_convert(value, dims), ("", None))

@@ -13,6 +13,7 @@ import tempfile
 import uuid
 from io import StringIO
 from unittest import mock
+from urllib.parse import urlsplit
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -42,6 +43,7 @@ URL = reg.URL
 READ_SERVICE = "https://read.example/iiif/b2/page1"
 DOWN_SERVICE = "https://down.example/iiif/b3/page1"
 LEGACY_SERVICE = "https://legacy.example/iiif/b4/page1"
+REAL_SLEEP = annotation_frames.Command._sleep
 
 
 def rectangle(width, height, unit=32):
@@ -934,7 +936,7 @@ class RetryTests(AnnotationFramesCase):
         self.flaky_up = True
 
     def answer(self, url, **kwargs):
-        if url.startswith("https://flaky.example"):
+        if urlsplit(url).hostname == "flaky.example":
             if not self.flaky_up:
                 raise requests.exceptions.ReadTimeout("slow")
             return answered(info_json(1000, 2000, 512))
@@ -1027,3 +1029,182 @@ class RetryTests(AnnotationFramesCase):
             out = self.run_command("stamp", "--apply", "--journal", self.journal)
         self.assertLessEqual(self.sleeps[0], annotation_frames.RETRY_WAIT_MAX)
         self.assertIn("may still be live", out)
+
+
+class UnusableZoneTests(AnnotationFramesCase):
+    def odd_tile(self):
+        feature = zone("nocanvas")
+        feature["properties"].pop("canvas")
+        return self.tile(zone("ok", canvas=READ_SERVICE), 5, "text", feature)
+
+    def test_a_stamp_counts_what_it_cannot_stamp_and_stamps_the_rest(self):
+        tile = self.odd_tile()
+        out = self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertIn("not stampable (no id, canvas or properties): 3", out)
+        self.assertEqual(self.props(tile, "ok")["msFrame"], "read")
+        stored = self.row(tile).data[str(self.annotation.pk)]["features"]
+        unstamped = [f for f in stored if isinstance(f, dict) and f["id"] == "nocanvas"]
+        self.assertNotIn("msFrame", unstamped[0]["properties"])
+
+    def test_check_lists_what_is_not_a_feature_and_a_zone_without_canvas(self):
+        self.odd_tile()
+        out = self.run_command("check")
+        self.assertIn("(not a feature): 2", out)
+        self.assertIn("(no canvas): 1", out)
+
+    def test_check_does_not_count_provisional_zones_as_unresolved(self):
+        value = {str(self.annotation.pk): collection(zone("p1", canvas=DOWN_SERVICE))}
+        self.tile(edits={"7": {"value": value}})
+        out = self.run_command("check")
+        self.assertIn("No unstamped zone.", out)
+        self.assertNotIn(DOWN_SERVICE, out)
+
+
+class RetryScopeTests(AnnotationFramesCase):
+    def test_a_retry_pass_leaves_the_other_images_of_the_tile_to_the_first_pass(self):
+        flaky = "https://flaky.example/iiif/b5/page1"
+        refused = SERVICE + "-unregistered"
+        state = {"up": False}
+
+        def slept(command, seconds):
+            cache.clear()
+            state["up"] = True
+
+        def answer(url, **kwargs):
+            if urlsplit(url).hostname == "flaky.example":
+                if not state["up"]:
+                    raise requests.exceptions.ReadTimeout("slow")
+                return answered(info_json(1000, 2000, 512))
+            return answered({}, status=403)
+
+        self.fetch.side_effect = answer
+        tile = self.tile(zone("f", canvas=flaky), zone("u", x=5.0, canvas=refused))
+        with mock.patch.object(annotation_frames.Command, "_sleep", slept):
+            out = self.run_command("stamp", "--apply", "--journal", self.journal)
+        self.assertEqual(self.props(tile, "f")["msFrame"], "read")
+        self.assertNotIn("msFrame", self.props(tile, "u"))
+        self.assertEqual(len(open(self.journal).readlines()), 1)
+        self.assertIn("1 of 1 planned zone(s) stamped", out)
+
+
+class MissingTileTests(AnnotationFramesCase):
+    def test_a_tile_deleted_after_planning_is_passed_over_by_the_stamp(self):
+        gone = uuid.uuid4()
+        fd = annotation_frames.open_journal(self.journal)
+        try:
+            written = annotation_frames.apply_batch([(gone, [])], fd)
+        finally:
+            os.close(fd)
+        self.assertEqual(written, 0)
+
+    def test_a_tile_deleted_since_the_stamp_is_listed_by_the_unstamp(self):
+        gone = uuid.uuid4()
+        line = {
+            "tile": str(gone),
+            "node": "n",
+            "provisional": None,
+            "feature": "z1",
+            "canvas": "c",
+            "digest": "d",
+            "before": {},
+            "after": {},
+        }
+        for apply_changes in (False, True):
+            with self.subTest(apply=apply_changes):
+                restored, changed = annotation_frames.restore_batch(
+                    [gone], {gone: [line]}, apply_changes
+                )
+                self.assertEqual(restored, 0)
+                self.assertEqual(changed, [(line, "tile gone")])
+
+
+class JournalFileTests(AnnotationFramesCase):
+    def journal_with(self, text):
+        with open(self.journal, "w") as handle:
+            handle.write(text)
+
+    def good_line(self, **changes):
+        return {
+            "tile": str(uuid.uuid4()),
+            "node": "n",
+            "provisional": None,
+            "feature": "z",
+            "canvas": "c",
+            "digest": "d",
+            "before": {},
+            "after": {},
+            **changes,
+        }
+
+    def test_a_line_that_is_not_an_object_names_its_number(self):
+        self.journal_with("[1, 2]\n")
+        with self.assertRaisesMessage(CommandError, "line 1"):
+            annotation_frames.read_journal(self.journal)
+
+    def test_a_line_whose_feature_is_not_an_id_names_its_number(self):
+        self.journal_with(json.dumps(self.good_line(feature=["z"])) + "\n")
+        with self.assertRaisesMessage(CommandError, "line 1"):
+            annotation_frames.read_journal(self.journal)
+
+    def test_blank_lines_are_ignored(self):
+        line = self.good_line()
+        self.journal_with("\n" + json.dumps(line) + "\n\n")
+        grouped = annotation_frames.read_journal(self.journal)
+        self.assertEqual(grouped, {uuid.UUID(line["tile"]): [line]})
+
+    def test_a_journal_that_cannot_be_read_is_refused_cleanly(self):
+        with self.assertRaisesMessage(CommandError, "cannot read the journal"):
+            annotation_frames.read_journal(self.dir.name)
+
+    def test_a_journal_that_cannot_be_removed_after_a_failed_sync_still_fails_cleanly(
+        self,
+    ):
+        real = os.open
+
+        def refuse_directories(path, flags, *args, **kwargs):
+            if flags & os.O_DIRECTORY:
+                raise OSError(errno.EACCES, "denied")
+            return real(path, flags, *args, **kwargs)
+
+        module = "manuspectrum.management.commands.annotation_frames.os"
+        with mock.patch(f"{module}.open", refuse_directories):
+            with mock.patch(f"{module}.unlink", side_effect=OSError("busy")):
+                with self.assertRaisesMessage(CommandError, "cannot create"):
+                    annotation_frames.open_journal(self.journal)
+        os.unlink(self.journal)
+
+    def test_closing_never_raises_and_keeps_a_file_it_cannot_measure(self):
+        module = "manuspectrum.management.commands.annotation_frames.os"
+        fd = os.open(self.journal, os.O_WRONLY | os.O_CREAT)
+        with mock.patch(f"{module}.fstat", side_effect=OSError("gone")):
+            self.assertTrue(annotation_frames._close_journal(fd, self.journal))
+        self.assertTrue(os.path.exists(self.journal))
+
+    def test_closing_never_raises_when_the_descriptor_or_the_file_is_already_gone(self):
+        module = "manuspectrum.management.commands.annotation_frames.os"
+        fd = os.open(self.journal, os.O_WRONLY | os.O_CREAT)
+        with mock.patch(f"{module}.close", side_effect=OSError("closed")):
+            with mock.patch(f"{module}.unlink", side_effect=OSError("busy")):
+                self.assertFalse(annotation_frames._close_journal(fd, self.journal))
+        os.close(fd)
+        os.unlink(self.journal)
+
+
+class OptionGuardTests(AnnotationFramesCase):
+    def test_a_batch_below_one_is_refused(self):
+        for args in (
+            ("stamp", "--batch", "0"),
+            ("unstamp", "--journal", "j", "--batch", "0"),
+        ):
+            with self.subTest(args=args):
+                with self.assertRaisesMessage(CommandError, "--batch must be"):
+                    self.run_command(*args)
+
+    def test_a_negative_retry_count_is_refused(self):
+        with self.assertRaisesMessage(CommandError, "--retries must be"):
+            self.run_command("stamp", "--retries", "-1")
+
+    def test_the_wait_between_passes_sleeps_for_the_seconds_given(self):
+        with mock.patch.object(annotation_frames.time, "sleep") as sleep:
+            REAL_SLEEP(annotation_frames.Command(), 7)
+        sleep.assert_called_once_with(7)

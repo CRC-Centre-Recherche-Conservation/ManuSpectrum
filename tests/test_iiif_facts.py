@@ -294,6 +294,12 @@ class MalformedZoneTests(FactsCase):
         self.assertEqual(found[:2], [a, b])
         self.assertEqual(len(found), 2)
 
+    def test_zones_without_an_id_are_read_after_those_with_one(self):
+        a = str(uuid.uuid4())
+        self.tile_of([self.feature(None), self.feature(a), self.feature("")])
+        found = [feature for _, feature, _, _ in self.read()]
+        self.assertEqual([str(f) if f else None for f in found], [a, None, None])
+
     def test_geometries_whose_coordinates_cannot_be_read_are_skipped(self):
         a, b = sorted(str(uuid.uuid4()) for _ in range(2))
         odd = [

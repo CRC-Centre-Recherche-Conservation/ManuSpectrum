@@ -483,3 +483,17 @@ class HugeCoordinateTests(SimpleTestCase):
         )
         self.assertEqual(todo, {})
         self.assertEqual(out["features"][0]["properties"]["msUnit"], 16)
+
+
+class MatchGuardTests(SimpleTestCase):
+    def test_a_feature_without_a_usable_id_matches_no_stored_zone(self):
+        previous = previous_of(feature(**stamp()))
+        for fid in (None, 5, ["f1"], ""):
+            with self.subTest(fid=fid):
+                new = feature()
+                new["id"] = fid
+                self.assertIsNone(previous.match(new, NODE))
+
+    def test_a_feature_with_a_stored_id_matches_it(self):
+        stored = feature(**stamp())
+        self.assertIs(previous_of(stored).match(feature(), NODE), stored)
