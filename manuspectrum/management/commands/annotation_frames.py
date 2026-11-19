@@ -9,7 +9,7 @@ rectangle the import wrote before stamping existed, at any power-of-two unit
 (32 before 1.0.3, the read or assumed unit since), gets ``import-legacy``; any
 other zone gets ``frame_writes.frame_for_service`` of its image, one call per
 distinct image service and manifest, the registered manifests loaded once per
-run. Each image description is read at most once per run, again over the
+run. Each image description is read at most once per pass, again over the
 network unless this server read it within ``IIIF_IMAGE_INFO_STAMP_MAX_AGE``
 seconds. An image that cannot be read is skipped and listed. A zone already
 carrying a valid stamp is never touched.
@@ -23,7 +23,8 @@ marks have expired (``RETRY_WAIT_MAX`` bounds the wait). Only those services
 are read again, and their zones are written through the same batches and
 journal. The services still unavailable after the last pass are listed: run the
 command again later, with a new journal. A dry run waits for nothing and only
-reports what a retry would read.
+reports what a retry would read. Ctrl-C during a wait stops the retrying, keeps
+what is written, prints the summary and the reindex reminder, and exits non-zero.
 
 ``stamp`` is dry by default; the dry run reads image descriptions over the
 network (and fills the image-info cache) but writes nothing. With ``--apply``
@@ -95,9 +96,11 @@ def annotation_nodes():
     }
 
 
-def tiles_of(nodes):
-    """``(tile id, data, provisionaledits)`` of every tile of the annotation nodegroups."""
+def tiles_of(nodes, only=None):
+    """``(tile id, data, provisionaledits)`` of every tile of the annotation nodegroups (those in *only* when given)."""
     rows = TileModel.objects.filter(nodegroup_id__in=set(nodes.values()))
+    if only is not None:
+        rows = rows.filter(pk__in=only)
     return rows.values_list("tileid", "data", "provisionaledits").iterator(
         chunk_size=500
     )
@@ -163,13 +166,14 @@ def _page_frame(feature, width, height):
 class Plan:
     """What ``stamp`` would write, and what it could not resolve."""
 
-    def __init__(self, service=None, only=None):
+    def __init__(self, service=None, only=None, size_of=None):
         self.service = service
         self.only = only
+        self.tiles_of_skipped = defaultdict(set)
         self.last_failure = None
         self.entries = defaultdict(list)
         self.frames = {}
-        self.size_of = frame_writes.size_lookup()
+        self.size_of = size_of or frame_writes.size_lookup()
         self._reads = {}
         self.skipped = Counter()
         self.stamped = Counter()
@@ -202,10 +206,14 @@ class Plan:
         return self.frames[key]
 
 
-def plan_stamps(nodes, service=None, only=None):
-    """A ``Plan`` for every unstamped zone of the database (those of the services in *only* when given); reads image descriptions, writes nothing."""
-    plan = Plan(service, only)
-    for tile_id, data, edits in tiles_of(nodes):
+def plan_stamps(nodes, service=None, only=None, size_of=None, tiles=None):
+    """A ``Plan`` for every unstamped zone of the database; reads image descriptions, writes nothing.
+
+    A retry pass names the image services *only* to plan, the *tiles* that
+    held their skipped zones and the *size_of* lookup of the first pass.
+    """
+    plan = Plan(service, only, size_of)
+    for tile_id, data, edits in tiles_of(nodes, tiles):
         for user_id, node_id, collection in collections_of(data, edits, nodes):
             for feature in collection["features"]:
                 if not isinstance(feature, dict):
@@ -233,6 +241,7 @@ def plan_stamps(nodes, service=None, only=None):
                     )
                 if frame is None:
                     plan.skipped[canvas] += 1
+                    plan.tiles_of_skipped[canvas].add(tile_id)
                     continue
                 plan.entries[tile_id].append(
                     (
@@ -559,12 +568,21 @@ class Command(BaseCommand):
     def _sleep(self, seconds):
         time.sleep(seconds)
 
-    def _wait(self, plan):
-        """Sleep until the host-down marks set by *plan*'s failed reads have expired, at most ``RETRY_WAIT_MAX`` seconds."""
-        ttl = units._setting("IIIF_IMAGE_INFO_DOWN_TTL", 120)
+    def _wait(self, plan, number, stamped, pending):
+        """Say what pass *number* did, then sleep until the host-down marks set by *plan*'s failed reads have expired, at most ``RETRY_WAIT_MAX`` seconds."""
+        ttl = units.down_ttl()
         elapsed = time.monotonic() - (plan.last_failure or time.monotonic())
         seconds = min(max(ttl - elapsed + 1, 0), RETRY_WAIT_MAX)
-        self._out(f"Waiting {seconds:.0f} s for the host-down marks to expire.")
+        note = (
+            f" (the marks last {ttl} s and may still be live)"
+            if ttl > RETRY_WAIT_MAX
+            else ""
+        )
+        self._out(
+            f"pass {number}: {stamped} zone(s) stamped; {len(pending)} service(s) "
+            f"unavailable; waiting {seconds:.0f} s{note} (Ctrl-C stops retrying "
+            "and keeps what is written)"
+        )
         self._sleep(seconds)
 
     def _write(self, plan, journal, size):
@@ -613,30 +631,44 @@ class Command(BaseCommand):
         if apply_changes and not journal_path:
             raise CommandError("--apply needs --journal PATH (a new file)")
         journal = open_journal(journal_path) if apply_changes else None
-        written, failed, retry_left = 0, False, set()
+        written, failed, retry_left, interrupted = 0, False, set(), False
         try:
             nodes = annotation_nodes()
-            plan = plan_stamps(nodes, service)
-            stamped = Counter(plan.stamped)
-            skipped = Counter(plan.skipped)
-            current, passes = plan, 0
+            current = plan_stamps(nodes, service)
+            already, unusable = current.already, current.unusable
+            size_of = current.size_of
+            skipped = Counter(current.skipped)
+            planned = {}
+            passes = 0
             while True:
+                for tile_id, entries in current.entries.items():
+                    for node_id, user_id, fid, _d, _c, frame, _l in entries:
+                        planned[(tile_id, node_id, user_id, fid)] = frame.source
+                done = 0
                 if apply_changes:
-                    written += self._write(current, journal, options["batch"])
+                    done = self._write(current, journal, options["batch"])
+                    written += done
                 pending = current.unavailable()
                 if not pending:
                     break
                 if not apply_changes or passes >= options["retries"]:
                     retry_left = pending
                     break
+                try:
+                    self._wait(current, passes + 1, done, pending)
+                except KeyboardInterrupt:
+                    retry_left, interrupted = pending, True
+                    break
                 passes += 1
-                self._wait(current)
-                current = plan_stamps(nodes, service, only=pending)
+                tiles = set().union(*(current.tiles_of_skipped[c] for c in pending))
+                current = plan_stamps(
+                    nodes, service, only=pending, size_of=size_of, tiles=tiles
+                )
                 for canvas in pending:
                     skipped.pop(canvas, None)
                 skipped.update(current.skipped)
-                stamped.update(current.stamped)
-            total = sum(stamped.values())
+            stamped = Counter(planned.values())
+            total = len(planned)
         except BaseException:
             failed = True
             raise
@@ -650,25 +682,29 @@ class Command(BaseCommand):
             self._out(f"Only the zones of {service}.")
         for source, count in sorted(stamped.items()):
             self._out(f"  {source}: {count} zone(s)")
-        if skipped:
+        others = Counter({c: n for c, n in skipped.items() if c not in retry_left})
+        if others:
             self._out(
-                "Skipped, no frame known (unavailable or refused without a registered size):"
+                "Skipped, no frame known (refused without a registered size, or an unusable description):"
             )
-            for canvas, count in skipped.most_common():
+            for canvas, count in others.most_common():
                 self._out(f"  {canvas}: {count}")
         if retry_left:
+            self._out("Unavailable services (read failed or host marked down):")
+            for canvas in sorted(retry_left):
+                self._out(f"  {canvas}: {skipped[canvas]}")
             if apply_changes:
                 self._out(
                     f"{len(retry_left)} service(s) still unavailable after {passes} "
                     "retry pass(es): run the command again later, with a new journal."
                 )
-            else:
+            elif options["retries"] > 0:
                 self._out(
                     f"{len(retry_left)} unavailable service(s) would be read again "
                     "with --apply, after the host-down marks expire (no wait in a dry run)."
                 )
         self._out(
-            f"  already stamped: {plan.already}; not stampable (no id, canvas or properties): {plan.unusable}"
+            f"  already stamped: {already}; not stampable (no id, canvas or properties): {unusable}"
         )
         if apply_changes:
             self._out(
@@ -678,6 +714,10 @@ class Command(BaseCommand):
                 )
             )
             self._out("Now run:  python manage.py es reindex_database")
+            if interrupted:
+                raise CommandError(
+                    "interrupted while waiting to retry; what was written is kept"
+                )
         else:
             self._out(self.style.WARNING(f"{total} zone(s) would be stamped (dry run)"))
             self._out(

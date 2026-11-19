@@ -258,6 +258,11 @@ def stamp_max_age():
     return _setting("IIIF_IMAGE_INFO_STAMP_MAX_AGE", 3600)
 
 
+def down_ttl():
+    """The seconds a host stays marked down after a failed read."""
+    return _setting("IIIF_IMAGE_INFO_DOWN_TTL", 120)
+
+
 def image_info(service, deadline=None, max_age=None):
     """``ImageInfo`` of the image service *service*, ``REFUSED`` or ``UNAVAILABLE``.
 

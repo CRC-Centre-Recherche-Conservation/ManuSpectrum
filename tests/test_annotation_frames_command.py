@@ -926,6 +926,7 @@ class RetryTests(AnnotationFramesCase):
         self.t_flaky2 = self.tile(zone("f2", canvas=self.FLAKY + "b"))
         self.t_read = self.tile(zone("r1", canvas=READ_SERVICE))
         self.t_refused = self.tile(zone("x1", canvas=SERVICE))
+        self.t_unregistered = self.tile(zone("u1", canvas=SERVICE + "-unregistered"))
 
     def slept(self, seconds):
         super().slept(seconds)
@@ -941,7 +942,7 @@ class RetryTests(AnnotationFramesCase):
             return answered({}, status=503)
         return super().answer(url, **kwargs)
 
-    def stamped(self, tile, fid, canvas=None):
+    def stamped(self, tile, fid):
         return "msUnit" in self.props(tile, fid)
 
     def test_a_host_down_on_the_first_read_is_stamped_by_a_retry_in_one_journal(self):
@@ -956,6 +957,9 @@ class RetryTests(AnnotationFramesCase):
         )
         self.assertNotIn("still unavailable", out)
         self.assertEqual(len(self.calls(READ_SERVICE)), 1)
+        self.assertTrue(119 <= self.sleeps[0] <= 121)
+        self.assertIn("pass 1: 2 zone(s) stamped; 2 service(s) unavailable", out)
+        self.assertIn("4 of 4 planned zone(s) stamped", out)
 
     def test_a_host_still_down_after_every_retry_is_listed_and_the_rest_stamped(self):
         self.tile(zone("d1", canvas=DOWN_SERVICE))
@@ -967,10 +971,42 @@ class RetryTests(AnnotationFramesCase):
         self.assertIn(DOWN_SERVICE, out)
         self.assertIn("still unavailable", out)
         self.assertIn("again later", out)
+        listed = out.split("Unavailable services")[1]
+        self.assertIn(DOWN_SERVICE, listed)
+        self.assertNotIn(SERVICE + "-unregistered", listed)
+
+    def test_ctrl_c_while_waiting_keeps_the_stamps_and_prints_the_summary(self):
+        out = StringIO()
+        with mock.patch.object(
+            annotation_frames.Command, "_sleep", side_effect=KeyboardInterrupt
+        ):
+            with self.assertRaises(CommandError):
+                call_command(
+                    "annotation_frames",
+                    "stamp",
+                    "--apply",
+                    "--journal",
+                    self.journal,
+                    stdout=out,
+                    stderr=StringIO(),
+                )
+        self.assertTrue(self.stamped(self.t_read, "r1"))
+        self.assertFalse(self.stamped(self.t_flaky, "f1"))
+        self.assertGreater(os.path.getsize(self.journal), 0)
+        self.assertIn("still unavailable", out.getvalue())
+        self.assertIn("es reindex_database", out.getvalue())
+
+    def test_a_dry_run_with_no_retries_does_not_promise_a_retry(self):
+        out = self.run_command("stamp", "--retries", "0")
+        self.assertNotIn("would be read again", out)
+        self.assertIn(self.FLAKY, out)
 
     def test_a_refused_service_is_never_retried(self):
-        self.run_command("stamp", "--apply", "--journal", self.journal)
+        out = self.run_command("stamp", "--apply", "--journal", self.journal)
         self.assertEqual(len(self.calls(SERVICE)), 1)
+        self.assertFalse(self.stamped(self.t_unregistered, "u1"))
+        self.assertIn(SERVICE + "-unregistered", out)
+        self.assertNotIn("Unavailable services", out)
 
     def test_no_retry_leaves_the_unavailable_zones_as_before(self):
         out = self.run_command(
@@ -988,5 +1024,6 @@ class RetryTests(AnnotationFramesCase):
 
     def test_the_wait_is_bounded(self):
         with override_settings(IIIF_IMAGE_INFO_DOWN_TTL=10_000):
-            self.run_command("stamp", "--apply", "--journal", self.journal)
+            out = self.run_command("stamp", "--apply", "--journal", self.journal)
         self.assertLessEqual(self.sleeps[0], annotation_frames.RETRY_WAIT_MAX)
+        self.assertIn("may still be live", out)
