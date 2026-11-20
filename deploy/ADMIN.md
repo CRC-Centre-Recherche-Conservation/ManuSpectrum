@@ -436,6 +436,16 @@ Any other value stops web from starting. Change it in `.env`, then `make -C depl
 per-address request budget and how to raise it before an event are in
 `deploy/runbooks/explorer.md`.
 
+## Data Lab: Mirador viewer
+
+`EXPLORER_MIRADOR_URL` in `.env` is the Mirador viewer that the Data Lab's « Open in Mirador »
+links open, with `?manifest=` (a manifest) or `?iiif-content=` (a zone). Empty (the default)
+hides the button. Only an absolute `https://` address is accepted, without credentials; anything
+else stops web from starting. The value for the CRC plugin's demo is
+`https://crc-centre-recherche-conservation.github.io/mirador-xyviewer/`, to set once that demo
+reads `?manifest=`. To change it, set `env_explorer_mirador_url` in the inventory (or edit `.env`),
+run Ansible, then `make -C deploy up`.
+
 ## Google Search Console
 
 To verify the site, add a URL-prefix property, choose the « HTML tag » method and copy the
