@@ -77,6 +77,7 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/intro-bar.ts";
 import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
+import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 import { warmViewer } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 import {
     hasActiveFilters,
@@ -95,6 +96,7 @@ import type {
     Label,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
+    DocumentOrigin,
     Focus,
     FolioView,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
@@ -657,11 +659,18 @@ const resultsLabel = computed(() => {
               );
     return interpolate(text, { n: shown.total }, true);
 });
-const backLabel = computed(() =>
-    store.documentOrigin === "results"
+/** Where the back link leads: Compare while that view is available, else the Corpus screen `backToCompare` falls back to. */
+const backTarget = computed<DocumentOrigin>(() => {
+    if (store.documentOrigin !== "compare" || isViewAvailable("compare"))
+        return store.documentOrigin;
+    return hasActiveFilters(store.filters) ? "results" : "home";
+});
+const backLabel = computed(() => {
+    if (backTarget.value === "compare") return $gettext("Back to Compare");
+    return backTarget.value === "results"
         ? resultsLabel.value
-        : $gettext("Data Lab home"),
-);
+        : $gettext("Data Lab home");
+});
 const drawerVisible = computed({
     get: () => narrow.value && cardOpen.value,
     set: (visible: boolean) => {
@@ -1039,6 +1048,10 @@ function selectCanvas(canvasId: string): void {
 }
 
 function back(): void {
+    if (store.documentOrigin === "compare") {
+        store.backToCompare();
+        return;
+    }
     store.setCorpusScreen(store.documentOrigin);
 }
 

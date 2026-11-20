@@ -47,6 +47,7 @@ import type {
     ToolKind,
     ToolWindow,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
+import type { DocumentTarget } from "@/manuspectrum/pages/AnalysisExplorer/selection/place.ts";
 import type { MapState } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/map-state.ts";
 import type { TrackResult } from "@/manuspectrum/pages/AnalysisExplorer/views/Map/tracking.ts";
 import type { FocusMode } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/focus.ts";
@@ -297,14 +298,40 @@ export const useExplorerStore = defineStore("explorer", () => {
         folioView.value = "analyses";
     }
 
-    /** Opens a document screen, remembering the Corpus screen it was opened from. */
+    /** Opens a document screen, remembering the screen it was opened from: Compare when that view is shown, else the Corpus screen. */
     function openDocument(id: string, canvas: string | null = null): void {
-        if (corpusScreen.value !== "document") {
+        if (view.value === "compare") {
+            documentOrigin.value = "compare";
+        } else if (corpusScreen.value !== "document") {
             documentOrigin.value = corpusScreen.value;
         }
         view.value = "corpus";
         corpusScreen.value = "document";
         document.value = { id, canvas };
+        focus.value = null;
+        folioView.value = "analyses";
+    }
+
+    /**
+     * Opens a document on a page with a record focused and the folio view that
+     * draws it, in one change: the address records one history entry.
+     */
+    function openInDocument(target: DocumentTarget): void {
+        openDocument(target.document, target.canvas);
+        focusOn(target.focus);
+    }
+
+    /**
+     * Leaves a document screen opened from Compare for the Compare view, the
+     * state the address of that view gives back: results while a Corpus filter
+     * is active, else home.
+     */
+    function backToCompare(): void {
+        view.value = isViewAvailable("compare") ? "compare" : "corpus";
+        corpusScreen.value = hasActiveFilters(filters.value)
+            ? "results"
+            : "home";
+        document.value = null;
         focus.value = null;
         folioView.value = "analyses";
     }
@@ -650,6 +677,8 @@ export const useExplorerStore = defineStore("explorer", () => {
         setView,
         setCorpusScreen,
         openDocument,
+        openInDocument,
+        backToCompare,
         setCanvas,
         focusOn,
         setFolioView,

@@ -242,6 +242,45 @@ describe("SelectionIndicator", () => {
         expect(store.focus).toEqual({ kind: "analysis", id: AN2 });
     });
 
+    it("leaves a Ctrl-click or a middle click on « Open in the document » to the browser", async () => {
+        const { view, linked } = mountIndicator();
+        linked.toggle(analysisNode(AN2));
+        await button(view).trigger("click");
+        const link = view.find("a.open-document");
+        for (const init of [
+            { ctrlKey: true },
+            { metaKey: true },
+            { button: 1 },
+        ]) {
+            let handled = true;
+            const listener = (event: Event) => {
+                handled = event.defaultPrevented;
+                event.preventDefault();
+            };
+            link.element.addEventListener("click", listener);
+            link.element.dispatchEvent(
+                new MouseEvent("click", {
+                    bubbles: true,
+                    cancelable: true,
+                    ...init,
+                }),
+            );
+            link.element.removeEventListener("click", listener);
+            expect(handled).toBe(false);
+        }
+        expect(useExplorerStore().document).toBeNull();
+    });
+
+    it("remembers Compare as the origin of the document it opens", async () => {
+        const { view, linked } = mountIndicator();
+        const store = useExplorerStore();
+        store.setView("compare");
+        linked.toggle(analysisNode(AN2));
+        await button(view).trigger("click");
+        await view.find("a.open-document").trigger("click");
+        expect(store.documentOrigin).toBe("compare");
+    });
+
     it("offers a menu of documents when the linked records span several", async () => {
         const { view, linked } = mountIndicator({
             ...SYNTHESIS,

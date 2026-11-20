@@ -658,3 +658,39 @@ describe("map state", () => {
         expect(store.trackMode).toBe("all");
     });
 });
+
+describe("openInDocument and Compare", () => {
+    const TARGET = {
+        document: uuid(1),
+        canvas: "https://iiif.example/c2",
+        focus: { kind: "characterization", id: uuid(5) },
+    } as const;
+
+    it("opens a document, its page, the focus and the folio view of the record in one change", () => {
+        const store = useExplorerStore();
+        store.openInDocument(TARGET);
+        expect(store.corpusScreen).toBe("document");
+        expect(store.document).toEqual({ id: uuid(1), canvas: TARGET.canvas });
+        expect(store.focus).toEqual(TARGET.focus);
+        expect(store.folioView).toBe("characterizations");
+    });
+
+    it("remembers Compare as the origin when that view is shown, even over a document already open", () => {
+        const store = useExplorerStore();
+        store.openDocument(uuid(9));
+        store.setView("compare");
+        store.openInDocument(TARGET);
+        expect(store.documentOrigin).toBe("compare");
+    });
+
+    it("goes back to Compare, closing the document and its card, keeping the filters", () => {
+        const store = useExplorerStore();
+        store.setView("compare");
+        store.openInDocument(TARGET);
+        store.backToCompare();
+        expect(store.view).toBe("compare");
+        expect(store.corpusScreen).toBe("home");
+        expect(store.document).toBeNull();
+        expect(store.focus).toBeNull();
+    });
+});
