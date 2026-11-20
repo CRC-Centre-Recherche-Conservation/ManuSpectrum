@@ -43,6 +43,7 @@ MULTIPROC_PY = REPO / "manuspectrum" / "observability" / "multiproc.py"
 TEXTFILE_SCRIPTS = [
     REPO / "deploy" / "scripts" / "backup.sh",
     REPO / "deploy" / "scripts" / "restore-test.sh",
+    REPO / "deploy" / "scripts" / "log-archive.sh",
     REPO / "deploy" / "scripts" / "lib-release.sh",
     REPO / "deploy" / "scripts" / "release-watch.sh",
     REPO / "deploy" / "scripts" / "release-update.sh",

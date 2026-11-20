@@ -162,14 +162,15 @@ class HostRoleTests(unittest.TestCase):
         self.assertEqual(module_of(tasks[-1]), "meta")
         self.assertEqual(tasks[-1]["ansible.builtin.meta"], "flush_handlers")
 
-    def test_journald_keeps_a_bounded_persistent_journal(self):
+    def test_journald_keeps_a_persistent_journal_for_one_year(self):
         text = (ROLES_DIR / "host" / "templates" / "journald.conf.j2").read_text(
             encoding="utf-8"
         )
         for line in (
             "Storage=persistent",
-            "SystemMaxUse=500M",
-            "MaxRetentionSec=3month",
+            "SystemMaxUse=12G",
+            "MaxRetentionSec=1year",
+            "MaxFileSec=1day",
         ):
             self.assertIn(line, text.splitlines())
         self.assertIn("[Journal]", text.splitlines())
@@ -421,7 +422,7 @@ class ReleaseInstallTests(unittest.TestCase):
     def test_the_release_file_list_is_the_managed_list_of_release_managed(self):
         files = app_defaults()["app_release_program_files"]
         names = {f["name"] for f in files}
-        self.assertEqual(names, managed_script_names())
+        self.assertEqual(names, managed_script_names() - {"log-archive.sh"})
         modes = {f["name"]: f["mode"] for f in files}
         for name in ("lib-release.sh", "lib-metrics.sh"):
             self.assertEqual(modes[name], "0644")

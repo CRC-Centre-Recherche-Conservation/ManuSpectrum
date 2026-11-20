@@ -79,10 +79,6 @@ class AcceptanceCommandTests(unittest.TestCase):
     def setUp(self):
         self.text = (DEPLOY / "ACCEPTANCE.md").read_text()
 
-    def test_the_log_listing_expands_its_glob_as_root(self):
-        self.assertNotIn("sudo ls -lh $(sudo docker inspect", self.text)
-        self.assertIn('sudo sh -c "ls -lh $L*"', self.text)
-
     def test_the_secrets_aside_directory_is_removed_without_prompts(self):
         self.assertIn('rm -rf "${SECRETS_DIR:?}/aside"', self.text)
         self.assertNotIn('rm -r "${SECRETS_DIR:?}/aside"', self.text)

@@ -65,7 +65,7 @@
     group: root
     mode: "0755"
 
-- name: Keep a bounded persistent journal
+- name: Keep a persistent journal for one year, one file per day
   ansible.builtin.template:
     src: journald.conf.j2
     dest: /etc/systemd/journald.conf.d/manuspectrum.conf
@@ -73,6 +73,12 @@
     group: root
     mode: "0644"
   notify: restart journald
+
+- name: Keep the rsyslog text logs for 52 weeks
+  ansible.builtin.replace:
+    path: /etc/logrotate.d/rsyslog
+    regexp: '^(\s*)rotate\s+\d+\s*$'
+    replace: '\1rotate 52'
 
 - name: Create the drop-in directory of the Docker scopes
   ansible.builtin.file:

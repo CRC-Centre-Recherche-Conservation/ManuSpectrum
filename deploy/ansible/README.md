@@ -224,5 +224,5 @@ ansible-playbook -i inventories/example render.yml -e render_dir=/tmp/rendered
 RENDERED_UNITS_DIR=/tmp/rendered/units bash ../systemd/tests/test_units.sh
 ```
 
-`render.yml` renders `.env`, the seventeen units and the logrotate rule from the
+`render.yml` renders `.env`, the nineteen units and the logrotate rule from the
 example inventory into a scratch directory, without privileges.

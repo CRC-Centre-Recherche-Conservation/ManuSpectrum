@@ -743,7 +743,7 @@ CNRS (legal notice, `/<lang>/about/legal`).
 | Person resources | Names and affiliations of people in the scientific records | Attribution of data | With the data |
 | Mails | Invitations and notices (embargo, workflow) to the people concerned; summaries to `ALERT_EMAILS` | Service notices, no unsubscribe link | Not stored by ManuSpectrum (the relay keeps its own logs) |
 | Backups | The whole database, media and secrets, encrypted (restic) | Recovery | 7 daily, 4 weekly, 6 monthly (`BACKUP.md`) |
-| Server logs | Access log without query string | Operation | 30 days |
+| Server logs | Access log without query string, error log, container logs and system logs (the access and error logs carry the IP address) | Operation | One year |
 
 Rights are exercised at `CONTACT_EMAIL`. Erasures since a backup are replayed before reopening a
 restored stack (`BACKUP.md`, "Personal data").
