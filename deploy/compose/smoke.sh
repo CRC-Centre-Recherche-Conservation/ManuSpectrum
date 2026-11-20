@@ -348,6 +348,8 @@ cmd_monitoring() {
 
   # The task series exist once a worker pool process has primed them.
   retry "the worker exposes its primed task series" 120 has_series manuspectrum_celery_tasks_total
+  # The TLS series of a probe exist from its first handshake; the edge is probed once a minute.
+  retry "the edge probe has completed a TLS handshake" 150 has_series 'probe_ssl_earliest_cert_expiry{job="blackbox-edge"}'
   tmp="$(mktemp -d)"
   prom_get /api/v1/rules >"$tmp/rules.json"
   prom_get /api/v1/label/__name__/values >"$tmp/names.json"

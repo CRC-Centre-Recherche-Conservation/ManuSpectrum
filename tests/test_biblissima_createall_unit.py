@@ -319,7 +319,8 @@ class BufferIsolationTests(CreateAllBase):
             [r["status"] for r in results], ["created", "failed", "created"]
         )
         self.assertEqual(results[1]["error"], "Creation failed for this item.")
-        self.assertNotIn(b"403", json.dumps(payload).encode())
+        self.assertNotIn("Client Error", json.dumps(payload))
+        self.assertNotIn("Forbidden", json.dumps(payload))
 
         # Survivors are items 0 and 2; item 1 failed and has no resourceId.
         survivor_ids = {r["resourceId"] for r in results if r["status"] == "created"}
