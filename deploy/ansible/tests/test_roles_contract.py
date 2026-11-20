@@ -171,6 +171,7 @@ class HostRoleTests(unittest.TestCase):
             "SystemMaxUse=12G",
             "MaxRetentionSec=1year",
             "MaxFileSec=1day",
+            "SystemMaxFiles=2000",
         ):
             self.assertIn(line, text.splitlines())
         self.assertIn("[Journal]", text.splitlines())

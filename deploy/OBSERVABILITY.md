@@ -182,7 +182,7 @@ silences one alert; silences live on a volume and survive a restart.
 `make -C deploy observability-off` stops the stack (volumes kept).
 
 **Node exporter down.** `NfsUnavailable`, `BackupMissing`, `RestoreTestMissing`, `ReleaseWatchStale`,
-`HostMetricsStale`, `DiskUsageStale` and `ContainerMissing` read series that only
+`HostMetricsStale`, `DiskUsageStale`, `LogArchiveStale` and `ContainerMissing` read series that only
 node_exporter carries. They count a missing series only while node_exporter is up,
 so its outage raises `NodeExporterDown` alone (critical, after 15 minutes, since it
 blinds the backup and NFS alerts; `TargetDown` covers the other targets).

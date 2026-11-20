@@ -320,8 +320,9 @@ reindex; the rehearsal figures are in `ACCEPTANCE.md`.
 
 The server logs stay one year on the host: the nginx access and error logs
 (logrotate, 365 days), the container logs and the system journal (journald, one
-year), the rsyslog files of `/var/log` (52 weeks). They are not in restic. The
-hosting provider's TSM backup copies `/data`, `/etc`, `/home` and `/root` daily,
+year), the rsyslog, ufw and fail2ban files of `/var/log` (52 weeks), `wtmp` and
+`btmp` (12 months); other packages' own log files keep their own rotation. The
+logs are not in restic. The hosting provider's TSM backup copies `/data`, `/etc`, `/home` and `/root` daily,
 and `/var/log` once it is added to the `DOMAIN` of `/var/spool/tsm/etc/dsm.sys`
 (the provider's file, edited by hand); the VM cannot delete those backups.
 

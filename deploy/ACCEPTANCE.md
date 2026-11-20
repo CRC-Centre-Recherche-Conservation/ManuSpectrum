@@ -131,8 +131,8 @@ Detailed build procedure: `deploy/rehearsal/README.md`. Here, the checks.
   When containers already run and the file would change, the play stops and asks for
   `-e docker_restart_ok=true`: the Docker restart stops the stack (plan a window on a live host).
 - [ ] After the `host` role: `systemctl cat systemd-journald | grep -c manuspectrum.conf` → `1` and
-  `grep -E 'SystemMaxUse|MaxRetentionSec|MaxFileSec' /etc/systemd/journald.conf.d/manuspectrum.conf` → `SystemMaxUse=12G`,
-  `MaxRetentionSec=1year`, `MaxFileSec=1day`; `grep rotate /etc/logrotate.d/rsyslog` → `rotate 52` (weekly, about one year).
+  `grep -E 'SystemMax|MaxRetentionSec|MaxFileSec' /etc/systemd/journald.conf.d/manuspectrum.conf` → `SystemMaxUse=12G`,
+  `MaxRetentionSec=1year`, `MaxFileSec=1day`, `SystemMaxFiles=2000`; `grep -H rotate /etc/logrotate.d/{rsyslog,ufw,fail2ban,wtmp,btmp}` → `rotate 52` for the weekly rules, `rotate 12` for `wtmp` and `btmp`.
   A `daemon.json` with keys the role does not manage stops the play: merge them by hand first.
 - [ ] `ls -l /etc/manuspectrum/rehearsal-host` → `-rw-r--r-- 1 root root`: the marker without which
   `make load-snapshot` is refused (the rehearsal VM only; never create it on a production host).
@@ -1451,7 +1451,8 @@ sizes of the data directories.
   schedule decided in 7.4 is recorded.
 - [ ] `systemctl list-timers manuspectrum-log-archive.timer` lists the daily 07:30 timer; `sudo systemctl start manuspectrum-log-archive`
   then `journalctl -u manuspectrum-log-archive -e` → on a host without `dsmc` the unit succeeds and logs `dsmc not installed`;
-  with `dsmc`, `archived N file(s)` and `sudo dsmc query archive "/var/log/*"` lists them.
+  with `dsmc`, `archived N file(s)` and `sudo dsmc query archive "/var/log/*"` lists them. On the production host,
+  `dsmc not installed` is a failure: the archive is off and `LogArchiveStale` stays silent.
 
 ## Step 8 — Accounts (`deploy/ADMIN.md`)
 
