@@ -35,10 +35,12 @@ from zipstream import ZIP_STORED, ZipStream
 from manuspectrum.iiif.sources import (
     canvas_index,
     canvases_of,
+    local_manifest_id,
     manifest_id,
     manifest_sources,
+    published_manifest,
 )
-from manuspectrum.iiif.zones import annotation_features
+from manuspectrum.iiif.zones import located_features
 from manuspectrum.observability import metrics
 from manuspectrum.utils.role_links import role_node
 from manuspectrum.views.explorer.api import _not_found
@@ -166,7 +168,7 @@ def _json_bytes(value):
 def analysis_zones(scope):
     """``{analysis id: {"canvas", "label", "shape"}}``: the first zone of each analysis on a canvas of its document's manifest.
 
-    Zones are read from the nodegroup the reader may read; the canvas is resolved as ``build_manifest`` resolves it.
+    Zones are read from the nodegroup the reader may read; the canvas is resolved as ``build_manifest`` resolves it. Only the kept zone is converted.
     """
     bundle = scope.bundle
     readable = scope.nodegroups
@@ -180,13 +182,15 @@ def analysis_zones(scope):
         analyses = [
             a for a in scope.analyses if bundle.chains.get(a, (None,))[0] == document
         ]
-        for rid, _, canvas, shape in annotation_features(
+        for rid, _, canvas, convert in located_features(
             zone_node, analyses, canvas_index(listed), readable
         ):
-            if canvas in labels:
-                zones.setdefault(
-                    rid, {"canvas": canvas, "label": labels[canvas], "shape": shape}
-                )
+            if canvas in labels and rid not in zones:
+                zones[rid] = {
+                    "canvas": canvas,
+                    "label": labels[canvas],
+                    "shape": convert(),
+                }
     return zones
 
 
@@ -732,10 +736,18 @@ def _data_members(scope, content, zones, stored):
 
     *stored* is the scope's ``stored_sizes``; an entry absent from it has no
     member. *unfetched* lists ``(analysis name, manifest URL)`` for each imaging
-    manifest that could not be read; it has no member.
+    manifest that could not be read; it has no member. A local imaging
+    manifest is written as ``ids.stored_manifest`` serves it
+    (``published_manifest``); an external one as stored.
     """
     bundle = scope.bundle
     taken, members, unfetched = set(), [], []
+    imaging_sources = manifest_sources(
+        entry.get("downloadUrl")
+        for files in content.files.values()
+        for entry in files
+        if entry.get("dataKind") == "chemical-imaging"
+    )
     for row in content.rows:
         analysis_id = row["id"]
         document = bundle.chains.get(analysis_id, (None, None))[0]
@@ -768,6 +780,12 @@ def _data_members(scope, content, zones, stored):
                     unfetched.append((row["name"]["value"], entry.get("downloadUrl")))
                     continue
                 imaging += 1
+                globalid = local_manifest_id(entry.get("downloadUrl"))
+                if globalid:
+                    source = imaging_sources.get(entry.get("downloadUrl"))
+                    manifest = published_manifest(
+                        manifest, globalid, source.original if source else None
+                    )
                 data = _json_bytes(manifest)
                 name = arcname(parts, f"imaging-{imaging}.json", taken, "imaging")
                 members.append(

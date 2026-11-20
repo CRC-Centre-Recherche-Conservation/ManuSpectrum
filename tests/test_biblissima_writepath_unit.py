@@ -807,6 +807,59 @@ class AnnotationTargetGuardTests(TestCase):
 
         self.assertEqual(len(location_tiles), 1)
 
+    def _page_corner(self, location_tiles):
+        from manuspectrum.views.biblissima_proxy import COMP_LOCATION_DOC_NODE
+
+        feature = location_tiles[0].data[COMP_LOCATION_DOC_NODE]["features"][0]
+        return feature["geometry"]["coordinates"][0][2]
+
+    def test_the_whole_page_zone_is_in_the_units_of_its_image(self):
+        from manuspectrum.utils.http import FetchedResponse
+
+        info = FetchedResponse(
+            "https://example.com/iiif/image/info.json",
+            200,
+            {},
+            b'{"width": 800, "height": 1000, "tiles": [{"width": 512}]}',
+        )
+        with (
+            self.settings(IIIF_IMAGE_INFO_READ=True),
+            patch("manuspectrum.iiif.units.safe_fetch", return_value=info),
+        ):
+            _, location_tiles = self._build("93.184.216.34")
+
+        self.assertEqual(self._page_corner(location_tiles), [400, -500])
+
+    def test_the_whole_page_zone_of_an_unread_image_assumes_its_tiles(self):
+        _, location_tiles = self._build("93.184.216.34")
+
+        self.assertEqual(self._page_corner(location_tiles), [200, -250])
+
+    def test_an_unread_image_is_logged_with_its_host_only(self):
+        with self.assertLogs("manuspectrum.views.biblissima_proxy", "WARNING") as logs:
+            self._build("93.184.216.34")
+
+        line = "\n".join(logs.output)
+        self.assertIn("assumed unit", line)
+        self.assertIn("example.com", line)
+        self.assertNotIn("/iiif/image", line)
+
+    def test_a_read_image_logs_nothing(self):
+        from manuspectrum.utils.http import FetchedResponse
+
+        info = FetchedResponse(
+            "https://example.com/iiif/image/info.json",
+            200,
+            {},
+            b'{"width": 800, "height": 1000, "tiles": [{"width": 512}]}',
+        )
+        with (
+            self.settings(IIIF_IMAGE_INFO_READ=True),
+            patch("manuspectrum.iiif.units.safe_fetch", return_value=info),
+            self.assertNoLogs("manuspectrum.views.biblissima_proxy", "WARNING"),
+        ):
+            self._build("93.184.216.34")
+
     def test_a_target_inside_the_network_writes_no_annotation(self):
         view, location_tiles = self._build("169.254.169.254")
 

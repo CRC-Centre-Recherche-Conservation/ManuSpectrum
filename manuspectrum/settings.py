@@ -19,7 +19,7 @@ except ImportError:
     pass
 
 APP_NAME = "manuspectrum"
-APP_VERSION = semantic_version.Version(major=1, minor=0, patch=2)
+APP_VERSION = semantic_version.Version(major=1, minor=0, patch=3)
 APP_ROOT = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 
 WEBPACK_LOADER = {
@@ -823,6 +823,30 @@ IIIF_RETRY_AFTER_MAX = 10
 # costs nothing next to re-fetching one per search result.
 IIIF_MANIFEST_CACHE_TTL = 60 * 60 * 24
 
+# Annotation zones are stored in the units of the leaflet-iiif layer Arches'
+# viewer drew, which only the image's info.json converts to pixels
+# (manuspectrum/iiif/units.py). A read is kept IIIF_IMAGE_INFO_CACHE_TTL
+# seconds; a host that refuses this server (403) or a service without a usable
+# description is asked again after IIIF_IMAGE_INFO_REFUSED_TTL; a host that
+# failed (timeout, 429, 5xx) is left alone IIIF_IMAGE_INFO_DOWN_TTL seconds.
+# One read gets IIIF_IMAGE_INFO_TIMEOUT seconds, the reads of one manifest in
+# one request IIIF_IMAGE_INFO_DEADLINE. IIIF_IMAGE_INFO_READ = False requests
+# nothing: every unit is then assumed from the canvas size.
+IIIF_IMAGE_INFO_READ = True
+IIIF_IMAGE_INFO_CACHE_TTL = 7 * 24 * 60 * 60
+IIIF_IMAGE_INFO_REFUSED_TTL = 60 * 60
+IIIF_IMAGE_INFO_DOWN_TTL = 120
+IIIF_IMAGE_INFO_TIMEOUT = 4
+IIIF_IMAGE_INFO_DEADLINE = 6
+# Tile width, by host name, of image services whose info.json this server
+# cannot read (a host that blocks server-side requests): what a browser reads
+# in `tiles[0].width` (`tile_width` in Image API 1.1) there. Without an entry
+# an unread image is assumed to be tiled at 256.
+IIIF_IMAGE_TILE_HINTS = {}
+# Tile width assumed for an unread image of this platform's own image server;
+# it follows Cantaloupe's `endpoint.iiif.min_tile_size` (512 by default in Cantaloupe 5).
+IIIF_OWN_IMAGE_TILE = 512
+
 # max-age advertised on a search thumbnail. Each miss costs a manifest fetch
 # plus an image fetch from the provider, so the browser and any intermediary
 # must be told the answer keeps.
@@ -1063,10 +1087,10 @@ IIIF_AUTH_COOKIE_TTL = 8 * 3600
 IIIF_AUTH_TRUSTED_ORIGINS = ["https://crc-centre-recherche-conservation.github.io"]
 # Token requests per client IP (django-ratelimit); over it: « unavailable ».
 IIIF_AUTH_TOKEN_RATE = "30/m"
-# django-cors-headers leaves /iiif/ alone: every IIIF view answers its own
-# CORS (Access-Control-Allow-Origin: *, preflight with Authorization, on
-# every status) and the auth pages answer none.
-CORS_URLS_REGEX = r"^(?!/iiif/).*$"
+# django-cors-headers leaves /iiif/ and the bare /manifest/<uuid> redirect
+# alone: every IIIF view answers its own CORS (Access-Control-Allow-Origin: *,
+# preflight with Authorization, on every status) and the auth pages answer none.
+CORS_URLS_REGEX = r"^(?!/iiif/|/manifest/).*$"
 
 ####### PASSWORDS #######
 # Argon2 first. A PBKDF2 hash stays valid and is rehashed at the next sign-in;

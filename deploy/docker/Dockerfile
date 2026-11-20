@@ -10,7 +10,7 @@
 # python-deps and runtime use the same Python image.
 FROM ghcr.io/astral-sh/uv:0.12.20@sha256:100047e74f30778ab704942321a09750d6158739573ff58bf3924085cc6cd2d8 AS uv
 
-FROM python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb AS python-deps
+FROM python:3.13-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS python-deps
 ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -36,7 +36,7 @@ RUN set -a && . /tmp/placeholder.env && set +a \
     && python -c "import django; django.setup()" \
     && test -s frontend_configuration/webpack-metadata.json
 
-FROM node:24-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe AS frontend
+FROM node:24-trixie-slim@sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0 AS frontend
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # hadolint ignore=DL3008
 RUN apt-get update \
@@ -78,7 +78,7 @@ RUN set -a && . /tmp/placeholder.env && set +a \
     && find static -type f ! -name .build-id -print0 | LC_ALL=C sort -z | xargs -0 sha256sum \
         | sha256sum | cut -c1-16 > static/.build-id
 
-FROM python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb AS runtime
+FROM python:3.13-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS runtime
 LABEL org.opencontainers.image.title="ManuSpectrum" \
       org.opencontainers.image.source="https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum" \
       org.opencontainers.image.licenses="AGPL-3.0-only"

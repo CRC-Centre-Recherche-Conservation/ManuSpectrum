@@ -20,9 +20,10 @@ signed-in user without a secret on the enrolment page. A user whose secret was
 cleared by an administrator (lost device, new `SECRET_KEY`) cannot sign in to
 get there, so the reset mails a personal link (`TwoFactorResetView`): a signed
 token bound to the password hash and to the empty secret, so it dies with the
-first enrolment or any password change. The link answers a « Continue » page
-whose post moves the token to the session and redirects to the same route with
-the placeholder `enrol`, as in `ActivateAccountView` (see `mailed_links`).
+first enrolment or any password change. The link sets a short-lived
+cookie holding the token and redirects to the same route with the placeholder
+`enrol`, as in `ActivateAccountView` (see `mailed_links`); the cookie is renewed
+by every valid answer and deleted once the user is enrolled.
 The user types the password (counted by django-axes like a sign-in), enrols
 with a valid code and is signed in.
 """
@@ -57,7 +58,7 @@ from manuspectrum.accounts.activation import (
     LOGIN_BACKEND,
     is_real_user,
 )
-from manuspectrum.accounts.mailed_links import land
+from manuspectrum.accounts.mailed_links import COOKIE_MAX_AGE, MailedLink
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,11 @@ PENDING_KEY = "ms_pending_mfa_secret"
 RESET_SALT = "manuspectrum.two-factor-reset"
 RESET_MAX_AGE = 24 * 3600
 RESET_PLACEHOLDER = "enrol"
-RESET_TOKEN_KEY = "_ms_two_factor_reset_token"
+LINK = MailedLink(
+    cookie="ms_two_factor_link",
+    route="account-two-factor-reset",
+    placeholder=RESET_PLACEHOLDER,
+)
 RESET_VERIFIED_KEY = "_ms_two_factor_reset_verified"
 RESET_PENDING_KEY = "ms_reset_pending_mfa_secret"
 
@@ -310,22 +315,30 @@ class TwoFactorResetView(View):
         if not settings.ENABLE_TWO_FACTOR_AUTHENTICATION:
             raise Http404
         token = kwargs["token"]
+        expired = False
         if token == RESET_PLACEHOLDER:
-            token = request.session.get(RESET_TOKEN_KEY, "")
+            token = LINK.token(request)
+            expired = not token
         elif user_for_reset(token) is not None:
-            return land(
-                request,
-                token=token,
-                session_key=RESET_TOKEN_KEY,
-                target=reverse(
-                    "account-two-factor-reset", kwargs={"token": RESET_PLACEHOLDER}
-                ),
-                template_name="accounts/two_factor_reset_continue.htm",
-            )
+            return LINK.land(request, token)
         self.account = user_for_reset(token) if token else None
         if self.account is None:
-            return render(request, "accounts/two_factor_reset_invalid.htm", status=410)
-        return super().dispatch(request, *args, **kwargs)
+            response = render(
+                request,
+                "accounts/two_factor_reset_invalid.htm",
+                {"expired": expired, "minutes": COOKIE_MAX_AGE // 60},
+                status=410,
+            )
+            LINK.forget(response)
+            return response
+        self.token = token
+        self.done = False
+        response = super().dispatch(request, *args, **kwargs)
+        if self.done:
+            LINK.forget(response)
+        else:
+            LINK.remember(response, self.token)
+        return response
 
     def get(self, request, token):
         return self.render(request)
@@ -344,13 +357,13 @@ class TwoFactorResetView(View):
         if action == "confirm":
             return self.confirm(request)
         if action == "cancel":
-            self.forget(request)
+            self.forget_steps(request)
         return redirect(request.path)
 
     def verified(self, request):
         return request.session.get(RESET_VERIFIED_KEY) == self.account.pk
 
-    def forget(self, request):
+    def forget_steps(self, request):
         for key in (RESET_VERIFIED_KEY, RESET_PENDING_KEY):
             request.session.pop(key, None)
 
@@ -358,8 +371,9 @@ class TwoFactorResetView(View):
         """Verify the password and open the enrolment step.
 
         When `authenticate` rehashes the password (an older hasher or new
-        parameters), the session token, bound to the password hash, is
-        re-signed for the new hash: its 24 hours restart at this step.
+        parameters), the token, bound to the password hash, is
+        re-signed for the new hash, and the answer carries it in the cookie:
+        its 24 hours restart at this step.
         """
         user = authenticate(
             request=request,
@@ -371,7 +385,7 @@ class TwoFactorResetView(View):
                 request, error=_("The password is not valid."), status=400
             )
         if user.password != self.account.password:
-            request.session[RESET_TOKEN_KEY] = reset_token(user)
+            self.token = reset_token(user)
         request.session[RESET_VERIFIED_KEY] = user.pk
         request.session[RESET_PENDING_KEY] = encrypt_secret(pyotp.random_base32())
         return self.render(request)
@@ -389,10 +403,10 @@ class TwoFactorResetView(View):
         profile, _created = UserProfile.objects.get_or_create(user=self.account)
         profile.encrypted_mfa_hash = encrypt_secret(secret)
         profile.save(update_fields=["encrypted_mfa_hash"])
-        self.forget(request)
-        request.session.pop(RESET_TOKEN_KEY, None)
+        self.forget_steps(request)
         self.account.backend = LOGIN_BACKEND
         login(request, self.account)
+        self.done = True
         logger.info("Two-factor authenticator re-enrolled for user %s", self.account.pk)
         return redirect("root")
 

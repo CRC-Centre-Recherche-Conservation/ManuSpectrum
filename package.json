@@ -1,6 +1,6 @@
 {
     "name": "manuspectrum",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "license": "AGPL-3.0-only",
     "engines": {
         "node": "^22.13.0 || >=24"
@@ -30,15 +30,15 @@
         "arches_controlled_lists": "archesproject/arches-controlled-lists#stable/1.2.0",
         "arches_vue_components": "archesproject/arches-vue-components#stable/2.0.3",
         "dompurify": "^3.4.17",
-        "es-toolkit": "^1.53.0",
-        "gridstack": "14.0.0",
+        "es-toolkit": "^1.53.2",
+        "gridstack": "14.1.0",
         "leaflet": "1.6.0",
         "leaflet-iiif": "3.0.0",
         "leaflet.markercluster": "^1.5.3",
         "maplibre-gl": "4.7.1",
         "papaparse": "^5.7.0",
-        "pinia": "^3.0.4",
-        "plotly.js-cartesian-dist": "^4.1.2",
+        "pinia": "^4.1.0",
+        "plotly.js-cartesian-dist": "^4.3.0",
         "primeicons": "7.0.0",
         "primelocale": "^2.6.2",
         "primevue": "4.3.7",
@@ -54,7 +54,7 @@
         "@types/plotly.js": "^3.0.15",
         "arches-dev-dependencies": "archesproject/arches-dev-dependencies#stable/8.1.6",
         "css-minimizer-webpack-plugin": "^8.0.0",
-        "webpack": "^5.110.3"
+        "webpack": "^5.112.2"
     },
     "nodeModulesPaths": {
         "uuid-esm": "node_modules/uuid/dist/esm-browser/index.js"

@@ -19,7 +19,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../../../.." && pwd)"
 NGINX_DIR="${NGINX_DIR:-$(cd "$HERE/.." && pwd)}" # a mutated copy of the configuration, to see a case fail
 
-NGINX_IMAGE="nginxinc/nginx-unprivileged:1.30.5-alpine@sha256:15c994d10d6d78658721c3bcafff14cb281fba2a4bdf9d5ba92c416a472516e3"
+NGINX_IMAGE="nginx/nginx-unprivileged:1.30.7-alpine-slim@sha256:8432c57ac86f178741af2b89948bd9087cb9df1c415bc1ab4d23735c4f0e3e61"
 PYTHON_IMAGE="python:3.13-slim-trixie@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb"
 HOST="manuspectrum.test"
 FILE_A="00000000-0000-4000-8000-00000000000a"

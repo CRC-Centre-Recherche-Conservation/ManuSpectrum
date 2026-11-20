@@ -1,0 +1,13 @@
+# Managed by deploy/ansible (host role).
+# runc gives a container with memswap_limit equal to its memory limit
+# memory.swap.max=0 in the cgroup file only: it passes MemorySwapMax to
+# systemd just when the swap allowance is not 0, so the transient
+# docker-<id>.scope unit keeps MemorySwapMax=infinity and the next
+# systemctl daemon-reload resets the file to max
+# (opencontainers/cgroups#74). This prefix drop-in gives every Docker scope the
+# value 0; a container that asks for swap carries its own 50-MemorySwapMax.conf,
+# which sorts after this file and wins.
+# Remove it once runc ships opencontainers/cgroups#78: the per-container value
+# is then carried by runc.
+[Scope]
+MemorySwapMax=0
