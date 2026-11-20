@@ -6,60 +6,77 @@ drew; a ``canvas_index`` of the source manifest maps both to the canvas id.
 
 import sys
 import uuid
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 
-from django.db.models import JSONField
-from django.db.models.expressions import RawSQL
+from django.db.models import F, Func, JSONField, TextField, Value
+from django.db.models.functions import Cast
 
 from arches.app.models.models import TileModel
 
+from manuspectrum.iiif.frames import frame_of
+from manuspectrum.iiif.units import unit_of_frame
 from manuspectrum.views.explorer.values import rewrite_legacy_url, shape_of
 
 
 def canvas_and_convert(feature, dims):
-    """Canvas id of one annotation feature and the function giving its pixel ``Shape``; ``("", None)`` when unresolved.
+    """Canvas id of one annotation feature and the function giving its pixel shape and unit; ``("", None)`` when unresolved.
 
     *dims* is a ``CanvasIndex``: the stored name (canvas id or image service)
-    becomes the manifest's canvas id. The shape is converted with the unit of
-    that canvas (``CanvasIndex.unit``), which is read when the function is
-    called: a zone whose shape is never asked costs no request. A shape is
-    brought inside its canvas when the unit was read from the image's
-    description. With an assumed unit, or on a canvas missing from the index
-    (which keeps its stored name), it is not clamped to the canvas: its
-    coordinates are the stored ones times the unit, negatives brought to 0.
+    becomes the manifest's canvas id. ``convert()`` returns ``(Shape,
+    ZoneUnit)``. A feature carrying a valid frame stamp (``frames.frame_of``)
+    is converted from it, with the canvas size, and no image description is
+    read; the unit is noted on the canvas (``CanvasIndex.note_unit``). An
+    unstamped feature takes the unit of its canvas (``CanvasIndex.unit``),
+    read when the function is called: a zone whose shape is never asked costs
+    no request. A shape is brought inside its canvas when the unit was
+    measured, or stamped with a measured frame. With an assumed unit or an
+    ``estimated`` stamp it is not clamped: its coordinates are the stored ones
+    times the unit, negatives brought to 0. On a canvas missing from the index
+    (which keeps its stored name) an unstamped zone is not clamped either, and
+    a zone stamped with a measured frame is clamped to the frame's size.
     """
-    feature = feature or {}
-    stored = rewrite_legacy_url((feature.get("properties") or {}).get("canvas") or "")
+    if not isinstance(feature, dict):
+        return "", None
+    props = feature.get("properties")
+    canvas_name = props.get("canvas") if isinstance(props, dict) else None
+    stored = rewrite_legacy_url(canvas_name if isinstance(canvas_name, str) else "")
     geometry = feature.get("geometry")
+    if not isinstance(geometry, dict):
+        return "", None
     name = stored.rstrip("/")
     canvas = (dims.get(name) or (stored,))[0]
     if not canvas or shape_of(geometry, sys.maxsize, sys.maxsize) is None:
         return "", None
+    frame = frame_of(feature)
 
     def convert():
-        unit = dims.unit(name)
-        return shape_of(
+        if frame:
+            unit = unit_of_frame(frame, *(dims.size(name) or (0, 0)))
+            dims.note_unit(canvas, unit)
+        else:
+            unit = dims.unit(name)
+        shape = shape_of(
             geometry,
             unit.width or sys.maxsize,
             unit.height or sys.maxsize,
             (unit.x, unit.y),
         )
+        return shape, unit
 
     return canvas, convert
 
 
-def canvas_and_shape(feature, dims):
-    """Canvas id and pixel ``Shape`` of one annotation feature (``canvas_and_convert``); canvas empty and shape None when unresolved."""
-    canvas, convert = canvas_and_convert(feature, dims)
-    return (canvas, convert()) if convert else ("", None)
+def assumed_unit_payload(unit):
+    """The ``ZoneUnit`` payload of *unit* when its shape was not measured, else None."""
+    return unit.payload() if unit is not None and not unit.read else None
 
 
 class FeatureRows:
     """The annotation features of *node* on *resource_ids*, read in one query and resolved per manifest.
 
     Nothing is read when the node is unresolved or its nodegroup is not in
-    *readable*. ``features`` resolves a subset against one manifest's
-    ``canvas_index``, in the order ``annotation_features`` gives.
+    *readable*. ``located`` resolves a subset against one manifest's
+    ``canvas_index``, by feature id.
     """
 
     def __init__(self, node, resource_ids, readable):
@@ -71,20 +88,15 @@ class FeatureRows:
                 nodegroup_id=node.nodegroup_id,
                 resourceinstance_id__in=list(resource_ids),
             )
-            .annotate(
-                feature=RawSQL(
-                    "jsonb_array_elements(tiles.tiledata -> %s -> 'features')",
-                    [str(node.nodeid)],
-                    JSONField(),
-                )
-            )
+            .annotate(feature=_StoredFeatures(Value(str(node.nodeid))))
             .values_list("resourceinstance_id", "feature")
         )
-        for order, (rid, feature) in enumerate(sorted(rows, key=_by_feature_id)):
+        usable = [row for row in rows if _usable(row[1])]
+        for order, (rid, feature) in enumerate(sorted(usable, key=_by_feature_id)):
             self._by_resource[str(rid)].append((order, str(rid), feature))
 
     def located(self, resource_ids, dims):
-        """``(resource id, feature id, canvas, convert)`` of every resolved feature of *resource_ids*, by feature id; ``convert()`` gives the shape (``canvas_and_convert``)."""
+        """``(resource id, feature id, canvas, convert)`` of every resolved feature of *resource_ids*, by feature id; ``convert()`` gives ``(shape, unit)`` (``canvas_and_convert``)."""
         picked = sorted(
             row
             for rid in {str(r) for r in resource_ids}
@@ -95,10 +107,35 @@ class FeatureRows:
             if canvas and convert:
                 yield rid, _feature_id(feature), canvas, convert
 
-    def features(self, resource_ids, dims):
-        """``(resource id, feature id, canvas, shape)`` of every resolved feature of *resource_ids*, by feature id."""
-        for rid, feature, canvas, convert in self.located(resource_ids, dims):
-            yield rid, feature, canvas, convert()
+
+StoredZone = namedtuple("StoredZone", "feature canvas")
+
+
+def annotation_zones(resource_id):
+    """``StoredZone(feature, canvas name)`` of every usable feature of every annotation node of *resource_id*, by feature id, read in one query.
+
+    No nodegroup permission is applied: the caller decides who may see the
+    zones. The canvas name is the stored ``properties.canvas`` when it is a
+    string, else None. Unusable features (not an object, an id that is not a
+    UUID) are left out, as ``FeatureRows`` leaves them.
+    """
+    found = (
+        TileModel.objects.filter(
+            resourceinstance_id=resource_id, nodegroup__node__datatype="annotation"
+        )
+        .annotate(feature=_StoredFeatures(Cast("nodegroup__node__nodeid", TextField())))
+        .values_list("feature", flat=True)
+    )
+    rows = sorted(
+        (feature for feature in found if _usable(feature)),
+        key=lambda feature: _by_feature_id((None, feature)),
+    )
+    zones = []
+    for feature in rows:
+        props = feature.get("properties")
+        canvas = props.get("canvas") if isinstance(props, dict) else None
+        zones.append(StoredZone(feature, canvas if isinstance(canvas, str) else None))
+    return zones
 
 
 def located_features(node, resource_ids, dims, readable):
@@ -107,13 +144,37 @@ def located_features(node, resource_ids, dims, readable):
     yield from FeatureRows(node, resource_ids, readable).located(resource_ids, dims)
 
 
-def annotation_features(node, resource_ids, dims, readable):
-    """``(resource id, feature id, canvas, shape)`` of every resolved annotation feature of *node*, by feature id.
+class _StoredFeatures(Func):
+    """One row per element of the ``features`` array a tile stores under the node id *key* (a text expression); none when that value is not an array."""
 
-    Nothing when the node is unresolved or its nodegroup is not in *readable*.
-    """
-    resource_ids = [str(r) for r in resource_ids]
-    yield from FeatureRows(node, resource_ids, readable).features(resource_ids, dims)
+    template = (
+        "jsonb_array_elements(CASE WHEN"
+        " jsonb_typeof(%(expressions)s -> 'features') = 'array'"
+        " THEN %(expressions)s -> 'features' ELSE '[]'::jsonb END)"
+    )
+    arg_joiner = " -> "
+    output_field = JSONField()
+
+    def __init__(self, key):
+        super().__init__(F("data"), key)
+
+    def as_sql(self, compiler, connection, **extra_context):
+        sql, params = super().as_sql(compiler, connection, **extra_context)
+        return sql, (*params, *params)
+
+
+def _usable(feature):
+    """True for a feature object whose id is absent or a UUID string: what ``_feature_id`` can sort."""
+    if not isinstance(feature, dict):
+        return False
+    found = feature.get("id")
+    if found is None or (isinstance(found, str) and not found):
+        return True
+    try:
+        uuid.UUID(found)
+    except (ValueError, AttributeError, TypeError):
+        return False
+    return True
 
 
 def _feature_id(feature):
@@ -128,12 +189,19 @@ def _by_feature_id(row):
 
 
 def first_zone(node, resource_ids, dims, readable):
-    """``{resource id: {"canvas", "shape"}}`` from the first annotation feature of *node*; ``{}`` when its nodegroup is not in *readable*.
+    """``{resource id: {"canvas", "shape", "unit"}}`` from the first annotation feature of *node*; ``{}`` when its nodegroup is not in *readable*.
 
-    Only the kept feature is converted: a discarded one reads no image description.
+    ``unit`` is the ``ZoneUnit`` payload when the shape was not measured, else
+    None. Only the kept feature is converted: a discarded one reads no image
+    description.
     """
     zones = {}
     for rid, _, canvas, convert in located_features(node, resource_ids, dims, readable):
         if rid not in zones:
-            zones[rid] = {"canvas": canvas, "shape": convert()}
+            shape, unit = convert()
+            zones[rid] = {
+                "canvas": canvas,
+                "shape": shape,
+                "unit": assumed_unit_payload(unit),
+            }
     return zones

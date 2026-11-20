@@ -7,11 +7,16 @@ equal Arches' pin, unless `DIVERGENCES` names it with a reason. Everything
 Arches leaves open stays free.
 
 The checks are functions of the parsed files, so the unit cases at the bottom
-feed them modified copies.
+feed them modified copies. `ZoneFrameContractTests` pins by source snippet what
+the annotation zone stamps rely on in Arches' IIIF viewer, leaflet-iiif and
+Leaflet, and fails with what to re-check when an upgrade moves it. The Arches
+sources are read from the Python package copy webpack builds from
+(`arches.__file__`), leaflet-iiif and Leaflet from `node_modules`.
 """
 
 import copy
 import fnmatch
+import hashlib
 import importlib.metadata
 import json
 import re
@@ -19,6 +24,7 @@ import tomllib
 import unittest
 from pathlib import Path
 
+import arches
 import yaml
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
@@ -428,3 +434,499 @@ class CheckBehaviourTests(unittest.TestCase):
         self.assertEqual(
             python_pin_problems(self.real["pyproject"], ["celery==5.5.0"]), []
         )
+
+
+LEAFLET_IIIF = ROOT / "node_modules" / "leaflet-iiif" / "leaflet-iiif.js"
+LEAFLET_SRC = ROOT / "node_modules" / "leaflet" / "dist" / "leaflet-src.js"
+LEAFLET_IIIF_SHA256 = "3910f668c74903c81f9f2fd1a1cb40cd3151b54cfffe8144b5bfa560cf5cd8f3"
+ARCHES_COMPONENTS = (
+    Path(arches.__file__).parent / "app" / "media" / "js" / "views" / "components"
+)
+IIIF_VIEWER = ARCHES_COMPONENTS / "iiif-viewer.js"
+IIIF_ANNOTATION = ARCHES_COMPONENTS / "iiif-annotation.js"
+ANNOTATION_BLOCK_SHA256 = (
+    "34233d3d6e9d11cf141c991d6ab9e12658d68d4c29b81e0bf110384a03bef5a1"
+)
+
+REVISIT = (
+    "Zone stamps (`msUnit`, `msImageWidth`, `msImageHeight`, `msFrame`, "
+    "manuspectrum/iiif/units.py and frames.py) rely on this: "
+)
+
+
+def squeeze(source):
+    return re.sub(r"\s+", " ", source)
+
+
+JS_TOKEN = re.compile(
+    r"(?P<keep>\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`"
+    r"|(?<=[=(,:!&|?;{}\[])\s*/(?![/*])(?:\\.|\[(?:\\.|[^\]\\\n])*\]|[^/\\\n\[])+/)"
+    r"|/\*.*?\*/|//[^\n]*",
+    re.S,
+)
+
+
+def strip_comments(source):
+    """*source* without its JavaScript comments.
+
+    String, template and regular expression literals are kept whole, so a `//`
+    or `/*` inside one does not open a comment.
+    """
+    return JS_TOKEN.sub(lambda m: m.group("keep") or " ", source)
+
+
+def bare(source):
+    """*source* without any whitespace, so a reflow cannot break a snippet."""
+    return re.sub(r"\s+", "", source)
+
+
+def leaflet_iiif_problems(raw):
+    """What the zone frame arithmetic relies on in leaflet-iiif's layer."""
+    problems = []
+    if hashlib.sha256(raw).hexdigest() != LEAFLET_IIIF_SHA256:
+        problems.append(
+            REVISIT + "leaflet-iiif.js changed: compare its `_getInfo` (how it sets "
+            "`maxNativeZoom` from the info.json tile size and sizes) with "
+            "`units.native_zoom` and `units.tile_width`, and re-check "
+            "folio/page-layer.ts and folio/geometry.ts, then update "
+            "LEAFLET_IIIF_SHA256."
+        )
+    source = bare(raw.decode())
+    for needle in (
+        "_this.x=data.width",
+        "_this.y=data.height",
+        "_this.maxNativeZoom=",
+        "_this._infoPromise=",
+        "_this._imageSizes=",
+        "_getZoomForUrl",
+        "_isValidTile",
+    ):
+        if needle not in source:
+            problems.append(
+                REVISIT + f"leaflet-iiif no longer has `{needle}`; the Data Lab "
+                "reads these layer members (folio/page-layer.ts)."
+            )
+    return problems
+
+
+LAYER_FACTORY = re.compile(
+    r"\b(?:tileLayer\s*(?:\.\s*iiif\b|\[\s*(['\"])iiif\1\s*\])"
+    r"|TileLayer\s*(?:\.\s*Iiif\b|\[\s*(['\"])Iiif\2\s*\]))"
+    r"(?:\s*\.\s*(?:call|apply|bind)\b)?\s*\("
+)
+LAYER_OPTION = (
+    r"(?:fitBounds|className)\s*:\s*(?:\"[^\"\n]*\"|'[^'\n]*'|`[^`]*`|[^,{}\"'`])+"
+)
+LAYER_ARGS = re.compile(
+    rf"[^,(){{}}]+,\s*\{{\s*{LAYER_OPTION}(?:\s*,\s*{LAYER_OPTION})*\s*,?\s*\}}\s*\)"
+)
+UNIT_NAMES = r"(?:tileSize|zoomOffset|detectRetina|zoomReverse|maxNativeZoom)"
+WRITE = r"\s*(?:\+\+|--|(?:\*\*|<<|>>>?|&&|\|\||\?\?|[-+*/%&|^])?=(?![=>]))"
+UNIT_CHANGE = re.compile(
+    rf"(?<=[{{,])\s*(?:{UNIT_NAMES}|(['\"]){UNIT_NAMES}\1"
+    rf"|\[\s*(['\"]){UNIT_NAMES}\2\s*\])\s*:"
+    rf"|(?<=[{{,])\s*{UNIT_NAMES}\s*[,}}]"
+    rf"|\b(?:{UNIT_NAMES}|crs)\b['\"]?\]?{WRITE}"
+    rf"|(?:\+\+|--)\s*[\w$.]*\b{UNIT_NAMES}\b"
+    rf"|\boptions['\"]?\]?(?:\s*\[[^\]]*\])?{WRITE}"
+    r"|\b(?:setOptions|mergeOptions)\s*\("
+    r"|\.(?:extend|defaults)\s*\("
+    r"|\bassign\s*\(\s*[\w$.\[\]'\"]*options"
+)
+
+
+def iiif_viewer_problems(source):
+    """Arches builds its image layers with leaflet-iiif's defaults on CRS.Simple.
+
+    Every way of building a leaflet-iiif layer (`L.tileLayer.iiif(`, its
+    bracket and `.call` forms, `new L.TileLayer.Iiif(`) takes a URL and an
+    object literal of `fitBounds` and `className` only; there are at least
+    two. Outside comments, nothing sets a unit-moving option (`tileSize`,
+    `zoomOffset`, `detectRetina`, `zoomReverse`, `maxNativeZoom`) as a key, a
+    shorthand or a write, changes a layer's options after construction
+    (`setOptions`, `mergeOptions`, any `.extend(` or `.defaults(`, `assign`
+    into options, a write to `options` or one of its entries) or writes a
+    `crs`. Reading these options, directly or through a member
+    (`canvasLayer.options.maxNativeZoom`), is allowed.
+    """
+    problems = []
+    source = strip_comments(source)
+    calls = list(LAYER_FACTORY.finditer(source))
+    if len(calls) < 2 or any(not LAYER_ARGS.match(source, c.end()) for c in calls):
+        problems.append(
+            REVISIT + "iiif-viewer.js no longer builds every layer with "
+            "`L.tileLayer.iiif(url, {fitBounds, className})`; other options, a "
+            "spread or options built elsewhere may move the unit: re-check how "
+            "the layer is made."
+        )
+    moving = sorted({m.group(0).strip() for m in UNIT_CHANGE.finditer(source)})
+    if moving:
+        problems.append(
+            REVISIT + f"iiif-viewer.js now writes or may write {moving}: options "
+            "of a layer that move the unit, or the map's CRS, are set or changed "
+            "there (a `.extend(`, `.defaults(` or `assign` call may write them)."
+        )
+    if bare("crs: L.CRS.Simple") not in bare(source):
+        problems.append(
+            REVISIT + "iiif-viewer.js no longer sets `crs: L.CRS.Simple` on the map."
+        )
+    return problems
+
+
+def iiif_annotation_problems(source):
+    """The card keeps each feature's id, canvas and Leaflet-written geometry.
+
+    `frames.stamp_collection` matches a saved feature to its stored stamp by
+    id, `properties.canvas` and the geometry rounded as Leaflet writes it.
+    """
+    problems = []
+    source = bare(strip_comments(source))
+    start = source.find("this.updateTiles")
+    end = source.find("updateDrawFeatures();", start) + len("updateDrawFeatures();")
+    if (
+        start < 0
+        or hashlib.sha256(source[start:end].encode()).hexdigest()
+        != ANNOTATION_BLOCK_SHA256
+    ):
+        problems.append(
+            REVISIT + "iiif-annotation.js `this.updateTiles … updateDrawFeatures();` "
+            "changed: check each feature still keeps its id and `properties.canvas`, "
+            "its geometry as Leaflet wrote it (6 decimals) and its stamp, and that "
+            "features are written as loaded; then update ANNOTATION_BLOCK_SHA256."
+        )
+    for snippet in (
+        "features.push(feature);",
+        "features:features}",
+        "self.tile.data[id].features(features);",
+        "drawFeatures(drawFeatures().concat(featureCollection.features));",
+        "feature.properties.nodeId = id;",
+        "feature.id=uuid.generate();",
+        "canvas:self.canvas(),",
+        "drawFeature.properties=Object.assign(drawFeature.properties,styleProperties);",
+        "drawFeature.geometry = layer.toGeoJSON().geometry;",
+    ):
+        if bare(snippet) not in source:
+            problems.append(
+                REVISIT + f"iiif-annotation.js no longer contains `{snippet}`: "
+                "check a save still returns each feature with its id, "
+                "`properties.canvas`, stamp and 6-decimal geometry."
+            )
+    if (
+        source.count("uuid.generate") != 1
+        or len(re.findall(r"\.id=(?!=)", source)) != 1
+    ):
+        problems.append(
+            REVISIT + "iiif-annotation.js assigns a feature id elsewhere than on "
+            "draw (or no longer on draw); an id given on load would re-stamp "
+            "every zone with the live frame."
+        )
+    return problems
+
+
+def leaflet_rounding_problems(source):
+    """Leaflet 1.6 `toGeoJSON` rounds to 6 decimals, as `frames.leaflet_round`."""
+    source = bare(source)
+    needles = (
+        "precision=typeofprecision==='number'?precision:6;",
+        "varpow=Math.pow(10,(digits===undefined?6:digits));"
+        "returnMath.round(num*pow)/pow;",
+    )
+    return [
+        REVISIT + f"leaflet-src.js no longer contains `{n}`: compare with "
+        "`frames.leaflet_round` (geometry equality, `same_geometry`)."
+        for n in needles
+        if bare(n) not in source
+    ]
+
+
+class ZoneFrameContractTests(unittest.TestCase):
+    def test_leaflet_iiif_layer_is_the_one_the_frames_are_computed_for(self):
+        problems = leaflet_iiif_problems(LEAFLET_IIIF.read_bytes())
+        self.assertEqual(problems, [], "\n" + "\n".join(problems))
+
+    def test_arches_viewer_layers_take_only_default_unit_options(self):
+        problems = iiif_viewer_problems(IIIF_VIEWER.read_text())
+        self.assertEqual(problems, [], "\n" + "\n".join(problems))
+
+    def test_arches_annotation_card_returns_id_canvas_and_geometry(self):
+        problems = iiif_annotation_problems(IIIF_ANNOTATION.read_text())
+        self.assertEqual(problems, [], "\n" + "\n".join(problems))
+
+    def test_arches_annotation_datatype_accepts_stamped_features(self):
+        from arches.app.datatypes.datatypes import AnnotationDataType
+
+        collection = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "id": "0b0d0f3e-0b8a-4a39-9a63-0c4d5f5a1a11",
+                    "geometry": {
+                        "type": "Polygon",
+                        "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 0]]],
+                    },
+                    "properties": {
+                        "msUnit": 32,
+                        "msImageWidth": 4000,
+                        "msImageHeight": 3000,
+                        "msFrame": "read",
+                    },
+                }
+            ],
+        }
+        self.assertEqual(AnnotationDataType().validate(collection), [])
+        self.assertEqual(
+            AnnotationDataType().transform_value_for_tile(json.dumps(collection)),
+            collection,
+        )
+
+    def test_leaflet_rounds_geometry_to_six_decimals(self):
+        problems = leaflet_rounding_problems(LEAFLET_SRC.read_text())
+        self.assertEqual(problems, [], "\n" + "\n".join(problems))
+
+    def test_leaflet_iiif_changes_name_what_to_recheck(self):
+        raw = LEAFLET_IIIF.read_bytes()
+        problems = leaflet_iiif_problems(raw + b"\n// edit")
+        self.assertEqual(len(problems), 1)
+        self.assertIn("_getInfo", problems[0])
+        for old, needle in (
+            (b"_this.x = ", "_this.x=data.width"),
+            (b"_this._imageSizes = ", "_this._imageSizes="),
+        ):
+            self.assertIn(old, raw)
+            problems = leaflet_iiif_problems(raw.replace(old, b"_this.zz = "))
+            self.assertEqual(len(problems), 2, problems)
+            self.assertIn(needle, problems[1])
+
+    def test_viewer_changes_that_move_the_unit_fail(self):
+        viewer = IIIF_VIEWER.read_text()
+        first_call = re.compile(r"L\.tileLayer\.iiif\(layerInfoUrl, \{.*?\}\)", re.S)
+        cases = {
+            "tileSize option": (
+                "fitBounds: false,",
+                "fitBounds: false, tileSize: 512,",
+            ),
+            "zoomOffset option": (
+                "fitBounds: false,",
+                "fitBounds: false, zoomOffset: 1,",
+            ),
+            "detectRetina option": (
+                "fitBounds: false,",
+                "fitBounds: false, detectRetina: true,",
+            ),
+            "zoomReverse option": (
+                "fitBounds: false,",
+                "fitBounds: false, zoomReverse: true,",
+            ),
+            "spread": ("fitBounds: false,", "...layerDefaults, fitBounds: false,"),
+            "shorthand": ("fitBounds: false,", "fitBounds: false, tileSize,"),
+            "call removed": ("L.tileLayer.iiif(", "x("),
+            "options after construction": (
+                "});\n\n                    canvasLayer.on",
+                "}); canvasLayer.options.zoomOffset = 1; canvasLayer.on",
+            ),
+            "crs": ("crs: L.CRS.Simple", "crs: L.CRS.EPSG3857"),
+        }
+        for name, (old, new) in cases.items():
+            self.assertIn(old, viewer, name)
+            self.assertTrue(iiif_viewer_problems(viewer.replace(old, new)), name)
+        self.assertTrue(
+            iiif_viewer_problems(
+                first_call.sub("L.tileLayer.iiif(layerInfoUrl, opts)", viewer, count=1)
+            ),
+            "options in a variable",
+        )
+        push = "layers.push(canvasLayer);"
+        self.assertIn(push, viewer)
+        for name, code in {
+            "tileSize key": "const o = {tileSize: 512};",
+            "zoomOffset key": "const o = {zoomOffset: 1};",
+            "detectRetina key": "const o = {detectRetina: true};",
+            "zoomReverse write": "zoomReverse = true;",
+            "maxNativeZoom write": "canvasLayer.maxNativeZoom = 3;",
+            "maxNativeZoom write by key": "canvasLayer['maxNativeZoom'] = 3;",
+            "shorthand key": "const o = {tileSize};",
+            "quoted key": "const o = {'detectRetina': true};",
+            "computed key": "const o = {['zoomOffset']: 1};",
+            "compound write": "canvasLayer.options.zoomOffset += 1;",
+            "postfix increment": "canvasLayer.options.zoomOffset++;",
+            "prefix increment": "++canvasLayer.options.zoomOffset;",
+            "bracket write": "canvasLayer.options['zoomOffset'] = 1;",
+            "entry write": "for (var k in params.o) canvasLayer.options[k] = params.o[k];",
+            "options replaced": "canvasLayer.options = params.o;",
+            "options replaced by key": "canvasLayer['options'] = params.o;",
+            "setOptions": "L.setOptions(canvasLayer, params.o);",
+            "mergeOptions": "L.TileLayer.Iiif.mergeOptions(params.o);",
+            "extend a class": "const B = L.TileLayer.Iiif.extend({options: params.o});",
+            "L.extend": "L.extend(canvasLayer.options, params.o);",
+            "L.Util.extend": "L.Util.extend(canvasLayer.options, params.o);",
+            "$.extend": "$.extend(canvasLayer.options, params.o);",
+            "_.extend": "_.extend(canvasLayer.options, params.o);",
+            "_.defaults": "_.defaults(canvasLayer.options, params.o);",
+            "assign into options": "Object.assign(canvasLayer.options, params.o);",
+            "assign into bracket options": (
+                "Object.assign(canvasLayer['options'], params.o);"
+            ),
+            "crs write": "map.options.crs = L.CRS.EPSG3857;",
+            "crs bracket write": "map.options['crs'] = L.CRS.EPSG3857;",
+            "write between strings holding comment marks": (
+                "var g = 'image/*'; canvasLayer.options.zoomOffset = 1; var h = 'a*/b';"
+            ),
+            "write between double-quoted strings holding comment marks": (
+                'var g = "image/*"; canvasLayer.options.zoomOffset = 1; var h = "a*/b";'
+            ),
+            "write between template literals holding comment marks": (
+                "var g = `image/*`; canvasLayer.options.zoomOffset = 1; var h = `a*/b`;"
+            ),
+            "write after a double-quoted string holding a line comment mark": (
+                'var u = "http://x"; canvasLayer.options.zoomOffset = 1;'
+            ),
+            "write after a template literal holding a line comment mark": (
+                "var u = `http://${h}`; canvasLayer.options.zoomOffset = 1;"
+            ),
+            "write after a regex holding a quote": (
+                "var r = /'/; var u = '//'; canvasLayer.options.zoomOffset = 1;"
+            ),
+        }.items():
+            self.assertTrue(
+                iiif_viewer_problems(viewer.replace(push, code + push)), name
+            )
+
+    def test_every_way_to_build_the_layer_takes_allowed_keys_only(self):
+        viewer = IIIF_VIEWER.read_text()
+        first_call = re.compile(r"L\.tileLayer\.iiif\(layerInfoUrl, \{.*?\}\)", re.S)
+        for name, source in {
+            "spread": viewer.replace(
+                "fitBounds: false,", "...layerDefaults, fitBounds: false,", 1
+            ),
+            "variable": first_call.sub(
+                "L.tileLayer.iiif(layerInfoUrl, opts)", viewer, count=1
+            ),
+            "another key": viewer.replace(
+                "fitBounds: false,", "fitBounds: false, setMaxBounds: true,", 1
+            ),
+            "spread after an allowed key": viewer.replace(
+                'className: "iiif-layer-primary"',
+                'className: "iiif-layer-primary", ...layerDefaults',
+            ),
+            "space before the parenthesis": viewer + "\nx = L.tileLayer.iiif (u, o);",
+            "reflowed member": viewer + "\nx = L.tileLayer\n    .iiif(u, o);",
+            "bracket member": viewer + "\nx = L.tileLayer['iiif'](u, o);",
+            "class": viewer + "\nx = new L.TileLayer.Iiif(u, o);",
+            "class bracket member": viewer + "\nx = new L.TileLayer['Iiif'](u, o);",
+            "call": viewer + "\nx = L.tileLayer.iiif.call(L, u, {fitBounds: false});",
+        }.items():
+            self.assertIsNone(UNIT_CHANGE.search(strip_comments(source)), name)
+            self.assertTrue(iiif_viewer_problems(source), name)
+        for name, code in {
+            "class with allowed keys": "new L.TileLayer.Iiif(u, {fitBounds: false});",
+            "bracket member with allowed keys": "L.tileLayer['iiif'](u, {className: c});",
+        }.items():
+            self.assertEqual(iiif_viewer_problems(viewer + "\nx = " + code), [], name)
+
+    def test_viewer_changes_that_leave_the_unit_alone_pass(self):
+        viewer = IIIF_VIEWER.read_text()
+        push = "layers.push(canvasLayer);"
+        for name, source in {
+            "reflowed options": viewer.replace(
+                "fitBounds: false,", "fitBounds:false,", 1
+            ).replace("{\n                        fitBounds", "{ fitBounds", 1),
+            "className from a template literal": viewer.replace(
+                'className: "iiif-layer-primary"', "className: `iiif-layer-${side}`"
+            ),
+            "className from a variable": viewer.replace(
+                'className: "iiif-layer-primary"', "className: self.layerClass"
+            ),
+        }.items():
+            self.assertEqual(iiif_viewer_problems(source), [], name)
+        for name, code in {
+            "comment naming tileSize": "// leaflet-iiif reads tileSize\n",
+            "Math.min read": "var z = Math.min(canvasLayer.options.maxNativeZoom, 3);",
+            "ternary read": "var z = c ? canvasLayer.options.maxNativeZoom : 0;",
+            "object literal read": "var o = {z: canvasLayer.options.maxNativeZoom};",
+            "bracket read": "var z = canvasLayer.options['maxNativeZoom'];",
+            "comparison": "if (canvasLayer.maxNativeZoom === 3) {}",
+            "crs read": "var c = map.options.crs;",
+            "arrow parameter": "var f = maxNativeZoom => maxNativeZoom * 2;",
+        }.items():
+            self.assertEqual(
+                iiif_viewer_problems(viewer.replace(push, code + push)), [], name
+            )
+
+    def test_unit_options_in_comments_are_not_writes(self):
+        viewer = IIIF_VIEWER.read_text()
+        push = "layers.push(canvasLayer);"
+        for comment in (
+            "// options: {tileSize: 256}\n",
+            "/* canvasLayer.options.zoomOffset = 1; */",
+        ):
+            self.assertTrue(UNIT_CHANGE.search(comment), comment)
+            self.assertEqual(
+                iiif_viewer_problems(viewer.replace(push, comment + push)), [], comment
+            )
+
+    def test_annotation_changes_that_lose_id_canvas_or_geometry_fail(self):
+        annotation = IIIF_ANNOTATION.read_text()
+        for old, new in (
+            ("features.push(feature);", ""),
+            ("drawFeature.geometry = layer.toGeoJSON().geometry;", ""),
+            ("feature.properties.nodeId = id;", ""),
+            ("canvas: self.canvas(),", ""),
+            ("features: features", "features: features.map(fn)"),
+            ("self.tile.data[id].features(features);", ""),
+            ("feature.id = uuid.generate();", ""),
+            (
+                "feature.properties.nodeId = id;",
+                "feature.properties.nodeId = id; feature.id = uuid.generate();",
+            ),
+            (
+                "var features = [];",
+                "var features = [];\n            var strip = function(f) { return f; };",
+            ),
+            (
+                "if (ko.isObservable(self.tile.data[id])) {",
+                "features = features.map(strip);\n            "
+                "if (ko.isObservable(self.tile.data[id])) {",
+            ),
+            (
+                "this.card.triggerUpdate = updateDrawFeatures;",
+                "feature.id = uuid.generate(); "
+                "this.card.triggerUpdate = updateDrawFeatures;",
+            ),
+            (
+                "this.card.triggerUpdate = updateDrawFeatures;",
+                "feature.id = makeId(); this.card.triggerUpdate = updateDrawFeatures;",
+            ),
+            (
+                "this.card.triggerUpdate = updateDrawFeatures;",
+                "feature['id'] = uuid.generate(); "
+                "this.card.triggerUpdate = updateDrawFeatures;",
+            ),
+        ):
+            self.assertIn(old, annotation)
+            self.assertTrue(
+                iiif_annotation_problems(annotation.replace(old, new)), (old, new)
+            )
+        style = re.sub(
+            r"Object\.assign\(\s*drawFeature\.properties,", "assign2(", annotation
+        )
+        self.assertTrue(iiif_annotation_problems(style))
+
+    def test_a_reflowed_or_commented_annotation_card_passes(self):
+        annotation = IIIF_ANNOTATION.read_text()
+        trigger = "this.card.triggerUpdate = updateDrawFeatures;"
+        for name, source in {
+            "reflowed": annotation.replace("\n", "\n  "),
+            "comment in the pinned block": annotation.replace(
+                "features.push(feature);", "features.push(feature); // kept whole\n"
+            ),
+            "commented id assignment": annotation.replace(
+                trigger, "/* feature.id = uuid.generate(); */ " + trigger
+            ),
+        }.items():
+            self.assertNotEqual(source, annotation, name)
+            self.assertEqual(iiif_annotation_problems(source), [], name)
+
+    def test_leaflet_rounding_changes_fail(self):
+        leaflet = LEAFLET_SRC.read_text()
+        self.assertTrue(leaflet_rounding_problems(leaflet.replace(": 6;", ": 5;")))

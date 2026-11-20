@@ -2,11 +2,14 @@ import L from "leaflet";
 import "leaflet-iiif";
 import { infoJsonUrl } from "utils/iiif-image";
 
+import { liveUnit } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
+import type { LayerFrame } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import {
     curtainable,
     layerImageChain,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 
+import type { ZoneUnit } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { FramedImage } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 
 /** The leaflet-iiif 3.0.0 state read here: the info.json request, the image sizes it yields, the tile container. */
@@ -70,6 +73,36 @@ export const PIXELATED_CLASS = "ms-pixelated";
 export interface PageLayer {
     layer: L.TileLayer;
     remove: () => void;
+    /**
+     * The frame of the layer laid alone, once its info.json is read
+     * (`maxNativeZoom`, `x`, `y` of the leaflet-iiif layer); null when the
+     * read failed or gave no size, or the page was removed first. A layer
+     * placed by a scale group is shifted and rescaled: `layServed` gives it
+     * no frame.
+     */
+    frame: Promise<LayerFrame | null>;
+}
+
+/**
+ * The unit of the zones of a canvas of `canvas` pixels on the live layer of
+ * `page` (`liveUnit`); null when the layer has no frame (`PageLayer.frame`) or
+ * the canvas has no size.
+ */
+export async function liveUnitOf(
+    page: PageLayer,
+    canvas: { width: number; height: number },
+): Promise<ZoneUnit | null> {
+    const frame = await page.frame;
+    return frame && canvas.width > 0 && canvas.height > 0
+        ? liveUnit(frame, canvas)
+        : null;
+}
+
+function frameOf(layer: IiifLayer): LayerFrame | null {
+    const { maxNativeZoom: zoom, x: width, y: height } = layer;
+    return Number.isFinite(zoom) && width && height
+        ? { zoom: zoom as number, width, height }
+        : null;
 }
 
 /**
@@ -121,10 +154,15 @@ export function layPage(
     layer.onRemove = (from: L.Map) =>
         layer._container ? onRemove.call(layer, from) : layer;
     let removed = false;
+    let framed: (frame: LayerFrame | null) => void = () => undefined;
+    const frame = new Promise<LayerFrame | null>((resolve) => {
+        framed = resolve;
+    });
     void Promise.resolve(layer._infoPromise).then(
         () => {
-            if (removed) return;
+            if (removed) return framed(null);
             if (layer._imageSizes) {
+                framed(frameOf(layer));
                 map.addLayer(layer);
                 void Promise.all([layer._infoPromise]).then(() => {
                     if (!removed && layer._container && map.hasLayer(layer)) {
@@ -132,14 +170,19 @@ export function layPage(
                         layer._resetView();
                     }
                 });
-            } else failed();
+            } else {
+                framed(null);
+                failed();
+            }
         },
         () => {
+            framed(null);
             if (!removed) failed();
         },
     );
     return {
         layer,
+        frame,
         remove: () => {
             removed = true;
             if (map.hasLayer(layer)) map.removeLayer(layer);
@@ -341,7 +384,7 @@ function iiifMember(
     layer: IiifLayer,
     size: PixelSize,
 ): ScaleMember {
-    const own = nativeZoomOf({ layer, remove: () => undefined });
+    const own = nativeZoomOf(layer);
     const shift = shiftTiles(layer);
     return {
         nativeZoom: own,
@@ -409,13 +452,16 @@ export function layServed(
             member = iiifMember(map, laid.layer as IiifLayer, size);
             options.scale.join(member);
         }
-        const zoom = options.scale ? options.scale.zoom() : nativeZoomOf(laid);
+        const zoom = options.scale
+            ? options.scale.zoom()
+            : nativeZoomOf(laid.layer);
         allowOverzoom(map, zoom);
         handlers.read(size, zoom);
     }
     map.on("layeradd", onAdd);
     return {
         layer: laid.layer,
+        frame: options.scale ? Promise.resolve(null) : laid.frame,
         remove: () => {
             map.off("layeradd", onAdd);
             if (member) options.scale?.leave(member);
@@ -660,7 +706,7 @@ export function pageBoundsOf(
 ): [[number, number], [number, number]] | null {
     const size = servedSize(page);
     if (!size) return null;
-    const scale = 2 ** nativeZoomOf(page);
+    const scale = 2 ** nativeZoomOf(page?.layer);
     return [
         [-size.h / scale, 0],
         [0, size.w / scale],
@@ -668,9 +714,9 @@ export function pageBoundsOf(
 }
 
 /** The map zoom at which the page shows at its served size, one pixel per unit. */
-export function nativeZoomOf(page: PageLayer | null): number {
-    const layer = page?.layer as IiifLayer | undefined;
-    const declared = layer?.options?.maxNativeZoom;
+export function nativeZoomOf(layer: L.TileLayer | undefined): number {
+    const iiif = layer as IiifLayer | undefined;
+    const declared = iiif?.options?.maxNativeZoom;
     if (typeof declared === "number") return declared;
-    return Math.max(0, (layer?._imageSizes?.length ?? 1) - 1);
+    return Math.max(0, (iiif?._imageSizes?.length ?? 1) - 1);
 }

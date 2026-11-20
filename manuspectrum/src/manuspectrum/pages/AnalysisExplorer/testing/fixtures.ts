@@ -337,9 +337,12 @@ export function documentResponses({
             (candidate) => candidate.id === entry.canvas,
         );
         if (canvas < 0) throw new Error(`no canvas ${entry.canvas}`);
-        analyses
-            .get(entry.analysis)!
-            .zones.push({ canvas, shape: entry.shape, feature: entry.key });
+        analyses.get(entry.analysis)!.zones.push({
+            canvas,
+            shape: entry.shape,
+            unit: entry.unit,
+            feature: entry.key,
+        });
     }
     return {
         payload: { ...payload, techniques, analyses: [...analyses.values()] },
@@ -404,6 +407,7 @@ export function annotation(
         analysis: uuid(100 + n),
         canvas: "https://iiif.example/c1",
         shape: { type: "point", x: 100 * n, y: 50 * n },
+        unit: null,
         technique: technique("http://example.org/xrf", "XRF"),
         name: label(`MS1_f12_XRF_0${n}`),
         dataKind: "xy",
@@ -424,6 +428,7 @@ export function documentComponent(
         zones: [
             {
                 canvas: 0,
+                unit: null,
                 shape: { type: "rect", x: 30 * n, y: 40 * n, w: 50, h: 60 },
                 feature: uuid(950 + n),
             },
@@ -442,6 +447,7 @@ export function sample(
         name: label(`Sample ${n}`),
         zone: {
             canvas: "https://iiif.example/c1",
+            unit: null,
             shape: { type: "rect", x: 40 * n, y: 60 * n, w: 20, h: 10 },
         },
         analyses: [],

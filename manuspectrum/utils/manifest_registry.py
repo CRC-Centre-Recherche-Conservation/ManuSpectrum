@@ -331,16 +331,16 @@ def feature_manifest(feature):
 
 
 def annotation_manifests(data):
-    """``{node id: {manifest URL: [canvas ids]}}`` of the http(s) manifests named by the FeatureCollections of tile ``data``.
+    """``{node id: {manifest URL: [canvas ids]}}`` of the http(s) manifests named by the collections (any dict whose ``features`` is a list, as the zone readers take it) of tile ``data``.
 
     The one rule for which manifests an annotation names; canvas ids are kept
     in the order first seen, once each.
     """
     found = {}
     for nodeid, value in (data or {}).items():
-        if not isinstance(value, dict) or value.get("type") != "FeatureCollection":
+        if not isinstance(value, dict) or not isinstance(value.get("features"), list):
             continue
-        for feature in value.get("features") or []:
+        for feature in value["features"]:
             named = feature_manifest(feature)
             if named is None:
                 continue

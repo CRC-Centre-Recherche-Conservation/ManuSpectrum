@@ -112,6 +112,7 @@ const FolioStub = defineComponent({
         "captured",
         "capture-failed",
         "layer-reset",
+        "live-unit",
     ],
     setup(_props, { expose }) {
         expose({ focusTarget, focusCurrent });
@@ -631,6 +632,7 @@ describe("CorpusDocument", () => {
                     characterization(1, {
                         zone: {
                             canvas: "https://iiif.example/c1",
+                            unit: null,
                             shape: { type: "point", x: 1, y: 1 },
                             source: "own",
                         },
@@ -638,6 +640,7 @@ describe("CorpusDocument", () => {
                     characterization(2, {
                         zone: {
                             canvas: "https://iiif.example/c1",
+                            unit: null,
                             shape: { type: "point", x: 2, y: 2 },
                             source: "own",
                         },
@@ -720,6 +723,7 @@ describe("CorpusDocument", () => {
                         ],
                         zone: {
                             canvas: "https://iiif.example/c1",
+                            unit: null,
                             shape: { type: "point", x: 10, y: 10 },
                             source: "own",
                         },
@@ -730,6 +734,7 @@ describe("CorpusDocument", () => {
                     sample(2, {
                         zone: {
                             canvas: "https://iiif.example/c2",
+                            unit: null,
                             shape: { type: "point", x: 10, y: 10 },
                         },
                     }),
@@ -1803,6 +1808,29 @@ describe("CorpusDocument", () => {
             const { wrapper, folio } = await mountLaidLayer();
             expect(folio.props("overlays")).toHaveLength(1);
             expect(folio.props("adjusting")).toBeNull();
+            wrapper.unmount();
+        });
+
+        it("places the layer with the live unit of the page shown, never with one read on another page", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            const canvas = (folio.props("canvas") as { id: string }).id;
+            const fallback = folio.props("overlays")[0].bounds;
+            folio.vm.$emit("live-unit", {
+                canvas,
+                unit: { x: 2, y: 2, read: true },
+            });
+            await flushPromises();
+            const live = folio.props("overlays")[0].bounds;
+            expect(live).not.toEqual(fallback);
+            folio.vm.$emit("live-unit", {
+                canvas: "https://iiif.example/another-page",
+                unit: { x: 2, y: 2, read: true },
+            });
+            await flushPromises();
+            expect(folio.props("overlays")[0].bounds).toEqual(fallback);
+            folio.vm.$emit("live-unit", null);
+            await flushPromises();
+            expect(folio.props("overlays")[0].bounds).toEqual(fallback);
             wrapper.unmount();
         });
 

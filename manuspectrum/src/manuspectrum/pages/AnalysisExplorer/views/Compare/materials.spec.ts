@@ -128,6 +128,7 @@ describe("materialRecords", () => {
         const late = characterization(8, {
             zone: {
                 canvas: "c8",
+                unit: null,
                 shape: { type: "point", x: 1, y: 1 },
                 source: "own",
             },

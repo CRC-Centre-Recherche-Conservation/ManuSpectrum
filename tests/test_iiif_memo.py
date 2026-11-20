@@ -398,6 +398,41 @@ class MemoTests(IIIFCase):
         self.assertGreater(self.remaining(key), settings.IIIF_DEGRADED_TTL)
         self.assertIn("ETag", page)
 
+    def stamp_zones(self, analysis, unit, width, height):
+        node = self.nodes[("analysis", "literal_location_of_analysis")]
+        for tile in TileModel.objects.filter(
+            resourceinstance=analysis, nodegroup_id=node.nodegroup_id
+        ):
+            collection = tile.data[str(node.nodeid)]
+            for feature in collection["features"]:
+                feature["properties"].update(
+                    {
+                        "msUnit": unit,
+                        "msImageWidth": width,
+                        "msImageHeight": height,
+                        "msFrame": "browser",
+                    }
+                )
+            TileModel.objects.filter(pk=tile.pk).update(data=tile.data)
+
+    def test_page_of_stamped_zones_reads_nothing_and_is_not_degraded(self):
+        url = self.with_image_services()
+        self.stamp_zones(self.analyses["on_document"], 16, 4000, 5000)
+        with (
+            self.settings(IIIF_IMAGE_INFO_READ=True),
+            mock.patch(
+                "manuspectrum.iiif.units.safe_fetch",
+                side_effect=requests.exceptions.ConnectTimeout(),
+            ) as read,
+        ):
+            page = self.visitor.get(url)
+
+        (key,) = memo_keys()
+        read.assert_not_called()
+        self.assertIn(b'"xywh=160,160,320,320"', page.content)
+        self.assertIn("ETag", page)
+        self.assertGreater(self.remaining(key), settings.IIIF_DEGRADED_TTL)
+
     def test_a_local_manifest_missing_from_the_database_is_degraded(self):
         node = self.nodes[("document", "facsimiles")]
         TileModel.objects.filter(

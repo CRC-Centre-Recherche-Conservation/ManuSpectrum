@@ -255,6 +255,7 @@ class DashboardFileTests(unittest.TestCase):
             "manuspectrum_workflow_cleanups_total",
             "manuspectrum_workflow_cleanup_resources_total",
             "manuspectrum_account_mails_total",
+            "manuspectrum_annotation_zones",
             'view="transaction_reverse"',
         ):
             with self.subTest(series=series):
@@ -272,6 +273,17 @@ class DashboardFileTests(unittest.TestCase):
         (cancelled,) = panels["Workflows cancelled per day"]["targets"]
         self.assertIn(" unless ", cancelled["expr"])
         self.assertIn("up offset 1d == 1", cancelled["expr"])
+
+    def test_the_activity_dashboard_shows_the_zones_without_a_measured_frame(self):
+        panels = {p["title"]: p for p in walk_panels(self.by_uid()["ms-activity"])}
+        panel = panels["Annotation zones without a measured frame"]
+        self.assertEqual(panel["type"], "stat")
+        (target,) = panel["targets"]
+        self.assertEqual(
+            target["expr"],
+            'max by (state) (manuspectrum_annotation_zones{state=~"unstamped|estimated"})',
+        )
+        self.assertEqual(target["legendFormat"], "{{state}}")
 
     def test_the_activity_dashboard_counts_nobody(self):
         text = json.dumps(self.by_uid()["ms-activity"])

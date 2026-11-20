@@ -5,6 +5,7 @@ import type {
     Label,
     Shape,
     Technique,
+    ZoneUnit,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
 /** One zone of an analysis on one page, as the folio, the page list and the strip read it. */
@@ -16,6 +17,8 @@ export interface Annotation {
     /** Id of the page's canvas. */
     canvas: string;
     shape: Shape;
+    /** The zone's own unit when its frame is not measured (`AnalysisZone.unit`); null when measured. */
+    unit: ZoneUnit | null;
     technique: Technique | null;
     dataKind: DataKind;
     unpublished: boolean;
@@ -88,6 +91,7 @@ export function documentView(
                 key: `an:${analysis.id}:${index}`,
                 canvas: canvas.id,
                 shape: zone.shape,
+                unit: zone.unit,
             });
         });
     }
