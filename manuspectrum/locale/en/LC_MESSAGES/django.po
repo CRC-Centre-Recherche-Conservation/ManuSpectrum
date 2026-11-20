@@ -6152,13 +6152,28 @@ msgstr[1] "%(n)s months (%(days)s days), then deleted."
 msgid "Access log"
 msgstr "Access log"
 
-#: templates/views/pages/privacy.htm:56 templates/views/pages/privacy.htm:60
-msgid "30 days, then deleted."
-msgstr "30 days, then deleted."
+#: templates/views/pages/privacy.htm:57 templates/views/pages/privacy.htm:61
+#: templates/views/pages/privacy.htm:65
+msgid "One year, then deleted."
+msgstr "One year, then deleted."
 
 #: templates/views/pages/privacy.htm:59
 msgid "Error log"
 msgstr "Error log"
+
+#: templates/views/pages/privacy.htm:38
+msgid ""
+"Application log: sign-ins, failed sign-ins and lockouts, with the user "
+"name, IP address and browser identification, kept for the security of the "
+"service and not shared."
+msgstr ""
+"Application log: sign-ins, failed sign-ins and lockouts, with the user "
+"name, IP address and browser identification, kept for the security of the "
+"service and not shared."
+
+#: templates/views/pages/privacy.htm:64
+msgid "Application log"
+msgstr "Application log"
 
 #: templates/views/pages/privacy.htm:63
 msgid "Accounts"

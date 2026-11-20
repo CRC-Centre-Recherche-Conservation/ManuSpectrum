@@ -6278,13 +6278,28 @@ msgstr[1] "%(n)s mois (%(days)s jours), puis supprimés."
 msgid "Access log"
 msgstr "Journal d'accès"
 
-#: templates/views/pages/privacy.htm:56 templates/views/pages/privacy.htm:60
-msgid "30 days, then deleted."
-msgstr "30 jours, puis supprimé."
+#: templates/views/pages/privacy.htm:57 templates/views/pages/privacy.htm:61
+#: templates/views/pages/privacy.htm:65
+msgid "One year, then deleted."
+msgstr "Un an, puis supprimé."
 
 #: templates/views/pages/privacy.htm:59
 msgid "Error log"
 msgstr "Journal d'erreurs"
+
+#: templates/views/pages/privacy.htm:38
+msgid ""
+"Application log: sign-ins, failed sign-ins and lockouts, with the user "
+"name, IP address and browser identification, kept for the security of the "
+"service and not shared."
+msgstr ""
+"Journal de l'application : connexions, échecs de connexion et blocages, "
+"avec l'identifiant, l'adresse IP et l'identification du navigateur, "
+"conservé pour la sécurité du service et non partagé."
+
+#: templates/views/pages/privacy.htm:64
+msgid "Application log"
+msgstr "Journal de l'application"
 
 #: templates/views/pages/privacy.htm:63
 msgid "Accounts"
