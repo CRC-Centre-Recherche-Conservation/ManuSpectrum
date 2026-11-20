@@ -64,7 +64,8 @@ if ! command -v "$DSMC" >/dev/null 2>&1; then
   exit 0
 fi
 
-mkdir -p -m 0700 "$STATE_DIR"
+mkdir -p "$STATE_DIR"
+chmod 0700 "$STATE_DIR"
 exec 9>"$STATE_DIR/lock"
 flock -n 9 || { log "another run holds the lock"; exit 0; }
 state="$STATE_DIR/archived.sha256"
