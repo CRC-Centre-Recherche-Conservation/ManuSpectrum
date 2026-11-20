@@ -78,7 +78,7 @@ grep -q 'label=com.docker.compose.project=manuspectrum' "$TMP/calls" \
   && grep -q 'label=com.docker.compose.service=nginx' "$TMP/calls"
 assert "the container is selected by the two Compose labels" "$?"
 
-grep -qE '^rotate 30|^ +rotate 30' "$TEMPLATE" && grep -qE '^ +maxage 30' "$TEMPLATE"
-assert "retention is 30 days" "$?"
+grep -qE '^rotate 365|^ +rotate 365' "$TEMPLATE" && grep -qE '^ +maxage 365' "$TEMPLATE"
+assert "retention is one year" "$?"
 
 exit "$failed"

@@ -130,6 +130,9 @@ Detailed build procedure: `deploy/rehearsal/README.md`. Here, the checks.
   `sudo systemctl reboot` with the stack up: the host is back within a few minutes and every container is healthy again.
   When containers already run and the file would change, the play stops and asks for
   `-e docker_restart_ok=true`: the Docker restart stops the stack (plan a window on a live host).
+- [ ] After the `host` role: `systemctl cat systemd-journald | grep -c manuspectrum.conf` → `1` and
+  `grep -E 'SystemMax|MaxRetentionSec|MaxFileSec' /etc/systemd/journald.conf.d/manuspectrum.conf` → `SystemMaxUse=12G`,
+  `MaxRetentionSec=1year`, `MaxFileSec=1day`, `SystemMaxFiles=2000`; `grep -H rotate /etc/logrotate.d/{rsyslog,ufw,fail2ban,wtmp,btmp}` → `rotate 52` for the weekly rules, `rotate 12` for `wtmp` and `btmp`.
   A `daemon.json` with keys the role does not manage stops the play: merge them by hand first.
 - [ ] `ls -l /etc/manuspectrum/rehearsal-host` → `-rw-r--r-- 1 root root`: the marker without which
   `make load-snapshot` is refused (the rehearsal VM only; never create it on a production host).
@@ -402,14 +405,11 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
 ### 2.6 Logs and rotation
 
 - [ ] *(service account)* `for c in $(dc ps -q); do docker inspect -f '{{.Name}} {{.HostConfig.LogConfig}}' $c; done`
-  → nine lines ending `{json-file map[max-file:5 max-size:10m]}`.
+  → nine lines ending `{journald map[tag:{{.Name}}]}`.
   - On failure: `logging` is missing for that service in `compose.yaml`.
-- [ ] *(admin)* `L=$(sudo docker inspect -f '{{.LogPath}}' manuspectrum-web-1); sudo sh -c "ls -lh $L*"` (the glob must be
-  expanded by root's shell: the admin cannot read `/var/lib/docker/containers`) → `*-json.log`,
-  no file above 10 MB. To see rotation itself, write about 12 MB:
-  `docker exec manuspectrum-web-1 sh -c 'yes ms-log-test | head -c 12000000 >/proc/1/fd/1'`,
-  then the same `sudo sh -c "ls -lh $L*"` → a second file `*-json.log.1`, none larger than 10 MB, at most five.
-- [ ] *(service account)* `docker logs --tail=5 manuspectrum-web-1` still answers (rotation does not break it).
+- [ ] *(admin)* `sudo journalctl CONTAINER_TAG=manuspectrum-web-1 -n 3 -o cat` → the last lines of the web container (the
+  journal keeps them one year, not the container).
+- [ ] *(service account)* `docker logs --tail=5 manuspectrum-web-1` still answers (the journald driver is readable by Docker).
 
 ### 2.7 Data survives (rehearsal VM only)
 
@@ -897,7 +897,7 @@ change shows within a minute (reload after waiting). Browser in a private window
   (for instance after `dc stop web`, 4.4) still carry the raw request line, query string and reset
   token included. The protection is the directory mode, not the
   file's (nginx creates its logs `0644`; only rotated files are `0640`): `stat -c %a <NGINX_LOG_HOST_DIR>`
-  → `750`. Rotated thirty days with the access log (4.9).
+  → `750`. Rotated one year with the access log (4.9).
 
 ### 4.9 Rotation
 
@@ -906,14 +906,14 @@ change shows within a minute (reload after waiting). Browser in a private window
   a rotation: `sudo logrotate -f -s /tmp/state /etc/logrotate.d/manuspectrum-nginx`.
   - Expected: dated, then compressed (next run) files appear in `$LOG`, a new `access.log` is
     created `0640` for the service account, and nginx keeps writing to it with no restart
-    (`dc ps nginx` uptime unchanged, a new request lands in the new file). `rotate 30`: thirty days.
+    (`dc ps nginx` uptime unchanged, a new request lands in the new file). `rotate 365`: one year.
   - On failure: `su` line missing (logrotate refuses a directory not owned by root), or the
     `nginx -s reopen` did not reach the container (`docker ps --filter label=com.docker.compose.service=nginx`).
     The rule never uses `docker kill --signal`: Docker would record a manual stop and `unless-stopped` would no
     longer restart nginx at the next boot. After a rotation, `docker inspect -f '{{.State.Status}} {{.HostConfig.RestartPolicy.Name}}' $(dc ps -q nginx)`
     stays `running unless-stopped` and nginx comes back after a reboot of the VM.
 - [ ] *(service account)* `docker inspect -f '{{.HostConfig.LogConfig}}' $(dc ps -q nginx)`
-  → `{json-file map[max-file:5 max-size:10m]}` (nginx's own stdout stays bounded).
+  → `{journald map[tag:{{.Name}}]}` (nginx's own stdout goes to the journal).
 
 ### 4.10 Data steps after loading a snapshot
 
@@ -1449,6 +1449,10 @@ sizes of the data directories.
 - [ ] `AllowTcpForwarding yes` is set for the administrators' accounts and the tunnel of 7.2 works there.
 - [ ] The timers are installed by PP-8 and listed by `systemctl list-timers 'manuspectrum-*'`; the disk-usage
   schedule decided in 7.4 is recorded.
+- [ ] `systemctl list-timers manuspectrum-log-archive.timer` lists the daily 07:30 timer; `sudo systemctl start manuspectrum-log-archive`
+  then `journalctl -u manuspectrum-log-archive -e` → on a host without `dsmc` the unit succeeds and logs `dsmc not installed`;
+  with `dsmc`, `archived N file(s)` and `sudo dsmc query archive "/var/log/*"` lists them. On the production host,
+  `dsmc not installed` is a failure: the archive is off and `LogArchiveStale` stays silent.
 
 ## Step 8 — Accounts (`deploy/ADMIN.md`)
 

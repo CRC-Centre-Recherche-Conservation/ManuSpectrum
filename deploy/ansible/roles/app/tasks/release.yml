@@ -57,6 +57,36 @@
   loop_control:
     label: "{{ item.name }}"
 
+- name: Create the log archive program and state directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ app_log_archive_dir }}", mode: "0755" }
+    - { path: "{{ app_log_archive_state_dir }}", mode: "0700" }
+
+- name: Install the log archive program
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../scripts/{{ item.name }}"
+    dest: "{{ app_log_archive_dir }}/{{ item.name }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop: "{{ app_log_archive_files }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Write the log archive configuration
+  ansible.builtin.template:
+    src: log-archive.env.j2
+    dest: "/etc/manuspectrum/log-archive.env"
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Install the update command
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../sbin/manuspectrum-update"
