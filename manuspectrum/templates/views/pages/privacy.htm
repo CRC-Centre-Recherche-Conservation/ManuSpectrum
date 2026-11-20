@@ -36,6 +36,7 @@
     <li>{% trans "Access log, for every visitor, with or without an account: date and time, IP address, method, page requested (without the query string; the tokens of password-reset, activation and two-factor links are removed), status, size, duration, host, path of the referring page and browser identification. Purpose: security and operation of the service. It is not shared and not used for statistics about individuals." %}</li>
     <li>{% trans "The web server's error log, for failed requests only: date, IP address and the request line as sent (a link token included, for links that expire within days), kept for the same purpose and not shared." %}</li>
     <li>{% trans "Application log: sign-ins, failed sign-ins and lockouts, with the user name, IP address and browser identification, kept for the security of the service and not shared." %}</li>
+    <li>{% trans "Server system logs: the mails the platform sends (recipient address, date and delivery result) and the administrators' connections, kept for the security and operation of the service and not shared." %}</li>
     <li>{% trans "History of the data: the account that created or changed each resource, and the date." %}</li>
     <li>{% trans "Resources can name researchers (authors, contacts) as part of the scientific description." %}</li>
     <li>{% trans "The contact form opens your own mail application: nothing you type is stored by the platform before you send it." %}</li>
@@ -84,6 +85,7 @@
         </tr>
     </tbody>
 </table>
+<p>{% trans "The server logs, system logs included, are kept one year; the copies of them in the backups of the host of the platform are deleted at most two months later." %}</p>
 
 <h2>{% trans "Recipients" %}</h2>
 <p>{% trans "The administrators and the team of the Centre de recherche sur la conservation, and the host of the platform, UAR Huma-Num. Nothing is sold, and no data is given to advertisers." %}</p>
