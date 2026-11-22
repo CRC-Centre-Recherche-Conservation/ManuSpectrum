@@ -1453,6 +1453,9 @@ sizes of the data directories.
   then `journalctl -u manuspectrum-log-archive -e` → on a host without `dsmc` the unit succeeds and logs `dsmc not installed`;
   with `dsmc`, `archived N file(s)` and `sudo dsmc query archive "/var/log/*"` lists them. On the production host,
   `dsmc not installed` is a failure: the archive is off and `LogArchiveStale` stays silent.
+- [ ] Where TSM is installed, after the playbook: `/var/log` in the `DOMAIN` of `/var/spool/tsm/etc/dsm.sys` with an active
+  `VirtualMountpoint /var/log`, and `/etc/cron.daily/tsm` sets `LANG=C.UTF-8` before `dsmc` and passes no `-se`; the next
+  morning `/var/spool/tsm/log/dsmc.incremental.local.log` holds no `ANS…E` and `sudo dsmc query filespace` lists `/var/log`.
 
 ## Step 8 — Accounts (`deploy/ADMIN.md`)
 

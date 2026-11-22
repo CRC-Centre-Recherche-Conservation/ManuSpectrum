@@ -322,9 +322,13 @@ The server logs stay one year on the host: the nginx access and error logs
 (logrotate, 365 days), the container logs and the system journal (journald, one
 year), the rsyslog, ufw and fail2ban files of `/var/log` (52 weeks), `wtmp` and
 `btmp` (12 months); other packages' own log files keep their own rotation. The
-logs are not in restic. The hosting provider's TSM backup copies `/data`, `/etc`, `/home` and `/root` daily,
-and `/var/log` once it is added to the `DOMAIN` of `/var/spool/tsm/etc/dsm.sys`
-(the provider's file, edited by hand); the VM cannot delete those backups.
+logs are not in restic. The hosting provider's TSM backup (`/etc/cron.daily/tsm`, 06:25) copies `/data`, `/etc`,
+`/home`, `/root` and `/var/log` daily; the VM cannot delete those backups. Where the
+provider's client is installed, the Ansible `host` role adds `/var/log` to the `DOMAIN`
+of `/var/spool/tsm/etc/dsm.sys` (with its `VirtualMountpoint`), drops the job's `-se`
+option (`dsm.opt` names the server) and runs the job in the `C.UTF-8` locale: without a
+UTF-8 locale `dsmc` refuses every file name holding a non-ASCII character (`ANS4042E`).
+The job's report is `/var/spool/tsm/log/dsmc.incremental.local.log`.
 
 Once a day (`manuspectrum-log-archive.timer`, 07:30, `scripts/log-archive.sh`,
 run as root) the closed logs are also archived into TSM with `dsmc archive`: the

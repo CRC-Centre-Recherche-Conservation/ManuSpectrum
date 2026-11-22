@@ -140,7 +140,7 @@ if [ "$count" -gt 0 ]; then
     if [[ "$path" == *" "* ]]; then printf '"%s"\n' "$path"; else printf '%s\n' "$path"; fi
   done >"$filelist"
   rc=0
-  LANG=C LC_ALL=C "$DSMC" archive -filelist="$filelist" -archsymlinkasfile=no \
+  LANG=C.UTF-8 LC_ALL=C.UTF-8 "$DSMC" archive -filelist="$filelist" -archsymlinkasfile=no \
     -description="manuspectrum logs $today" >"$stage/dsmc.out" 2>&1 || rc=$?
   cat "$stage/dsmc.out" >&2
   # 0: every file sent. 4 (some files not processed) and 8 (warnings): only the

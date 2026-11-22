@@ -8,3 +8,10 @@ host_log_rotations:
   - { rule: fail2ban, rotate: 52 }
   - { rule: wtmp, rotate: 12 }
   - { rule: btmp, rotate: 12 }
+
+# The hosting provider's TSM client (Huma-Num): its options file and the nightly
+# job that runs `dsmc incremental`. When they exist, the role adds /var/log to the
+# backup domain, drops the job's `-se` (dsm.opt names the server) and runs the job
+# in a UTF-8 locale, without which dsmc refuses every non-ASCII file name.
+host_tsm_options: /var/spool/tsm/etc/dsm.sys
+host_tsm_cron: /etc/cron.daily/tsm

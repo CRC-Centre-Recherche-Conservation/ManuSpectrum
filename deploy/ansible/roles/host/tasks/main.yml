@@ -90,6 +90,43 @@
     label: "{{ item.item.rule }}"
   when: item.stat.exists
 
+- name: Find the hosting provider's TSM client options and nightly job
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ host_tsm_options }}"
+    - "{{ host_tsm_cron }}"
+  register: host_tsm_files
+
+- name: Declare /var/log as a TSM virtual mount point
+  ansible.builtin.lineinfile:
+    path: "{{ host_tsm_options }}"
+    regexp: '(?i)^\*?\s*virtualmountpoint\s+/var/log/?\s*$'
+    line: "        VirtualMountpoint       /var/log"
+  when: host_tsm_files.results[0].stat.exists
+
+- name: Add /var/log to the TSM backup domain
+  ansible.builtin.replace:
+    path: "{{ host_tsm_options }}"
+    regexp: '(?i)^(\s*domain\s(?!.*\s/var/log/?(\s|$)).*?)\s*$'
+    replace: '\1 /var/log'
+  when: host_tsm_files.results[0].stat.exists
+
+- name: Let the nightly TSM backup use the default server of dsm.opt
+  ansible.builtin.replace:
+    path: "{{ host_tsm_cron }}"
+    regexp: '(?i)^(.*\bdsmc\s.*?)\s+-se(rvername)?=\S+(.*)$'
+    replace: '\1\3'
+  when: host_tsm_files.results[1].stat.exists
+
+- name: Run the nightly TSM backup in a UTF-8 locale
+  ansible.builtin.lineinfile:
+    path: "{{ host_tsm_cron }}"
+    line: export LANG=C.UTF-8 LC_ALL=C.UTF-8
+    insertbefore: '^\s*\S*dsmc\s'
+    firstmatch: true
+  when: host_tsm_files.results[1].stat.exists
+
 - name: Create the drop-in directory of the Docker scopes
   ansible.builtin.file:
     path: /etc/systemd/system/docker-.scope.d
