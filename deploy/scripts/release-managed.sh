@@ -18,6 +18,7 @@ is_managed() {
     deploy/scripts/release-update.sh | deploy/scripts/release-watch.sh | deploy/scripts/release-managed.sh) return 0 ;;
     deploy/scripts/release-verify.sh | deploy/scripts/release-ref-guard.sh) return 0 ;;
     deploy/scripts/lib-release.sh | deploy/scripts/lib-metrics.sh | deploy/scripts/image-digest.sh) return 0 ;;
+    deploy/scripts/log-archive.sh) return 0 ;;
   esac
   return 1
 }

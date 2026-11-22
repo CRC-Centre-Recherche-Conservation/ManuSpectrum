@@ -4,7 +4,7 @@
 #   @NGINX_LOG_HOST_DIR@  the host directory bound to /var/log/manuspectrum
 #   @APP_USER@ @APP_GROUP@  the service account that owns that directory
 #
-# Enforces the 30-day retention of access and error logs (spec §6.2): both
+# Enforces the one-year retention of the access and error logs: both
 # carry client IP addresses. `su` is required because the directory is owned
 # by the service account, not by root, and logrotate refuses to rotate in it
 # otherwise. After rotation nginx reopens its files (`nginx -s reopen` run inside
@@ -14,8 +14,8 @@
 @NGINX_LOG_HOST_DIR@/access.log @NGINX_LOG_HOST_DIR@/error.log {
     su @APP_USER@ @APP_GROUP@
     daily
-    rotate 30
-    maxage 30
+    rotate 365
+    maxage 365
     compress
     delaycompress
     dateext
