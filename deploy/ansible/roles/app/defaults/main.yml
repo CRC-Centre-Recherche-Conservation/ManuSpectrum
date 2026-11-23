@@ -4,6 +4,7 @@ app_unit_names:
   - manuspectrum-cert-renew
   - manuspectrum-container-metrics
   - manuspectrum-disk-usage
+  - manuspectrum-log-archive
   - manuspectrum-monthly-report
   - manuspectrum-restore-test
   - manuspectrum-watch
@@ -13,6 +14,7 @@ app_timer_names:
   - manuspectrum-restore-test
   - manuspectrum-container-metrics
   - manuspectrum-disk-usage
+  - manuspectrum-log-archive
   - manuspectrum-monthly-report
   - manuspectrum-watch
 # Rendered as `.service` only: the instance name comes from the update command.
@@ -43,6 +45,12 @@ app_release_program_files:
   - { name: image-digest.sh, mode: "0755" }
   - { name: lib-release.sh, mode: "0644" }
   - { name: lib-metrics.sh, mode: "0644" }
+# Root-owned copy of the log archive job the root unit runs, never the checkout.
+app_log_archive_dir: /usr/local/lib/manuspectrum/log-archive
+app_log_archive_state_dir: /var/lib/manuspectrum/log-archive
+app_log_archive_files:
+  - { name: log-archive.sh, mode: "0755" }
+  - { name: lib-metrics.sh, mode: "0644" }
 # Paths of the laptop checkout that release-managed.sh hashes (its is_managed()).
 app_release_managed_paths:
   - deploy/ansible/site.yml
@@ -50,4 +58,5 @@ app_release_managed_paths:
   - deploy/systemd/*.in
   - deploy/logrotate/*.in
   - deploy/sbin
+  - deploy/scripts/log-archive.sh
   - "{{ app_release_program_files | map(attribute='name') | map('regex_replace', '^', 'deploy/scripts/') | list }}"

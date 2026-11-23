@@ -673,9 +673,12 @@ templates, the update command, the release programs) that differs between the ta
    `git submodule update --init --force` once: otherwise the CIDOC-CRM
    ontology of `pkg/` looks modified.
 2. Run the playbook for the host (`deploy/ansible/README.md`).
-3. Check that `sudo manuspectrum-update --status` shows `needs_ansible=0` on the
-   armed release. No new mail says the release is ready once Ansible has run:
-   the watch resets the flag silently.
+3. Optionally, refresh the flag at once with
+   `sudo systemctl start manuspectrum-watch.service`, then check that
+   `sudo manuspectrum-update --status` shows `needs_ansible=0` on the armed
+   release. Otherwise the flag stays at 1 until the next hourly watch run, which
+   resets it silently (no new mail says the release is ready). The flag only
+   informs: the update checks the host itself before installing.
 4. Install again with `--now` or `--at`.
 
 Ansible never changes the running version; it only brings the host's files up to
@@ -743,7 +746,7 @@ CNRS (legal notice, `/<lang>/about/legal`).
 | Person resources | Names and affiliations of people in the scientific records | Attribution of data | With the data |
 | Mails | Invitations and notices (embargo, workflow) to the people concerned; summaries to `ALERT_EMAILS` | Service notices, no unsubscribe link | Not stored by ManuSpectrum (the relay keeps its own logs) |
 | Backups | The whole database, media and secrets, encrypted (restic) | Recovery | 7 daily, 4 weekly, 6 monthly (`BACKUP.md`) |
-| Server logs | Access log without query string | Operation | 30 days |
+| Server logs | Access log without query string, error log, application log (sign-ins, failures, lockouts), container logs and system logs; the access, error and application logs and `auth.log` carry IP addresses | Operation | One year; the hosting provider's TSM backup keeps a deleted file about two more months |
 
 Rights are exercised at `CONTACT_EMAIL`. Erasures since a backup are replayed before reopening a
 restored stack (`BACKUP.md`, "Personal data").

@@ -861,6 +861,8 @@ abbr.ms-gloss { text-decoration: underline dotted; text-underline-offset: 3px; c
     &:first-child { margin-top: 0; }
     p { margin: 0 0 0.75rem; color: $ms-ink; }
     p:last-child { margin-bottom: 0; } }
+.ms-legal-ai { display: flex; align-items: center; gap: 0.6rem; }
+.ms-legal-ai img { flex-shrink: 0; }
 .ms-legal-pending { background: #fef3c7; color: $ms-ink; padding: 0 6px; border-radius: 4px; }
 .ms-account-form { margin: 0 0 1.6rem;
     p { margin: 0 0 1.25rem; }
