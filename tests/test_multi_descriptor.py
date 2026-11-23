@@ -16,6 +16,7 @@ from unittest import mock
 from django.test import SimpleTestCase
 from django.utils import translation
 
+from arches.app.datatypes.datatypes import StringDataType
 from arches.app.models import models
 from arches.app.models.resource import Resource
 
@@ -26,6 +27,8 @@ PATCH_NODE = "arches.app.models.models.Node"
 PATCH_TILE = "arches.app.models.models.TileModel"
 PATCH_FACTORY = "manuspectrum.functions.multi_descriptor.DataTypeFactory"
 LOGGER = "manuspectrum.functions.multi_descriptor"
+
+REAL_TILE_MODEL = models.TileModel
 
 GRAPH_ID = uuid.uuid4()
 NODEGROUP_ID = uuid.uuid4()
@@ -485,7 +488,10 @@ class LanguageFallbackTests(DescriptorTestCase):
 
         with translation.override("en"):
             self.assertEqual(self.describe("<titre>"), "Undefined")
-        self.assertEqual(self.datatype.get_display_value.call_count, 2)
+        self.assertEqual(
+            self.datatype.get_display_value.call_count,
+            len(descriptor_settings.LANGUAGES),
+        )
 
 
 class SaveDescriptorsTests(SimpleTestCase):
@@ -603,3 +609,24 @@ class SaveDescriptorsTests(SimpleTestCase):
             "Cote Ms. 12 (fr)",
         )
         self.Node.objects.filter.assert_not_called()
+
+    def test_a_french_only_string_node_names_the_english_descriptor(self):
+        self.DataTypeFactory.return_value.get_instance.return_value = StringDataType()
+        self.TileModel.objects.filter.return_value.order_by.return_value = [
+            REAL_TILE_MODEL(
+                tileid=uuid.uuid4(),
+                nodegroup_id=NODEGROUP_ID,
+                data={
+                    str(self.cote.nodeid): {
+                        "fr": {"value": "Ms. 12", "direction": "ltr"},
+                        "en": {"value": "", "direction": "ltr"},
+                    }
+                },
+            )
+        ]
+        resource = self.make_resource()
+
+        resource.save_descriptors()
+
+        self.assertEqual(resource.descriptors["en"]["name"], "Cote Ms. 12")
+        self.assertEqual(resource.descriptors["fr"]["name"], "Cote Ms. 12")
