@@ -2260,7 +2260,9 @@ class UnitaryCreateDependencyGuardTests(TestCase):
         import json
         from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
 
-        mock_create.side_effect = ValueError(
+        from manuspectrum.views.biblissima_proxy import DependencyError
+
+        mock_create.side_effect = DependencyError(
             f"Dependency {self.DEP} for 'parent' does not exist; "
             "cannot link a dangling relationship."
         )
@@ -2281,7 +2283,59 @@ class UnitaryCreateDependencyGuardTests(TestCase):
         view = BiblissimaCreateResourceView()
         resp = view.post(req)
         self.assertEqual(resp.status_code, 400)
-        self.assertIn("does not exist", json.loads(resp.content)["error"])
+        self.assertNotIn(self.DEP.encode(), resp.content)
+        self.assertEqual(
+            json.loads(resp.content)["error"],
+            "A linked place, person or group could not be found.",
+        )
+
+    def _post_create(self, side_effect):
+        from django.test import RequestFactory
+        from manuspectrum.views.biblissima_proxy import BiblissimaCreateResourceView
+
+        body = json.dumps(
+            {
+                "resourceType": "Document",
+                "biblissimaData": {"label": "x"},
+                "dependencies": {},
+            }
+        )
+        req = RequestFactory().post(
+            "/api/biblissima/create-resource",
+            data=body,
+            content_type="application/json",
+        )
+        req.user = MagicMock()
+        with patch(
+            "manuspectrum.views.biblissima_proxy.BiblissimaCreateResourceView._create_resource",
+            side_effect=side_effect,
+        ):
+            return BiblissimaCreateResourceView().post(req)
+
+    def test_post_maps_project_error_to_a_fixed_message(self):
+        from manuspectrum.views.biblissima_proxy import ProjectError
+
+        with self.assertLogs("manuspectrum.views.biblissima_proxy", "WARNING"):
+            resp = self._post_create(ProjectError(f"Project {self.DEP} does not exist"))
+        self.assertEqual(resp.status_code, 400)
+        self.assertNotIn(self.DEP.encode(), resp.content)
+        self.assertEqual(
+            json.loads(resp.content)["error"],
+            "The project chosen for this import could not be found.",
+        )
+
+    def test_post_hides_unexpected_valueerror_text(self):
+        with self.assertLogs("manuspectrum.views.biblissima_proxy", "WARNING"):
+            resp = self._post_create(ValueError("internal detail"))
+        self.assertEqual(resp.status_code, 400)
+        self.assertNotIn(b"internal detail", resp.content)
+        self.assertEqual(json.loads(resp.content)["error"], "Invalid Biblissima data.")
+
+    def test_post_hides_unexpected_exception_text(self):
+        with self.assertLogs("manuspectrum.views.biblissima_proxy", "ERROR"):
+            resp = self._post_create(KeyError("secret_column"))
+        self.assertEqual(resp.status_code, 500)
+        self.assertNotIn(b"secret_column", resp.content)
 
 
 class CheckDuplicatesComponentScopeTests(TestCase):

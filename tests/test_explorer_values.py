@@ -206,6 +206,32 @@ class AxisAndShapeTests(SimpleTestCase):
         self.assertEqual(rect["type"], "rect")
         self.assertGreater(rect["w"], 0)
 
+    def test_a_shape_counts_the_pixels_of_its_unit_on_each_axis(self):
+        polygon = {
+            "type": "Polygon",
+            "coordinates": [[[10, -10], [20, -10], [20, -20], [10, -20], [10, -10]]],
+        }
+
+        self.assertEqual(
+            shape_of({"type": "Point", "coordinates": [10, -20]}, 4000, 5000),
+            {"type": "point", "x": 320, "y": 640},
+        )
+        self.assertEqual(
+            shape_of({"type": "Point", "coordinates": [10, -20]}, 4000, 5000, (2, 2)),
+            {"type": "point", "x": 20, "y": 40},
+        )
+        self.assertEqual(
+            shape_of(polygon, 4000, 5000, (16, 8.5)),
+            {"type": "rect", "x": 160, "y": 85, "w": 160, "h": 85},
+        )
+        self.assertEqual(
+            shape_of(
+                {"type": "Point", "coordinates": [100, -100]}, 4000, 5000, (64, 64)
+            ),
+            {"type": "point", "x": 3999, "y": 4999},
+        )
+        self.assertIsNone(shape_of({"type": "Point", "coordinates": ["a", 1]}, 9, 9))
+
 
 @override_settings(
     RAW_INSTRUMENT_EXTENSIONS=(".mca", ".asd"),

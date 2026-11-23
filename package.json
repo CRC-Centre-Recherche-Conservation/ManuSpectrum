@@ -1,6 +1,6 @@
 {
     "name": "manuspectrum",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "license": "AGPL-3.0-only",
     "engines": {
         "node": ">=24"
@@ -29,7 +29,7 @@
         "arches": "archesproject/arches#v8.2.0-alpha.25",
         "dompurify": "3.4.17",
         "es-toolkit": "1.50.0",
-        "gridstack": "14.0.0",
+        "gridstack": "14.1.0",
         "leaflet": "1.6.0",
         "leaflet-iiif": "3.0.0",
         "leaflet.markercluster": "^1.5.3",
@@ -37,7 +37,7 @@
         "openvue": "1.0.0",
         "papaparse": "^5.7.0",
         "pinia": "3.0.4",
-        "plotly.js-cartesian-dist": "^4.1.2",
+        "plotly.js-cartesian-dist": "^4.3.0",
         "primeicons": "7.0.0",
         "primelocale": "^2.6.2",
         "typescript": "5.9.3",

@@ -522,6 +522,16 @@ class EdgeContractTests(SimpleTestCase):
                 with translation.override(code), self.assertRaises(Resolver404):
                     resolve(f"/{code}{path}")
 
+    def test_the_bare_manifest_redirect_shares_the_api_location_and_leaves_arches_route(
+        self,
+    ):
+        path = f"/manifest/{UUID}"
+        self.assertView(path, "manifest-legacy")
+        self.assertNamed("snippets/edge-rules.conf", path, "/manifest/")
+        for code, _ in settings.LANGUAGES:
+            with translation.override(code):
+                self.assertEqual(resolve(f"/{code}{path}").url_name, "manifest")
+
     def test_site_notice_falls_back_to_the_snapshot_django_writes(self):
         text = (NGINX_DIR / "snippets/edge-rules.conf").read_text()
         self.assertIn("error_page 500 502 503 504 = @site_notice_snapshot;", text)

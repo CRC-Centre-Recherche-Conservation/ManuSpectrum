@@ -330,7 +330,7 @@ services:
     # nginx-unprivileged listens on 80 and 443 with no capability: Docker sets
     # net.ipv4.ip_unprivileged_port_start=0 in the container.
     # Runs as the service account, which owns the media files and the log directory.
-    image: nginxinc/nginx-unprivileged:1.30.5-alpine@sha256:15c994d10d6d78658721c3bcafff14cb281fba2a4bdf9d5ba92c416a472516e3
+    image: nginx/nginx-unprivileged:1.30.7-alpine-slim@sha256:8432c57ac86f178741af2b89948bd9087cb9df1c415bc1ab4d23735c4f0e3e61
     user: "${APP_UID:?set APP_UID in .env}:${APP_GID:?set APP_GID in .env}"
     read_only: true
     ports:

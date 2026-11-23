@@ -21,7 +21,7 @@ image_of() { # image_of SERVICE-COMMENT-FREE-PATTERN
   grep -oE "image: $1[^ ]*@sha256:[0-9a-f]{64}" "$COMPOSE_FILE" | head -n 1 | sed 's/^image: //'
 }
 CERTBOT_IMAGE="$(image_of certbot/certbot)"
-NGINX_IMAGE="$(image_of nginxinc/nginx-unprivileged)"
+NGINX_IMAGE="$(image_of nginx/nginx-unprivileged)"
 PEBBLE_IMAGE="ghcr.io/letsencrypt/pebble@sha256:68cf1ec8a8db96f64244d5f559c448bc8e54f2934e0dd53a414eabffda7a6f22" # 2.10.0
 DEBIAN_IMAGE="debian:12-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587"
 

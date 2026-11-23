@@ -547,6 +547,7 @@ const overlays = computed(() =>
         pageAnnotations.value,
         {
             canvas: currentCanvas.value?.id ?? null,
+            unit: currentCanvas.value?.zoneUnit ?? null,
             registration:
                 focusedAnalysis.value === null
                     ? null

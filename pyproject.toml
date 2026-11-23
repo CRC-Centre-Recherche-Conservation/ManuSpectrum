@@ -47,7 +47,7 @@ dependencies = [
     # it once arches requires at least as much.
     "idna>=3.15",
 ]
-version = "1.0.2"
+version = "1.0.3"
 
 [dependency-groups]
 dev = [

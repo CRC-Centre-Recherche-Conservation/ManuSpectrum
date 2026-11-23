@@ -2,10 +2,9 @@
 # Refuses a release tag whose base version differs from one of the three
 # places that state it. The tag vX.Y.Z or vX.Y.Z-rc.N must read X.Y.Z, at the
 # tagged commit, in manuspectrum/settings.py (APP_VERSION, parsed with a regex:
-# no Django import), pyproject.toml (`version`, repeated by uv.lock and carried
-# by the image's package metadata) and package.json (`version`, repeated by
-# package-lock.json). An APP_VERSION that carries a prerelease never equals a
-# release base version.
+# no Django import), pyproject.toml (`version`, repeated by uv.lock) and
+# package.json (`version`, repeated by package-lock.json). An APP_VERSION that
+# carries a prerelease never equals a release base version.
 # Usage: release-version-guard.sh TAG [COMMIT]   (run in a clone that holds the
 # commit; COMMIT defaults to the tag)
 set -uo pipefail

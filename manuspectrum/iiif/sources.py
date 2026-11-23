@@ -25,6 +25,7 @@ from arches.app.models.models import IIIFManifest
 from manuspectrum.constants.licenses import iiif_rights
 from manuspectrum.iiif import ids
 from manuspectrum.iiif import language as lang
+from manuspectrum.iiif import units
 from manuspectrum.utils.iiif_tools import CanvasIIIF
 from manuspectrum.views.explorer.values import rewrite_legacy_url
 
@@ -283,20 +284,47 @@ def canvases_of(manifest):
     return found
 
 
+class CanvasIndex(dict):
+    """``{name: (canvas id, width, height)}`` of a manifest's canvases, with the unit of the zones stored on each.
+
+    ``unit`` reads a canvas's image description the first time a zone on it
+    is converted (``units.UnitReader``): a canvas without a zone costs no
+    request.
+    """
+
+    def __init__(self, canvases):
+        super().__init__()
+        self._services = {}
+        self._read = units.UnitReader()
+        for canvas in canvases:
+            image = canvas["image"]
+            entry = (canvas["id"], image["width"], image["height"])
+            self._services[canvas["id"]] = image["service"]
+            self[canvas["id"].rstrip("/")] = entry
+            if image["service"]:
+                self[image["service"].rstrip("/")] = entry
+
+    def unit(self, name):
+        """``ZoneUnit`` of the canvas stored under *name*; ``units.UNKNOWN_UNIT`` for a name the manifest does not list."""
+        entry = self.get(name)
+        if entry is None:
+            return units.UNKNOWN_UNIT
+        canvas, width, height = entry
+        return self._read(canvas, self._services[canvas], width, height)
+
+    def unit_used(self, canvas):
+        """The unit a zone on *canvas* (a canvas id) was converted with, or None when none was."""
+        return self._read.used(canvas)
+
+
 def canvas_index(canvases):
-    """``{name: (canvas id, width, height)}`` of each canvas, by its id and by its image service.
+    """``CanvasIndex`` of *canvases* (``canvases_of``), by canvas id and by image service.
 
     Arches' IIIF viewer stores an annotation under the image service it drew
     (the tile layer's URL), not under the manifest's canvas id; both names
     lead to the canvas.
     """
-    index = {}
-    for canvas in canvases:
-        entry = (canvas["id"], canvas["image"]["width"], canvas["image"]["height"])
-        index[canvas["id"].rstrip("/")] = entry
-        if canvas["image"]["service"]:
-            index[canvas["image"]["service"].rstrip("/")] = entry
-    return index
+    return CanvasIndex(canvases)
 
 
 def _rewritten(value):
