@@ -7731,3 +7731,7 @@ msgid ""
 msgstr ""
 "Carries the token of a link received by e-mail to its form, for 15 minutes; "
 "deleted once the form is sent."
+
+#: templates/views/components/widgets/ms-lang-fallback/shown.htm:1
+msgid "Not entered in this language, shown in"
+msgstr "Not entered in this language, shown in"

@@ -964,3 +964,40 @@ class ZoneFrameContractTests(unittest.TestCase):
     def test_leaflet_rounding_changes_fail(self):
         leaflet = LEAFLET_SRC.read_text()
         self.assertTrue(leaflet_rounding_problems(leaflet.replace(": 6;", ": 5;")))
+
+
+class CoreWidgetTemplateTests(unittest.TestCase):
+    CORE_TEXT = (
+        Path(arches.__file__).parent / "app/templates/views/components/widgets/text.htm"
+    )
+
+    def test_core_text_template_keeps_the_blocks_we_replace(self):
+        source = self.CORE_TEXT.read_text()
+        expected = (
+            "{% block report %}",
+            "{% block display_value %}",
+            '<dd data-bind="text: displayValue() && currentLanguage() && '
+            "displayValue()[currentLanguage()] && "
+            "displayValue()[currentLanguage()]['value'] ? "
+            "displayValue()[currentLanguage()]['value'] : $root.translations.none",
+        )
+        missing = [piece for piece in expected if piece not in source]
+        self.assertEqual(
+            missing,
+            [],
+            "Arches' text widget template changed: re-check "
+            "manuspectrum/templates/views/components/widgets/text.htm against it.",
+        )
+
+    def test_core_base_widget_template_wraps_the_report_block_as_expected(self):
+        base = self.CORE_TEXT.with_name("base.htm").read_text()
+        condition = (
+            "<!-- ko if: !ko.unwrap(hideEmptyNodes) || "
+            "ko.unwrap(hideEmptyNodes) === true && displayValue() -->"
+        )
+        self.assertIn(
+            condition,
+            base,
+            "Arches' widget base template changed: re-check "
+            "manuspectrum/templates/views/components/widgets/text.htm against it.",
+        )

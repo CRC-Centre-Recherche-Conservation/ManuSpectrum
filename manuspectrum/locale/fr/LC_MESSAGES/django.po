@@ -7895,3 +7895,7 @@ msgid ""
 msgstr ""
 "Porte le jeton d'un lien reçu par e-mail jusqu'à son formulaire, pendant 15 "
 "minutes ; supprimé une fois le formulaire envoyé."
+
+#: templates/views/components/widgets/ms-lang-fallback/shown.htm:1
+msgid "Not entered in this language, shown in"
+msgstr "Non saisi dans cette langue, affiché en"

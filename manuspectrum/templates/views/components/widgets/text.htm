@@ -1,0 +1,33 @@
+{% extends "views/components/widgets/text.htm" %}
+{% load i18n %}
+
+{% block display_value %}
+<span data-bind="class: nodeCssClasses">
+<!-- ko let: { {% include "views/components/widgets/ms-lang-fallback/shown.htm" %} } -->
+<!-- ko if: msShown.text -->
+<span data-bind="text: msShown.text, attr: {lang: msShown.code}"></span>
+{% include "views/components/widgets/ms-lang-fallback/marker.htm" %}
+<!-- /ko -->
+<!-- ko ifnot: msShown.text -->
+<span data-bind="text: $root.translations.none"></span>
+<!-- /ko -->
+<!-- /ko -->
+</span>
+{% endblock display_value %}
+
+{% block report %}
+<!-- ko let: { {% include "views/components/widgets/ms-lang-fallback/shown.htm" %} } -->
+<!-- ko if: !ko.unwrap(hideEmptyNodes) || !!msShown.text -->
+<dt data-bind="text: label, class: nodeCssClasses"></dt>
+<dd data-bind="class: nodeCssClasses">
+<!-- ko if: msShown.text -->
+<span data-bind="text: msShown.text, attr: {lang: msShown.code}"></span>
+{% include "views/components/widgets/ms-lang-fallback/marker.htm" %}
+<!-- /ko -->
+<!-- ko ifnot: msShown.text -->
+<span data-bind="text: $root.translations.none"></span>
+<!-- /ko -->
+</dd>
+<!-- /ko -->
+<!-- /ko -->
+{% endblock report %}
