@@ -328,6 +328,21 @@ class ComposeStackTests(unittest.TestCase):
         environment = self.base["services"]["cantaloupe"]["environment"]
         self.assertEqual(environment["CANTALOUPE_PROCESSOR_JPG_QUALITY"], "90")
 
+    def test_cantaloupe_min_tile_size_is_the_own_tile(self):
+        """Pin Cantaloupe's minimum tile size to `IIIF_OWN_IMAGE_TILE`.
+
+        A minimum, not the served tile: Cantaloupe still advertises a larger
+        one for an image that asks for it. After re-encoding stored images
+        (JP2, #373), run `annotation_frames verify --host <own host>`.
+        """
+        settings = (COMPOSE_DIR.parents[1] / "manuspectrum" / "settings.py").read_text()
+        own_tile = re.search(r"^IIIF_OWN_IMAGE_TILE = (\d+)$", settings, re.M)
+        self.assertIsNotNone(own_tile)
+        environment = self.base["services"]["cantaloupe"]["environment"]
+        self.assertEqual(
+            environment["CANTALOUPE_ENDPOINT_IIIF_MIN_TILE_SIZE"], own_tile.group(1)
+        )
+
     def test_every_service_restarts_logs_and_drops_privileges(self):
         for label, name, service in self.each_service():
             with self.subTest(stack=label, service=name):

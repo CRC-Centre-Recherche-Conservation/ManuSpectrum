@@ -62,6 +62,28 @@ read. With ``--apply --journal PATH`` the only write is a requalification: an
 ``estimated`` stamp equal to the measured frame gets that frame's ``msFrame``
 source, through the same locked, guarded batches and journal as ``stamp``.
 
+``rebase`` (``--service`` or ``--host`` required) carries the stored geometry
+of the measured zones whose stamp differs from the live frame of their image
+host to that frame: coordinates are scaled by the ratio of the units and
+written as Leaflet 1.6 writes them, and the stamp becomes the live frame.
+``--resize`` also rebases a zone whose image changed size, when the aspect is
+kept. An ``estimated`` zone is never rebased without ``--since DATE`` (the day
+the host changed): its stamp may describe the old frame on geometry drawn
+after the change. With ``--since``, only a zone that existed unchanged before
+that date moves (judged from the edit log: the tile's ``oldvalue`` or the
+user's provisional value); a zone drawn or moved since is listed for review
+and ``relabel``. A refused or unreadable service plans nothing (``--frames``
+supplies a browser measure for a refused one; an unreadable one exits
+non-zero). Dry by default; ``--apply --journal PATH`` writes through the same
+locked, guarded batches, journaling ``geometry_before``. Run it with editing
+closed: an editor tab opened before it saves the old geometry back.
+
+``relabel --service URL --zone TILE:FEATURE`` (repeatable) gives the named
+zones the measured live frame of the service and leaves their geometry
+untouched: for a zone drawn after a host change that carries the old frame.
+A zone on another service, already equal, not found or changed since the read
+is listed and left. Same dry run, ``--apply --journal`` and reindex reminder.
+
 ``unstamp --journal PATH`` puts every ``before`` back, only where the zone's
 canvas, geometry digest and properties still equal the journaled ones; a zone
 changed since is listed and left alone. Restoring the whole ``properties``
