@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 
-// jsdom has no ResizeObserver; PrimeVue's TabList observes its own size.
+// jsdom has no ResizeObserver; OpenVue's TabList observes its own size.
 class NoResizeObserver {
     observe(): void {}
     unobserve(): void {}

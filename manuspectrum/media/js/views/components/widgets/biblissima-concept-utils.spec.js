@@ -31,7 +31,7 @@ vi.mock('viewmodels/widget', () => ({
     },
 }));
 vi.mock('bindings/select2-query', () => ({ default: {} }));
-vi.mock('@/arches/utils/generate-arches-url.ts', () => ({ generateArchesURL: () => '/s' }));
+vi.mock('@/arches_vue_components/application/generate-arches-url.ts', () => ({ generateArchesURL: () => '/s' }));
 vi.mock('templates/views/components/widgets/biblissima-concept-widget.htm', () => ({
     default: '<div></div>',
 }));

@@ -1,6 +1,6 @@
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import PrimeVue from "primevue/config";
+import OpenVue from "openvue/config";
 import { beforeEach, describe, expect, it } from "vitest";
 import { ref } from "vue";
 
@@ -48,7 +48,7 @@ function mountPreview(
     const wrapper = mount(ImagingPreview, {
         props: { file, analysis: analysisPayload({ files: [file] }) },
         global: {
-            plugins: [pinia, PrimeVue],
+            plugins: [pinia, OpenVue],
             provide: {
                 [CURTAIN_KEY as symbol]: curtain,
                 [FOLIO_ZONES_KEY as symbol]: ref(new Set(zones)),

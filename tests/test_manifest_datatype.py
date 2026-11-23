@@ -11,6 +11,7 @@ import socket
 import uuid
 from unittest.mock import MagicMock, Mock, patch, call
 
+from django.conf import settings
 from django.test import TestCase, override_settings
 from django.utils import translation
 import requests
@@ -24,13 +25,19 @@ def resolves_publicly():
     The guard runs on every import path now, so a test whose subject is the
     import — not the guard — has to say where its host resolves. Tests that
     ARE about the guard use literal addresses and leave the resolver alone.
+    The patch replaces the process-wide ``socket.getaddrinfo``, which psycopg 3
+    calls to resolve the database host from any thread: that host keeps the
+    real resolver.
     """
-    return patch(
-        "manuspectrum.utils.http.socket.getaddrinfo",
-        return_value=[
-            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
-        ],
-    )
+    real = socket.getaddrinfo
+    database_host = settings.DATABASES["default"]["HOST"]
+
+    def resolve(host, *args, **kwargs):
+        if host == database_host:
+            return real(host, *args, **kwargs)
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]
+
+    return patch("manuspectrum.utils.http.socket.getaddrinfo", side_effect=resolve)
 
 
 class ManifestTestData:

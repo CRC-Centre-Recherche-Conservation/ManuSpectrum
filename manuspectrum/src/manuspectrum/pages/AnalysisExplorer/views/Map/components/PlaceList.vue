@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import InputText from "primevue/inputtext";
+import InputText from "openvue/inputtext";
 
 import CollapsibleSection from "@/manuspectrum/pages/AnalysisExplorer/components/CollapsibleSection.vue";
 

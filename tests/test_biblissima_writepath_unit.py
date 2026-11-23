@@ -2730,8 +2730,8 @@ class ResourceRelationsDatabaseTests(TestCase):
             "graphs": [
                 {
                     "graphid": bp.DOCUMENT_GRAPH_ID,
-                    "ontologyProperty": "",
-                    "inverseOntologyProperty": "",
+                    "relationship": "",
+                    "inverseRelationship": "",
                 }
             ]
         }
@@ -2754,20 +2754,18 @@ class ResourceRelationsDatabaseTests(TestCase):
             ResourceInstance.objects.create(graph=self.component_graph).pk
         )
         self.resource = Resource.objects.get(pk=self.component_id)
-        self.resource.set_serialized_graph(
-            {
-                "root": {"ontologyclass": None},
-                "nodes": [
-                    {
-                        "nodeid": bp.COMP_PARENT_DOC_NODE,
-                        "name": "parent_document",
-                        "datatype": "resource-instance",
-                        "nodegroup_id": bp.COMP_PARENT_DOC_NG,
-                        "config": self.node_config,
-                    }
-                ],
-            }
-        )
+        self.resource.serialized_graph = {
+            "root": {"ontologyclass": None},
+            "nodes": [
+                {
+                    "nodeid": bp.COMP_PARENT_DOC_NODE,
+                    "name": "parent_document",
+                    "datatype": "resource-instance",
+                    "nodegroup_id": bp.COMP_PARENT_DOC_NG,
+                    "config": self.node_config,
+                }
+            ],
+        }
         self.view = bp.BiblissimaCreateResourceView()
         self.view._tile_buffer = []
         self.tile = self.view._create_tile(

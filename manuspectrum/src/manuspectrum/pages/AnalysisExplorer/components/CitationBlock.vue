@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import Tab from "primevue/tab";
-import TabList from "primevue/tablist";
-import TabPanel from "primevue/tabpanel";
-import TabPanels from "primevue/tabpanels";
-import Tabs from "primevue/tabs";
+import Tab from "openvue/tab";
+import TabList from "openvue/tablist";
+import TabPanel from "openvue/tabpanel";
+import TabPanels from "openvue/tabpanels";
+import Tabs from "openvue/tabs";
 import { useGettext } from "vue3-gettext";
 
 import CopyButton from "@/manuspectrum/pages/AnalysisExplorer/components/CopyButton.vue";

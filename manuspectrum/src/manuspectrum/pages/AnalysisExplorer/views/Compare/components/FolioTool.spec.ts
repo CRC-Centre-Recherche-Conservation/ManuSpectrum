@@ -53,7 +53,7 @@ vi.hoisted(() => {
 });
 vi.mock("leaflet-iiif", () => ({}));
 vi.mock("utils/leaflet-stack", () => ({ stackSmallestOnTop: vi.fn() }));
-vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+vi.mock("@/arches_vue_components/application/generate-arches-url.ts", () => ({
     generateArchesURL: (_name: string, parameters: Record<string, string>) =>
         `/en/api/explorer/document/${parameters.resourceid}`,
 }));

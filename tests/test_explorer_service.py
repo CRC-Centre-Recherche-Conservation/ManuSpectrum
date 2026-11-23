@@ -15,7 +15,7 @@ from django.test.utils import CaptureQueriesContext
 
 from arches.app.models.models import IIIFManifest, Node, TileModel
 
-from arches_controlled_lists.models import List, ListItem, ListItemValue
+from arches.extensions.controlled_lists.models import List, ListItem, ListItemValue
 
 from manuspectrum.utils.public_visibility import visible_set
 from manuspectrum.views.explorer import service as explorer_service

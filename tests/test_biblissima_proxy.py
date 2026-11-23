@@ -2032,8 +2032,8 @@ class LinkToProjectIdempotenceTests(TestCase):
             PROJECT_STUDIED_OBJECTS_NODE: [
                 {
                     "resourceId": rid,
-                    "ontologyProperty": "",
-                    "inverseOntologyProperty": "",
+                    "relationship": "",
+                    "inverseRelationship": "",
                     "resourceXresourceId": "",
                 }
             ]

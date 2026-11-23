@@ -124,7 +124,7 @@
                                             data-bind="
                                                 select2Query: {
                                                     select2Config: self.getSelect2ConfigForOntologyProperties(
-                                                        $data.ontologyProperty,
+                                                        $data.relationship,
                                                         self.rootOntologyClass,
                                                         $data.ontologyClass(),
                                                         $root.translations.selectAnOntologyProperty
@@ -160,7 +160,7 @@
                                             data-bind="
                                                 select2Query: {
                                                     select2Config: self.getSelect2ConfigForOntologyProperties(
-                                                        $data.inverseOntologyProperty,
+                                                        $data.inverseRelationship,
                                                         $data.ontologyClass(),
                                                         self.rootOntologyClass,
                                                         $root.translations.selectAnOntologyProperty

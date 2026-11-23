@@ -26,7 +26,7 @@ const { SUGGEST_URL, generateArchesURL } = vi.hoisted(() => {
     return { SUGGEST_URL: url, generateArchesURL: vi.fn(() => url) };
 });
 
-vi.mock('@/arches/utils/generate-arches-url.ts', () => ({ generateArchesURL }));
+vi.mock('@/arches_vue_components/application/generate-arches-url.ts', () => ({ generateArchesURL }));
 
 import viewModel from './biblissima-search-step.js';
 import { SUGGEST_MAX_INPUT_LENGTH } from '../../widgets/biblissima-concept-utils.js';
