@@ -989,6 +989,21 @@ class CoreWidgetTemplateTests(unittest.TestCase):
             "manuspectrum/templates/views/components/widgets/text.htm against it.",
         )
 
+    def test_core_base_root_renders_the_modules_block_before_the_main_bundle(self):
+        source = (
+            Path(arches.__file__).parent / "app/templates/base-root.htm"
+        ).read_text()
+        modules = source.find("{% block arches_modules %}")
+        bundle = source.find("{% render_bundle main_script %}")
+        self.assertGreaterEqual(modules, 0)
+        self.assertGreaterEqual(bundle, 0)
+        self.assertLess(
+            modules,
+            bundle,
+            "Arches' base-root.htm no longer renders arches_modules before the "
+            "main bundle: msLangFallback would be undefined when Knockout binds.",
+        )
+
     def test_core_base_widget_template_wraps_the_report_block_as_expected(self):
         base = self.CORE_TEXT.with_name("base.htm").read_text()
         condition = (

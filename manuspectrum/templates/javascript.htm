@@ -141,5 +141,7 @@ extends itself once: a block that appended to its parent would emit the banner
 module twice. The Arches block is empty, so this one replaces it.
 {% endcomment %}
 {% block project_modules %}
+{# Must stay a synchronous classic script (no type="module", defer or async): Knockout bindings of the text widgets call msLangFallback. #}
+<script src="{% static 'js/utils/lang-fallback.js' %}"></script>
 {% include 'includes/ms_site_notice.htm' %}
 {% endblock project_modules %}

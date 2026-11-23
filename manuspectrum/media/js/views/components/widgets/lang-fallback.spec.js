@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import ko from 'knockout';
+import '../../../utils/lang-fallback.js';
 
 const TEMPLATES = path.resolve(globalThis.process.cwd(), 'manuspectrum/templates');
 

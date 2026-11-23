@@ -5,11 +5,17 @@ Usage:
     python manage.py test tests.test_lang_fallback_templates --settings="tests.test_settings"
 """
 
+import re
+from pathlib import Path
+
 from django.template.loader import get_template
 from django.test import SimpleTestCase
 from django.utils import translation
 
 TEXT = "views/components/widgets/text.htm"
+JAVASCRIPT = (
+    Path(__file__).resolve().parent.parent / "manuspectrum/templates/javascript.htm"
+)
 
 
 def render():
@@ -78,3 +84,32 @@ class SharedBehaviourTests(SimpleTestCase):
         html = get_template(TEXT).render({})
         self.assertIn('aria-hidden="true"', html)
         self.assertIn("sr-only", html)
+
+
+class PickRuleScriptTests(SimpleTestCase):
+    def project_modules(self):
+        source = JAVASCRIPT.read_text()
+        match = re.search(
+            r"\{% block project_modules %\}(.*?)\{% endblock project_modules %\}",
+            source,
+            re.S,
+        )
+        self.assertIsNotNone(match)
+        return match.group(1)
+
+    def test_the_pick_rule_is_a_synchronous_classic_script(self):
+        tags = [
+            tag
+            for tag in re.findall(r"<script\b[^>]*>", self.project_modules())
+            if "js/utils/lang-fallback.js" in tag
+        ]
+        self.assertEqual(len(tags), 1)
+        for forbidden in ("module", "defer", "async"):
+            self.assertNotRegex(tags[0], rf"\b{forbidden}\b")
+
+    def test_the_shown_expression_only_calls_the_script(self):
+        html = get_template(
+            "views/components/widgets/ms-lang-fallback/shown.htm"
+        ).render({})
+        self.assertIn("msLangFallback(", html)
+        self.assertNotIn("function (", html)
