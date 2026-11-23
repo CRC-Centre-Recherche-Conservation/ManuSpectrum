@@ -964,3 +964,99 @@ class ZoneFrameContractTests(unittest.TestCase):
     def test_leaflet_rounding_changes_fail(self):
         leaflet = LEAFLET_SRC.read_text()
         self.assertTrue(leaflet_rounding_problems(leaflet.replace(": 6;", ": 5;")))
+
+
+class CoreWidgetTemplateTests(unittest.TestCase):
+    CORE_TEXT = (
+        Path(arches.__file__).parent / "app/templates/views/components/widgets/text.htm"
+    )
+
+    def test_core_text_template_keeps_the_blocks_we_replace(self):
+        source = self.CORE_TEXT.read_text()
+        expected = (
+            "{% block report %}",
+            "{% block display_value %}",
+            '<dd data-bind="text: displayValue() && currentLanguage() && '
+            "displayValue()[currentLanguage()] && "
+            "displayValue()[currentLanguage()]['value'] ? "
+            "displayValue()[currentLanguage()]['value'] : $root.translations.none",
+        )
+        missing = [piece for piece in expected if piece not in source]
+        self.assertEqual(
+            missing,
+            [],
+            "Arches' text widget template changed: re-check "
+            "manuspectrum/templates/views/components/widgets/text.htm against it.",
+        )
+
+    def test_core_base_root_renders_the_modules_block_before_the_main_bundle(self):
+        source = (
+            Path(arches.__file__).parent / "app/templates/base-root.htm"
+        ).read_text()
+        modules = source.find("{% block arches_modules %}")
+        bundle = source.find("{% render_bundle main_script %}")
+        self.assertGreaterEqual(modules, 0)
+        self.assertGreaterEqual(bundle, 0)
+        self.assertLess(
+            modules,
+            bundle,
+            "Arches' base-root.htm no longer renders arches_modules before the "
+            "main bundle: msLangFallback would be undefined when Knockout binds.",
+        )
+
+    def test_core_base_widget_template_wraps_the_report_block_as_expected(self):
+        base = self.CORE_TEXT.with_name("base.htm").read_text()
+        condition = (
+            "<!-- ko if: !ko.unwrap(hideEmptyNodes) || "
+            "ko.unwrap(hideEmptyNodes) === true && displayValue() -->"
+        )
+        self.assertIn(
+            condition,
+            base,
+            "Arches' widget base template changed: re-check "
+            "manuspectrum/templates/views/components/widgets/text.htm and rich-text.htm against it.",
+        )
+
+    def test_core_rich_text_template_keeps_the_blocks_we_replace(self):
+        source = self.CORE_TEXT.with_name("rich-text.htm").read_text()
+        expected = (
+            "{% block report %}",
+            "{% block display_value %}",
+            "html: currentText || $root.translations.none",
+            "'[' + $root.translations.richText + ']'",
+            "ko.unwrap(displayfullvalue)",
+        )
+        missing = [piece for piece in expected if piece not in source]
+        self.assertEqual(
+            missing,
+            [],
+            "Arches' rich-text widget template changed: re-check "
+            "manuspectrum/templates/views/components/widgets/rich-text.htm against it.",
+        )
+
+    def test_core_widget_viewmodels_keep_the_names_the_replaced_blocks_read(self):
+        js = Path(arches.__file__).parent / "app/media/js"
+        checks = {
+            "views/components/widgets/text.js": (
+                r"self\.languages\s*=\s*ko\.observableArray",
+                r"self\.currentLanguage\s*=\s*ko\.observable",
+            ),
+            "views/components/widgets/rich-text.js": (
+                r"self\.languages\s*=\s*ko\.observableArray",
+                r"self\.currentLanguage\s*=\s*ko\.observable",
+            ),
+            "viewmodels/widget.js": (r"this\.displayValue\s*=\s*ko\.computed",),
+        }
+        missing = [
+            f"{name}: {pattern}"
+            for name, patterns in checks.items()
+            for pattern in patterns
+            if not re.search(pattern, (js / name).read_text())
+        ]
+        self.assertEqual(
+            missing,
+            [],
+            "Arches' widget viewmodels changed: re-check "
+            "manuspectrum/templates/views/components/widgets/text.htm and rich-text.htm "
+            "(they read languages, currentLanguage and displayValue).",
+        )

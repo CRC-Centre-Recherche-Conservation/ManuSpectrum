@@ -1,0 +1,1 @@
+{% load i18n %}{% trans "Not entered in this language, shown in" as msLangFallbackTitle %}msShown: msLangFallback(ko.toJS(displayValue()), currentLanguage(), typeof languages === 'function' ? languages() : [], '{{ msLangFallbackTitle|escapejs }}')

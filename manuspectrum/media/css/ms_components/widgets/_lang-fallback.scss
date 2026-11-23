@@ -1,0 +1,32 @@
+// Marker beside a text shown in another language than the page's
+.ms-lang-fallback {
+    display: inline-block;
+    margin-inline-start: 6px;
+    padding: 0 4px;
+    border: 1px solid #bbb;
+    border-radius: 3px;
+    color: #6b6b6b;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 14px;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    text-transform: uppercase;
+    vertical-align: middle;
+    cursor: help;
+}
+
+// Bootstrap 3's abbr[title] rule (dotted underline, no bottom border) outranks .ms-lang-fallback
+abbr.ms-lang-fallback[title] {
+    border-bottom: 1px solid #bbb;
+    text-decoration: none;
+}
+
+// Rich text: the marker sits on its own line above the content
+.ms-lang-fallback-line {
+    margin-bottom: 4px;
+
+    .ms-lang-fallback {
+        margin-inline-start: 0;
+    }
+}
