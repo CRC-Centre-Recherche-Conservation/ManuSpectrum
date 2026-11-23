@@ -35,7 +35,9 @@ dependencies = [
     "defusedcsv>=3,<4",
     # Observability (spec observability §4): /metrics and its multiprocess
     # registry under gunicorn and Celery, JSON logs.
-    "django-prometheus>=2.5,<2.6",
+    # 2.6.0.dev1 (django-commons/django-prometheus master, Django 6.1 support);
+    # back to the PyPI release once 2.6.0 is published.
+    "django-prometheus @ https://github.com/django-commons/django-prometheus/archive/5093c6366d1c88f0597bf9cbdcb40e09e9f56c8b.tar.gz",
     "prometheus-client>=0.22,<1",
     "python-json-logger>=4.2,<5",
     # Accounts hardening (PP-4): sign-in lockout and login records; Argon2
@@ -68,11 +70,6 @@ prod = [
     # Redis containers of the Compose stack. kombu's extra bounds its version.
     "kombu[redis]",
 ]
-
-[tool.uv]
-# django-prometheus 2.5.0 caps Django below 6.1; 2.6.0 only lifts the cap
-# (django-commons/django-prometheus#537, unreleased). Drop once it is on PyPI.
-override-dependencies = ["django~=6.1.0"]
 
 [tool.setuptools]
 packages = ["manuspectrum"]
