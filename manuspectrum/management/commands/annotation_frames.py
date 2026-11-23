@@ -560,6 +560,15 @@ def rebase_batch(batch, journal):
     return _guarded_batch(batch, journal, change)
 
 
+def relabel_batch(batch, journal):
+    """Give the planned zones of the tiles of *batch* the stamp of their target frame (the entry's payload), geometry untouched; return ``(written, changed since)`` as ``_guarded_batch``."""
+
+    def change(feature, target):
+        feature["properties"].update(target.stamp())
+
+    return _guarded_batch(batch, journal, change)
+
+
 def _append(fd, lines):
     """Write *lines* to the journal *fd* and fsync it; on a failure the file is cut back to where it was and the error is raised.
 
@@ -839,7 +848,7 @@ def _script_name(host):
 
 class Command(BaseCommand):
     help = (
-        "Check, stamp, verify (dry by default) or unstamp the image frame of "
+        "Check, stamp, verify, rebase, relabel (dry by default) or unstamp the image frame of "
         "stored annotation zones."
     )
 
@@ -905,6 +914,28 @@ class Command(BaseCommand):
             "--journal", help="New JSONL journal file, required with --apply."
         )
         rebase.add_argument("--batch", type=int, default=BATCH)
+        relabel = sub.add_parser(
+            "relabel",
+            help="Give named zones their image host's measured frame, geometry untouched.",
+        )
+        relabel.add_argument(
+            "--service", required=True, help="The image service of the zones."
+        )
+        relabel.add_argument(
+            "--zone",
+            action="append",
+            required=True,
+            metavar="TILE:FEATURE",
+            help="A zone to relabel (repeatable).",
+        )
+        relabel.add_argument(
+            "--frames", help="Frames file measured in a browser (frame_check.js)."
+        )
+        relabel.add_argument("--apply", action="store_true", help="Write the stamps.")
+        relabel.add_argument(
+            "--journal", help="New JSONL journal file, required with --apply."
+        )
+        relabel.add_argument("--batch", type=int, default=BATCH)
         unstamp = sub.add_parser("unstamp", help="Restore the journaled values.")
         unstamp.add_argument("--journal", required=True)
         unstamp.add_argument("--apply", action="store_true")
@@ -1447,6 +1478,116 @@ class Command(BaseCommand):
                 self._out(f"  {reason}: zone {zone.feature_id} of tile {zone.tile_id}")
             for tile_id, fid in late[canvas]:
                 self._out(f"  changed since: zone {fid} of tile {tile_id}")
+
+    def _zone_arguments(self, texts):
+        """``{(tile id, feature id)}`` of the ``--zone TILE:FEATURE`` arguments."""
+        named = set()
+        for text in texts:
+            tile_text, _, fid = text.partition(":")
+            try:
+                tile_id = uuid.UUID(tile_text)
+            except ValueError:
+                tile_id = None
+            if tile_id is None or not fid:
+                raise CommandError(f"--zone {text!r}: expected TILE-UUID:FEATURE-ID")
+            named.add((tile_id, fid))
+        return named
+
+    def _relabel(self, options):
+        apply_changes = options["apply"]
+        journal_path = options["journal"]
+        if apply_changes and not journal_path:
+            raise CommandError("--apply needs --journal PATH (a new file)")
+        service = rewrite_legacy_url(options["service"]).rstrip("/")
+        named = self._zone_arguments(options["zone"])
+        frames_file = None
+        if options["frames"]:
+            try:
+                frames_file = frame_scope.read_frames_file(options["frames"])
+            except ValueError as error:
+                raise CommandError(f"{options['frames']}: {error}") from error
+        zones = list(
+            stamped_zones(annotation_nodes(), tiles={tile for tile, _ in named})
+        )
+        target = Measures(frames_file).frame(service)
+        found, listed, plan, planned = set(), [], defaultdict(list), set()
+        if isinstance(target, str):
+            labels = dict(BUCKETS)
+            self._out(f"{service}: {labels[target]}: nothing planned")
+        else:
+            self._out(f"{service}: live frame {_size_of(target)}")
+            for zone in zones:
+                key = (zone.tile_id, zone.feature_id)
+                if key not in named:
+                    continue
+                found.add(key)
+                if zone.canvas != service:
+                    listed.append(("on another service", zone.tile_id, zone.feature_id))
+                elif zone.frame == target:
+                    listed.append(("already equal", zone.tile_id, zone.feature_id))
+                else:
+                    once = (zone.tile_id, zone.node_id, zone.user_id, zone.feature_id)
+                    if (*once, zone.digest) in planned:
+                        continue
+                    planned.add((*once, zone.digest))
+                    plan[zone.tile_id].append(
+                        (
+                            zone.node_id,
+                            zone.user_id,
+                            zone.feature_id,
+                            zone.digest,
+                            service,
+                            zone.frame,
+                            target,
+                        )
+                    )
+            listed.extend(
+                ("not found or not stamped", tile_id, fid)
+                for tile_id, fid in sorted(named - found, key=str)
+            )
+        journal = open_journal(journal_path) if apply_changes and plan else None
+        failed = False
+        written, changed = 0, []
+        try:
+            if apply_changes:
+                items = list(plan.items())
+                for start in range(0, len(items), options["batch"]):
+                    try:
+                        done, skipped = relabel_batch(
+                            items[start : start + options["batch"]], journal
+                        )
+                    except OSError as error:
+                        raise CommandError(f"journal write failed: {error}") from error
+                    written += done
+                    changed.extend(skipped)
+        except BaseException:
+            failed = True
+            raise
+        finally:
+            if journal is not None:
+                kept = _close_journal(journal, journal_path)
+                if kept and failed:
+                    self._stopped_note(journal_path)
+        for reason, tile_id, fid in listed:
+            self._out(f"  {reason}: zone {fid} of tile {tile_id}")
+        for tile_id, fid in changed:
+            self._out(f"  changed since: zone {fid} of tile {tile_id}")
+        count = len(planned)
+        if apply_changes:
+            self._out(
+                self.style.SUCCESS(
+                    f"{written} of {count} planned zone(s) relabeled"
+                    + (f"; journal: {journal_path}" if written else "")
+                )
+            )
+            self._out("Now run:  python manage.py es reindex_database")
+        else:
+            self._out(
+                self.style.WARNING(f"{count} zone(s) would be relabeled (dry run)")
+            )
+            self._out("Pass --apply --journal PATH to write.")
+        if target == UNREADABLE_STATE:
+            raise CommandError(f"not measured: {service} is unreadable, run again")
 
     def _stopped_note(self, journal_path):
         """Tell where the journal of a stopped run is and how to undo it; never raises."""

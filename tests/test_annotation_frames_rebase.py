@@ -603,3 +603,148 @@ class RebaseWriteTests(RebaseCase):
         )
         self.assertNotIn("changed since", out)
         self.assertEqual(self.snapshot(), before)
+
+
+class RelabelTests(RebaseCase):
+    def stamp(self, unit=32, source="estimated"):
+        return Frame(unit, *SIZE, source).stamp()
+
+    def relabel(self, *args):
+        out = StringIO()
+        error = None
+        try:
+            call_command(
+                "annotation_frames",
+                "relabel",
+                "--service",
+                SVC,
+                *args,
+                stdout=out,
+                stderr=StringIO(),
+            )
+        except CommandError as caught:
+            error = str(caught)
+        return out.getvalue(), error
+
+    def apply_zones(self, *zones, extra=()):
+        args = [a for z in zones for a in ("--zone", z)]
+        return self.relabel("--apply", "--journal", self.journal, *args, *extra)
+
+    def test_the_named_zone_gets_the_target_stamp_and_its_geometry_is_kept(self):
+        self.answers = {SVC: live(16)}
+        tile = self.tile(
+            point("a", (320, 640), 32, stamp=self.stamp()),
+            point("b", (320, 640), 32, stamp=self.stamp()),
+        )
+        a, b = self.feature(tile, "a"), copy.deepcopy(self.feature(tile, "b"))
+        out, error = self.apply_zones(f"{tile.pk}:a")
+        self.assertIsNone(error)
+        after = self.feature(tile, "a")
+        self.assertEqual(after["geometry"], a["geometry"])
+        self.assertEqual(frames.frame_of(after), Frame(16, *SIZE, "read"))
+        self.assertEqual(self.feature(tile, "b"), b)
+        self.assertIn("1 of 1 planned zone(s) relabeled", out)
+        self.assertIn("es reindex_database", out)
+        (line,) = self.journal_lines()
+        self.assertEqual(line["tile"], str(tile.pk))
+        self.assertEqual(line["feature"], "a")
+        self.assertEqual(line["canvas"], SVC)
+        self.assertEqual(line["before"], a["properties"])
+        self.assertEqual(line["after"], after["properties"])
+        self.assertEqual(line["digest"], frames.geometry_digest(a["geometry"]))
+        self.assertNotIn("geometry_before", line)
+
+    def test_dry_run_writes_nothing(self):
+        self.answers = {SVC: live(16)}
+        tile = self.tile(point("a", (320, 640), 32, stamp=self.stamp()))
+        before = self.snapshot()
+        out, error = self.relabel("--zone", f"{tile.pk}:a")
+        self.assertIsNone(error)
+        self.assertEqual(self.snapshot(), before)
+        self.assertIn("1 zone(s) would be relabeled (dry run)", out)
+        self.assertFalse(os.path.exists(self.journal))
+
+    def test_bad_zone_arguments_and_missing_journal_are_refused(self):
+        for bad in ("nope", "x:a", f"{uuid.uuid4()}:", f"{uuid.uuid4()}"):
+            with self.subTest(bad=bad):
+                _out, error = self.relabel("--zone", bad)
+                self.assertIn("expected TILE-UUID:FEATURE-ID", error)
+        _out, error = self.relabel("--apply", "--zone", f"{uuid.uuid4()}:a")
+        self.assertIn("--journal", error)
+
+    def test_missing_other_service_and_equal_zones_are_listed(self):
+        self.answers = {SVC: live(16)}
+        tile = self.tile(
+            point("same", (320, 640), 16, stamp=self.stamp(16, "read")),
+            point("elsewhere", (1, 1), 32, canvas=SVC_B, stamp=self.stamp()),
+        )
+        ghost = uuid.uuid4()
+        before = self.snapshot()
+        out, error = self.apply_zones(
+            f"{tile.pk}:same", f"{tile.pk}:elsewhere", f"{ghost}:z"
+        )
+        self.assertIsNone(error)
+        self.assertEqual(self.snapshot(), before)
+        self.assertIn(f"already equal: zone same of tile {tile.pk}", out)
+        self.assertIn(f"on another service: zone elsewhere of tile {tile.pk}", out)
+        self.assertIn(f"not found or not stamped: zone z of tile {ghost}", out)
+        self.assertFalse(os.path.exists(self.journal))
+
+    def test_a_refused_service_plans_nothing(self):
+        self.answers = {SVC: units.REFUSED}
+        tile = self.tile(point("a", (1, 1), 32, stamp=self.stamp()))
+        before = self.snapshot()
+        out, error = self.apply_zones(f"{tile.pk}:a")
+        self.assertIsNone(error)
+        self.assertEqual(self.snapshot(), before)
+        self.assertIn(f"{SVC}: refused or not an image description", out)
+
+    def test_an_unreadable_service_plans_nothing_and_fails(self):
+        tile = self.tile(point("a", (1, 1), 32, stamp=self.stamp()))
+        before = self.snapshot()
+        out, error = self.apply_zones(f"{tile.pk}:a")
+        self.assertEqual(self.snapshot(), before)
+        self.assertIn(f"{SVC}: unreadable", out)
+        self.assertIn("not measured", error)
+
+    def test_a_provisional_zone_is_relabeled_in_provisionaledits_only(self):
+        self.answers = {SVC: live(16)}
+        node = str(self.annotation.pk)
+        edit = {node: collection(point("a", (320, 640), 32, stamp=self.stamp()))}
+        tile = self.tile(
+            point("d", (320, 640), 32, stamp=self.stamp()),
+            edits={"7": {"value": edit}},
+        )
+        data = self.row(tile).data
+        out, error = self.apply_zones(f"{tile.pk}:a")
+        self.assertIsNone(error)
+        row = self.row(tile)
+        self.assertEqual(row.data, data)
+        feature = row.provisionaledits["7"]["value"][node]["features"][0]
+        self.assertEqual(frames.frame_of(feature), Frame(16, *SIZE, "read"))
+        self.assertEqual(self.journal_lines()[0]["provisional"], "7")
+
+    def test_unstamp_restores_the_zone(self):
+        self.answers = {SVC: live(16)}
+        tile = self.tile(point("a", (320, 640), 32, stamp=self.stamp()))
+        before = self.snapshot()
+        self.apply_zones(f"{tile.pk}:a")
+        self.assertNotEqual(self.snapshot(), before)
+        self.run_command("unstamp", "--journal", self.journal, "--apply")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_a_zone_changed_between_plan_and_write_is_listed_and_untouched(self):
+        node = str(self.annotation.pk)
+        tile = self.tile(point("a", (320, 640), 32, stamp=self.stamp()))
+
+        def change(service):
+            data = self.row(tile).data
+            data[node]["features"][0]["geometry"]["coordinates"] = [5.0, -5.0]
+            TileModel.objects.filter(pk=tile.pk).update(data=data)
+            return live(16)
+
+        self.answers = {SVC: change}
+        out, _error = self.apply_zones(f"{tile.pk}:a")
+        self.assertEqual(self.feature(tile, "a")["properties"]["msUnit"], 32)
+        self.assertIn(f"changed since: zone a of tile {tile.pk}", out)
+        self.assertFalse(os.path.exists(self.journal))
