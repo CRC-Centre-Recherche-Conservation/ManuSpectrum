@@ -5,6 +5,7 @@ Usage:
 """
 
 import copy
+import errno
 import json
 import os
 import uuid
@@ -556,8 +557,9 @@ class RebaseSinceTests(RebaseCase):
         tile = self.tile(point("z", (32, 32), 32, stamp=self.stamp))
         for day in (12, 13, 14):
             self.log(tile, {self.node: collection()}, when=datetime(2026, 11, day))
+        original = annotation_frames._zone_keys
         with mock.patch.object(
-            annotation_frames, "_zone_keys", wraps=annotation_frames._zone_keys
+            annotation_frames, original.__name__, wraps=original
         ) as keys:
             annotation_frames.values_before([tile.pk], datetime(2026, 11, 10))
         self.assertEqual(keys.call_count, 1)
@@ -1167,3 +1169,156 @@ class RebaseOddityTests(RebaseCase):
             [f["geometry"]["coordinates"] for f in data], [[20.0, -40.0]] * 2
         )
         self.assertEqual(len(self.journal_lines()), 2)
+
+
+class RepairEdgeTests(RebaseCase):
+    def stamp(self, unit=32, source="read"):
+        return Frame(unit, *SIZE, source).stamp()
+
+    def call(self, verb, *args):
+        out, err = StringIO(), StringIO()
+        error = None
+        try:
+            call_command("annotation_frames", verb, *args, stdout=out, stderr=err)
+        except CommandError as caught:
+            error = str(caught)
+        return out.getvalue(), err.getvalue(), error
+
+    def frames_path(self, content):
+        path = os.path.join(self.dir.name, "frames.json")
+        with open(path, "w") as handle:
+            handle.write(content)
+        return path
+
+    def test_a_journal_failing_on_the_second_batch_keeps_the_first_line_and_says_so(
+        self,
+    ):
+        self.answers = {SVC: live(16)}
+        first = self.tile(point("a", (320, 640), 32, stamp=self.stamp()))
+        second = self.tile(point("b", (320, 640), 32, stamp=self.stamp()))
+        real, seen = os.write, []
+
+        def full(fd, data):
+            if bytes(data).startswith(b'{"'):
+                seen.append(1)
+                if len(seen) == 2:
+                    raise OSError(errno.ENOSPC, "No space left on device")
+            return real(fd, data)
+
+        with mock.patch(
+            "manuspectrum.management.commands.annotation_frames.os.write", full
+        ):
+            _out, err, error = self.call(
+                "rebase", "--host", "rb.example", "--batch", "1",
+                "--apply", "--journal", self.journal,
+            )  # fmt: skip
+        self.assertIn("journal write failed", error)
+        self.assertIn("No space left", error)
+        self.assertIn(f"The run stopped; the journal {self.journal} was kept", err)
+        self.assertIn(f"annotation_frames unstamp --journal {self.journal}", err)
+        lines = self.journal_lines()
+        self.assertEqual(len(lines), 1)
+        units_after = {
+            t.pk: self.feature(t, f)["properties"]["msUnit"]
+            for t, f in ((first, "a"), (second, "b"))
+        }
+        written_tile = {str(first.pk): first, str(second.pk): second}[lines[0]["tile"]]
+        self.assertEqual(units_after[written_tile.pk], 16)
+        self.assertEqual(sorted(units_after.values()), [16, 32])
+
+    def test_a_tile_deleted_between_plan_and_write_is_listed_changed_since(self):
+        tile = self.tile(point("z", (320, 640), 32, stamp=self.stamp()))
+
+        def delete(service):
+            TileModel.objects.filter(pk=tile.pk).delete()
+            return live(16)
+
+        self.answers = {SVC: delete}
+        out, _error = self.apply()
+        self.assertIn(f"changed since: zone z of tile {tile.pk}", out)
+        self.assertFalse(os.path.exists(self.journal))
+
+    def test_a_node_value_that_stopped_being_a_collection_is_listed_changed_since(
+        self,
+    ):
+        node = str(self.annotation.pk)
+        tile = self.tile(point("z", (320, 640), 32, stamp=self.stamp()))
+
+        def blank(service):
+            TileModel.objects.filter(pk=tile.pk).update(data={node: None})
+            return live(16)
+
+        self.answers = {SVC: blank}
+        out, _error = self.apply()
+        self.assertIn(f"changed since: zone z of tile {tile.pk}", out)
+        self.assertEqual(self.row(tile).data, {node: None})
+
+    def test_a_geometry_the_change_refuses_is_listed_and_the_tile_untouched(self):
+        self.answers = {SVC: live(16)}
+        tile = self.tile(point("z", (320, 640), 32, stamp=self.stamp()))
+        before = self.row(tile).data
+        real, calls = frame_scope.scaled_geometry, []
+
+        def refuse_when_writing(geometry, fx, fy):
+            calls.append(1)
+            if len(calls) > 1:
+                raise ValueError("not a coordinate")
+            return real(geometry, fx, fy)
+
+        with mock.patch(
+            "manuspectrum.management.commands.annotation_frames.frame_scope"
+            ".scaled_geometry",
+            refuse_when_writing,
+        ):
+            out, _error = self.apply()
+        self.assertIn(f"changed since: zone z of tile {tile.pk}", out)
+        self.assertEqual(self.row(tile).data, before)
+        self.assertFalse(os.path.exists(self.journal))
+
+    def test_an_unreadable_frames_file_names_the_file_for_rebase_and_relabel(self):
+        path = self.frames_path("not json")
+        for verb, args in (
+            ("rebase", ("--service", SVC)),
+            ("relabel", ("--service", SVC, "--zone", f"{uuid.uuid4()}:z")),
+        ):
+            with self.subTest(verb=verb):
+                _out, _err, error = self.call(verb, *args, "--frames", path)
+                self.assertTrue(error.startswith(f"{path}: not JSON"), error)
+
+    def test_a_rebase_with_nothing_stamped_says_so(self):
+        out, _error = self.rebase("--service", SVC)
+        self.assertIn("No stamped zone to rebase.", out)
+
+    def test_a_relabel_listing_the_same_stamped_zone_twice_plans_it_once(self):
+        self.answers = {SVC: live(16)}
+        twin = point("z", (320, 640), 32, stamp=self.stamp(source="estimated"))
+        tile = self.tile(twin, copy.deepcopy(twin))
+        out, _err, _error = self.call(
+            "relabel", "--service", SVC, "--zone", f"{tile.pk}:z"
+        )
+        self.assertIn("1 zone(s) would be relabeled (dry run)", out)
+
+
+class MeasuresTests(RebaseCase):
+    def test_a_server_read_that_cannot_be_a_frame_is_refused(self):
+        self.answers = {SVC: ImageInfo(1_000_001, 10, 512)}
+        self.assertEqual(
+            annotation_frames.Measures().frame(SVC), annotation_frames.REFUSED_STATE
+        )
+
+    def test_a_file_entry_that_cannot_be_a_frame_falls_back_to_the_server_answer(self):
+        bad = ImageInfo(1_000_001, 10, 512)
+        listed = frame_scope.FramesFile({SVC: bad}, [], "2026-11-23T10:00:00Z", "o")
+        for answer, state in (
+            (units.REFUSED, annotation_frames.REFUSED_STATE),
+            (units.UNAVAILABLE, annotation_frames.UNREADABLE_STATE),
+        ):
+            with self.subTest(answer=answer):
+                self.answers = {SVC: answer}
+                self.assertEqual(annotation_frames.Measures(listed).frame(SVC), state)
+
+    def test_a_file_entry_stands_in_for_a_refused_service(self):
+        self.answers = {SVC: units.REFUSED}
+        listed = frame_scope.FramesFile({SVC: live(16)}, [], "2026-11-23", "o")
+        got = annotation_frames.Measures(listed).frame(SVC)
+        self.assertEqual((got.unit, got.source), (16, "browser"))

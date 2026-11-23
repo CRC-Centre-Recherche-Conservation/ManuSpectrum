@@ -148,8 +148,5 @@ def scaled_geometry(geometry, fx, fy):
     kind = geometry.get("type") if isinstance(geometry, dict) else None
     if kind not in _DEPTH:
         raise ValueError(f"unsupported geometry: {kind!r}")
-    try:
-        coordinates = _scaled(geometry.get("coordinates"), _DEPTH[kind], fx, fy)
-    except TypeError as error:
-        raise ValueError(f"not a coordinate: {error}") from error
+    coordinates = _scaled(geometry.get("coordinates"), _DEPTH[kind], fx, fy)
     return {**geometry, "coordinates": coordinates}

@@ -120,6 +120,7 @@ import os
 import shlex
 import time
 import uuid
+from contextlib import contextmanager
 from datetime import datetime
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -1163,8 +1164,8 @@ class Command(BaseCommand):
         if apply_changes and not journal_path:
             raise CommandError("--apply needs --journal PATH (a new file)")
         journal = open_journal(journal_path) if apply_changes else None
-        written, failed, retry_left, interrupted = 0, False, set(), False
-        try:
+        written, retry_left, interrupted = 0, set(), False
+        with self._journaled(journal, journal_path):
             nodes = annotation_nodes()
             current = plan_stamps(nodes, service)
             already, unusable = current.already, current.unusable
@@ -1201,14 +1202,6 @@ class Command(BaseCommand):
                 skipped.update(current.skipped)
             stamped = Counter(planned.values())
             total = len(planned)
-        except BaseException:
-            failed = True
-            raise
-        finally:
-            if journal is not None:
-                kept = _close_journal(journal, journal_path)
-                if kept and failed:
-                    self._stopped_note(journal_path)
         self._out("")
         if service:
             self._out(f"Only the zones of {service}.")
@@ -1296,12 +1289,7 @@ class Command(BaseCommand):
         journal_path = options["journal"]
         if apply_changes and not journal_path:
             raise CommandError("--apply needs --journal PATH (a new file)")
-        frames_file = None
-        if options["frames"]:
-            try:
-                frames_file = frame_scope.read_frames_file(options["frames"])
-            except ValueError as error:
-                raise CommandError(f"{options['frames']}: {error}") from error
+        frames_file = self._read_frames(options["frames"])
         nodes = annotation_nodes()
         zones = list(stamped_zones(nodes, options["service"], options["host"]))
         by_service = defaultdict(list)
@@ -1313,8 +1301,7 @@ class Command(BaseCommand):
                 directory, {_origin_of(canvas) for canvas in by_service}
             )
         journal = open_journal(journal_path) if apply_changes else None
-        failed = False
-        try:
+        with self._journaled(journal, journal_path):
             measures = Measures(frames_file)
             buckets = defaultdict(lambda: defaultdict(lambda: [set(), 0]))
             different, plan = Counter(), defaultdict(list)
@@ -1356,24 +1343,9 @@ class Command(BaseCommand):
                     cell[1] += 1
             written, changed = 0, []
             if apply_changes:
-                items = list(plan.items())
-                for start in range(0, len(items), options["batch"]):
-                    try:
-                        done, skipped = requalify_batch(
-                            items[start : start + options["batch"]], journal
-                        )
-                    except OSError as error:
-                        raise CommandError(f"journal write failed: {error}") from error
-                    written += done
-                    changed.extend(skipped)
-        except BaseException:
-            failed = True
-            raise
-        finally:
-            if journal is not None:
-                kept = _close_journal(journal, journal_path)
-                if kept and failed:
-                    self._stopped_note(journal_path)
+                written, changed = self._in_batches(
+                    plan, options["batch"], requalify_batch, journal
+                )
         self._report(
             frames_file, zones, buckets, different, plan, written, changed, options
         )
@@ -1571,12 +1543,7 @@ class Command(BaseCommand):
         named = self._zone_arguments(options["zone"]) if options["zone"] else None
         if named and since:
             self._out("--since is ignored with --zone")
-        frames_file = None
-        if options["frames"]:
-            try:
-                frames_file = frame_scope.read_frames_file(options["frames"])
-            except ValueError as error:
-                raise CommandError(f"{options['frames']}: {error}") from error
+        frames_file = self._read_frames(options["frames"])
         nodes = annotation_nodes()
         by_service, found = defaultdict(list), set()
         for zone in stamped_zones(
@@ -1591,8 +1558,7 @@ class Command(BaseCommand):
                 by_service[zone.canvas].append(zone)
         missing = sorted(named - found, key=str) if named else []
         journal = open_journal(journal_path) if apply_changes else None
-        failed = False
-        try:
+        with self._journaled(journal, journal_path):
             per, plan = self._rebase_plan(
                 by_service,
                 Measures(frames_file),
@@ -1602,26 +1568,9 @@ class Command(BaseCommand):
             )
             written, changed, written_by = 0, [], Counter()
             if apply_changes:
-                items = list(plan.items())
-                for start in range(0, len(items), options["batch"]):
-                    try:
-                        done, skipped = rebase_batch(
-                            items[start : start + options["batch"]],
-                            journal,
-                            written_by,
-                        )
-                    except OSError as error:
-                        raise CommandError(f"journal write failed: {error}") from error
-                    written += done
-                    changed.extend(skipped)
-        except BaseException:
-            failed = True
-            raise
-        finally:
-            if journal is not None:
-                kept = _close_journal(journal, journal_path)
-                if kept and failed:
-                    self._stopped_note(journal_path)
+                written, changed = self._in_batches(
+                    plan, options["batch"], rebase_batch, journal, written_by
+                )
         self._rebase_report(per, changed, written_by, apply_changes, missing)
         planned = sum(info["rebased"] for info in per.values())
         unreadable = sum(
@@ -1702,12 +1651,7 @@ class Command(BaseCommand):
             raise CommandError("--apply needs --journal PATH (a new file)")
         service = rewrite_legacy_url(options["service"]).rstrip("/")
         named = self._zone_arguments(options["zone"])
-        frames_file = None
-        if options["frames"]:
-            try:
-                frames_file = frame_scope.read_frames_file(options["frames"])
-            except ValueError as error:
-                raise CommandError(f"{options['frames']}: {error}") from error
+        frames_file = self._read_frames(options["frames"])
         zones = list(
             stamped_zones(annotation_nodes(), tiles={tile for tile, _ in named})
         )
@@ -1748,28 +1692,12 @@ class Command(BaseCommand):
                 for tile_id, fid in sorted(named - found, key=str)
             )
         journal = open_journal(journal_path) if apply_changes and plan else None
-        failed = False
         written, changed = 0, []
-        try:
+        with self._journaled(journal, journal_path):
             if apply_changes:
-                items = list(plan.items())
-                for start in range(0, len(items), options["batch"]):
-                    try:
-                        done, skipped = relabel_batch(
-                            items[start : start + options["batch"]], journal
-                        )
-                    except OSError as error:
-                        raise CommandError(f"journal write failed: {error}") from error
-                    written += done
-                    changed.extend(skipped)
-        except BaseException:
-            failed = True
-            raise
-        finally:
-            if journal is not None:
-                kept = _close_journal(journal, journal_path)
-                if kept and failed:
-                    self._stopped_note(journal_path)
+                written, changed = self._in_batches(
+                    plan, options["batch"], relabel_batch, journal
+                )
         for reason, tile_id, fid in listed:
             self._out(f"  {reason}: zone {fid} of tile {tile_id}")
         for tile_id, fid, _canvas in changed:
@@ -1790,6 +1718,50 @@ class Command(BaseCommand):
             self._out("Pass --apply --journal PATH to write.")
         if target == UNREADABLE_STATE:
             raise CommandError(f"not measured: {service} is unreadable, run again")
+
+    @staticmethod
+    def _read_frames(path):
+        """Read a `--frames` file; a bad file is a `CommandError` naming it."""
+        if not path:
+            return None
+        try:
+            return frame_scope.read_frames_file(path)
+        except ValueError as error:
+            raise CommandError(f"{path}: {error}") from error
+
+    @contextmanager
+    def _journaled(self, journal, journal_path):
+        """Close the journal when the block ends; after a failure, say how to undo it."""
+        failed = False
+        try:
+            yield
+        except BaseException:
+            failed = True
+            raise
+        finally:
+            if journal is not None:
+                kept = _close_journal(journal, journal_path)
+                if kept and failed:
+                    self._stopped_note(journal_path)
+
+    @staticmethod
+    def _in_batches(plan, size, write_batch, journal, *extra):
+        """Write `plan` by `size` tiles through `write_batch`; return (written, changed).
+
+        A journal that cannot be written stops the run with a `CommandError`.
+        """
+        items = list(plan.items())
+        written, changed = 0, []
+        for start in range(0, len(items), size):
+            try:
+                done, skipped = write_batch(
+                    items[start : start + size], journal, *extra
+                )
+            except OSError as error:
+                raise CommandError(f"journal write failed: {error}") from error
+            written += done
+            changed.extend(skipped)
+        return written, changed
 
     def _stopped_note(self, journal_path):
         """Tell where the journal of a stopped run is and how to undo it; never raises."""

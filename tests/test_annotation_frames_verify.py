@@ -91,6 +91,37 @@ class FramesFileTests(SimpleTestCase):
         self.assertEqual(found.failed[-1][0], GALLICA)
         self.assertIn("width", found.failed[-1][1])
 
+    def test_a_failed_entry_that_is_not_service_and_reason_raises(self):
+        for failed in ([["only-one"]], [["a", 1]], ["text"], [[None, "x"]]):
+            with self.subTest(failed=failed):
+                with self.assertRaisesRegex(ValueError, "not \\[service, reason\\]"):
+                    self.read(frames_file(failed=failed))
+
+    def test_an_entry_without_a_service_is_failed_and_the_others_are_kept(self):
+        found = self.read(
+            frames_file(
+                frames=[
+                    {"info": {"width": 10, "height": 10}},
+                    "not an object",
+                    {"service": "", "info": {"width": 10, "height": 10}},
+                    {
+                        "service": GALLICA,
+                        "info": {"width": 3435, "height": 4905, "tile_width": 1024},
+                    },
+                ],
+                failed=[],
+            )
+        )
+        self.assertEqual(found.frames, {GALLICA: ImageInfo(3435, 4905, 1024)})
+        self.assertEqual(
+            found.failed,
+            [
+                ("None", "entry without a service"),
+                ("None", "entry without a service"),
+                ("", "entry without a service"),
+            ],
+        )
+
     def test_a_file_that_cannot_be_used_raises_with_the_reason(self):
         cases = {
             "version": json.dumps(frames_file(version=2)),
@@ -509,3 +540,34 @@ class VerifyTests(AnnotationFramesCase):
         self.assertIn("1 estimated zone(s) would be requalified", out)
         self.assertEqual(self.snapshot(), before)
         self.assertEqual(self.props(tile, "e")["msFrame"], "estimated")
+
+    def test_nothing_stamped_says_so(self):
+        out, error = self.verify()
+        self.assertIsNone(error)
+        self.assertIn("No stamped zone to verify.", out)
+
+    def test_refused_out_must_be_a_directory(self):
+        self.tile(zone("a", canvas=READ_A, stamp=stamp_of()))
+        path = os.path.join(self.dir.name, "plain-file")
+        open(path, "w").close()
+        _out, error = self.verify("--refused-out", path)
+        self.assertEqual(error, f"--refused-out {path} is not a directory")
+        self.assertEqual(self.reads, [])
+
+    def test_a_script_that_cannot_be_created_names_its_path(self):
+        self.answers = {REFUSED_1: units.REFUSED}
+        self.tile(zone("r", canvas=REFUSED_1, stamp=stamp_of(source="estimated")))
+        real = os.open
+
+        def refuse_scripts(path, *args, **kwargs):
+            if str(path).startswith(self.dir.name):
+                raise PermissionError(13, "Permission denied")
+            return real(path, *args, **kwargs)
+
+        with mock.patch(
+            "manuspectrum.management.commands.annotation_frames.os.open",
+            refuse_scripts,
+        ):
+            _out, error = self.verify("--refused-out", self.dir.name)
+        self.assertRegex(error, rf"^cannot create {self.dir.name}/.*: .*Permission")
+        self.assertEqual(os.listdir(self.dir.name), [])
