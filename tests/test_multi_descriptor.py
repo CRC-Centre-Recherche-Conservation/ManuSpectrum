@@ -16,15 +16,19 @@ from unittest import mock
 from django.test import SimpleTestCase
 from django.utils import translation
 
+from arches.app.datatypes.datatypes import StringDataType
 from arches.app.models import models
 from arches.app.models.resource import Resource
 
 from manuspectrum.functions.multi_descriptor import MultiDescriptor
+from manuspectrum.functions.multi_descriptor import settings as descriptor_settings
 
 PATCH_NODE = "arches.app.models.models.Node"
 PATCH_TILE = "arches.app.models.models.TileModel"
 PATCH_FACTORY = "manuspectrum.functions.multi_descriptor.DataTypeFactory"
 LOGGER = "manuspectrum.functions.multi_descriptor"
+
+REAL_TILE_MODEL = models.TileModel
 
 GRAPH_ID = uuid.uuid4()
 NODEGROUP_ID = uuid.uuid4()
@@ -401,6 +405,95 @@ class TileCacheTests(DescriptorTestCase):
         self.assertEqual(self.TileModel.objects.filter.call_count, 2)
 
 
+THREE_LANGUAGES = [("en", "English"), ("fr", "French"), ("de", "German")]
+
+
+class LanguageFallbackTests(DescriptorTestCase):
+    def display_values_by_language(self, values):
+        self.languages_asked = []
+
+        def display_value(tile, node, language=None):
+            self.languages_asked.append(language)
+            return values[node.alias].get(language or translation.get_language(), "")
+
+        self.datatype.get_display_value.side_effect = display_value
+
+    def one_node(self, alias="titre"):
+        node = make_node(alias)
+        self.graph_nodes(node)
+        self.tiles(make_tile({node: {"fr": {"value": "x"}}}))
+        return node
+
+    def test_a_node_filled_only_in_french_gives_the_english_descriptor_its_french_text(
+        self,
+    ):
+        self.one_node()
+        self.display_values_by_language({"titre": {"fr": "Lettrine"}})
+
+        self.assertEqual(self.describe("<titre>"), "Lettrine")
+
+    def test_each_node_falls_back_on_its_own(self):
+        titre = make_node("titre")
+        folio = make_node("folio", nodegroup_id=OTHER_NODEGROUP_ID)
+        self.graph_nodes(titre, folio)
+        self.tiles(make_tile({titre: {}}), make_tile({folio: {}}))
+        self.display_values_by_language(
+            {"titre": {"fr": "Lettrine"}, "folio": {"en": "f1v", "fr": "f1v"}}
+        )
+
+        self.assertEqual(self.describe("<titre> - <folio>"), "Lettrine - f1v")
+
+    def test_the_descriptor_language_wins_when_it_is_filled(self):
+        self.one_node()
+        self.display_values_by_language({"titre": {"en": "Initial", "fr": "Lettrine"}})
+
+        self.assertEqual(self.describe("<titre>"), "Initial")
+        self.assertEqual(self.languages_asked, ["en"])
+
+    def test_a_blank_value_is_treated_as_missing(self):
+        self.one_node()
+        self.display_values_by_language({"titre": {"en": "  ", "fr": "Lettrine"}})
+
+        self.assertEqual(self.describe("<titre>"), "Lettrine")
+
+    def test_no_language_filled_still_gives_the_undefined_label(self):
+        self.one_node()
+        self.display_values_by_language({"titre": {}})
+
+        with translation.override("en"):
+            self.assertEqual(self.describe("<titre>"), "Undefined")
+
+    @mock.patch.object(descriptor_settings, "LANGUAGES", THREE_LANGUAGES)
+    def test_languages_are_tried_in_the_settings_order(self):
+        self.one_node()
+        self.display_values_by_language({"titre": {"de": "Initiale"}})
+        self.assertEqual(self.describe("<titre>"), "Initiale")
+
+        self.display_values_by_language({"titre": {"fr": "Lettrine", "de": "Initiale"}})
+        self.assertEqual(self.describe("<titre>"), "Lettrine")
+
+    def test_without_a_requested_language_the_active_one_is_tried_once(self):
+        self.one_node()
+        self.display_values_by_language({"titre": {"fr": "", "en": "Initial"}})
+
+        with translation.override("fr"):
+            self.assertEqual(self.describe("<titre>", context={}), "Initial")
+        self.assertEqual(self.languages_asked, [None, "en"])
+
+    def test_a_datatype_ignoring_the_language_is_called_once_per_language(self):
+        self.one_node()
+        self.datatype.get_display_value.side_effect = (
+            lambda tile, node, language=None: ""
+        )
+
+        with translation.override("en"):
+            self.assertEqual(self.describe("<titre>"), "Undefined")
+        self.assertEqual(
+            self.datatype.get_display_value.call_count,
+            len(descriptor_settings.LANGUAGES),
+        )
+
+
 class SaveDescriptorsTests(SimpleTestCase):
     """The whole Arches loop: three descriptors × every configured language.
 
@@ -516,3 +609,24 @@ class SaveDescriptorsTests(SimpleTestCase):
             "Cote Ms. 12 (fr)",
         )
         self.Node.objects.filter.assert_not_called()
+
+    def test_a_french_only_string_node_names_the_english_descriptor(self):
+        self.DataTypeFactory.return_value.get_instance.return_value = StringDataType()
+        self.TileModel.objects.filter.return_value.order_by.return_value = [
+            REAL_TILE_MODEL(
+                tileid=uuid.uuid4(),
+                nodegroup_id=NODEGROUP_ID,
+                data={
+                    str(self.cote.nodeid): {
+                        "fr": {"value": "Ms. 12", "direction": "ltr"},
+                        "en": {"value": "", "direction": "ltr"},
+                    }
+                },
+            )
+        ]
+        resource = self.make_resource()
+
+        resource.save_descriptors()
+
+        self.assertEqual(resource.descriptors["en"]["name"], "Cote Ms. 12")
+        self.assertEqual(resource.descriptors["fr"]["name"], "Cote Ms. 12")
