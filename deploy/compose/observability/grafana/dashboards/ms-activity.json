@@ -549,6 +549,53 @@
       }
     },
     {
+      "id": 28,
+      "type": "stat",
+      "title": "Annotation zones without a measured frame",
+      "description": "Annotation zones stamped `estimated` (frame assumed: the image host refuses this server) and still `unstamped` (no frame known), refreshed hourly. Unstamped zones after a release or an import: run `annotation_frames check`, then `stamp` (deploy/ADMIN.md, « Annotation zone frames »).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 35,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (state) (manuspectrum_annotation_zones{state=~\"unstamped|estimated\"})",
+          "legendFormat": "{{state}}",
+          "instant": false,
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "values": false
+        }
+      }
+    },
+    {
       "id": 12,
       "type": "row",
       "title": "Workflows",

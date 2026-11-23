@@ -14,8 +14,10 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import {
     boundsOfBox,
+    boxOfBounds,
     fitInside,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
+import { shapeBounds } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import { UNPLACED } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration-store.ts";
 import {
     analysisPayload,
@@ -24,6 +26,7 @@ import {
     uuid,
 } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
 
+import type { Shape } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { Registration } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration-store.ts";
 
 describe("folio overlays", () => {
@@ -176,6 +179,55 @@ describe("folio overlays", () => {
         expect(
             rotatedImageUrl({ ...image, service: "javascript:alert(1)" }, 1),
         ).toBeNull();
+    });
+
+    it("places the zone with the unit given: the zone's own, else the live one, else the canvas's", () => {
+        const analysis = analysisPayload({ files: [imagingEntry()] });
+        const on = {
+            [overlayKey(uuid(101), 1)]: {
+                element: "Hg",
+                opacity: 0.6,
+                on: true,
+            },
+        };
+        const shape: Shape = { type: "rect", x: 0, y: 0, w: 64, h: 32 };
+        const boundsWith = (zone: ReturnType<typeof annotation>, place = {}) =>
+            folioOverlays(analysis, on, [zone], {
+                canvas: null,
+                registration: null,
+                ...place,
+            })[0].bounds;
+        const base = { dataKind: "chemical-imaging" as const, shape };
+        const live = { x: 16, y: 16, read: true };
+        const canvasUnit = { x: 8, y: 8, read: false };
+        const zoneUnit = { x: 4, y: 4, read: false };
+        const unitBox = (unit: number) =>
+            boundsOfBox(
+                fitInside(
+                    boxOfBounds(
+                        shapeBounds(shape, { x: unit, y: unit, read: true })!,
+                    ),
+                    2000 / 3000,
+                ),
+            );
+        expect(
+            boundsWith(annotation(1, { ...base, unit: null }), {
+                live,
+                unit: canvasUnit,
+            }),
+        ).toEqual(unitBox(16));
+        expect(
+            boundsWith(annotation(1, { ...base, unit: zoneUnit }), {
+                live,
+                unit: canvasUnit,
+            }),
+        ).toEqual(unitBox(4));
+        expect(
+            boundsWith(annotation(1, { ...base, unit: null }), {
+                live: null,
+                unit: canvasUnit,
+            }),
+        ).toEqual(unitBox(8));
     });
 
     it("lays the layers switched on in the analysis zone, at their own aspect ratio", () => {

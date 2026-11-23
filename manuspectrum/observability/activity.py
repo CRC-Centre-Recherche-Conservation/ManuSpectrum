@@ -393,8 +393,56 @@ def monthly_summary(label, now=None):
     return {"month": label, **collect(start, end, now)}
 
 
+ZONE_STATE_SQL = """
+SELECT CASE WHEN NOT v.ok THEN 'unstamped'
+            WHEN q.p ->> 'msFrame' = 'estimated' THEN 'estimated'
+            ELSE 'measured' END AS state,
+       count(*)
+FROM tiles t
+JOIN nodes n ON n.nodegroupid = t.nodegroupid AND n.datatype = 'annotation'
+CROSS JOIN LATERAL jsonb_array_elements(
+    CASE WHEN jsonb_typeof(t.tiledata -> n.nodeid::text -> 'features') = 'array'
+         THEN t.tiledata -> n.nodeid::text -> 'features' ELSE '[]'::jsonb END
+  ) AS f
+CROSS JOIN LATERAL (SELECT f -> 'properties' AS p) AS q
+CROSS JOIN LATERAL (
+  SELECT CASE
+    WHEN coalesce(q.p ->> 'msFrame', '')
+           NOT IN ('browser', 'read', 'import-legacy', 'estimated') THEN false
+    WHEN jsonb_typeof(q.p -> 'msUnit') IS DISTINCT FROM 'number'
+      OR jsonb_typeof(q.p -> 'msImageWidth') IS DISTINCT FROM 'number'
+      OR jsonb_typeof(q.p -> 'msImageHeight') IS DISTINCT FROM 'number' THEN false
+    WHEN (q.p -> 'msUnit')::text !~ '^[0-9]+$'
+      OR (q.p -> 'msImageWidth')::text !~ '^[0-9]+$'
+      OR (q.p -> 'msImageHeight')::text !~ '^[0-9]+$' THEN false
+    WHEN (q.p -> 'msUnit')::text::numeric NOT BETWEEN 1 AND 1048576
+      OR (q.p -> 'msImageWidth')::text::numeric NOT BETWEEN 1 AND 1000000
+      OR (q.p -> 'msImageHeight')::text::numeric NOT BETWEEN 1 AND 1000000 THEN false
+    ELSE ((q.p -> 'msUnit')::text::bigint
+          & ((q.p -> 'msUnit')::text::bigint - 1)) = 0
+  END AS ok
+) AS v
+GROUP BY 1
+"""
+
+
+def annotation_zone_counts():
+    """``{state: zones}`` over the annotation nodes' stored features, every state present.
+
+    A stamp is valid by the rule of ``frames.frame_of``: the four keys, whole
+    ``msUnit`` (a power of two up to 2**20), ``msImageWidth`` and
+    ``msImageHeight`` (1 to 1 000 000) and a known ``msFrame``. ``measured`` is
+    a valid stamp whose ``msFrame`` is not ``estimated``, ``unstamped`` every
+    other feature, whatever its shape. Provisional edits are not counted.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(ZONE_STATE_SQL)
+        found = dict(cursor.fetchall())
+    return {state: found.get(state, 0) for state in metrics.ZONE_STATES}
+
+
 def publish_gauges(now=None):
-    """Set the activity gauges: totals, the last 24 hours, open workflows."""
+    """Set the activity gauges: totals, the last 24 hours, open workflows, annotation zones."""
     now = now or datetime.now(timezone.utc)
     figures = collect(now - timedelta(hours=RECENT_HOURS), now, now)
     totals = dict.fromkeys(metrics.RESOURCE_MODELS + (metrics.OTHER,), 0)
@@ -419,5 +467,9 @@ def publish_gauges(now=None):
         metrics.RESOURCE_CHANGES.labels(model=model, kind=kind).set(n)
     for (kind, state), n in runs.items():
         metrics.WORKFLOWS.labels(kind=kind, state=state).set(n)
+    for state, n in annotation_zone_counts().items():
+        metrics.ANNOTATION_ZONES.labels(
+            state=metrics.bounded(state, metrics.ZONE_STATES)
+        ).set(n)
     metrics.ACTIVITY_MEASURED.set(now.timestamp())
     return figures

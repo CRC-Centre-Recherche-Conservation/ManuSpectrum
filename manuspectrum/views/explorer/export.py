@@ -213,7 +213,7 @@ def analysis_zones(scope):
                 zones[rid] = {
                     "canvas": canvas,
                     "label": labels[canvas],
-                    "shape": convert(),
+                    "shape": convert()[0],
                 }
     return zones
 

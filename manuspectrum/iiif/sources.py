@@ -293,7 +293,8 @@ class CanvasIndex(dict):
 
     ``unit`` reads a canvas's image description the first time a zone on it
     is converted (``units.UnitReader``): a canvas without a zone costs no
-    request.
+    request, and a zone carrying its frame stamp costs none either
+    (``note_unit``).
     """
 
     def __init__(self, canvases):
@@ -315,6 +316,21 @@ class CanvasIndex(dict):
             return units.UNKNOWN_UNIT
         canvas, width, height = entry
         return self._read(canvas, self._services[canvas], width, height)
+
+    def size(self, name):
+        """``(width, height)`` of the canvas stored under *name*; None for a name the manifest does not list or a canvas of no size."""
+        entry = self.get(name)
+        if entry is None or not (entry[1] > 0 and entry[2] > 0):
+            return None
+        return entry[1], entry[2]
+
+    def note_unit(self, canvas, unit):
+        """Record the *unit* a stamped zone on *canvas* (a canvas id) was converted with, without reading the image.
+
+        A unit taken from the canvas's image description (or assumed when it
+        was not read) wins over a unit noted from a stamp.
+        """
+        self._read.note(canvas, unit)
 
     def unit_used(self, canvas):
         """The unit a zone on *canvas* (a canvas id) was converted with, or None when none was."""

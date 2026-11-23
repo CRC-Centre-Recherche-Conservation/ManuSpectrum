@@ -33,11 +33,12 @@ def haversine_km(a, b):
 
 
 def _features(collection):
-    if not isinstance(collection, dict):
+    features = collection.get("features") if isinstance(collection, dict) else None
+    if not isinstance(features, list):
         return []
     return [
         f
-        for f in collection.get("features") or []
+        for f in features
         if isinstance(f, dict) and isinstance(f.get("geometry"), dict)
     ]
 
@@ -46,7 +47,8 @@ def derived_only(collection):
     """Whether every feature of *collection* is a derived copy (``msDerivedFrom``); False for an empty one."""
     features = _features(collection)
     return bool(features) and all(
-        DERIVED_MARK in (f.get("properties") or {}) for f in features
+        isinstance(f.get("properties"), dict) and DERIVED_MARK in f["properties"]
+        for f in features
     )
 
 

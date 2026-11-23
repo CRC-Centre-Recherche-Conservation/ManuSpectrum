@@ -222,6 +222,9 @@ MIB = 1024 * 1024
 BYTES_EXPORT = tuple(n * MIB for n in (1, 5, 10, 25, 50, 100, 250, 500))
 
 
+ZONE_STATES = ("measured", "estimated", "unstamped")
+
+
 def bounded(value, allowed):
     """*value* as a string when it is in *allowed*, else ``"other"``."""
     value = "" if value is None else str(value)
@@ -534,6 +537,12 @@ WORKFLOWS = gauge(
     "manuspectrum_workflows",
     "Workflow runs not completed, per workflow, and those open for too long.",
     ["kind", "state"],
+    mode="mostrecent",
+)
+ANNOTATION_ZONES = gauge(
+    "manuspectrum_annotation_zones",
+    "Annotation zones by stamp state, set by the hourly activity task.",
+    ["state"],
     mode="mostrecent",
 )
 ACTIVITY_MEASURED = gauge(
