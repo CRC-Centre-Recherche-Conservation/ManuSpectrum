@@ -80,8 +80,18 @@ def read_frames_file(path):
         if info is None:
             failed.append((service, "not an image description"))
             continue
+        try:
+            units.frame_from_info(info, "browser")
+        except ValueError as error:
+            failed.append((service, str(error)))
+            continue
         found[service] = info
     return FramesFile(found, failed, body["measured_at"], body["origin"])
+
+
+def same_aspect(old, new):
+    """Whether the height of *old* scaled by the width ratio is within one pixel of the height of *new*."""
+    return abs(round(old.height * new.width / old.width) - new.height) <= 1
 
 
 def rebase_factors(old, new, resize):
@@ -95,7 +105,7 @@ def rebase_factors(old, new, resize):
     if (old.width, old.height) == (new.width, new.height):
         factor = old.unit / new.unit
         return factor, factor
-    if resize and abs(round(old.height * new.width / old.width) - new.height) <= 1:
+    if resize and same_aspect(old, new):
         return (
             old.unit * new.width / (old.width * new.unit),
             old.unit * new.height / (old.height * new.unit),

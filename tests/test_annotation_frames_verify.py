@@ -76,6 +76,21 @@ class FramesFileTests(SimpleTestCase):
         self.assertEqual(found.failed[-1][0], GALLICA)
         self.assertTrue(found.failed[-1][1])
 
+    def test_an_entry_too_large_for_a_frame_is_failed_with_its_reason(self):
+        found = self.read(
+            frames_file(
+                frames=[
+                    {
+                        "service": GALLICA,
+                        "info": {"width": 1_000_001, "height": 10, "tile_width": 512},
+                    }
+                ]
+            )
+        )
+        self.assertEqual(found.frames, {})
+        self.assertEqual(found.failed[-1][0], GALLICA)
+        self.assertIn("width", found.failed[-1][1])
+
     def test_a_file_that_cannot_be_used_raises_with_the_reason(self):
         cases = {
             "version": json.dumps(frames_file(version=2)),
@@ -262,6 +277,7 @@ class VerifyTests(AnnotationFramesCase):
             "refused or not an image description: 1 service(s), 1 zone(s)", out
         )
         self.assertIn("--refused-out", out)
+        self.assertIn("zone(s) not verified: refused or not an image description;", out)
 
     def test_a_frames_file_answers_for_a_refused_service(self):
         self.answers = {REFUSED_1: units.REFUSED}
@@ -310,10 +326,11 @@ class VerifyTests(AnnotationFramesCase):
         out, error = self.verify("--refused-out", target)
         self.assertIsNone(error)
         self.assertEqual(
-            sorted(os.listdir(target)), ["ref1.example.js", "ref2.example.js"]
+            sorted(os.listdir(target)),
+            ["https_ref1.example.js", "https_ref2.example.js"],
         )
         for host, service in (("ref1.example", REFUSED_1), ("ref2.example", REFUSED_2)):
-            with open(os.path.join(target, host + ".js")) as handle:
+            with open(os.path.join(target, f"https_{host}.js")) as handle:
                 script = handle.read()
             self.assertIn(f"const SERVICES = {json.dumps([service])};", script)
             self.assertNotIn("__SERVICES__", script)
@@ -329,14 +346,52 @@ class VerifyTests(AnnotationFramesCase):
         target = os.path.join(self.dir.name, "scripts")
         os.mkdir(target)
         self.verify("--refused-out", target, "--host", "ref2.example")
-        self.assertEqual(os.listdir(target), ["ref2.example.js"])
-        before = open(os.path.join(target, "ref2.example.js")).read()
+        name = "https_ref2.example.js"
+        self.assertEqual(os.listdir(target), [name])
+        before = open(os.path.join(target, name)).read()
         self.reads.clear()
         _out, error = self.verify("--refused-out", target)
-        self.assertIn("ref2.example.js", error)
+        self.assertIn(name, error)
         self.assertEqual(self.reads, [])
-        self.assertEqual(os.listdir(target), ["ref2.example.js"])
-        self.assertEqual(open(os.path.join(target, "ref2.example.js")).read(), before)
+        self.assertEqual(os.listdir(target), [name])
+        self.assertEqual(open(os.path.join(target, name)).read(), before)
+
+    def test_refused_out_groups_by_origin_not_by_host(self):
+        secure = "https://ref1.example/iiif/a"
+        plain = "http://ref1.example/iiif/b"
+        ported = "https://ref1.example:8443/iiif/c"
+        self.answers = {s: units.REFUSED for s in (secure, plain, ported)}
+        self.tile(
+            *[
+                zone(f"r{i}", canvas=c, stamp=stamp_of(source="estimated"))
+                for i, c in enumerate((secure, plain, ported))
+            ]
+        )
+        target = os.path.join(self.dir.name, "scripts")
+        os.mkdir(target)
+        out, error = self.verify("--refused-out", target)
+        self.assertIsNone(error)
+        self.assertEqual(
+            sorted(os.listdir(target)),
+            [
+                "http_ref1.example.js",
+                "https_ref1.example.js",
+                "https_ref1.example_8443.js",
+            ],
+        )
+        for name, service in (
+            ("https_ref1.example.js", secure),
+            ("http_ref1.example.js", plain),
+            ("https_ref1.example_8443.js", ported),
+        ):
+            with open(os.path.join(target, name)) as handle:
+                self.assertIn(json.dumps([service]), handle.read())
+        for origin in (
+            "https://ref1.example",
+            "http://ref1.example",
+            "https://ref1.example:8443",
+        ):
+            self.assertIn(f"Open a tab on {origin},", out)
 
     def requalify_tile(self, **kwargs):
         self.answers = {READ_A: self.info()}

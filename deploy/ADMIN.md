@@ -515,8 +515,12 @@ be reached).
 - **Rebase.** `rebase --service URL | --host HOSTNAME [--frames FILE] [--resize] [--since YYYY-MM-DD]` carries the
   stored geometry of the zones whose stamp differs from the live frame to that frame (dry run by default;
   `--apply --journal PATH`; reindex after). `--resize` also moves zones whose image changed size with its aspect
-  kept. An `estimated` zone is never moved without `--since`, the day the host changed: then only a zone that existed
-  unchanged before that day moves, and a zone drawn or moved since is listed for review.
+  kept (without `--resize` such a zone is listed « same aspect: give --resize »; another aspect is listed « redraw »).
+  An `estimated` zone is never moved without `--since`, the day the host changed: then only a zone that existed
+  unchanged before that day moves, and a zone drawn or moved since is listed for review. A tile of a resource whose
+  creation is logged from that day on (a CSV business-data import) counts as drawn since. `--zone TILE:FEATURE`
+  (repeatable) moves only the named zones, whatever their stamp source and without `--since`; the other zones are not
+  touched. An `import-legacy` zone is counted apart and never moved. The dry run lists the zone ids per reason.
 - **Relabel.** `relabel --service URL --zone TILE:FEATURE [--zone …] [--frames FILE]` gives the named zones the live
   frame and leaves their geometry alone, for a zone drawn after the change that carries the old frame (same
   `--apply --journal PATH`).
@@ -533,19 +537,29 @@ drawn before the change are in the old frame.
    concerned.
 3. Close editing (site notice, maintenance slot): an editor tab opened before the rebase saves the old geometry
    back.
-4. `annotation_frames rebase --service URL|--host HOSTNAME [--frames FILE] [--since <date of the last good verify>]`
-   (dry run), then the same with `--apply --journal /srv/media/annotation-frames-rebase-YYYYMMDD.jsonl`.
-5. `annotation_frames relabel --service URL --zone TILE:FEATURE …` for the zones the rebase lists, after review in the
-   editor.
+4. `annotation_frames rebase --service URL|--host HOSTNAME [--frames FILE] [--since <date the host changed>]`
+   (dry run), then the same with `--apply --journal /srv/media/annotation-frames-rebase-YYYYMMDD.jsonl`. Take the
+   date of the change itself: a date earlier than the change (the last good `verify`) lists as « drawn or moved
+   since » zones that are still in the old frame.
+5. Review each zone the rebase lists as « drawn or moved since » in the editor. One that sits right is in the new
+   frame with an old stamp: `annotation_frames relabel --service URL --zone TILE:FEATURE …`. One that looks moved is
+   in the old frame: `annotation_frames rebase --service URL|--host HOSTNAME --zone TILE:FEATURE …` (dry run, then
+   `--apply --journal` with a new file).
 6. `make -C deploy manage ARGS="es reindex_database"`; reopen editing.
 7. A few days later, a dry `annotation_frames unstamp --journal <rebase journal>`: any « geometry reverted by a later
-   save » is a zone an old editor tab saved back; go back to 4 or 5 for it.
+   save » is a zone an old editor tab saved back, now carrying the new stamp on old-frame geometry. Run
+   `unstamp --apply` of that journal, which puts the old stamp back on such zones (their other properties and their
+   geometry stay), then `rebase` again with a new journal. The `unstamp` also undoes the zones of that journal that were not saved back, and the new `rebase` moves them again (keep editing closed between the two); a zone already restored is reported « already restored ».
 
 Undo: `unstamp --journal PATH` (dry run, then `--apply`), newest journal first when several touched the same
 zones, then reindex.
 
 When to run `verify`: after the first `stamp` in production (with the refused-host browser check and
-`verify --frames FILE --apply --journal PATH`, so the stock leaves `estimated`), at each release rehearsal and Arches
+`verify --frames FILE --apply --journal PATH`, so the stock leaves `estimated`; when `verify --frames` then shows
+`estimated` zones different from the measure, the estimate was wrong at stamp time: set the right
+`IIIF_IMAGE_TILE_HINTS` entry, `unstamp --apply` the stamp journal, `stamp --apply` again with a new journal, then
+`verify --frames FILE --apply --journal PATH`; these zones were drawn on the real frame, never `rebase` them), at each
+release rehearsal and Arches
 upgrade, after re-encoding the platform's own images (`verify --host <own host>`), and once a year for refused
 hosts. Cantaloupe's minimum tile size is pinned in `compose.yaml` to `IIIF_OWN_IMAGE_TILE`, so a Cantaloupe change does
 not move it silently.

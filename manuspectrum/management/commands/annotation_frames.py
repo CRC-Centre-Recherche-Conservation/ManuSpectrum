@@ -71,12 +71,21 @@ kept. An ``estimated`` zone is never rebased without ``--since DATE`` (the day
 the host changed): its stamp may describe the old frame on geometry drawn
 after the change. With ``--since``, only a zone that existed unchanged before
 that date moves (judged from the edit log: the tile's ``oldvalue`` or the
-user's provisional value); a zone drawn or moved since is listed for review
-and ``relabel``. A refused or unreadable service plans nothing (``--frames``
+user's provisional value, or, for a tile with no row of its own, the ``create``
+row of its resource: a resource created since held no zone before); a zone
+drawn or moved since is listed for review (looks moved: ``rebase --zone``;
+looks right: ``relabel``). ``--zone TILE:FEATURE`` (repeatable) rebases only
+the named zones, which skip the ``estimated``/``--since`` gate but still need a
+stamp other than the target, a valid geometry and factors. An ``import-legacy``
+zone is counted apart and never moved. Without ``--resize`` a zone whose image
+changed size with its aspect kept is listed « give --resize », another aspect
+« redraw ». A refused or unreadable service plans nothing (``--frames``
 supplies a browser measure for a refused one; an unreadable one exits
 non-zero). Dry by default; ``--apply --journal PATH`` writes through the same
 locked, guarded batches, journaling ``geometry_before``. Run it with editing
-closed: an editor tab opened before it saves the old geometry back.
+closed: an editor tab opened before it saves the old geometry back; ``unstamp
+--apply`` of its journal then puts the old stamp back on such a zone, and
+``rebase`` again moves it.
 
 ``relabel --service URL --zone TILE:FEATURE`` (repeatable) gives the named
 zones the measured live frame of the service and leaves their geometry
@@ -91,9 +100,14 @@ object gives the stored ``data`` back value for value (jsonb keeps no key
 order). A journal line may carry ``geometry_before`` (the feature's geometry
 before a verb that moves zones): ``unstamp`` puts it back with ``before``. A
 line whose feature, on the same canvas, already has the digest of
-``geometry_before`` (a stale editor save puts the old geometry back and the
-save's own stamping rule restamps it) is listed as « geometry reverted by a later save ». Dry by
-default as well.
+``geometry_before`` under another stamp (a stale editor save puts the old
+geometry back and the save's own stamping rule restamps it) is listed as
+« geometry reverted by a later save »; ``--apply`` puts only the stamp keys of
+``before`` back on it (a key absent from ``before`` is dropped; the other
+properties and the geometry stay, nothing is journaled) and lists it as
+« stamp put back on reverted geometry ». A zone that already has the
+journaled ``before`` is listed as « already restored ». Dry by default as
+well.
 """
 
 import copy
@@ -113,6 +127,7 @@ from urllib.parse import urlsplit
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.db.models import Q
 
 from arches.app.models.models import EditLog, Node, TileModel
 
@@ -128,6 +143,9 @@ LEGACY_SIZE = (4000, 5000)
 BATCH = 200
 RETRIES = 2
 RETRY_WAIT_MAX = 300
+ALREADY_RESTORED_REASON = "already restored"
+REVERTED_REASON = "geometry reverted by a later save"
+PUT_BACK_REASON = "stamp put back on reverted geometry"
 REFUSED_STATE = "refused"
 UNREADABLE_STATE = "unreadable"
 CHECK_SCRIPT = Path(frames.__file__).with_name("frame_check.js")
@@ -498,8 +516,10 @@ def _locked_rows(tile_ids):
     }
 
 
-def _guarded_batch(batch, journal, change):
-    """Change the planned zones of the tiles of *batch* (``[(tile id, entries)]``) under lock; return ``(written, [(tile id, feature id)] changed since)``.
+def _guarded_batch(batch, journal, change, written_by=None):
+    """Change the planned zones of the tiles of *batch* (``[(tile id, entries)]``) under lock; return ``(written, [(tile id, feature id, canvas)] changed since)``.
+
+    *written_by*, a Counter, receives one count per journal line under its canvas.
 
     An entry is ``(node id, user id, feature id, digest, canvas, stamped
     frame, payload)``. A feature is changed only while it still carries the
@@ -514,7 +534,7 @@ def _guarded_batch(batch, journal, change):
         rows = _locked_rows(tile_id for tile_id, _ in batch)
         for tile_id, entries in batch:
             if tile_id not in rows:
-                changed.extend((tile_id, entry[2]) for entry in entries)
+                changed.extend((tile_id, entry[2], entry[4]) for entry in entries)
                 continue
             data, edits = copy.deepcopy(rows[tile_id][1]), copy.deepcopy(
                 rows[tile_id][2]
@@ -524,15 +544,17 @@ def _guarded_batch(batch, journal, change):
                 value = frame_writes._value_of(data, edits, user_id)
                 found = _matching_stamped(value, node_id, fid, digest, canvas, frame)
                 if not found:
-                    changed.append((tile_id, fid))
+                    changed.append((tile_id, fid, canvas))
                 for feature in found:
                     before = copy.deepcopy(feature["properties"])
                     geometry_before = copy.deepcopy(feature.get("geometry"))
                     try:
                         change(feature, payload)
                     except ValueError:
-                        changed.append((tile_id, fid))
+                        changed.append((tile_id, fid, canvas))
                         continue
+                    if written_by is not None:
+                        written_by[canvas] += 1
                     line = {
                         "tile": str(tile_id),
                         "node": node_id,
@@ -566,7 +588,7 @@ def requalify_batch(batch, journal):
     return _guarded_batch(batch, journal, change)
 
 
-def rebase_batch(batch, journal):
+def rebase_batch(batch, journal, written_by=None):
     """Carry the planned zones of the tiles of *batch* to the live frame; return ``(written, changed since)`` as ``_guarded_batch``.
 
     An entry's payload is ``(target frame, fx, fy)``: the geometry is scaled
@@ -579,7 +601,7 @@ def rebase_batch(batch, journal):
         feature["geometry"] = geometry
         feature["properties"].update(target.stamp())
 
-    return _guarded_batch(batch, journal, change)
+    return _guarded_batch(batch, journal, change, written_by)
 
 
 def relabel_batch(batch, journal):
@@ -666,7 +688,22 @@ def restore_batch(batch, lines_by_tile, apply_changes=True):
                     None,
                 )
                 if target is None:
-                    changed.append((line, _unmatched_reason(line, value)))
+                    reason, feature = _unmatched(line, value)
+                    if reason == REVERTED_REASON and apply_changes:
+                        for key in frames.STAMP_KEYS:
+                            if key in line["before"]:
+                                feature["properties"][key] = line["before"][key]
+                            else:
+                                feature["properties"].pop(key, None)
+                        reason = PUT_BACK_REASON
+                        changes[
+                            (
+                                "data"
+                                if line["provisional"] is None
+                                else "provisionaledits"
+                            )
+                        ] = (data if line["provisional"] is None else edits)
+                    changed.append((line, reason))
                     continue
                 target["properties"] = line["before"]
                 if "geometry_before" in line:
@@ -680,23 +717,47 @@ def restore_batch(batch, lines_by_tile, apply_changes=True):
     return restored, changed
 
 
-def _unmatched_reason(line, value):
-    """Why the zone of journal *line* is not restored: a later save put the geometry of ``geometry_before`` back (whatever stamp it then carries), or it changed since."""
-    if "geometry_before" in line:
-        collection = value.get(line["node"]) if isinstance(value, dict) else None
-        features = (
-            collection["features"] if frame_writes._is_collection(collection) else []
-        )
-        digest = frames.geometry_digest(line["geometry_before"])
-        if any(
-            isinstance(f, dict)
-            and f.get("id") == line["feature"]
-            and frames.canvas_of(f) == line["canvas"]
-            and frames.geometry_digest(f.get("geometry")) == digest
-            for f in features
+def _stamp_part(properties):
+    """The stamp keys of *properties* that are present."""
+    return {k: properties[k] for k in frames.STAMP_KEYS if k in properties}
+
+
+def _unmatched(line, value):
+    """``(reason, feature)`` for the zone of journal *line* that is not restored.
+
+    ``already restored``: the zone has the journaled ``before`` (the stamp of
+    ``before`` and, when the line moved the geometry, the geometry of
+    ``geometry_before``). ``geometry reverted by a later save``: a later save
+    put the geometry of ``geometry_before`` back under another stamp
+    (*feature* is that zone, whose stamp ``unstamp --apply`` puts back).
+    Otherwise ``changed since``, with no feature.
+    """
+    collection = value.get(line["node"]) if isinstance(value, dict) else None
+    features = collection["features"] if frame_writes._is_collection(collection) else []
+    same = [
+        f
+        for f in features
+        if isinstance(f, dict)
+        and f.get("id") == line["feature"]
+        and isinstance(f.get("properties"), dict)
+        and frames.canvas_of(f) == line["canvas"]
+    ]
+    moved = "geometry_before" in line
+    digest = frames.geometry_digest(line["geometry_before"]) if moved else None
+    reverted = None
+    for feature in same:
+        if moved and frames.geometry_digest(feature.get("geometry")) != digest:
+            continue
+        properties = feature["properties"]
+        if properties == line["before"] or (
+            moved and _stamp_part(properties) == _stamp_part(line["before"])
         ):
-            return "geometry reverted by a later save"
-    return "changed since"
+            return ALREADY_RESTORED_REASON, feature
+        if moved and reverted is None:
+            reverted = feature
+    if reverted is not None:
+        return REVERTED_REASON, reverted
+    return "changed since", None
 
 
 def _journal_line(text):
@@ -833,39 +894,87 @@ def _zone_keys(value):
     return found
 
 
+class ZonesBefore(dict):
+    """``{(tile id, user id or None): zone keys}`` as ``values_before`` returns it, and ``created``: the tiles of a resource created since the date."""
+
+    created = frozenset()
+
+
 def values_before(tile_ids, since):
-    """``{(tile id, user id or None): zone keys}``: what each tile held before *since*, for the tiles an edit log row dates from *since* on.
+    """``ZonesBefore``: what each tile held before *since*, for the tiles an edit log row dates from *since* on.
 
     One ``EditLog`` query. The value before the date is the ``oldvalue`` of the
     earliest row of the tile at or after it (its ``data``), and, for a
     provisional edit, the ``oldprovisionalvalue`` of the earliest such row of
     that user (the edit's own value; none when the user's first edit is that
     row). A tile or user with no such row is absent: nothing changed since,
-    the current value is the old one.
+    the current value is the old one, unless the tile's resource has a
+    ``create`` row from *since* on (``Resource.bulk_save``, the CSV import,
+    writes no row per tile): the tile is then in ``created`` and held no zone
+    before, wherever a row of its own does not say otherwise.
     """
-    found = {}
+    tile_ids = list(tile_ids)
+    resource_of = {
+        str(tile_id): str(resource_id)
+        for tile_id, resource_id in TileModel.objects.filter(
+            pk__in=tile_ids
+        ).values_list("tileid", "resourceinstance_id")
+    }
+    found, created = ZonesBefore(), set()
     rows = (
         EditLog.objects.filter(
-            tileinstanceid__in=[str(tile_id) for tile_id in tile_ids],
+            Q(tileinstanceid__in=list(resource_of))
+            | Q(
+                edittype="create",
+                resourceinstanceid__in=list(set(resource_of.values())),
+            ),
             timestamp__gte=since,
         )
         .order_by("timestamp")
         .values_list(
-            "tileinstanceid", "provisional_userid", "oldvalue", "oldprovisionalvalue"
+            "tileinstanceid",
+            "provisional_userid",
+            "oldvalue",
+            "oldprovisionalvalue",
+            "edittype",
+            "resourceinstanceid",
         )
         .iterator(chunk_size=200)
     )
-    for tile_text, user, old, old_provisional in rows:
+    for tile_text, user, old, old_provisional, edit_type, resource in rows:
+        if edit_type == "create" and resource:
+            created.add(resource)
+        if tile_text not in resource_of:
+            continue
         tile_id = uuid.UUID(tile_text)
-        found.setdefault((tile_id, None), _zone_keys(old))
-        if user not in (None, ""):
-            found.setdefault((tile_id, str(user)), _zone_keys(old_provisional))
+        if (tile_id, None) not in found:
+            found[(tile_id, None)] = _zone_keys(old)
+        if user not in (None, "") and (tile_id, str(user)) not in found:
+            found[(tile_id, str(user))] = _zone_keys(old_provisional)
+    found.created = frozenset(
+        uuid.UUID(tile_text)
+        for tile_text, resource in resource_of.items()
+        if resource in created
+    )
     return found
 
 
-def _script_name(host):
-    """The file name of the console script of *host*."""
-    return "".join(c if c.isalnum() or c in ".-" else "_" for c in host) + ".js"
+def _origin_of(service):
+    """``scheme://netloc`` of *service*: what a browser tab must be opened on to read it."""
+    parts = urlsplit(service)
+    return f"{parts.scheme}://{parts.netloc}"
+
+
+def _script_name(origin):
+    """The file name of the console script of *origin*."""
+    parts = urlsplit(origin)
+    return (
+        "".join(
+            c if c.isalnum() or c in ".-" else "_"
+            for c in f"{parts.scheme}_{parts.netloc}"
+        )
+        + ".js"
+    )
 
 
 class Command(BaseCommand):
@@ -930,6 +1039,12 @@ class Command(BaseCommand):
         rebase.add_argument(
             "--since",
             help="YYYY-MM-DD: the host changed that day; only zones that existed unchanged before it move.",
+        )
+        rebase.add_argument(
+            "--zone",
+            action="append",
+            metavar="TILE:FEATURE",
+            help="Rebase only this zone (repeatable); an estimated stamp or --since is not asked about it.",
         )
         rebase.add_argument("--apply", action="store_true", help="Write the zones.")
         rebase.add_argument(
@@ -1140,19 +1255,19 @@ class Command(BaseCommand):
             )
             self._out("Pass --apply --journal PATH to write.")
 
-    def _refused_scripts_check(self, directory, hosts):
-        """``CommandError`` when *directory* is missing or already holds the script of one of *hosts*."""
+    def _refused_scripts_check(self, directory, origins):
+        """``CommandError`` when *directory* is missing or already holds the script of one of *origins*."""
         if not os.path.isdir(directory):
             raise CommandError(f"--refused-out {directory} is not a directory")
-        for host in sorted(hosts):
-            path = os.path.join(directory, _script_name(host))
+        for origin in sorted(origins):
+            path = os.path.join(directory, _script_name(origin))
             if os.path.lexists(path):
                 raise CommandError(f"{path} exists; nothing was read or written")
 
     def _write_scripts(self, directory, refused):
-        """Write ``DIR/<host>.js`` for each host of *refused* (``{host: [service]}``) and say how to use it."""
-        for host, services in sorted(refused.items()):
-            path = os.path.join(directory, _script_name(host))
+        """Write one script in *directory* for each origin of *refused* (``{origin: [service]}``) and say how to use it."""
+        for origin, services in sorted(refused.items()):
+            path = os.path.join(directory, _script_name(origin))
             script = CHECK_SCRIPT.read_text(encoding="utf-8").replace(
                 "__SERVICES__", json.dumps(sorted(services))
             )
@@ -1162,9 +1277,8 @@ class Command(BaseCommand):
                 raise CommandError(f"cannot create {path}: {error}") from error
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 handle.write(script)
-            parts = urlsplit(sorted(services)[0])
             self._out(
-                f"{path}: {len(services)} service(s). Open a tab on {parts.scheme}://{parts.netloc}, "
+                f"{path}: {len(services)} service(s). Open a tab on {origin}, "
                 "paste the script in its console, save the copied JSON as a file, "
                 "then run verify again with --frames FILE."
             )
@@ -1188,7 +1302,7 @@ class Command(BaseCommand):
         directory = options["refused_out"]
         if directory:
             self._refused_scripts_check(
-                directory, {_host_of(canvas) for canvas in by_service}
+                directory, {_origin_of(canvas) for canvas in by_service}
             )
         journal = open_journal(journal_path) if apply_changes else None
         failed = False
@@ -1201,7 +1315,7 @@ class Command(BaseCommand):
                 measured = measures.frame(canvas)
                 host = _host_of(canvas)
                 if measured == REFUSED_STATE:
-                    refused[host].append(canvas)
+                    refused[_origin_of(canvas)].append(canvas)
                 for zone in by_service[canvas]:
                     if isinstance(measured, str):
                         key = measured
@@ -1287,7 +1401,7 @@ class Command(BaseCommand):
         if count(REFUSED_STATE):
             self._out(
                 self.style.WARNING(
-                    f"{count(REFUSED_STATE)} zone(s) not verified: refused by their host; "
+                    f"{count(REFUSED_STATE)} zone(s) not verified: refused or not an image description; "
                     "measure them in a browser (--refused-out DIR, then --frames FILE)"
                 )
             )
@@ -1326,16 +1440,26 @@ class Command(BaseCommand):
             self._out(f"  {canvas}: {stamped} \u2192 {live} ({count} zone(s))")
         for entry, reason in (frames_file.failed if frames_file else []):
             self._out(f"Frames file, not measured: {entry}: {reason}")
-        for tile_id, fid in changed:
+        for tile_id, fid, _canvas in changed:
             self._out(f"  changed since: zone {fid} of tile {tile_id}")
 
-    def _rebase_plan(self, by_service, measures, resize, since):
-        """``(per, plan, canvas_of)``: for each service its target (a ``Frame`` or a state string), counts and listed zones; the entries for ``rebase_batch`` by tile; the service of each planned ``(tile id, feature id)``."""
+    def _rebase_plan(self, by_service, measures, resize, since, gated=True):
+        """``(per, plan)``: for each service its target (a ``Frame`` or a state string), counts and listed zones; the entries for ``rebase_batch`` by tile.
+
+        Without *gated* (the zones were named) an ``estimated`` stamp and a
+        date are not asked about.
+        """
         per = {}
         pending, tiles = [], set()
         for canvas in sorted(by_service):
             target = measures.frame(canvas)
-            info = {"target": target, "rebased": 0, "unchanged": 0, "listed": []}
+            info = {
+                "target": target,
+                "rebased": 0,
+                "unchanged": 0,
+                "legacy": 0,
+                "listed": [],
+            }
             per[canvas] = info
             for zone in by_service[canvas]:
                 if isinstance(target, str):
@@ -1348,6 +1472,9 @@ class Command(BaseCommand):
                 ):
                     info["unchanged"] += 1
                     continue
+                if f.source == "import-legacy":
+                    info["legacy"] += 1
+                    continue
                 try:
                     frame_scope.scaled_geometry(zone.geometry, 1.0, 1.0)
                 except ValueError:
@@ -1355,26 +1482,46 @@ class Command(BaseCommand):
                     continue
                 factors = frame_scope.rebase_factors(f, target, resize)
                 if factors is None:
+                    same_aspect = not resize and frame_scope.same_aspect(f, target)
                     info["listed"].append(
-                        ("size changed: redraw, or relabel by hand", zone)
+                        (
+                            (
+                                "size changed, same aspect: give --resize"
+                                if same_aspect
+                                else "size changed: redraw"
+                            ),
+                            zone,
+                        )
                     )
-                elif since is None and f.source == units.ESTIMATED:
+                elif gated and since is None and f.source == units.ESTIMATED:
                     info["listed"].append(("estimated: give --since", zone))
                 else:
                     pending.append((canvas, zone, target, factors))
                     tiles.add(zone.tile_id)
-        before = values_before(tiles, since) if since and pending else {}
-        plan, canvas_of, seen = defaultdict(list), {}, set()
+        before = (
+            values_before(tiles, since)
+            if gated and since and pending
+            else ZonesBefore()
+        )
+        plan, seen = defaultdict(list), set()
         for canvas, zone, target, (fx, fy) in pending:
             key = (zone.tile_id, zone.user_id)
             if (
-                since
-                and key in before
-                and ((zone.node_id, zone.feature_id, zone.digest) not in before[key])
+                gated
+                and since
+                and (
+                    (
+                        key in before
+                        and (zone.node_id, zone.feature_id, zone.digest)
+                        not in before[key]
+                    )
+                    or (key not in before and zone.tile_id in before.created)
+                )
             ):
                 per[canvas]["listed"].append(
                     (
-                        f"drawn or moved since {since:%Y-%m-%d}: review, then relabel",
+                        f"drawn or moved since {since:%Y-%m-%d}: review in the editor "
+                        "\u2014 looks moved: rebase --zone; looks right: relabel",
                         zone,
                     )
                 )
@@ -1385,12 +1532,12 @@ class Command(BaseCommand):
                 zone.user_id,
                 zone.feature_id,
                 zone.digest,
+                canvas,
             )
             if once in seen:
                 continue
             seen.add(once)
             per[canvas]["rebased"] += 1
-            canvas_of[(zone.tile_id, zone.feature_id)] = canvas
             plan[zone.tile_id].append(
                 (
                     zone.node_id,
@@ -1402,7 +1549,7 @@ class Command(BaseCommand):
                     (target, fx, fy),
                 )
             )
-        return per, plan, canvas_of
+        return per, plan
 
     def _rebase(self, options):
         apply_changes = options["apply"]
@@ -1412,6 +1559,7 @@ class Command(BaseCommand):
         if apply_changes and not journal_path:
             raise CommandError("--apply needs --journal PATH (a new file)")
         since = _since_of(options["since"]) if options["since"] else None
+        named = self._zone_arguments(options["zone"]) if options["zone"] else None
         frames_file = None
         if options["frames"]:
             try:
@@ -1419,22 +1567,37 @@ class Command(BaseCommand):
             except ValueError as error:
                 raise CommandError(f"{options['frames']}: {error}") from error
         nodes = annotation_nodes()
-        by_service = defaultdict(list)
-        for zone in stamped_zones(nodes, options["service"], options["host"]):
-            by_service[zone.canvas].append(zone)
+        by_service, found = defaultdict(list), set()
+        for zone in stamped_zones(
+            nodes,
+            options["service"],
+            options["host"],
+            tiles={tile for tile, _ in named} if named else None,
+        ):
+            key = (zone.tile_id, str(zone.feature_id))
+            if named is None or key in named:
+                found.add(key)
+                by_service[zone.canvas].append(zone)
+        missing = sorted(named - found, key=str) if named else []
         journal = open_journal(journal_path) if apply_changes else None
         failed = False
         try:
-            per, plan, canvas_of = self._rebase_plan(
-                by_service, Measures(frames_file), options["resize"], since
+            per, plan = self._rebase_plan(
+                by_service,
+                Measures(frames_file),
+                options["resize"],
+                since,
+                gated=named is None,
             )
-            written, changed = 0, []
+            written, changed, written_by = 0, [], Counter()
             if apply_changes:
                 items = list(plan.items())
                 for start in range(0, len(items), options["batch"]):
                     try:
                         done, skipped = rebase_batch(
-                            items[start : start + options["batch"]], journal
+                            items[start : start + options["batch"]],
+                            journal,
+                            written_by,
                         )
                     except OSError as error:
                         raise CommandError(f"journal write failed: {error}") from error
@@ -1448,7 +1611,7 @@ class Command(BaseCommand):
                 kept = _close_journal(journal, journal_path)
                 if kept and failed:
                     self._stopped_note(journal_path)
-        self._rebase_report(per, changed, canvas_of, apply_changes)
+        self._rebase_report(per, changed, written_by, apply_changes, missing)
         planned = sum(info["rebased"] for info in per.values())
         unreadable = sum(
             len(by_service[c])
@@ -1467,7 +1630,8 @@ class Command(BaseCommand):
                 "Run with editing closed: an editor tab opened before the rebase saves "
                 "the old geometry back. A few days later, dry-run `unstamp` of this "
                 "journal: any \u00ab geometry reverted by a later save \u00bb is a zone "
-                "to fix by `rebase --since` or `relabel`."
+                "to repair: run `unstamp --apply` of this journal, which puts the old "
+                "stamp back on such zones, then `rebase` again with a new journal."
             )
         else:
             self._out(
@@ -1479,27 +1643,31 @@ class Command(BaseCommand):
                 f"not measured: {unreadable} zone(s) unreadable, run again"
             )
 
-    def _rebase_report(self, per, changed, canvas_of, apply_changes):
-        if not per:
+    def _rebase_report(self, per, changed, written_by, apply_changes, missing):
+        if not per and not missing:
             self._out("No stamped zone to rebase.")
         labels = dict(BUCKETS)
         late = defaultdict(list)
-        for tile_id, fid in changed:
-            late[canvas_of[(tile_id, fid)]].append((tile_id, fid))
+        for tile_id, fid, canvas in changed:
+            late[canvas].append((tile_id, fid))
         for canvas, info in per.items():
             target = info["target"]
             if isinstance(target, str):
                 self._out(f"{canvas}: {labels[target]}: nothing planned")
                 continue
             self._out(f"{canvas}: live frame {_size_of(target)}")
-            done = info["rebased"] - len(late[canvas])
             verb = "rebased" if apply_changes else "would be rebased"
-            self._out(f"  {verb}: {done if apply_changes else info['rebased']} zone(s)")
+            count = written_by[canvas] if apply_changes else info["rebased"]
+            self._out(f"  {verb}: {count} zone(s)")
             self._out(f"  unchanged: {info['unchanged']} zone(s)")
+            if info["legacy"]:
+                self._out(f"  import-legacy: {info['legacy']} zone(s), never moved")
             for reason, zone in info["listed"]:
                 self._out(f"  {reason}: zone {zone.feature_id} of tile {zone.tile_id}")
             for tile_id, fid in late[canvas]:
                 self._out(f"  changed since: zone {fid} of tile {tile_id}")
+        for tile_id, fid in missing:
+            self._out(f"not found or not stamped: zone {fid} of tile {tile_id}")
 
     def _zone_arguments(self, texts):
         """``{(tile id, feature id)}`` of the ``--zone TILE:FEATURE`` arguments."""
@@ -1539,7 +1707,7 @@ class Command(BaseCommand):
         else:
             self._out(f"{service}: live frame {_size_of(target)}")
             for zone in zones:
-                key = (zone.tile_id, zone.feature_id)
+                key = (zone.tile_id, str(zone.feature_id))
                 if key not in named:
                     continue
                 found.add(key)
@@ -1592,7 +1760,7 @@ class Command(BaseCommand):
                     self._stopped_note(journal_path)
         for reason, tile_id, fid in listed:
             self._out(f"  {reason}: zone {fid} of tile {tile_id}")
-        for tile_id, fid in changed:
+        for tile_id, fid, _canvas in changed:
             self._out(f"  changed since: zone {fid} of tile {tile_id}")
         count = len(planned)
         if apply_changes:
@@ -1637,6 +1805,18 @@ class Command(BaseCommand):
         self._out("")
         for line, reason in changed:
             self._out(f"  {reason}: zone {line['feature']} of tile {line['tile']}")
+        reverted = sum(1 for _line, reason in changed if reason == REVERTED_REASON)
+        put_back = sum(1 for _line, reason in changed if reason == PUT_BACK_REASON)
+        if reverted:
+            self._out(
+                f"{reverted} zone(s) with reverted geometry: --apply puts their old "
+                "stamp back; then run rebase again with a new journal."
+            )
+        if put_back:
+            self._out(
+                f"{put_back} zone(s) have their old stamp back: run rebase again "
+                "with a new journal."
+            )
         summary = f"{restored} of {total} journaled zone(s) " + (
             "restored" if options["apply"] else "would be restored"
         )

@@ -1278,10 +1278,21 @@ class JournalGeometryTests(AnnotationFramesCase):
         self.store(reverted)
         stored = self.snapshot()
         self.write_journal(self.line(geometry_before=self.original["geometry"]))
-        out = self.run_command("unstamp", "--journal", self.journal, "--apply")
+        out = self.run_command("unstamp", "--journal", self.journal)
         self.assertIn("geometry reverted by a later save", out)
         self.assertNotIn("changed since", out)
         self.assertEqual(self.snapshot(), stored)
+
+    def test_apply_puts_the_old_stamp_back_on_the_reverted_geometry(self):
+        reverted = copy.deepcopy(self.moved)
+        reverted["geometry"] = copy.deepcopy(self.original["geometry"])
+        self.store(reverted)
+        self.write_journal(self.line(geometry_before=self.original["geometry"]))
+        out = self.run_command("unstamp", "--journal", self.journal, "--apply")
+        self.assertIn("stamp put back on reverted geometry", out)
+        feature = self.row(self.tile_).data[str(self.annotation.pk)]["features"][0]
+        self.assertEqual(feature["geometry"], self.original["geometry"])
+        self.assertEqual(feature["properties"], self.original["properties"])
 
     def test_a_reverted_geometry_is_named_whatever_properties_it_now_carries(self):
         reverted = copy.deepcopy(self.original)
@@ -1290,10 +1301,14 @@ class JournalGeometryTests(AnnotationFramesCase):
         self.store(reverted)
         stored = self.snapshot()
         self.write_journal(self.line(geometry_before=self.original["geometry"]))
-        out = self.run_command("unstamp", "--journal", self.journal, "--apply")
+        out = self.run_command("unstamp", "--journal", self.journal)
         self.assertIn("geometry reverted by a later save", out)
         self.assertNotIn("changed since", out)
         self.assertEqual(self.snapshot(), stored)
+        self.run_command("unstamp", "--journal", self.journal, "--apply")
+        feature = self.row(self.tile_).data[str(self.annotation.pk)]["features"][0]
+        self.assertEqual(feature["properties"]["msUnit"], 32)
+        self.assertEqual(feature["properties"]["note"], "restamped by a later save")
 
     def test_another_canvas_is_changed_since_even_with_the_old_geometry(self):
         elsewhere = copy.deepcopy(self.original)
