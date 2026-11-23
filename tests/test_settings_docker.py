@@ -55,6 +55,7 @@ NAMES = [
     "FORCE_TWO_FACTOR_AUTHENTICATION",
     "RELATED_RESOURCES_EXPORT_LIMIT",
     "EXPLORER_UI_ONLY",
+    "EXPLORER_MIRADOR_URL",
     "GOOGLE_SITE_VERIFICATION",
     "SESSION_COOKIE_SECURE",
     "CSRF_COOKIE_SECURE",
@@ -197,6 +198,27 @@ class SettingsDockerTests(SimpleTestCase):
             with self.subTest(value=text):
                 self.assertRefused(
                     dict(BASE_ENV, EXPLORER_UI_ONLY=text), "EXPLORER_UI_ONLY"
+                )
+
+    def test_the_mirador_viewer_is_empty_by_default_and_must_be_an_https_address(self):
+        demo = "https://crc-centre-recherche-conservation.github.io/mirador-xyviewer/"
+        self.assertEqual(load(BASE_ENV)["EXPLORER_MIRADOR_URL"], "")
+        self.assertEqual(
+            load(dict(BASE_ENV, EXPLORER_MIRADOR_URL="  "))["EXPLORER_MIRADOR_URL"], ""
+        )
+        values = load(dict(BASE_ENV, EXPLORER_MIRADOR_URL=f" {demo} "))
+        self.assertEqual(values["EXPLORER_MIRADOR_URL"], demo)
+        for text in (
+            "http://viewer.example/",
+            "javascript:alert(1)",
+            "viewer.example/mirador",
+            "https://",
+            "https://user:pw@viewer.example/",
+            "https://viewer.example/a b",
+        ):
+            with self.subTest(value=text):
+                self.assertRefused(
+                    dict(BASE_ENV, EXPLORER_MIRADOR_URL=text), "EXPLORER_MIRADOR_URL"
                 )
 
     def test_the_search_console_token_is_empty_by_default_and_must_be_a_plain_token(
