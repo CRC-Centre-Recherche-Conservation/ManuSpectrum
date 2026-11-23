@@ -1282,3 +1282,24 @@ class JournalGeometryTests(AnnotationFramesCase):
         self.assertIn("geometry reverted by a later save", out)
         self.assertNotIn("changed since", out)
         self.assertEqual(self.snapshot(), stored)
+
+    def test_a_reverted_geometry_is_named_whatever_properties_it_now_carries(self):
+        reverted = copy.deepcopy(self.original)
+        reverted["properties"]["msUnit"] = 16
+        reverted["properties"]["note"] = "restamped by a later save"
+        self.store(reverted)
+        stored = self.snapshot()
+        self.write_journal(self.line(geometry_before=self.original["geometry"]))
+        out = self.run_command("unstamp", "--journal", self.journal, "--apply")
+        self.assertIn("geometry reverted by a later save", out)
+        self.assertNotIn("changed since", out)
+        self.assertEqual(self.snapshot(), stored)
+
+    def test_another_canvas_is_changed_since_even_with_the_old_geometry(self):
+        elsewhere = copy.deepcopy(self.original)
+        elsewhere["properties"]["canvas"] = "https://other.example/iiif/x"
+        self.store(elsewhere)
+        self.write_journal(self.line(geometry_before=self.original["geometry"]))
+        out = self.run_command("unstamp", "--journal", self.journal, "--apply")
+        self.assertIn("changed since", out)
+        self.assertNotIn("reverted", out)
