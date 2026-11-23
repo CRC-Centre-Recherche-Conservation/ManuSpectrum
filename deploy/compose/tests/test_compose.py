@@ -489,7 +489,8 @@ class ComposeStackTests(unittest.TestCase):
                 # Arches 8.2's db_data.sql escapes quotes with backslashes in
                 # ordinary literals: only the default (on) reads them.
                 self.assertNotIn(
-                    "standard_conforming_strings", " ".join(postgres.get("command") or [])
+                    "standard_conforming_strings",
+                    " ".join(postgres.get("command") or []),
                 )
                 self.assertEqual(
                     postgres["environment"]["POSTGRES_INITDB_ARGS"],
