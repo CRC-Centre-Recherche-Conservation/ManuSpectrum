@@ -338,7 +338,7 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   only `ok:` lines, exit 0. **(CI too)** Among them, the three that fail most
   often on a new host:
   - `ok: database collation and encoding` (`en_US.utf8|UTF8`);
-  - `ok: standard_conforming_strings` (the value is `off`: Arches needs it);
+  - `ok: standard_conforming_strings` (the value is `on`, PostgreSQL's default: Arches 8.2's own SQL needs it);
   - `ok: admin does not use Arches' default password` (the check passes when `admin`'s password is no longer `admin`);
   - `ok: /healthz for the public name` (`200`) then
     `ok: /healthz for Host localhost (not allowed)` (`400`): gunicorn answers
@@ -362,7 +362,7 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
 ### 2.5 Resources and restart policy (D-H6)
 
 - [ ] *(service account)* `docker stats --no-stream --format '{{.Name}} {{.MemUsage}}'` → limits (second figure):
-  elasticsearch 5GiB, postgres 3GiB, web 4GiB, worker 2GiB, cantaloupe 1.75GiB,
+  elasticsearch 5GiB, postgres 3GiB, web 4GiB, worker 2GiB, cantaloupe 2.5GiB,
   redis-broker 256MiB, redis-cache 768MiB, beat 256MiB, nginx 512MiB. Record the idle usage of each.
   Expected idle: elasticsearch about 2.7 GiB on an empty database, about 3.4 GiB with data
   loaded (heap 2 GiB; the rest is direct memory, metaspace, threads and page cache). The
@@ -373,6 +373,13 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   (a container never swaps).
   - On failure: a limit shown as the whole host memory means `compose.prod.yaml` was not
     applied: the `-f` list or `make` was bypassed.
+- [ ] *(service account)* `for d in /sys/fs/cgroup/system.slice/docker-*.scope; do echo "$(cat $d/memory.swap.max) $d"; done`
+  → every line starts with `0` (the kernel limit, not only Docker's `MemorySwap`). Then
+  `sudo systemctl daemon-reload` from the admin account, and the same command again as the service account: still `0`
+  everywhere. For one container,
+  `systemctl show docker-<id>.scope -p MemorySwapMax` → `MemorySwapMax=0`.
+  - On failure: `/etc/systemd/system/docker-.scope.d/10-manuspectrum-no-swap.conf` is missing or
+    overridden; re-run the Ansible `host` role (`ContainerSwapAllowed` runbook).
 - [ ] *(service account)* `docker top manuspectrum-web-1 | grep -c 'gunicorn'` → `6` (master and 5 workers;
   each worker runs 4 threads: 20 concurrent requests, `GUNICORN_WORKERS`/`GUNICORN_THREADS`).
 - [ ] *(service account)* `docker exec manuspectrum-web-1 sh -c 'echo $GUNICORN_WORKERS $GUNICORN_THREADS'` → `5 4`.
@@ -821,13 +828,12 @@ change shows within a minute (reload after waiting). Browser in a private window
     on `/en/`; toggling an overlay keeps the French labels;
   - an editor draws a point and a polygon on a Place card (map widget), saves, and sees them on the
     report map; popups and hover work on the search map;
-  - no address search box on the maps (removed until Arches 8.2);
+  - no address search box on the Knockout maps (Arches 8.2's Nominatim geocoder is dropped);
   - the console shows no `access token` or Mapbox error, and the Network tab no request to
-    `*.mapbox.com`;
+    `*.mapbox.com` nor `nominatim.openstreetmap.org`;
 - [ ] the Network tab shows no request outside the domain (spec §6.2) except the expected third
   parties of the privacy policy (`tiles.openfreemap.org`, the holding institutions' IIIF servers,
-  `iiif.unicaen.fr` on the homepage; for signed-in editors `cke4.ckeditor.com`, and
-  `svc.webspellchecker.net` only if the spell checker is switched on; Google Fonts on the thesaurus page), and no 4xx or 5xx except the expected ones; the console lists
+  `iiif.unicaen.fr` on the homepage; Google Fonts on the thesaurus page), and no 4xx or 5xx except the expected ones; the console lists
   the CSP Report-Only violations: copy them into the issue for F5.
 - [ ] *CSP reports reach the server*: on any page, force a violation of `object-src 'none'` from the console:
   `document.body.append(Object.assign(document.createElement('object'), {data: 'https://csp-test.invalid/x?k=1'}))`.
@@ -1475,7 +1481,7 @@ Create the test accounts in the admin and delete them afterwards.
   save lands on the change page, and Mailpit holds one message
   with the subject prefix `[ManuSpectrum][Account]` and the header `X-ManuSpectrum-Category: Account`, English then French.
 - [ ] Open the link (read it as in « Reading a mail link » of step 7: a link cut at a line break answers `410`):
-  a « Continue » page, then the terms of use with a required checkbox; submitting without it is refused; with it, set
+  the terms of use open directly, with a required checkbox; submitting without it is refused; with it, set
   a password (an 11-character or common one is refused), then enrol an authenticator at `/en/account/two-factor`.
   The admin lists the acceptance (version, date) under "Terms acceptances".
 - [ ] Sign out and in again with the code. A POST to `/en/account/two-factor` and `/en/account/terms` repeated 7 times in
@@ -1484,9 +1490,15 @@ Create the test accounts in the admin and delete them afterwards.
   version, not the administrator who set the stack up: the next page after sign-in is the acceptance page. A person
   who has not accepted yet sees the terms at activation instead, and the acceptance page does not appear
   for an account that already accepted the current version.
-- [ ] The activation link answers a « Continue » page that stores nothing (opening the link again still works);
-  « Continue » leads to a URL without the token (`.../set-password`), and the nginx access log shows `[redacted]`
-  for the activation path in both `uri` and `referer`.
+- [ ] The activation link redirects at once to a URL without the token (`.../set-password`) that shows the form; it
+  stores nothing and consumes nothing (opening the link again still works). The response to the link sets a cookie
+  `ms_activation_link_en` and `_fr` (DevTools, Application, Cookies, or the response headers) with `HttpOnly`,
+  `Secure`, `SameSite=Lax`, a `Path` limited to `/<lang>/account/activate/<uid>/` and `Max-Age=900`; the response
+  to the successful form post deletes them (`Max-Age=0`). The nginx access log shows `[redacted]` for the activation
+  path in both `uri` and `referer`.
+- [ ] Open an activation link, delete its `ms_activation_link_en` cookie in DevTools (as after 15 minutes) and submit the
+  form: « This page has expired » answers (`410`), with the advice to open the link of the e-mail again; opening it
+  again shows the form.
 - [ ] Click the activation link from another site, as from a webmail: the Mailpit web page. Mailpit publishes no port;
   *(service account)* `docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$(dc ps -q mailpit)"`
   prints its addresses, then *(host)* `ssh -L 8025:<one of them>:8025 <admin>@192.168.123.10` and open
@@ -1494,16 +1506,17 @@ Create the test accounts in the admin and delete them afterwards.
   `<site>`): the same host name on another port is the same site, and the click would prove nothing (the code before
   the fix passed it too). With the browser developer tools recording the network in the tab that the click opens
   (Chromium: DevTools settings, « Auto-open DevTools for popups »), click the link: the first request shows
-  `Sec-Fetch-Site: cross-site`, otherwise the check does not count. The « Continue » page answers, not « This link is
-  not valid », and « Continue » leads to the terms. The same for a password-reset link (the new password form) and,
-  below, the two-factor re-enrolment link (the password field).
+  `Sec-Fetch-Site: cross-site`, otherwise the check does not count. The form opens directly, without an intermediate
+  page, not « This link is not valid »: the terms for the activation link. The same for a password-reset link (the
+  new password form, cookie `ms_reset_link_<lang>`) and, below, the two-factor re-enrolment link (the password field,
+  cookie `ms_two_factor_link_<lang>`).
 - [ ] Set `FORCE_TWO_FACTOR_AUTHENTICATION=true` in `.env`, recreate `web`. Invite and activate a second test user:
   after the password the browser lands on `/en/account/two-factor` and any other page sends it back there until a
   code is confirmed. Check in the browser that the enrolment page works fully (QR code, manual key, confirmation)
   for that not-yet-enrolled user. An enrolled user signs in with the code.
 - [ ] Lost phone, with forced two-factor still on: as a superuser, run **Reset two-factor authentication (superuser)**
   in the admin Users list (tick the account, choose the action; the User page shows the « Account » section).
-  Mailpit holds the re-enrolment mail; the link shows a « Continue » page, then asks for the password (a wrong one
+  Mailpit holds the re-enrolment mail; the link opens the password page directly, which asks for the password (a wrong one
   counts as a failed sign-in), then a new code, then signs the user in. Opening the link a second time is refused.
 - [ ] `make -C deploy manage ARGS="check --database default"` raises no `manuspectrum.W004` (no OAuth application with the
   password grant). Put `FORCE_TWO_FACTOR_AUTHENTICATION` back to `false` if the rehearsal continues without it.
@@ -1718,6 +1731,9 @@ Needs the stack running `vOld` and `vA` armed.
   the checks end with `check passed for vB`, the description shows `release: vB (installed: vA)`, `yes` →
   `step 5: backup (pre-update)`, `step 7: switching vA -> vB`, `readiness: 200`, `vB is installed and the application answers.`,
   exit status 0.
+- [ ] When `vB` changes a file the stack mounts from the checkout (`nginx.conf`, a Prometheus rule…): the journal has
+  `recreating the services whose configuration changed: …` naming its services, and *(service account)* `docker
+  compose … exec -T nginx sha256sum /etc/nginx/nginx.conf` prints the hash of `deploy/compose/nginx/nginx.conf`.
 - [ ] `--status` → `current: vB (…)`, `previous: vA`, `armed:    none`, `pending:  none`, `rollbacks:` unchanged. `curl -sk
   https://<host>/readyz` → `200`. The site answers; `smoke.sh edge` passes. `ReleasePendingTooLong` and `UpdateRolledBack`
   are not firing once the 64 hours of a previous rollback are over.

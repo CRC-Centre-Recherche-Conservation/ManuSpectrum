@@ -22,7 +22,7 @@ import type { Pinia } from "pinia";
 
 import type { Label } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
-vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+vi.mock("@/arches_vue_components/application/generate-arches-url.ts", () => ({
     generateArchesURL: (
         name: string,
         parameters: Record<string, string> = {},

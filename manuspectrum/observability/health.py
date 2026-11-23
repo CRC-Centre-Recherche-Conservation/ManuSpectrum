@@ -30,14 +30,14 @@ class ProbeFailed(Exception):
 
 def probe_postgres(timeout):
     """``SELECT 1`` on a new connection with the settings of ``default``, bounded by *timeout*."""
-    import psycopg2
+    import psycopg
 
     params = connections["default"].get_connection_params()
     params["connect_timeout"] = max(2, int(timeout))  # libpq: whole seconds, 2 at least
     params["options"] = (
         f"{params.get('options', '')} -c statement_timeout={int(timeout * 1000)}".strip()
     )
-    connection = psycopg2.connect(**params)
+    connection = psycopg.connect(**params)
     try:
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")

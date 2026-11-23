@@ -1,7 +1,7 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import L from "leaflet";
 import { createPinia, setActivePinia } from "pinia";
-import PrimeVue from "primevue/config";
+import OpenVue from "openvue/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref, shallowRef } from "vue";
 
@@ -121,7 +121,7 @@ describe("file URLs", () => {
                             analysis: analysisPayload({ files: [file] }),
                         },
                         global: {
-                            plugins: [pinia, PrimeVue],
+                            plugins: [pinia, OpenVue],
                             provide: {
                                 [CURTAIN_KEY as symbol]: ref(null),
                                 [FOLIO_ZONES_KEY as symbol]: ref(
@@ -184,7 +184,7 @@ describe("file URLs", () => {
                 feature: null,
             },
             global: {
-                plugins: [pinia, PrimeVue],
+                plugins: [pinia, OpenVue],
                 stubs: { SpectrumPreview: true },
                 provide: { [MIRADOR_URL_KEY as symbol]: "" },
             },

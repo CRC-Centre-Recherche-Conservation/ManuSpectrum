@@ -89,6 +89,11 @@ DENIED = [
     ("auth/signup", "signup"),
     ("auth/confirm_signup", "confirm_signup"),
     ("two-factor-authentication-settings", "two-factor-authentication-settings"),
+    ("o/device-authorization/", "arches_device_authorization"),
+    ("o/device/", "oauth2:device"),
+    ("o/device-confirm/client/code", "oauth2:device-confirm"),
+    ("o/device-grant-status/client/code", "oauth2:device-grant-status"),
+    ("auth/device_client_id", "device_client_id"),
 ]
 BARE = [
     ("snippets/edge-rules.conf", "/healthz", "healthz"),
@@ -310,6 +315,30 @@ class EdgeContractTests(SimpleTestCase):
         self.assertIn("zone=annotations_site:", zones)
         self.assertIn("zone=annotations_conn:", zones)
 
+    def test_iiif_annotation_batch_has_its_own_post_location_and_body_limit(self):
+        for code, _ in settings.LANGUAGES:
+            path = f"/{code}/iiifannotations/batch"
+            batch = self.location_body("snippets/edge-rules.conf", path)
+            single = self.location_body(
+                "snippets/edge-rules.conf", f"/{code}/iiifannotations"
+            )
+            self.assertNotEqual(batch, single)
+            self.assertIn("$request_method != POST", batch)
+            self.assertRegex(batch, r"client_max_body_size \d+k;")
+            self.assertRegex(
+                batch, r"limit_req zone=annotations_batch burst=\d+ nodelay;"
+            )
+            self.assertRegex(
+                batch, r"limit_req zone=annotations_batch_site burst=\d+ nodelay;"
+            )
+        zones = (NGINX_DIR / "snippets/ratelimit.conf").read_text()
+        self.assertIn("zone=annotations_batch:", zones)
+        self.assertIn("zone=annotations_batch_site:", zones)
+
+    def test_module_scripts_are_served_as_javascript(self):
+        text = (NGINX_DIR / "nginx.conf").read_text()
+        self.assertRegex(text, r"types\s*\{\s*text/javascript\s+mjs;\s*\}")
+
     def test_geojson_barrier_reads_the_session_cookie_of_the_settings(self):
         zones = (NGINX_DIR / "snippets/ratelimit.conf").read_text()
         self.assertIn(f"$cookie_{settings.SESSION_COOKIE_NAME}", zones)
@@ -386,6 +415,26 @@ class EdgeContractTests(SimpleTestCase):
                 )
                 self.assertIsNotNone(body, f"{path}: location block not found")
                 self.assertEqual(body.group(1).strip(), "return 404;", path)
+
+    def test_the_device_flow_denial_leaves_the_other_oauth_routes_open(self):
+        for code, _ in settings.LANGUAGES:
+            for rest in (
+                "o/token/",
+                "o/authorize/",
+                "o/revoke_token/",
+                "o/introspect/",
+                "o/applications/",
+                "o/devices",
+                "o/deviceX/",
+            ):
+                with self.subTest(path=f"/{code}/{rest}"):
+                    pattern = first_location(
+                        read_locations("snippets/edge-rules.conf"), f"/{code}/{rest}"
+                    )
+                    self.assertTrue(
+                        pattern is None or "device" not in pattern,
+                        f"/{code}/{rest} falls to {pattern!r}",
+                    )
 
     def test_two_factor_reset_link_gets_a_static_page_and_never_reaches_django(self):
         page = (NGINX_DIR / "errors/two-factor-reset.html").read_text()
@@ -472,6 +521,16 @@ class EdgeContractTests(SimpleTestCase):
             for code, _ in settings.LANGUAGES:
                 with translation.override(code), self.assertRaises(Resolver404):
                     resolve(f"/{code}{path}")
+
+    def test_the_bare_manifest_redirect_shares_the_api_location_and_leaves_arches_route(
+        self,
+    ):
+        path = f"/manifest/{UUID}"
+        self.assertView(path, "manifest-legacy")
+        self.assertNamed("snippets/edge-rules.conf", path, "/manifest/")
+        for code, _ in settings.LANGUAGES:
+            with translation.override(code):
+                self.assertEqual(resolve(f"/{code}{path}").url_name, "manifest")
 
     def test_site_notice_falls_back_to_the_snapshot_django_writes(self):
         text = (NGINX_DIR / "snippets/edge-rules.conf").read_text()

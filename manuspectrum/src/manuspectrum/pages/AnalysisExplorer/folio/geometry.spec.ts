@@ -24,6 +24,40 @@ describe("folio geometry", () => {
         expect(toLatLng(64, 32)).toEqual([-1, 2]);
     });
 
+    it.each([
+        [2, 611, 947, [-473.5, 305.5]],
+        [16, 1680, 925, [-57.8125, 105]],
+        [32, 3360, 1850, [-57.8125, 105]],
+        [64, 6720, 3700, [-57.8125, 105]],
+    ])(
+        "divides a canvas pixel by the canvas's unit of %i",
+        (scale, x, y, expected) => {
+            expect(toLatLng(x, y, { x: scale, y: scale, read: true })).toEqual(
+                expected,
+            );
+        },
+    );
+
+    it("divides each axis by its own unit when the canvas is not at the image's size", () => {
+        expect(toLatLng(500, 300, { x: 8, y: 7.5, read: true })).toEqual([
+            -40, 62.5,
+        ]);
+    });
+
+    it("reads a zone with its canvas's unit, read or assumed", () => {
+        const rect = { type: "rect", x: 160, y: 320, w: 160, h: 160 } as const;
+        const unit = { x: 16, y: 16, read: false };
+        expect(shapeCentre(rect, unit)).toEqual([-25, 15]);
+        expect(shapeBounds(rect, unit)).toEqual([
+            [-30, 10],
+            [-20, 20],
+        ]);
+        expect(shapeCorner(rect, unit)).toEqual([-20, 10]);
+        expect(
+            shapeFeature({ type: "point", x: 160, y: 320 }, {}, unit)?.geometry,
+        ).toEqual({ type: "Point", coordinates: [10, -20] });
+    });
+
     it("centres a rectangle and bounds it", () => {
         const rect = { type: "rect", x: 0, y: 0, w: 64, h: 32 } as const;
         expect(shapeCentre(rect)).toEqual([-0.5, 1]);

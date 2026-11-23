@@ -10,7 +10,7 @@ import {
     watch,
 } from "vue";
 import { useMediaQuery } from "@vueuse/core";
-import Drawer from "primevue/drawer";
+import Drawer from "openvue/drawer";
 import { useGettext } from "vue3-gettext";
 
 import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
@@ -547,6 +547,7 @@ const overlays = computed(() =>
         pageAnnotations.value,
         {
             canvas: currentCanvas.value?.id ?? null,
+            unit: currentCanvas.value?.zoneUnit ?? null,
             registration:
                 focusedAnalysis.value === null
                     ? null

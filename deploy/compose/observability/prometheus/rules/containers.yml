@@ -35,8 +35,15 @@ groups:
           description: "For every container the collector fell back on Docker's OOMKilled flag, which misses most kills; the cgroup memory.events file is unreadable."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/containers.md#oomsourcedegraded
       - alert: ContainerMemoryNearLimit
+        # Memory the kernel cannot drop (anon + shmem): the working set also
+        # counts the active page cache, which keeps an image server near its
+        # limit without any risk. The working set only stands in for a
+        # container whose memory.stat the collector cannot read.
         expr: |
-          manuspectrum_container_memory_working_set_bytes{container!="web"}
+          (
+            manuspectrum_container_memory_unreclaimable_bytes{container!="web"}
+            or manuspectrum_container_memory_working_set_bytes{container!="web"}
+          )
           / (manuspectrum_container_memory_limit_bytes{container!="web"} > 0) > 0.9
         for: 30m
         labels:
@@ -44,7 +51,7 @@ groups:
           service: containers
         annotations:
           summary: "A container is close to its memory limit"
-          description: "{{ $labels.container }} uses {{ $value | humanizePercentage }} of its memory limit."
+          description: "{{ $labels.container }} holds {{ $value | humanizePercentage }} of its memory limit in memory the kernel cannot reclaim."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/containers.md#containermemorynearlimit
       - alert: WebMemoryNearLimit
         expr: |
@@ -58,6 +65,28 @@ groups:
           summary: "The web container is close to its memory limit"
           description: "web uses {{ $value | humanizePercentage }} of its memory limit; each gunicorn worker holds the Explorer corpus."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/containers.md#webmemorynearlimit
+      - alert: ContainerSwapAllowed
+        expr: |
+          manuspectrum_container_swap_allowed == 1
+        for: 15m
+        labels:
+          severity: warning
+          service: containers
+        annotations:
+          summary: "A container may swap"
+          description: "{{ $labels.container }} has no swap limit (memory.swap.max is not 0): the no-swap drop-in of the host is missing or overridden."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/containers.md#containerswapallowed
+      - alert: ContainerSwapping
+        expr: |
+          manuspectrum_container_memory_swap_bytes > 0
+        for: 30m
+        labels:
+          severity: warning
+          service: containers
+        annotations:
+          summary: "A container holds memory in swap"
+          description: "{{ $labels.container }} holds {{ $value | humanize1024 }}B in swap; the pages stay there until it restarts."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/containers.md#containerswapping
       - alert: ContainerUnhealthy
         expr: |
           manuspectrum_container_healthy == 0

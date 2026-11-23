@@ -1,6 +1,6 @@
 import { enableAutoUnmount, mount } from "@vue/test-utils";
-import PrimeVue from "primevue/config";
-import Slider from "primevue/slider";
+import OpenVue from "openvue/config";
+import Slider from "openvue/slider";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import LayerControls from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/LayerControls.vue";
@@ -46,7 +46,7 @@ function mountBar(
             capturing: false,
             ...props,
         },
-        global: { plugins: [PrimeVue] },
+        global: { plugins: [OpenVue] },
         attachTo: document.body,
     });
 }

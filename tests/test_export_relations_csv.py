@@ -320,7 +320,7 @@ class ExtractResourceIdsTests(SimpleTestCase):
         value = [
             {
                 "resourceId": TARGET_ID,
-                "ontologyProperty": "",
+                "relationship": "",
                 "resourceXresourceId": "",
             },
             {"resourceId": OTHER_TARGET_ID},

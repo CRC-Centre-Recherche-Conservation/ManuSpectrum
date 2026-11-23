@@ -384,6 +384,18 @@ the sum of its entries, about four significant digits; the images figure counts
 the unique size of each image, shared layers left out, so it is about 0.3 % under `docker system df`; a measure of growth, not an accounting total):
 `manuspectrum_docker_disk_bytes{kind=images|build_cache|containers|volumes}` and
 `manuspectrum_docker_volume_bytes{volume=ms_*}` (the external data volumes).
+The memory of a container is exported twice: the working set of `docker stats`
+(`manuspectrum_container_memory_working_set_bytes`, which counts the active page
+cache) and `manuspectrum_container_memory_unreclaimable_bytes`, `anon` plus
+`shmem` of the cgroup v2 `memory.stat`, the memory the kernel cannot drop (the
+stack runs without swap). `ContainerMemoryNearLimit` reads the second, and the
+working set only for a container without a readable `memory.stat`.
+Swap is read from the same cgroup: `manuspectrum_container_memory_swap_bytes`
+(`memory.swap.current`) and `manuspectrum_container_swap_allowed` (1 when
+`memory.swap.max` is not `0`, that is when the container may swap; the host role
+keeps it `0` with a systemd drop-in). `ContainerSwapping` reads the first and
+`ContainerSwapAllowed` the second; neither series exists for a container whose
+cgroup file is unreadable.
 `manuspectrum_container_oom_cgroup` is 1 when a container's OOM kills are counted
 from the cgroup v2 `memory.events` file (a kill of a child process included) and 0
 when the collector fell back on Docker's `OOMKilled` flag, which misses most kills;

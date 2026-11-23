@@ -16,7 +16,7 @@ object is the digest, never a tag.
 | Build | `staging.yml`, on push to `main` | The image builds from scratch, with the day's Debian security updates, and carries the label `org.opencontainers.image.revision` = the commit |
 | Proof | `stack-proof.yml`, called by `staging.yml` | On that exact image: probe, the whole Compose stack, observability, mails, `down`/`up`, Docker restart, static swap, backup / loss / restore |
 | Publish | `staging.yml` | The image that passed is pushed as `sha-<commit>` and its build provenance is attested (workflow `staging.yml`, branch of the run); its digest is in the job summary |
-| Guard | `release.yml`, on a `v*` tag | A ruleset protects the `v*` tags (the job fails otherwise); final tags sit on the first-parent line of `main`, release candidates on the integration branch (`dev`), no other tag name is accepted; the tag's `X.Y.Z` must equal `APP_VERSION` in `manuspectrum/settings.py` at the tagged commit (`release-version-guard.sh`) |
+| Guard | `release.yml`, on a `v*` tag | A ruleset protects the `v*` tags (the job fails otherwise); final tags sit on the first-parent line of `main`, release candidates on the integration branch (`dev`), no other tag name is accepted; the tag's `X.Y.Z` must equal `APP_VERSION` in `manuspectrum/settings.py`, `version` in `pyproject.toml` and `version` in `package.json` at the tagged commit (`release-version-guard.sh`) |
 | Promote | `release.yml` | The provenance of the `sha-<commit>` digest is verified (`gh attestation verify`: signer workflow `staging.yml`, branch `main` for a final tag, the integration branch for a candidate), then the digest gets the tag name; the digest is compared before and after. No `sha-<commit>` image means `staging.yml` did not publish the commit: the job fails and says so. An image built on the integration branch is therefore never released as final |
 | Scan | `release.yml` | Trivy (HIGH and CRITICAL with a fix) blocks; accepted findings and their expiry are in `.trivyignore` |
 | Sign | `release.yml` | The job first checks that a digest carrying only `staging.yml`'s provenance fails `cosign verify`; then the digest is signed with cosign, keyless (GitHub OIDC); then the SBOM attestation is attached to it in GHCR (made by the same workflow identity, which cosign v3 accepts as a signature, so it comes last) |
@@ -27,7 +27,12 @@ object is the digest, never a tag.
 image built from the buildkit cache of the pull request and its base branch.
 Pushes to the integration branch only warm that cache (`staging.yml`,
 `warm-cache`); a manual run of `staging.yml` on it publishes a `sha-<commit>`
-image too.
+image too. That run reads the cache for every stage but `runtime`, which it
+builds again (`no-cache-filters`): the cached `apt-get upgrade` of the last
+push would otherwise ship Debian packages without the day's security updates,
+and Trivy would refuse the candidate. Pull-request builds (`deploy-lint.yml`)
+keep reading that cached layer, so their Trivy report (not blocking) may list
+Debian fixes that the published images already carry.
 
 ## Cut a release
 
@@ -44,10 +49,13 @@ image too.
 
    Tag exactly the commit the run published: the job summary of `publish`
    shows its commit and digest. A manual run is never cancelled by a later push.
-2. Test candidate: set `APP_VERSION` in `manuspectrum/settings.py` to the
-   version being released (`0.1.0`, no `v`, no prerelease), merge it, then tag
-   the commit and push the tag. `release.yml` refuses a tag whose `X.Y.Z`
-   differs from `APP_VERSION`.
+2. Test candidate: set the version being released (`0.1.0`, no `v`, no
+   prerelease) in its three places, `APP_VERSION` in
+   `manuspectrum/settings.py`, `version` in `pyproject.toml` (then `uv lock`,
+   which rewrites the project's line of `uv.lock`) and `version` in
+   `package.json` (and at the two places `package-lock.json` repeats it),
+   merge it, then tag the commit and push the tag. `release.yml` refuses a tag
+   whose `X.Y.Z` differs from any of the three.
 
    ```bash
    git tag -s v0.1.0-rc.1 <commit>
@@ -187,8 +195,8 @@ the first tag is pushed; the chain relies on all of them.
   `branch-guard` (a pull request into main comes from dev, a release branch or
   a hotfix branch), `dependency-review` (no new dependency version with a high
   or critical advisory) and, from `main.yml` (the Arches template),
-  `build_feature_branch (3.11)`, `build_feature_branch (3.12)`,
-  `build_feature_branch (3.13)`, `check_python_coverage` and
+  `build_feature_branch (3.12)`, `build_feature_branch (3.13)`,
+  `build_feature_branch (3.14)`, `check_python_coverage` and
   `check_frontend_coverage`. `conclusion`, `gitleaks`, `branch-guard` and
   `dependency-review` run on every pull request, with no `paths:` filter, so
   the checks are never missing. The jobs of `stack-proof.yml` are called
@@ -207,8 +215,8 @@ the first tag is pushed; the chain relies on all of them.
    person who tags.
 2. `main` and the integration branch are protected (no force-push), and the
    required checks are `conclusion`, `gitleaks`, `branch-guard`,
-   `dependency-review`, `build_feature_branch (3.11)`, `build_feature_branch (3.12)`,
-   `build_feature_branch (3.13)`, `check_python_coverage` and
+   `dependency-review`, `build_feature_branch (3.12)`, `build_feature_branch (3.13)`,
+   `build_feature_branch (3.14)`, `check_python_coverage` and
    `check_frontend_coverage`.
 3. The default workflow token permission is `read`.
 4. Merge, then wait for the warm-cache run on the integration branch (and, for

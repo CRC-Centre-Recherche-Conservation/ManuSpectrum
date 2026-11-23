@@ -121,7 +121,7 @@
       "id": 3,
       "type": "timeseries",
       "title": "Memory used by container",
-      "description": "Working set of each container.",
+      "description": "Per container, the memory the kernel cannot drop (anon and shmem) and, marked « with page cache », the working set, which also counts the active page cache the kernel drops at the limit.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -139,8 +139,19 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "manuspectrum_container_memory_working_set_bytes",
+          "expr": "manuspectrum_container_memory_unreclaimable_bytes",
           "legendFormat": "{{container}}",
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "manuspectrum_container_memory_working_set_bytes",
+          "legendFormat": "{{container}} (with page cache)",
           "instant": false,
           "range": true
         }
@@ -159,7 +170,30 @@
           },
           "min": 0
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*with page cache.*"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -179,7 +213,7 @@
       "id": 4,
       "type": "timeseries",
       "title": "Share of the memory limit",
-      "description": "Working set over the container limit; containers without a limit are left out. An OOM kill is near 100 %.",
+      "description": "Memory the kernel cannot drop over the container limit (the working set when it is not read), as ContainerMemoryNearLimit sees it; containers without a limit are left out. An OOM kill is near 100 %.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -197,7 +231,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "manuspectrum_container_memory_working_set_bytes / (manuspectrum_container_memory_limit_bytes > 0)",
+          "expr": "(manuspectrum_container_memory_unreclaimable_bytes or manuspectrum_container_memory_working_set_bytes) / (manuspectrum_container_memory_limit_bytes > 0)",
           "legendFormat": "{{container}}",
           "instant": false,
           "range": true
@@ -691,7 +725,7 @@
       "id": 13,
       "type": "timeseries",
       "title": "Swap used",
-      "description": "Swap in use; sustained use means memory pressure.",
+      "description": "Swap in use on the host, and the share each container holds; sustained use means memory pressure. Containers should hold none.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -711,6 +745,17 @@
           },
           "expr": "node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes",
           "legendFormat": "swap",
+          "instant": false,
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "manuspectrum_container_memory_swap_bytes",
+          "legendFormat": "{{container}}",
           "instant": false,
           "range": true
         }

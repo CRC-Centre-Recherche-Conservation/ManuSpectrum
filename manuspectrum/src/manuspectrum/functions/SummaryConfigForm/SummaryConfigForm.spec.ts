@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 
-import PrimeVue from "primevue/config";
-import ConfirmationService from "primevue/confirmationservice";
+import OpenVue from "openvue/config";
+import ConfirmationService from "openvue/confirmationservice";
 
 import FieldRow from "@/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue";
 import RollupEditor from "@/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue";
@@ -33,14 +33,14 @@ import type {
     VersionedConfig,
 } from "@/manuspectrum/functions/types.ts";
 
-vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+vi.mock("@/arches_vue_components/application/generate-arches-url.ts", () => ({
     generateArchesURL: (
         urlName: string,
         urlParameters: { [key: string]: string | number },
     ) => `/en/${urlName}/${urlParameters.graphid}`,
 }));
 
-// PrimeVue's Select subscribes to a media query when it mounts; jsdom ships no
+// OpenVue's Select subscribes to a media query when it mounts; jsdom ships no
 // matchMedia, and the rejection it throws tears the component down.
 vi.stubGlobal("matchMedia", (query: string) => ({
     matches: false,
@@ -54,7 +54,7 @@ vi.stubGlobal("matchMedia", (query: string) => ({
 }));
 
 // Every form is unmounted after its test, so its ConfirmDialog leaves
-// PrimeVue's module-wide confirmation bus and the next test's dialog is the
+// OpenVue's module-wide confirmation bus and the next test's dialog is the
 // only one listening.
 enableAutoUnmount(afterEach);
 
@@ -62,7 +62,7 @@ const GRAPH_ID = "11111111-1111-4111-8111-111111111111";
 const CONFIG_URL = `/en/manuspectrum:summary-config/${GRAPH_ID}`;
 const RELATIONS_URL = `/en/manuspectrum:relatable-nodes/${GRAPH_ID}`;
 const FORM_PLUGINS: (Plugin | [Plugin, ...unknown[]])[] = [
-    [PrimeVue, { unstyled: true }],
+    [OpenVue, { unstyled: true }],
     ConfirmationService,
 ];
 
@@ -1022,7 +1022,7 @@ describe("FieldRow", () => {
                 canMoveUp: true,
                 canMoveDown: true,
             },
-            global: { plugins: [[PrimeVue, { unstyled: true }]] },
+            global: { plugins: [[OpenVue, { unstyled: true }]] },
         });
     }
 
@@ -1092,7 +1092,7 @@ describe("RollupEditor", () => {
                 maxRelated: 500,
                 relations: relations(),
             },
-            global: { plugins: [[PrimeVue, { unstyled: true }]] },
+            global: { plugins: [[OpenVue, { unstyled: true }]] },
         });
     }
 
@@ -1172,7 +1172,7 @@ describe("RollupEditor", () => {
                 maxRelated: 500,
                 relations: relations(),
             },
-            global: { plugins: [[PrimeVue, { unstyled: true }]] },
+            global: { plugins: [[OpenVue, { unstyled: true }]] },
         });
         await withDistinct
             .find('[data-testid="toggle-distinct"]')
@@ -1284,7 +1284,7 @@ describe("RollupEditor", () => {
                 maxRelated: 500,
                 relations: relations(),
             },
-            global: { plugins: [[PrimeVue, { unstyled: true }]] },
+            global: { plugins: [[OpenVue, { unstyled: true }]] },
         });
         editor
             .findComponent<ComponentPublicInstance>(

@@ -2,7 +2,7 @@
 import { computed, inject, ref, useId } from "vue";
 import { useGettext } from "vue3-gettext";
 
-import InputText from "primevue/inputtext";
+import InputText from "openvue/inputtext";
 
 import HelpTip from "@/manuspectrum/pages/AnalysisExplorer/components/HelpTip.vue";
 import FocusSlotDot from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusSlotDot.vue";

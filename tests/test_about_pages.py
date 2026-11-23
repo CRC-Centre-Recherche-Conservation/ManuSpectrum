@@ -524,6 +524,13 @@ class LegalPagesTests(TestCase):
             self.assertIn(f"<code>{cookie}</code>", html)
         self.assertIn("no tracker", html.lower())
 
+    def test_privacy_lists_the_mailed_link_cookies_by_their_real_names(self):
+        from manuspectrum.accounts import activation, password_reset, twofactor
+
+        html = self.get("about-privacy")
+        for flow in (activation.LINK, password_reset.LINK, twofactor.LINK):
+            self.assertIn(f"<code>{flow.cookie}_&lt;language&gt;</code>", html)
+
     def test_privacy_names_the_map_third_parties_under_a_stable_anchor(self):
         for lang, heading in (("en", "Third-party services"), ("fr", "Services tiers")):
             html = self.get("about-privacy", lang)
@@ -548,11 +555,10 @@ class LegalPagesTests(TestCase):
                 "iiif.unicaen.fr",
                 "tiles.openfreemap.org",
                 "vtiles.openhistoricalmap.org",
-                "cke4.ckeditor.com",
-                "svc.webspellchecker.net",
                 "fonts.googleapis.com",
             ):
                 self.assertIn(host, html, f"{lang}: {host}")
+            self.assertNotIn("CKEditor", html)
             self.assertNotIn("No other page and no other Explorer view", html)
             self.assertNotIn("Aucune autre page", html)
 

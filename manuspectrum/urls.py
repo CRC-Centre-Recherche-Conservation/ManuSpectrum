@@ -43,7 +43,7 @@ from manuspectrum.views.iiif.auth import (
 )
 from manuspectrum.views.iiif.content_state import ContentStateView
 from manuspectrum.views.iiif.data import RawDataView, SeriesDataView
-from manuspectrum.views.iiif.manifests import StoredManifestView
+from manuspectrum.views.iiif.manifests import LegacyManifestView, StoredManifestView
 from manuspectrum.views.iiif.annotations import (
     AnnotationView,
     AnnotationViewV2,
@@ -94,9 +94,8 @@ urlpatterns = [
     # SEO: Arches serves the homepage at both "/" and "/index.htm" (names
     # `root` and `home`) — duplicate content. Project templates only link
     # `root`; anything still hitting /index.htm gets a permanent redirect.
-    # MUST stay above the app includes: arches_controlled_lists re-includes
-    # arches.urls, so the first arches `^index.htm` pattern appears as early
-    # as that include.
+    # MUST stay above the `arches.urls` include: its first `^index.htm`
+    # pattern would answer first.
     path(
         "index.htm",
         RedirectView.as_view(pattern_name="root", permanent=True, query_string=True),
@@ -112,19 +111,19 @@ urlpatterns = [
     ),
     # Arches core routes answered by project views. Each entry copies the core
     # pattern and name verbatim (arches/urls.py). Resolution takes the first
-    # match, and these come before arches_controlled_lists, the first include
-    # that pulls arches.urls in. reverse() takes the last registered pattern
-    # of a name, the core one, so {% url %}, reverse() and urls.json keep
-    # building the core URL, which then resolves here: a pattern that differed
-    # from core's would never be requested. Above the language boundary
-    # because those URLs carry the language prefix.
+    # match, and these come before the `arches.urls` include. reverse() takes
+    # the last registered pattern of a name, the core one, so {% url %},
+    # reverse() and urls.json keep building the core URL, which then resolves
+    # here: a pattern that differed from core's would never be requested. Above
+    # the language boundary because those URLs carry the language prefix.
     re_path(
         r"^thumbnail/(?P<resource_id>%s)$" % settings.UUID_REGEX,
         CachedThumbnailView.as_view(),
         name="thumbnail",
     ),
-    # The mailed password-reset link opens a « Continue » page first: a
-    # redirect started from a webmail loses the SameSite=Strict session cookie.
+    # The mailed password-reset link sets a short-lived SameSite=Lax cookie
+    # with its token and redirects to the form: a redirect started from a
+    # webmail would lose the SameSite=Strict session cookie.
     path(
         "reset/<uidb64>/<token>/",
         PasswordResetConfirmView.as_view(),
@@ -161,19 +160,17 @@ urlpatterns = [
 # include it shadows that route entirely — every /files/<uuid> download becomes
 # a 404 on a file literally named <uuid>.
 #
-# Not mounting it here does not remove the catch-all: arches_controlled_lists
-# (urls.py:106) registers the same one under DEBUG, and MEDIA_ROOT is still the
-# Python package — see the KNOWN EXPOSURE note in settings.py. Arches serves
-# media through files/<uuid>, which resolves the path from the database and
-# honours RESTRICT_MEDIA_ACCESS; a front-end alias bypasses both.
+# MEDIA_ROOT is still the Python package — see the KNOWN EXPOSURE note in
+# settings.py. Arches serves media through files/<uuid>, which resolves the
+# path from the database and honours RESTRICT_MEDIA_ACCESS; a front-end alias
+# bypasses both.
 
-urlpatterns.append(path("", include("arches_querysets.urls")))
-# arches_controlled_lists ships the Controlled List Manager plugin and the
-# reference-datatype APIs; arches_vue_components serves the Vue widgets they
-# render with. The latter is namespaced (app_name), the former re-includes
-# arches.urls — hence its position below the project's own routes.
-urlpatterns.append(path("", include("arches_controlled_lists.urls")))
-urlpatterns.append(path("", include("arches_vue_components.urls")))
+urlpatterns.append(path("", include("arches.extensions.querysets.urls")))
+# controlled_lists ships the Controlled List Manager plugin and the
+# reference-datatype APIs; vue_components serves the Vue widgets they render
+# with. The latter is namespaced (app_name).
+urlpatterns.append(path("", include("arches.extensions.controlled_lists.urls")))
+urlpatterns.append(path("", include("arches.extensions.vue_components.urls")))
 
 handler400 = "arches.app.views.main.custom_400"
 handler403 = "arches.app.views.main.custom_403"
@@ -640,6 +637,16 @@ urlpatterns.append(
         "iiif/manifest/<uuid:globalid>",
         StoredManifestView.as_view(),
         name="iiif-manifest",
+    )
+)
+
+### The bare path a manifest tile stores (``/manifest/<uuid>``) leads to it.
+### Arches' own ``manifest`` route stays under ``/en|fr/``.
+urlpatterns.append(
+    path(
+        "manifest/<uuid:globalid>",
+        LegacyManifestView.as_view(),
+        name="manifest-legacy",
     )
 )
 

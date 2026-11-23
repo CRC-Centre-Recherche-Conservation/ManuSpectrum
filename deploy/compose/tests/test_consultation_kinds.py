@@ -62,6 +62,7 @@ IGNORED = {
     "mvt": "map tiles",
     "templates": "Knockout templates",
     "manifest_manager": "back-office Image Service Manager",
+    "manifest-legacy": "redirect of the bare /manifest/<uuid> to the IIIF route or Arches' route, not a consultation",
     "model-graph": "UI plumbing",
     "relatable-nodes": "UI plumbing",
     "summary-config": "designer configuration",

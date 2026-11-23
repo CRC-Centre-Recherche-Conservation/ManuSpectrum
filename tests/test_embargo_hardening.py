@@ -49,7 +49,7 @@ CANVAS = "https://example.org/iiif/canvas-1"
 
 
 def reference(resource):
-    return [{"resourceId": str(resource.pk), "ontologyProperty": ""}]
+    return [{"resourceId": str(resource.pk), "relationship": ""}]
 
 
 class EmbargoCase(TestCase):

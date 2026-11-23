@@ -76,6 +76,15 @@ SHAPES = {
     "ColourRef": COLOUR_REF,
     "RankedValue": RANKED_VALUE,
     "ImageRef": IMAGE_REF,
+    "ZoneUnit": {"x": float, "y": float, "read": bool},
+    "DocumentCanvas": {
+        "id": str,
+        "label": str,
+        "image": "ImageRef",
+        "analysisCount": int,
+        "characterizationCount": int,
+        "zoneUnit": ("ZoneUnit", None),
+    },
     "FileLayer": FILE_LAYER,
     "LayerElement": LAYER_ELEMENT,
     "LayerBand": LAYER_BAND,
@@ -443,6 +452,7 @@ def _matches(value, expected):
 
 
 ITEM_SHAPES = {
+    ("DocumentPayload", "canvases"): "DocumentCanvas",
     ("CharacterizationSummary", "objects"): "Ref",
     ("CharacterizationSummary", "components"): "Ref",
 }

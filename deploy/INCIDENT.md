@@ -23,7 +23,7 @@ Every alert has a section named after it in the runbooks:
 | --- | --- |
 | [runbooks/site.md](runbooks/site.md) | `SiteDown`, `NotReady`, `CantaloupeDown`, `ErrorRateHigh`, search and write failures |
 | [runbooks/application.md](runbooks/application.md) | `ErrorLogRateHigh`, `WebSaturated`, account mail, embargo and workflow passes |
-| [runbooks/containers.md](runbooks/containers.md) | Restart loops, OOM kills, `ContainerUnhealthy`, `ContainerMissing` |
+| [runbooks/containers.md](runbooks/containers.md) | Restart loops, OOM kills, swap (`ContainerSwapAllowed`, `ContainerSwapping`), `ContainerUnhealthy`, `ContainerMissing` |
 | [runbooks/datastores.md](runbooks/datastores.md) | PostgreSQL connections, Redis memory |
 | [runbooks/celery.md](runbooks/celery.md) | Queue backlog, task failures, nightly passes |
 | [runbooks/explorer.md](runbooks/explorer.md) | Explorer bundle builds |

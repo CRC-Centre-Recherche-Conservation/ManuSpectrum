@@ -60,6 +60,21 @@ class AnalysisPopupTests(TestCase):
         self.assertIn("Encre ferrogallique", html)
 
 
+class TechniqueStatTests(TestCase):
+    def test_the_ma_xrf_stat_names_x_ray_fluorescence_imaging(self):
+        for lang, caption, wrong in (
+            ("en", "X-ray Fluorescence Imaging", "Micro-Fluorescence"),
+            ("fr", "Imagerie de fluorescence de rayons X", "Microfluorescence"),
+        ):
+            with self.subTest(lang=lang):
+                html = self.client.get(f"/{lang}/").content.decode()
+                self.assertRegex(
+                    html,
+                    rf'>MA-XRF</div>\s*<div class="ms-stat-label">{caption}</div>',
+                )
+                self.assertNotIn(wrong, html)
+
+
 class LogoDialogTests(TestCase):
     def test_zoom_is_a_labelled_dialog(self):
         html = self.client.get("/en/").content.decode()
@@ -78,7 +93,7 @@ class ArchesPayloadTests(TestCase):
     def test_homepage_carries_no_arches_payload(self):
         for lang in ("en", "fr"):
             html = self.client.get(f"/{lang}/").content.decode()
-            for marker in ("arches-translations", "arches-urls", "CKEDITOR_BASEPATH"):
+            for marker in ("arches-translations", "arches-urls", "arches-data"):
                 self.assertNotIn(marker, html, f"{marker} on /{lang}/")
 
 
@@ -185,7 +200,7 @@ class AboutPagePayloadTests(TestCase):
             "/en/about/contact",
         ):
             html = self.client.get(path).content.decode()
-            for marker in ("arches-urls", "arches-data", "CKEDITOR_BASEPATH"):
+            for marker in ("arches-urls", "arches-data"):
                 self.assertNotIn(marker, html, f"{marker} on {path}")
             self.assertNotIn("biblissima-", html, path)
 

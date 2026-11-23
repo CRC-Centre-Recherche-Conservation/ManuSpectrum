@@ -1,6 +1,7 @@
 """Invitation, account activation and acceptance of the terms (PP-4, decision 13)."""
 
 import re
+import time
 from html.parser import HTMLParser
 from unittest import mock
 
@@ -17,7 +18,7 @@ from django.utils import translation
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
-from manuspectrum.accounts import activation
+from manuspectrum.accounts import activation, mailed_links
 from manuspectrum.accounts.terms import TERMS_VERSION
 from manuspectrum.models import TermsAcceptance
 from manuspectrum.password_validation import HasLowerCaseValidator
@@ -124,15 +125,242 @@ def head_copies_of(response, token):
 
 
 def open_link(client, path):
-    """Open a mailed link and press « Continue », as a browser does.
+    """GET a mailed link, as a browser does: the redirect to the form.
 
-    Returns the answer to the « Continue » post: the redirect to the URL
-    without the token.
+    The cookie it sets stays in *client*, which sends it with later requests.
     """
-    landing = client.get(path)
-    if landing.status_code != 200:
-        raise AssertionError(f"the link answered {landing.status_code}")
-    return client.post(path)
+    response = client.get(path)
+    if response.status_code != 302:
+        raise AssertionError(f"the link answered {response.status_code}")
+    return response
+
+
+def link_cookies(response, base):
+    """The cookies of the flow *base* that *response* sets, by language code."""
+    prefix = base + "_"
+    return {
+        name.removeprefix(prefix): morsel
+        for name, morsel in response.cookies.items()
+        if name.startswith(prefix)
+    }
+
+
+class MailedLinkCases:
+    """What every mailed link does with its token cookie.
+
+    A subclass is a `TestCase` that sets `link` and `form` (the paths in
+    English), `fr_link` and `fr_form`, `cookie` (the base name), `folders` (the
+    cookie path of each language), `marker` (text only the form holds), and
+    defines `client_for(**options)`, `submit(client, page)` (the successful
+    form post), `assert_invalid(response)` and `other_cookie` (the base name of
+    another flow's cookie).
+    """
+
+    def token(self):
+        return self.link.rstrip("/").rsplit("/", 1)[1]
+
+    def test_a_valid_link_redirects_to_the_form_and_sets_the_cookie(self):
+        client = self.client_for()
+        response = client.get(self.link)
+        self.assertRedirects(response, self.form, fetch_redirect_response=False)
+        self.assertNotIn(self.token(), response["Location"])
+        self.assertEqual(response["Referrer-Policy"], "same-origin")
+        self.assertIn("no-store", response["Cache-Control"])
+        self.assertNotIn(settings.SESSION_COOKIE_NAME, response.cookies)
+        cookies = link_cookies(response, self.cookie)
+        self.assertEqual(set(cookies), {code for code, _ in settings.LANGUAGES})
+        for code, morsel in cookies.items():
+            self.assertTrue(morsel["httponly"], code)
+            self.assertEqual(morsel["samesite"], "Lax", code)
+            self.assertEqual(morsel["path"], self.folders[code], code)
+            self.assertEqual(morsel["max-age"], 900, code)
+
+    @override_settings(SESSION_COOKIE_SECURE=True)
+    def test_the_cookie_is_secure_where_the_session_cookie_is(self):
+        response = self.client_for().get(self.link)
+        for morsel in link_cookies(response, self.cookie).values():
+            self.assertTrue(morsel["secure"])
+
+    def test_a_link_clicked_in_a_webmail_reaches_the_form_in_one_chain(self):
+        self.assertEqual(settings.SESSION_COOKIE_SAMESITE, "Strict")
+        client = self.client_for(enforce_csrf_checks=True)
+        page = cross_site_click(client, self.link)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, self.marker)
+        self.assertNotContains(page, self.token())
+        self.assertEqual(page["Referrer-Policy"], "same-origin")
+
+    def test_the_form_post_succeeds_and_deletes_the_cookie(self):
+        client = self.client_for(enforce_csrf_checks=True)
+        page = cross_site_click(client, self.link)
+        done = self.submit(client, page)
+        cookies = link_cookies(done, self.cookie)
+        self.assertEqual(set(cookies), {code for code, _ in settings.LANGUAGES})
+        for code, morsel in cookies.items():
+            self.assertEqual(morsel["max-age"], 0, code)
+            self.assertEqual(morsel["path"], self.folders[code], code)
+
+    def test_a_signed_in_browser_keeps_its_session_after_a_cross_site_click(self):
+        client = self.client_for(enforce_csrf_checks=True)
+        other = User.objects.create_user("other", "other@manuspectrum.test", PASSWORD)
+        client.force_login(other)
+        cookie = client.cookies[settings.SESSION_COOKIE_NAME].value
+        page = cross_site_click(client, self.link)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, self.marker)
+        self.assertNotIn(settings.SESSION_COOKIE_NAME, page.cookies)
+        self.assertEqual(client.cookies[settings.SESSION_COOKIE_NAME].value, cookie)
+        self.assertEqual(client.session["_auth_user_id"], str(other.pk))
+
+    def test_opening_the_link_twice_works_and_consumes_nothing(self):
+        client = self.client_for()
+        for response in (
+            client.get(self.link),
+            client.head(self.link),
+            client.get(self.link),
+        ):
+            self.assertEqual(response.status_code, 302)
+        self.assertContains(client.get(self.form), self.marker)
+        self.assertEqual(self.client_for().get(self.link).status_code, 302)
+
+    def test_a_scanner_that_fetches_the_link_leaves_it_working(self):
+        scanner = self.client_for()
+        scanner.get(self.link)
+        self.assertNotIn(settings.SESSION_COOKIE_NAME, scanner.cookies)
+        self.assertEqual(self.client_for().get(self.link).status_code, 302)
+
+    def test_the_form_without_the_cookie_is_invalid_and_deletes_it(self):
+        response = self.client_for().get(self.form)
+        self.assert_invalid(response)
+        cookies = link_cookies(response, self.cookie)
+        self.assertEqual(set(cookies), {code for code, _ in settings.LANGUAGES})
+        for code, morsel in cookies.items():
+            self.assertEqual(morsel["max-age"], 0, code)
+
+    def test_a_tampered_cookie_is_invalid(self):
+        client = self.client_for()
+        client.cookies[f"{self.cookie}_en"] = "garbage:1a2b:signature"
+        response = client.get(self.form)
+        self.assert_invalid(response)
+        self.assertEqual(link_cookies(response, self.cookie)["en"]["max-age"], 0)
+
+    def test_a_cookie_older_than_fifteen_minutes_is_invalid(self):
+        client = self.client_for()
+        client.get(self.link)
+        self.assertContains(client.get(self.form), self.marker)
+        late = time.time() + mailed_links.COOKIE_MAX_AGE + 5
+        with mock.patch("django.core.signing.time.time", return_value=late):
+            response = client.get(self.form)
+        self.assert_invalid(response)
+        self.assertEqual(link_cookies(response, self.cookie)["en"]["max-age"], 0)
+
+    def test_a_valid_answer_renews_the_cookie(self):
+        client = self.client_for()
+        client.get(self.link)
+        response = client.get(self.form)
+        cookies = link_cookies(response, self.cookie)
+        self.assertEqual(set(cookies), {code for code, _ in settings.LANGUAGES})
+        for code, morsel in cookies.items():
+            self.assertEqual(morsel["max-age"], 900, code)
+
+    def test_the_cookie_of_another_flow_does_not_unlock_the_form(self):
+        client = self.client_for()
+        opened = client.get(self.link)
+        client.cookies.pop(f"{self.cookie}_en")
+        client.cookies[f"{self.other_cookie}_en"] = opened.cookies[
+            f"{self.cookie}_en"
+        ].value
+        self.assert_invalid(client.get(self.form))
+
+    def test_the_cookie_of_another_language_does_not_unlock_the_form(self):
+        client = self.client_for()
+        client.get(self.link)
+        client.cookies.pop(f"{self.cookie}_en")
+        self.assert_invalid(client.get(self.form))
+
+    def test_a_spent_link_is_invalid_when_opened_again(self):
+        client = self.client_for(enforce_csrf_checks=True)
+        page = cross_site_click(client, self.link)
+        self.submit(client, page)
+        self.assert_invalid(self.client_for().get(self.link))
+
+    def test_a_refused_link_page_holds_no_copy_of_its_token_in_its_head(self):
+        client = self.client_for(enforce_csrf_checks=True)
+        self.submit(client, cross_site_click(client, self.link))
+        response = self.client_for().get(self.link)
+        self.assert_invalid(response)
+        self.assertEqual(head_copies_of(response, self.token()), [])
+
+    def test_a_post_on_the_link_is_not_allowed(self):
+        response = self.client_for().post(self.link)
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response["Referrer-Policy"], "same-origin")
+        self.assertEqual(link_cookies(response, self.cookie), {})
+
+    def test_other_methods_on_the_link_are_not_allowed(self):
+        self.assertEqual(self.client_for().put(self.link).status_code, 405)
+
+    def test_the_form_post_without_the_csrf_token_is_refused(self):
+        client = self.client_for(enforce_csrf_checks=True)
+        client.get(self.link)
+        response = client.post(self.form, HTTP_ORIGIN="http://testserver")
+        self.assertEqual(response.status_code, 403)
+
+    def test_a_french_link_opens_the_form_in_french(self):
+        client = self.client_for()
+        response = client.get(self.fr_link)
+        self.assertRedirects(response, self.fr_form, fetch_redirect_response=False)
+        self.assertContains(client.get(self.fr_form), self.marker)
+
+    def test_the_language_switch_keeps_the_form_working(self):
+        client = self.client_for()
+        client.get(self.fr_link)
+        self.assertContains(client.get(self.fr_form), self.marker)
+        self.assertContains(client.get(self.form), self.marker)
+
+
+class ExpiredStepCases:
+    """The page a form answers when its cookie is gone while the link still works.
+
+    Needs `MailedLinkCases` and `assert_invalid` from the same class.
+    """
+
+    def assert_expired(self, response, heading="This page has expired"):
+        self.assert_invalid(response)
+        self.assertContains(response, heading, status_code=410)
+        self.assertNotContains(response, "This link is not valid", status_code=410)
+        cookies = link_cookies(response, self.cookie)
+        self.assertEqual(set(cookies), {code for code, _ in settings.LANGUAGES})
+        for code, morsel in cookies.items():
+            self.assertEqual(morsel["max-age"], 0, code)
+
+    def test_the_form_without_the_cookie_says_the_page_expired(self):
+        response = self.client_for().get(self.form)
+        self.assert_expired(response)
+        self.assertContains(response, "stays open for 15 minutes", status_code=410)
+
+    def test_the_expired_page_is_in_french_under_fr(self):
+        response = self.client_for().get(self.fr_form)
+        self.assert_expired(response, "Cette page a expiré")
+        self.assertContains(response, "reste ouverte 15 minutes", status_code=410)
+
+    def test_a_cookie_older_than_fifteen_minutes_says_the_page_expired(self):
+        client = self.client_for()
+        client.get(self.link)
+        late = time.time() + mailed_links.COOKIE_MAX_AGE + 5
+        with mock.patch("django.core.signing.time.time", return_value=late):
+            response = client.get(self.form)
+        self.assert_expired(response)
+
+    def test_a_refused_token_with_its_cookie_shows_the_invalid_page(self):
+        client = self.client_for()
+        client.get(self.link)
+        other = self.client_for(enforce_csrf_checks=True)
+        self.submit(other, cross_site_click(other, self.link))
+        response = client.get(self.form)
+        self.assert_invalid(response)
+        self.assertContains(response, "This link is not valid", status_code=410)
+        self.assertNotContains(response, "This page has expired", status_code=410)
 
 
 class _ParagraphNesting(HTMLParser):
@@ -195,8 +423,6 @@ class InvitationTests(Base):
         path = re.search(r"https?://[^\s]+/account/activate/[^\s]+", body).group(0)
         path = "/" + path.split("/", 3)[3]
         response = cross_site_click(self.client, path)
-        self.assertEqual(response.status_code, 200)
-        response = self.client.post(path, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'name="accept_terms"')
 
@@ -407,29 +633,14 @@ class ActivationTests(Base):
         self.assertEqual(response.status_code, 410)
         self.assertEqual(expired.status_code, 410)
 
-    def test_the_form_posts_from_the_browser_with_csrf_checks_on(self):
-        client = Client(enforce_csrf_checks=True)
-        landing = client.get(self.link)
-        browser_post(client, landing, self.link)
-        page = client.get(self.path)
-        self.assertEqual(page.status_code, 200)
-        response = browser_post(client, page, self.path, **self.good())
-        self.assertRedirects(
-            response, "/en/account/two-factor", fetch_redirect_response=False
-        )
-        self.user.refresh_from_db()
-        self.assertTrue(self.user.has_usable_password())
-
     def test_a_no_referrer_page_would_post_a_null_origin_that_csrf_refuses(self):
         client = Client(enforce_csrf_checks=True)
-        landing = client.get(self.link)
-        browser_post(client, landing, self.link)
-        page = client.get(self.path)
+        page = cross_site_click(client, self.link)
         page["Referrer-Policy"] = "no-referrer"
         response = browser_post(client, page, self.path, **self.good())
         self.assertEqual(response.status_code, 403)
 
-    def test_the_token_less_page_needs_the_session_token(self):
+    def test_the_token_less_page_needs_the_cookie(self):
         for client in (Client(), Client(raise_request_exception=False)):
             response = client.get(self.path)
             self.assertEqual(response.status_code, 410)
@@ -492,14 +703,27 @@ class ActivationTests(Base):
         self.assertIn(429, statuses)
 
 
-class LinkLandingTests(Base):
-    """The page a mailed activation link opens, and its « Continue » post."""
+class LinkLandingTests(MailedLinkCases, ExpiredStepCases, Base):
+    """The activation link: a cookie, a redirect, then the form."""
+
+    cookie = "ms_activation_link"
+    other_cookie = "ms_reset_link"
+    marker = 'name="accept_terms"'
 
     def setUp(self):
         super().setUp()
         self.user = invited()
         self.link = link_path(self.user)
-        self.path = placeholder_path(self.user)
+        self.form = self.path = placeholder_path(self.user)
+        self.fr_link = "/fr" + self.link.removeprefix("/en")
+        self.fr_form = "/fr" + self.form.removeprefix("/en")
+        uid = urlsafe_base64_encode(force_bytes(self.user.pk))
+        self.folders = {
+            code: f"/{code}/account/activate/{uid}/" for code, _ in settings.LANGUAGES
+        }
+
+    def client_for(self, **options):
+        return Client(**options)
 
     def good(self):
         return {
@@ -508,116 +732,71 @@ class LinkLandingTests(Base):
             "accept_terms": "on",
         }
 
-    def test_a_valid_link_shows_continue_then_moves_its_token_and_redirects(self):
-        client = Client()
-        token = self.link.rsplit("/", 1)[1]
-        landing = client.get(self.link)
-        self.assertEqual(landing.status_code, 200)
-        self.assertEqual(landing["Referrer-Policy"], "same-origin")
-        self.assertIn("no-store", landing["Cache-Control"])
-        self.assertContains(landing, '<meta name="robots" content="noindex')
-        # The token is in the page's own URL, so its head repeats that URL
-        # nowhere (canonical, alternates, og:url); the language links of the
-        # header keep it, to show this page in the other language. It is never
-        # in what the form sends.
-        document = lxml.html.fromstring(landing.content)
-        self.assertEqual(head_copies_of(landing, token), [])
-        self.assertEqual(
-            document.xpath('//link[@rel="canonical" or @rel="alternate"]'), []
-        )
-        self.assertEqual(document.xpath('//meta[@property="og:url"]'), [])
-        self.assertTrue(
-            document.xpath("//a[@hreflang][contains(@href, $token)]", token=token)
-        )
-        (form,) = document.xpath('//form[@method="post"]')
-        self.assertIsNone(form.get("action"))
-        self.assertNotIn(token, lxml.html.tostring(form).decode())
-        response = client.post(self.link)
-        self.assertRedirects(response, self.path, fetch_redirect_response=False)
-        self.assertNotIn(token, response["Location"])
-        self.assertEqual(response["Referrer-Policy"], "same-origin")
-        page = client.get(self.path)
-        self.assertEqual(page.status_code, 200)
-        self.assertEqual(page["Referrer-Policy"], "same-origin")
-        self.assertNotContains(page, token)
-
-    def test_the_continue_page_is_in_french_under_fr(self):
-        with translation.override("fr"):
-            response = Client().get("/fr" + self.link.removeprefix("/en"))
-        self.assertContains(response, "Activer mon compte")
-        self.assertContains(response, ">Continuer</button>")
-        self.assertContains(response, "Continuez pour lire les conditions")
-
-    def test_a_link_clicked_in_a_webmail_reaches_the_form(self):
-        """A cross-site click carries no session cookie over a redirect."""
-        # The production value, which `cross_site_click` reproduces.
-        self.assertEqual(settings.SESSION_COOKIE_SAMESITE, "Strict")
-        client = Client(enforce_csrf_checks=True)
-        landing = cross_site_click(client, self.link)
-        self.assertEqual(landing.status_code, 200)
-        self.assertContains(landing, ">Continue</button>")
-        response = browser_post(client, landing, self.link)
-        self.assertRedirects(response, self.path, fetch_redirect_response=False)
-        page = client.get(self.path)
-        self.assertEqual(page.status_code, 200)
-        self.assertContains(page, 'name="accept_terms"')
-        done = browser_post(client, page, self.path, **self.good())
+    def submit(self, client, page):
+        done = browser_post(client, page, self.form, **self.good())
         self.assertRedirects(
             done, "/en/account/two-factor", fetch_redirect_response=False
         )
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password(PASSWORD))
+        return done
 
-    def test_a_signed_in_browser_clicking_in_a_webmail_reaches_the_form(self):
-        client = Client(enforce_csrf_checks=True)
-        other = User.objects.create_user("other", "other@manuspectrum.test", PASSWORD)
-        client.force_login(other)
-        cookie = client.cookies[settings.SESSION_COOKIE_NAME].value
-        landing = cross_site_click(client, self.link)
-        self.assertEqual(landing.status_code, 200)
-        # A new session cookie would replace the one the click did not send.
-        self.assertNotIn(settings.SESSION_COOKIE_NAME, landing.cookies)
-        self.assertEqual(client.cookies[settings.SESSION_COOKIE_NAME].value, cookie)
-        response = browser_post(client, landing, self.link)
-        self.assertRedirects(response, self.path, fetch_redirect_response=False)
-        self.assertContains(client.get(self.path), 'name="accept_terms"')
+    def assert_invalid(self, response):
+        self.assertEqual(response.status_code, 410)
+        self.assertEqual(response["Referrer-Policy"], "same-origin")
+        self.assertNotContains(response, "accept_terms", status_code=410)
 
-    def test_opening_the_link_stores_nothing_and_does_not_use_it(self):
-        scanner = Client()
-        for response in (
-            scanner.get(self.link),
-            scanner.head(self.link),
-            scanner.get(self.link),
-        ):
-            self.assertEqual(response.status_code, 200)
-        self.assertNotIn(settings.SESSION_COOKIE_NAME, scanner.cookies)
-        self.assertEqual(scanner.get(self.path).status_code, 410)
+    def test_the_form_is_in_french_under_fr(self):
+        client = Client()
+        client.get(self.fr_link)
+        self.assertContains(client.get(self.fr_form), "Activer mon compte")
+
+    def test_the_form_page_holds_no_token_and_no_copy_of_its_url_in_its_head(self):
+        client = Client()
+        client.get(self.link)
+        page = client.get(self.form)
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, '<meta name="robots" content="noindex')
+        self.assertNotContains(page, self.token())
+        document = lxml.html.fromstring(page.content)
         self.assertEqual(
-            open_link(Client(), self.link)["Location"], self.path, "link still valid"
+            document.xpath('//link[@rel="canonical" or @rel="alternate"]'), []
         )
+        self.assertEqual(document.xpath('//meta[@property="og:url"]'), [])
+        (form,) = document.xpath('//form[@method="post"]')
+        self.assertIsNone(form.get("action"))
 
-    def test_continue_without_the_csrf_token_is_refused(self):
-        client = Client(enforce_csrf_checks=True)
+    def test_a_refused_post_keeps_the_form_and_renews_the_cookie(self):
+        client = Client()
         client.get(self.link)
         response = client.post(
-            self.link, HTTP_ORIGIN="http://testserver", HTTP_X_REAL_IP=IP
+            self.form, {"new_password1": PASSWORD, "new_password2": PASSWORD}
         )
-        self.assertEqual(response.status_code, 403)
-        self.assertNotIn(activation.SESSION_TOKEN_KEY, client.session)
-        # The refusal is a page of the site at the URL of the link.
-        self.assertEqual(head_copies_of(response, self.link.rsplit("/", 1)[1]), [])
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            link_cookies(response, self.cookie)["en"]["max-age"],
+            mailed_links.COOKIE_MAX_AGE,
+        )
 
-    def test_other_methods_on_the_link_are_not_allowed(self):
-        response = Client().put(self.link)
-        self.assertEqual(response.status_code, 405)
-        self.assertEqual(response["Referrer-Policy"], "same-origin")
-
-    def test_continue_on_a_bad_link_is_refused(self):
+    def test_a_bad_link_is_refused_and_sets_no_cookie(self):
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))
-        client = Client()
-        response = client.post(f"/en/account/activate/{uid}/bad-token")
+        response = Client().get(f"/en/account/activate/{uid}/bad-token")
         self.assertEqual(response.status_code, 410)
-        self.assertNotIn(activation.SESSION_TOKEN_KEY, client.session)
+        self.assertEqual(
+            {
+                name: morsel
+                for name, morsel in link_cookies(response, self.cookie).items()
+                if morsel["max-age"] != 0
+            },
+            {},
+        )
+
+    def test_a_link_cannot_add_attributes_to_the_cookie_header(self):
+        response = Client().get("/en/account/activate/x%3BDomain=evil.test%2C/bad")
+        self.assertEqual(response.status_code, 410)
+        header = response.cookies[f"{self.cookie}_en"].output()
+        self.assertIn("Path=/en/account/activate/x%3BDomain%3Devil.test%2C/", header)
+        self.assertNotIn("Domain=evil", header)
 
 
 class MiddlewareTests(Base):

@@ -16,7 +16,6 @@ import importerConfigurationTemplate from 'templates/views/components/plugins/im
 // Arches' onEnterkeyClick / onSpaceClick, so a heading that toggles a section
 // answers the keyboard as well as the mouse.
 import 'bindings/key-events-click';
-import 'bootstrap';
 import 'bindings/select2-query';
 
 const vm = function (params) {

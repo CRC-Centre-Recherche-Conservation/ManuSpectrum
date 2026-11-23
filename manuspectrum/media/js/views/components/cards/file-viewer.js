@@ -1,6 +1,6 @@
 /**
  * Shadow of arches/app/media/js/views/components/cards/file-viewer.js
- * (Arches 8.1.5). Re-check it against the core file at each Arches upgrade.
+ * (Arches 8.2.0). Re-check it against the core file at each Arches upgrade.
  *
  * Diff vs original:
  *   - rendererComponentName follows card.renderer. The core resolves it once
@@ -23,6 +23,7 @@ import CardMultiSelectViewModel from 'viewmodels/card-multi-select';
 import WorkbenchComponentViewModel from 'views/components/workbench';
 import fileViewerTemplate from 'templates/views/components/cards/file-viewer.htm';
 import 'bindings/slide';
+import 'bindings/select2-query';
 import 'bindings/fadeVisible';
 import 'bindings/scroll-to-file';
 import 'dropzone';

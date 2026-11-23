@@ -39,6 +39,7 @@ class CorsCase(IIIFCase):
             f"/iiif/auth/2/probe/{self.file_id}",
             f"/iiif/v3/explorer-manifest?document={self.documents['open'].pk}",
             f"/iiif/manifest/{imaging.globalid}",
+            f"/manifest/{imaging.globalid}",
         ]
 
     def assert_cors(self, response):

@@ -2,14 +2,26 @@ import fs from 'fs';
 import path from 'path';
 import vue from "@vitejs/plugin-vue";
 
+import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { defineConfig } from 'vitest/config';
 
+import { createProjectNodeModulesFallbackPlugin } from './vitest-utils/project-node-modules-fallback.ts';
+
 import type { ViteUserConfig } from 'vitest/config';
+
+// Loaded with require(), not import: Vite's config bundler chokes on this file's own
+// require('fs') when it tries to esbuild-bundle it into the config's ESM graph.
+const { requireVueLoaderWithTypeResolutionPatch } = createRequire(import.meta.url)(
+    './webpack/webpack-utils/patch-vue-compiler-sfc-type-resolution.js',
+);
+
+void requireVueLoaderWithTypeResolutionPatch();
 
 function generateConfig(): Promise<ViteUserConfig> {
     return new Promise((resolve, reject) => {
         const filePath = path.dirname(fileURLToPath(import.meta.url));
+        const frontendConfigurationDirectory = path.join(filePath, 'frontend_configuration');
 
         const exclude = [
             '**/*.d.ts',
@@ -23,7 +35,7 @@ function generateConfig(): Promise<ViteUserConfig> {
             '**/staticfiles/**',
         ];
 
-        const rawData = fs.readFileSync(path.join(__dirname, 'frontend_configuration', 'webpack-metadata.json'), 'utf-8');
+        const rawData = fs.readFileSync(path.join(frontendConfigurationDirectory, 'webpack-metadata.json'), 'utf-8');
         const parsedData = JSON.parse(rawData);
         // `APP_RELATIVE_PATH` is relative to the directory Django was started
         // from; `APP_ROOT` is absolute, so the app directory is resolved from it.
@@ -45,17 +57,27 @@ function generateConfig(): Promise<ViteUserConfig> {
             'file-renderers': path.join(parsedData['ROOT_DIR'], 'app', 'media', 'js', 'file-renderers.js'),
             // Mirrors Arches' `nodeModulesPaths` entry; specs mock the module.
             'leaflet-side-by-side': path.join(parsedData['ROOT_DIR'], 'app', 'media', 'plugins', 'leaflet-side-by-side', 'index.js'),
-            // Mirrors Arches' `nodeModulesPaths` entry; specs mock the module.
-            'mapbox-gl-geocoder': path.join(filePath, 'node_modules', '@mapbox', 'mapbox-gl-geocoder', 'dist', 'mapbox-gl-geocoder.min.js'),
         };
 
         for (
-            const [archesApplicationName, archesApplicationPath] 
+            const [archesApplicationName, archesApplicationPath]
             of Object.entries(
                 parsedData['ARCHES_APPLICATIONS_PATHS'] as { [key: string]: string }
             )
         ) {
             alias[`@/${archesApplicationName}`] = path.join(archesApplicationPath, 'src', archesApplicationName);
+        }
+
+        // Applications bundled with arches resolve whether or not this project enabled
+        // them, so that an installed application importing one still type checks and
+        // tests. Installed applications win, hence the conditional assignment.
+        for (
+            const [applicationName, applicationPath]
+            of Object.entries(
+                (parsedData['RESOLVABLE_APPLICATION_PATHS'] ?? {}) as { [key: string]: string }
+            )
+        ) {
+            alias[`@/${applicationName}`] ??= path.join(applicationPath, 'src', applicationName);
         }
 
         // Webpack builds an alias for every file under media/js from its path
@@ -118,11 +140,15 @@ function generateConfig(): Promise<ViteUserConfig> {
         };
 
         resolve({
-            plugins: [vue() as any, webpackCompatStubs],
+            plugins: [
+                vue(),
+                createProjectNodeModulesFallbackPlugin(),
+                webpackCompatStubs,
+            ],
             resolve: {
                 // Bare imports inside Arches application sources resolve from
                 // the project root, as `resolve.modules` does in webpack.common.js.
-                dedupe: ['pinia', 'primevue', 'vue3-gettext', '@primeuix/themes'],
+                dedupe: ['pinia', 'openvue', 'vue3-gettext', '@openvue/themes'],
             },
             test: {
                 alias: alias,
@@ -133,9 +159,9 @@ function generateConfig(): Promise<ViteUserConfig> {
                     // (bindings, widgets, workflows…) would crater the ratio and
                     // trip CI's "no coverage decrease" gate for every branch.
                     include: [
-                        path.join(appRelativePath, 'src', path.sep),
-                        path.join(appRelativePath, 'media', 'js', 'utils', path.sep),
-                        path.join(appRelativePath, 'media', 'js', 'views', 'pages', path.sep),
+                        path.join(appRelativePath, 'src', '**'),
+                        path.join(appRelativePath, 'media', 'js', 'utils', '**'),
+                        path.join(appRelativePath, 'media', 'js', 'views', 'pages', '**'),
                     ],
                     exclude: [...exclude, '**/*.spec.js'],
                     reporter: [
