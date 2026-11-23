@@ -569,10 +569,10 @@ class LegalPagesTests(TestCase):
             / "logrotate"
             / "manuspectrum-nginx.in"
         ).read_text()
-        days = re.search(r"^\s*maxage (\d+)", rule, re.M).group(1)
+        self.assertRegex(rule, r"(?m)^\s*maxage 365$")
         for lang, label, text in (
-            ("en", "Access log", f"{days} days, then deleted."),
-            ("fr", "Journal d", f"{days} jours"),
+            ("en", "Access log", "One year, then deleted."),
+            ("fr", "Journal d", "Un an, puis supprimé."),
         ):
             html = self.get("about-privacy", lang)
             self.assertIn(label, html)
@@ -588,15 +588,15 @@ class LegalPagesTests(TestCase):
             / "manuspectrum-nginx.in"
         ).read_text()
         self.assertRegex(rule, r"error\.log \{")
-        days = re.search(r"^\s*maxage (\d+)", rule, re.M).group(1)
+        self.assertRegex(rule, r"(?m)^\s*maxage 365$")
         for lang, kept, label, text in (
             (
                 "en",
                 "web server's error log",
                 "Error log",
-                f"{days} days, then deleted.",
+                "One year, then deleted.",
             ),
-            ("fr", "journal d", "Journal d.erreurs", f"{days} jours"),
+            ("fr", "journal d", "Journal d.erreurs", "Un an, puis supprimé."),
         ):
             html = self.get("about-privacy", lang)
             self.assertIn(kept, html, lang)

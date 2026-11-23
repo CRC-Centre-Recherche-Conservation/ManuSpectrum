@@ -960,6 +960,7 @@ img { max-width: 100%; height: auto; display: block; }
 }
 
 .ms-footer-arches a { color: var(--ink-muted); }
+.ms-footer-ai img { display: block; }
 .ms-footer-arches a:hover { color: var(--spectral-5); }
 
 // ============================================================
@@ -986,7 +987,7 @@ img { max-width: 100%; height: auto; display: block; }
     justify-content: center;
     flex-wrap: wrap;
     gap: 2.5rem 3rem;
-    max-width: 880px;
+    max-width: 960px;
     margin: 0 auto;
 }
 
@@ -1030,6 +1031,9 @@ img { max-width: 100%; height: auto; display: block; }
 
 // CRC
 .ms-partner-link--crc img { height: 50px; }
+
+// IRHT
+.ms-partner-link--irht img { height: 40px; }
 
 // ANR — min 30px, protection zone
 .ms-partner-link--anr { padding: 8px 12px; }
@@ -1113,6 +1117,7 @@ img { max-width: 100%; height: auto; display: block; }
     .ms-partner-link--cnrs img { height: 48px; }
     .ms-partner-link--mnhn img { height: 42px; }
     .ms-partner-link--crc img { height: 38px; }
+    .ms-partner-link--irht img { height: 30px; }
     .ms-partner-link--anr img { height: 34px; }
     .ms-partner-link--biblissima img { height: 38px; }
     .ms-partner-link--humanum img { height: 34px; }

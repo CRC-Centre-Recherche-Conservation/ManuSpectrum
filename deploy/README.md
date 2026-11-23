@@ -28,7 +28,7 @@ committed) and in the secret files of `SECRETS_DIR`.
 | `compose/nginx/` | nginx configuration: `nginx.conf`, the server template (names, HSTS), `snippets/` (TLS, headers, edge rules, rate limits, media, IIIF image server, logs), error pages, `tests/test_edge.sh` |
 | `compose/certbot/` | Deploy hook of the `certbot` service (`CERT_MODE=acme`) |
 | `certs/` | `make-local-ca.sh` (rehearsal CA, self-signed placeholder), `README.md` (modes, trust), tests |
-| `logrotate/` | Host `logrotate` template for the nginx logs (thirty days) |
+| `logrotate/` | Host `logrotate` template for the nginx logs (one year) |
 | `systemd/` | Service and timer templates: certificate renewal, nightly backup (02:00), weekly restore test (Sunday 05:30), container metrics (30 s), disk usage metrics (hourly), monthly report (the 1st, 08:00) |
 | `OBSERVABILITY.md` | Monitoring: services, Grafana by SSH tunnel, dashboards, alerts and their timing, recipients and sender, mail categories, monthly report, host metrics, upgrade note |
 | `compose/observability/` | Prometheus, Alertmanager, Grafana and blackbox configuration: scrape jobs, alert rules and their unit tests, e-mail templates, the five dashboards, `check.sh` |
@@ -224,12 +224,12 @@ Run as `make -C deploy <target>`; every target uses both Compose files.
   `edge-rules.conf`); the client IP read by Django comes from nginx.
 - The access log is JSON, one line per request with the request id, no query
   string and the reset token redacted. It is written to `NGINX_LOG_HOST_DIR`
-  (owned by the service account), rotated daily and kept thirty days by the
+  (owned by the service account), rotated daily and kept one year by the
   host `logrotate` file (`logrotate/manuspectrum-nginx.in`, installed by PP-8;
-  nginx reopens its files on `USR1`, no restart). Container stdout stays bounded
-  by `json-file` (10 MB x 5). `error.log` is not redacted: upstream-error lines
+  nginx reopens its files on `USR1`, no restart). Container logs go to the
+  systemd journal (`journald` driver, kept one year, see `ACCEPTANCE.md`). `error.log` is not redacted: upstream-error lines
   carry the raw request line (query string and reset token included). It is
-  rotated with the access log (thirty days) and readable by the service account
+  rotated with the access log (one year) and readable by the service account
   and root only; rate-limit lines are logged at `notice`, below the `warn`
   level of `error_log`, so they never reach it.
 - Certificates are files under `CERTS_DIR`, in separate directories so that each

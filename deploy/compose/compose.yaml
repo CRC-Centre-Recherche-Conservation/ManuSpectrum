@@ -10,10 +10,9 @@
 name: manuspectrum
 
 x-logging: &logging
-  driver: json-file
+  driver: journald
   options:
-    max-size: "10m"
-    max-file: "5"
+    tag: "{{.Name}}"
 
 x-service: &service
   restart: unless-stopped
@@ -185,7 +184,7 @@ services:
       CANTALOUPE_LOG_APPLICATION_CONSOLEAPPENDER_ENABLED: "true"
       CANTALOUPE_LOG_APPLICATION_ROLLINGFILEAPPENDER_ENABLED: "false"
       CANTALOUPE_LOG_ERROR_ROLLINGFILEAPPENDER_ENABLED: "false"
-      # nginx writes the access log (JSON, rotated by age on the host); json-file only rotates by size.
+      # nginx writes the access log (JSON, rotated by age on the host); container logs go to the systemd journal.
       CANTALOUPE_LOG_ACCESS_CONSOLEAPPENDER_ENABLED: "false"
     volumes:
       - type: bind

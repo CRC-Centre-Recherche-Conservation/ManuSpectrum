@@ -97,3 +97,27 @@ Run `make -C deploy restore-test`; restart the timer if it is stopped.
 ### Escalation
 
 The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
+
+## LogArchiveStale
+
+Severity: warning. The closed server logs have not been archived into TSM for more than 2 days.
+
+### Prerequisites
+
+SSH access to the host as an administrator with `sudo`: `dsmc` and the state file are root's. BACKUP.md, section Logs.
+
+### Symptom
+
+The daily archive of the rotated nginx logs, the rotated `/var/log` files and the archived journal files did not succeed. The logs themselves are still kept one year on the host.
+
+### Diagnosis
+
+`journalctl -u manuspectrum-log-archive -e` shows the run and the `dsmc` exit code (0 and 8 are success). `sudo dsmc query archive "/var/log/*"` lists what TSM holds. `sudo wc -l /var/lib/manuspectrum/log-archive/archived.sha256` counts the files already archived; a run offers again every file not in it.
+
+### Remediation
+
+Fix the cause (TSM client or server unreachable, expired node password, full disk), then `sudo systemctl start manuspectrum-log-archive`. The alert clears with the next successful run.
+
+### Escalation
+
+The technical lead. If the cause is the TSM server or the network, open a ticket with the hosting provider.

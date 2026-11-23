@@ -39,8 +39,8 @@ LABELLED_APP_METRICS = frozenset(
 )
 
 # Series that can be legitimately absent from a running stack: the labelled
-# application metrics above (not primed), the backup, restore-test and release gauges (they exist
-# only after the first run of those jobs), the gauges the daily account
+# application metrics above (not primed), the backup, restore-test, release and log archive
+# gauges (they exist only after the first run of those jobs), the gauges the daily account
 # passes set (their run timestamps and the embargo counts, from the first
 # pass on), ALERTS (only while an alert is
 # pending or firing) and redis_key_size (Redis deletes the empty `celery`
@@ -75,6 +75,9 @@ OPTIONAL_METRICS = LABELLED_APP_METRICS | frozenset(
         "manuspectrum_release_schedule_failed",
         "manuspectrum_login_records_prune_timestamp_seconds",
         "manuspectrum_workflow_cleanup_timestamp_seconds",
+        "manuspectrum_log_archive_enabled",
+        "manuspectrum_log_archive_files",
+        "manuspectrum_log_archive_last_success_timestamp_seconds",
     }
 )
 

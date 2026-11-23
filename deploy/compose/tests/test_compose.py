@@ -332,10 +332,8 @@ class ComposeStackTests(unittest.TestCase):
         for label, name, service in self.each_service():
             with self.subTest(stack=label, service=name):
                 self.assertEqual(service["restart"], "unless-stopped")
-                self.assertEqual(service["logging"]["driver"], "json-file")
-                self.assertEqual(
-                    service["logging"]["options"], {"max-size": "10m", "max-file": "5"}
-                )
+                self.assertEqual(service["logging"]["driver"], "journald")
+                self.assertEqual(service["logging"]["options"], {"tag": "{{.Name}}"})
                 self.assertIn("no-new-privileges:true", service["security_opt"])
                 self.assertEqual(service["cap_drop"], ["ALL"])
 
@@ -789,7 +787,7 @@ class ComposeStackTests(unittest.TestCase):
                 self.assertNotIn("pid", service)
                 self.assertNotIn("network_mode", service)
                 self.assertFalse(service.get("group_add"))
-                self.assertEqual(service["logging"]["driver"], "json-file")
+                self.assertEqual(service["logging"]["driver"], "journald")
                 for volume in service.get("volumes", []):
                     self.assertNotIn("docker.sock", str(volume.get("source", "")))
                 if name != "grafana":
