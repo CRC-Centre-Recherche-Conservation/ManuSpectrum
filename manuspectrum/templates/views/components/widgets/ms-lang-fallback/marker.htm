@@ -1,3 +1,4 @@
 <!-- ko if: msShown.code -->
-<abbr class="ms-lang-fallback" data-bind="text: msShown.code.toUpperCase(), attr: {title: msShown.label}"></abbr>
+<abbr class="ms-lang-fallback" aria-hidden="true" data-bind="text: msShown.code.toUpperCase(), attr: {title: msShown.label}"></abbr>
+<span class="sr-only" data-bind="text: msShown.label"></span>
 <!-- /ko -->

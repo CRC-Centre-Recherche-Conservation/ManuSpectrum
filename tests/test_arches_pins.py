@@ -1018,3 +1018,30 @@ class CoreWidgetTemplateTests(unittest.TestCase):
             "Arches' rich-text widget template changed: re-check "
             "manuspectrum/templates/views/components/widgets/rich-text.htm against it.",
         )
+
+    def test_core_widget_viewmodels_keep_the_names_the_replaced_blocks_read(self):
+        js = Path(arches.__file__).parent / "app/media/js"
+        checks = {
+            "views/components/widgets/text.js": (
+                r"self\.languages\s*=\s*ko\.observableArray",
+                r"self\.currentLanguage\s*=\s*ko\.observable",
+            ),
+            "views/components/widgets/rich-text.js": (
+                r"self\.languages\s*=\s*ko\.observableArray",
+                r"self\.currentLanguage\s*=\s*ko\.observable",
+            ),
+            "viewmodels/widget.js": (r"this\.displayValue\s*=\s*ko\.computed",),
+        }
+        missing = [
+            f"{name}: {pattern}"
+            for name, patterns in checks.items()
+            for pattern in patterns
+            if not re.search(pattern, (js / name).read_text())
+        ]
+        self.assertEqual(
+            missing,
+            [],
+            "Arches' widget viewmodels changed: re-check "
+            "manuspectrum/templates/views/components/widgets/text.htm and rich-text.htm "
+            "(they read languages, currentLanguage and displayValue).",
+        )

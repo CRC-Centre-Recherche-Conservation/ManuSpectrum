@@ -16,4 +16,4 @@
         }
     }
     return nothing;
-})(ko.toJS(displayValue()), currentLanguage(), languages())
+})(ko.toJS(displayValue()), currentLanguage(), typeof languages === 'function' ? languages() : [])

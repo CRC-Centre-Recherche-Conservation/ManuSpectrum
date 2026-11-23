@@ -34,7 +34,6 @@ function makeVm(values, over = {}) {
         displayValue: ko.observable(values),
         currentLanguage: ko.observable('en'),
         languages: ko.observableArray([{ code: 'en' }, { code: 'fr' }]),
-        currentText: ko.observable(values?.en?.value),
         hideEmptyNodes: false,
         label: ko.observable('Title'),
         nodeCssClasses: '',
@@ -56,7 +55,11 @@ function mount(html, vm) {
 const report = renderBlock('views/components/widgets/text.htm', 'report');
 const displayValue = renderBlock('views/components/widgets/text.htm', 'display_value');
 
-const text = (el) => el.textContent.replace(/\s+/g, ' ').trim();
+const text = (el) => {
+    const copy = el.cloneNode(true);
+    copy.querySelectorAll('.sr-only').forEach((node) => node.remove());
+    return copy.textContent.replace(/\s+/g, ' ').trim();
+};
 let mounted;
 const show = (html, values, over) => {
     mounted = mount(html, makeVm(values, over));
@@ -239,5 +242,23 @@ describe('rich-text.htm blocks', () => {
             ko.cleanNode(div);
             div.remove();
         }
+    });
+});
+
+describe('marker and viewmodel names', () => {
+    it('the marker hides the abbreviation from readers and spells the explanation out', () => {
+        const div = show(report, { en: { value: '' }, fr: { value: 'Lettrine' } });
+        expect(div.querySelector('abbr').getAttribute('aria-hidden')).toBe('true');
+        expect(div.querySelector('.sr-only').textContent).toBe(
+            'Not entered in this language, shown in French',
+        );
+    });
+
+    it('a viewmodel without languages shows the page language only and does not throw', () => {
+        const vm = makeVm({ en: { value: '' }, fr: { value: 'Lettrine' } });
+        delete vm.languages;
+        const div = mount(report, vm);
+        mounted = div;
+        expect(text(div.querySelector('dd'))).toBe('None');
     });
 });

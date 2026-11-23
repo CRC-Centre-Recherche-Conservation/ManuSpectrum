@@ -1,6 +1,14 @@
 {% extends "views/components/widgets/text.htm" %}
 {% load i18n %}
 
+{% comment %}
+Extends Arches 8.2 core widgets/text.htm and replaces its `report` and
+`display_value` blocks, so a field filled in another language only shows that
+text, marked with its language. Both blocks replace the core ones, never append
+to them (this template is reachable twice, see cards/file-viewer.htm).
+`tests/test_arches_pins.py` (CoreWidgetTemplateTests) pins what they copy.
+{% endcomment %}
+
 {% block display_value %}
 <span data-bind="class: nodeCssClasses">
 <!-- ko let: { {% include "views/components/widgets/ms-lang-fallback/shown.htm" %} } -->
