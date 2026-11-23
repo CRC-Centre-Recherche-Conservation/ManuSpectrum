@@ -11,7 +11,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from uuid import UUID
 
-from arches_controlled_lists.models import ListItem, ListItemValue
+from arches.extensions.controlled_lists.models import ListItem, ListItemValue
 from django.db.models import F
 
 from manuspectrum.utils.roles import ROLES

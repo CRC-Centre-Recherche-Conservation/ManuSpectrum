@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # deploy/scripts/tests/test_release_version_guard.sh
 # Tests of release-version-guard.sh on a throwaway repository: the base version
-# of a tag must equal APP_VERSION at the tagged commit.
+# of a tag must equal APP_VERSION, the pyproject.toml version and the
+# package.json version at the tagged commit.
 # Prints `ok N` / `not ok N`; exits non-zero on failure.
 # shellcheck disable=SC2319,SC2015,SC2001
 set -uo pipefail
@@ -24,17 +25,28 @@ git config commit.gpgsign false
 git config tag.gpgsign false
 mkdir manuspectrum
 
-at() { # at VERSION-ARGS TAG...: commit a settings file carrying VERSION-ARGS and tag it
-  local args="$1" t
-  shift
+at() { # at VERSION-ARGS PYPROJECT-VERSION NPM-VERSION TAG...: commit settings.py, pyproject.toml, package.json and tag them
+  local args="$1" pyproject="$2" npm="$3" t
+  shift 3
   printf 'APP_NAME = "manuspectrum"\nAPP_VERSION = semantic_version.Version(%s)\n' "$args" > manuspectrum/settings.py
-  git add manuspectrum/settings.py
+  printf '[project]\nname = "manuspectrum"\nrequires-python = ">=3.12"\nversion = "%s"\n' "$pyproject" > pyproject.toml
+  if [ -n "$npm" ]; then
+    printf '{\n    "name": "manuspectrum",\n    "version": "%s",\n    "dependencies": {"x": {"version": "%s"}}\n}\n' "$npm" "$pyproject" > package.json
+  else
+    printf '{\n    "name": "manuspectrum"\n}\n' > package.json
+  fi
+  git add manuspectrum/settings.py pyproject.toml package.json
   git commit -q -m "$args"
   for t in "$@"; do git tag "$t"; done
 }
 
-at "major=1, minor=0, patch=0" v1.0.0 v1.0.0-rc.1 v1.0.1 v1.1.0-rc.1
-at 'major=2, minor=0, patch=0, prerelease=("alpha",)' v2.0.0 v2.0.0-rc.1
+at "major=1, minor=0, patch=0" 1.0.0 1.0.0 v1.0.0 v1.0.0-rc.1 v1.0.1 v1.1.0-rc.1
+at 'major=2, minor=0, patch=0, prerelease=("alpha",)' 2.0.0 2.0.0 v2.0.0 v2.0.0-rc.1
+at "major=1, minor=0, patch=2" 1.0.0a0 1.0.2 v1.0.2 v1.0.2-rc.1
+at "major=1, minor=0, patch=4" 1.0.4 "" v1.0.4
+at "major=1, minor=0, patch=5" 1.0.5 1.0.4 v1.0.5-rc.1
+at "major=1, minor=0, patch=3" 1.0.3 1.0.3
+git rm -q pyproject.toml && git commit -qm "no pyproject" && git tag v1.0.3-rc.2
 printf 'APP_NAME = "x"\n' > manuspectrum/settings.py
 git commit -qam none
 git tag v3.0.0
@@ -56,6 +68,11 @@ refuses v2.0.0 "an APP_VERSION that still carries a prerelease" "2\.0\.0-alpha"
 refuses v2.0.0-rc.1 "an rc tag on a prerelease APP_VERSION" "2\.0\.0-alpha"
 refuses v3.0.0 "a settings file without APP_VERSION" "no APP_VERSION"
 refuses v1.2 "a name that is not a release tag" "not a release tag"
+refuses v1.0.2 "a final tag whose pyproject version differs" "::error::.*1\.0\.2.*pyproject.toml says 1\.0\.0a0"
+refuses v1.0.2-rc.1 "an rc tag whose pyproject version differs" "pyproject.toml says 1\.0\.0a0"
+refuses v1.0.3-rc.2 "a commit without pyproject.toml" "cannot read pyproject.toml"
+refuses v1.0.4 "a package.json without version" "package.json says ''"
+refuses v1.0.5-rc.1 "a package.json version that differs (a nested version does not count)" "package.json says '1\.0\.4'"
 
 # release.yml passes the commit the tag resolves to as the second argument.
 OUT="$(bash "$GUARD" v1.0.0 "$(git rev-parse 'v1.0.0^{commit}')" 2>&1)"; RC=$?

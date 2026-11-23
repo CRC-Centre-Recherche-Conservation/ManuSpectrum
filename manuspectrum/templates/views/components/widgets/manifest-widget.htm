@@ -193,7 +193,7 @@
     <!-- ko if: manifestUrl -->
     <div class="manifest-report-info">
         <strong data-bind="text: manifestLabel() || 'IIIF Manifest'"></strong><br>
-        <a class="manifest-report-link" data-bind="attr: { href: manifestDisplayUrl }, text: manifestDisplayUrl" target="_blank" rel="noopener"></a>
+        <a class="manifest-report-link" data-bind="attr: { href: manifestReportUrl }, text: manifestReportUrl" target="_blank" rel="noopener"></a>
     </div>
     <!-- /ko -->
     <!-- ko ifnot: manifestUrl -->

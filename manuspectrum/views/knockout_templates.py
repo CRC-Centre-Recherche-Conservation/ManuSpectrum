@@ -1,7 +1,7 @@
 """Knockout component templates, rendered once per language and kept.
 
 Arches' ``templates`` route (``arches.app.views.main.templates``, Arches
-8.1.5) renders any template name through the full request context and answers
+8.2.0) renders any template name through the full request context and answers
 without a validator, and ``template-loader.js`` asks
 ``/<language>/templates/<name>`` for every component a page mounts, on every
 page load. This view answers the same URLs.
@@ -50,11 +50,10 @@ SHARED_PREFIXES = (
     "views/resource/related-resources/",
 )
 
-# Distributions whose templates and catalogues a shared template renders.
+# Distributions whose templates and catalogues a shared template renders. The
+# controlled lists and Vue components apps ship inside ``arches`` (8.2).
 STAMPED_DISTRIBUTIONS = (
     "arches",
-    "arches-controlled-lists",
-    "arches-vue-components",
     "django",
 )
 

@@ -10,7 +10,7 @@ HTML; any other answer under ``/iiif/``, error and redirect included, drops
 them.
 """
 
-from django.utils.cache import cc_delim_re
+from django.utils.http import split_header_value
 
 IIIF_PREFIX = "/iiif/"
 LOCALISED_PAGES = frozenset(
@@ -46,7 +46,7 @@ class IIIFLanguageNeutralMiddleware:
         if response.has_header("Vary"):
             kept = [
                 field
-                for field in cc_delim_re.split(response["Vary"])
+                for field in split_header_value(response["Vary"])
                 if field and field.lower() != "accept-language"
             ]
             if kept:

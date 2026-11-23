@@ -189,7 +189,7 @@ def _placements(scope, bounded=True):
         placing = listed_source(url, listed)
         scope_analyses, analysis_ids = located[document]
         analyses, first = defaultdict(list), {}
-        for rid, _, canvas, _ in zones.features(analysis_ids, placing.dims):
+        for rid, _, canvas, _ in zones.located(analysis_ids, placing.dims):
             if canvas not in position:
                 continue
             if rid not in analyses[canvas]:

@@ -16,11 +16,29 @@ Everything slows down when memory is short.
 
 ### Diagnosis
 
-Memory by container on the Infrastructure dashboard; `ContainerMemoryNearLimit` alerts.
+Memory by container on the Infrastructure dashboard; `ContainerSwapping` and `ContainerSwapAllowed` alerts (`deploy/runbooks/containers.md`) name a container that holds swap or that may swap.
+
+Swap per container, as the service account (the id in the scope name is the container id; `docker ps --no-trunc` gives the name):
+
+```bash
+for f in /sys/fs/cgroup/system.slice/docker-*.scope/memory.swap.current; do
+  printf '%s %s\n' "$(( $(cat "$f") / 1048576 )) MiB" "$f"
+done | sort -rn
+docker ps --no-trunc --format '{{.ID}} {{.Names}}'
+```
+
+Swap per process (`VmSwap`, in kB; a process of a container shows here too):
+
+```bash
+grep -H VmSwap /proc/[0-9]*/status 2>/dev/null | awk '$2 > 0 {split($1, a, "/"); print $2, "kB pid", a[3]}' | sort -rn | head
+ps -o pid,comm,args -p <pid>
+```
+
+`memory.swap.max` of every container must be `0`: the host role installs a systemd drop-in (`docker-.scope.d/10-manuspectrum-no-swap.conf`) that keeps it so across a `systemctl daemon-reload`.
 
 ### Remediation
 
-Lower the memory of the largest consumer or move to a larger host.
+If a container holds the swap, follow `ContainerSwapping` and `ContainerSwapAllowed`: restore the drop-in by re-running the Ansible host role, then restart the container off-peak. Otherwise lower the memory of the largest consumer or move to a larger host.
 
 ### Escalation
 

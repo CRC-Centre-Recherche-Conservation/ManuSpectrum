@@ -22,7 +22,14 @@ runs:
     - name: Set up Elasticsearch
       uses: ankane/setup-elasticsearch@v1
       with:
-        elasticsearch-version: 8
+        # The 8.2 project template still sets 8, but Arches' client (elasticsearch>=9.5.1)
+        # refuses an 8 server and Arches' own CI runs 9: keep 9 at the next updateproject.
+        elasticsearch-version: 9
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v7
+      with:
+        node-version: 24
 
     - name: Install Python packages
       run: |

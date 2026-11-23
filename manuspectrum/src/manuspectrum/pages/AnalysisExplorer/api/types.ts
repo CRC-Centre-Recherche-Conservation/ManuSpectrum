@@ -331,12 +331,26 @@ export interface CertaintyScale {
     levels: RankedValue[];
 }
 
+/**
+ * Canvas pixels per stored annotation unit (Leaflet CRS.Simple) on each axis,
+ * as the server converted the shapes of the canvas; `read` is false when the
+ * image's info.json could not be read and the unit was assumed from the canvas
+ * size (the shapes are then exact on the page image only).
+ */
+export interface ZoneUnit {
+    x: number;
+    y: number;
+    read: boolean;
+}
+
 export interface DocumentCanvas {
     id: string;
     label: string;
     image: ImageRef;
     analysisCount: number;
     characterizationCount: number;
+    /** The unit of the zones on the canvas; null when the payload places none on it. */
+    zoneUnit: ZoneUnit | null;
 }
 
 /** Body of `GET document/<id>`, the same whatever the filters (`DocumentMatch` says what they keep). */
@@ -793,6 +807,18 @@ export const SHAPE_KEYS = {
         width: true,
         height: true,
     } satisfies Record<keyof ImageRef, true>,
+    ZoneUnit: { x: true, y: true, read: true } satisfies Record<
+        keyof ZoneUnit,
+        true
+    >,
+    DocumentCanvas: {
+        id: true,
+        label: true,
+        image: true,
+        analysisCount: true,
+        characterizationCount: true,
+        zoneUnit: true,
+    } satisfies Record<keyof DocumentCanvas, true>,
     FileLayer: {
         index: true,
         id: true,

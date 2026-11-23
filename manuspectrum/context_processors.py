@@ -18,7 +18,7 @@ def personal_link(request):
     """Tell every template whether the page's own path can hold a mailed token.
 
     True on the routes of `accounts.mailed_links`, whatever answers them: the
-    « Continue » page, but also the page of a refused CSRF check or of a link
+    placeholder page, but also the page of a refused CSRF check or of a link
     that is not valid. `ms_base.htm` then writes no canonical link, no
     hreflang alternate and no `og:url`, which would copy the token.
     """

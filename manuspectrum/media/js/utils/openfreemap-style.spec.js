@@ -1,11 +1,11 @@
 /**
  * Vitest unit spec — the vendored OpenFreeMap Bright layers
  * (constants/openfreemap_bright_layers.json) against the style specification
- * of mapbox-gl 1.13, the renderer of the Arches maps.
+ * of MapLibre GL, the renderer of the Arches maps.
  */
 
 import { describe, expect, it } from 'vitest';
-import { validate } from 'mapbox-gl/dist/style-spec/index.es.js';
+import { validateStyleMin as validate } from '@maplibre/maplibre-gl-style-spec';
 
 import layers from '../../../constants/openfreemap_bright_layers.json';
 
@@ -20,7 +20,7 @@ const styleWith = (styleLayers, sources = { openfreemap: SOURCE }) => ({
 });
 
 describe('OpenFreeMap Bright layers', () => {
-    it('are a valid mapbox-gl 1.13 style', () => {
+    it('are a valid MapLibre style', () => {
         expect(validate(styleWith(layers))).toEqual([]);
     });
 

@@ -22,7 +22,7 @@
 import ko from 'knockout';
 import L from 'leaflet';
 import arches from 'arches';
-import { generateArchesURL } from '@/arches/utils/generate-arches-url.ts';
+import { generateArchesURL } from '@/arches_vue_components/application/generate-arches-url.ts';
 
 /** Resolved entries kept for the next popup; the oldest goes first. */
 const MAX_ENTRIES = 50;
@@ -61,12 +61,13 @@ export function summaryUrl(id) {
     return generateArchesURL(
         'manuspectrum:api-summary',
         { resourceid: encodeURIComponent(id) },
+        undefined,
         currentLanguage(),
     );
 }
 
 function batchUrl(ids) {
-    const route = generateArchesURL('manuspectrum:api-summary-batch', {}, currentLanguage());
+    const route = generateArchesURL('manuspectrum:api-summary-batch', {}, undefined, currentLanguage());
     return `${route}?ids=${ids.join(',')}`;
 }
 
@@ -225,18 +226,18 @@ function restoreFocus(element, content) {
 }
 
 /**
- * Give a Mapbox popup the teardown and the keyboard Arches does not give it.
+ * Give a MapLibre popup the teardown and the keyboard Arches does not give it.
  *
  * Called from the popup provider's `processData`, which runs once the popup
  * exists, and returns its argument so it can sit in that pipeline. Arches never
  * runs `ko.cleanNode` on a popup, so without this the component's `dispose()`
  * never fires and the reference it holds on the cache is never released.
- * Mapbox also ships no Escape handler and an English close label, and moves
+ * MapLibre also ships no Escape handler and an English close label, and moves
  * focus neither into the card nor back to the feature that opened it. The
  * listener, the label and the focus are all undone in the popup's own `close`
  * handler, and the popup is marked so a second pass adds nothing.
  */
-export function attachMapboxPopupCleanup(data) {
+export function attachMapLibrePopupCleanup(data) {
     const popup = data?.popupFeatures?.[0]?.mapCard?.popup;
     const content = popup?._content;
     if (!content || popup._msSummaryCleanup) return data;
@@ -249,7 +250,7 @@ export function attachMapboxPopupCleanup(data) {
     };
     content.addEventListener('keydown', onKeydown);
 
-    const closeButton = content.querySelector('.mapboxgl-popup-close-button');
+    const closeButton = content.querySelector('.maplibregl-popup-close-button');
     const closeLabel = arches.translations?.summaryClose;
     if (closeButton && closeLabel) closeButton.setAttribute('aria-label', closeLabel);
 

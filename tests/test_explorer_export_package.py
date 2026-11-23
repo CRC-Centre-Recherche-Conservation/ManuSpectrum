@@ -18,6 +18,7 @@ from django.http import QueryDict
 from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
 from tests.test_explorer_service import XRF
 
+from manuspectrum.iiif import ids
 from manuspectrum.views.explorer.export import (
     _assemble,
     arcname,
@@ -350,7 +351,29 @@ class TablesTests(PackageCase):
             members = self.members(f"ids=an:{self.pk('open')}:-")
 
         (name,) = [n for n in members if n.endswith("imaging-1.json")]
-        self.assertEqual(json.loads(members[name].data), IMAGING_SOURCE)
+        written = json.loads(members[name].data)
+        self.assertEqual(written["id"], ids.stored_manifest(stored.globalid))
+        self.assertEqual(written["items"], IMAGING_SOURCE["items"])
+        self.assertNotIn("seeAlso", written)
+
+    def test_an_imported_imaging_manifest_is_written_under_our_id_with_its_publisher(
+        self,
+    ):
+        stored = IIIFManifest.objects.create(
+            label="Imaging", url=IMAGING, manifest=IMAGING_SOURCE
+        )
+        self.tile(
+            self.analyses["open"],
+            "chemical_imaging_manifest",
+            f"/manifest/{stored.globalid}",
+        )
+
+        members = self.members(f"ids=an:{self.pk('open')}:-")
+
+        (name,) = [n for n in members if n.endswith("imaging-1.json")]
+        written = json.loads(members[name].data)
+        self.assertEqual(written["id"], ids.stored_manifest(stored.globalid))
+        self.assertIn(IMAGING, [see["id"] for see in written["seeAlso"]])
 
     def test_each_manifest_is_read_once_per_package(self):
         self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)

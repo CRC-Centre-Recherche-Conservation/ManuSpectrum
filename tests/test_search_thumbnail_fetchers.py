@@ -29,6 +29,7 @@ from arches.app.utils.search_thumbnail_fetcher_factory import (
     SearchThumbnailFetcherFactory,
 )
 
+from manuspectrum.iiif import units
 from manuspectrum.utils.cache import get_or_build, stable_cache_key
 from manuspectrum.utils.search_thumbnail_fetchers import (
     _region_size,
@@ -71,11 +72,17 @@ POINT_REGION = "0,14,100,100/100,"
 
 
 class FetcherTestCase(SimpleTestCase):
-    """Clears the default cache: a miss flag outlives a test otherwise."""
+    """Clears the default cache (a miss flag outlives a test otherwise) and frames every image at zoom 5 and its canvas size; ``ImageFrameTests`` use the real frame."""
 
     def setUp(self):
         super().setUp()
         cache.clear()
+        frame = mock.patch(
+            f"{FETCHERS}._image_frame",
+            lambda service, width, height: (5, width, height),
+        )
+        frame.start()
+        self.addCleanup(frame.stop)
 
 
 def tile(**data):
@@ -1293,6 +1300,88 @@ class ZoneChoiceTests(FetcherTestCase):
             headers=IMAGE_HEADERS,
             purpose="thumbnail",
         )
+
+
+@mock.patch(SAFE_FETCH)
+@mock.patch(FETCH_MANIFEST)
+@mock.patch(ANNOTATION_MODEL)
+class ImageFrameTests(SimpleTestCase):
+    """The region of a zone is cut in the pixels its image description gives."""
+
+    ZONE = {"type": "Polygon", "coordinates": [[[10, -20], [15, -20], [15, -30]]]}
+
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.fetcher = ComponentThumbnailFetcher(RESOURCE)
+
+    def region(self, vw_annotation, fetch_manifest, safe_fetch, info, **manifest):
+        vw_annotation.objects.filter.return_value = queryset(
+            [annotation(geometry=self.ZONE)]
+        )
+        fetch_manifest.return_value = v2_manifest(**manifest)
+        safe_fetch.return_value = response()
+        with mock.patch(f"{FETCHERS}.units.image_info", return_value=info) as read:
+            self.fetcher.get_thumbnail(retrieve=True)
+        read.assert_called_once_with(CANVAS_SERVICE)
+        return safe_fetch.call_args.args[0].removeprefix(f"{CANVAS_SERVICE}/")
+
+    def test_a_read_image_gives_the_zoom_of_its_tiles(
+        self, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        region = self.region(
+            vw_annotation,
+            fetch_manifest,
+            safe_fetch,
+            units.ImageInfo(4913, 6609, 512),
+            width=4913,
+            height=6609,
+        )
+
+        self.assertEqual(region, "150,310,100,180/100,/0/default.jpg")
+
+    def test_the_region_is_cut_in_image_pixels_whatever_the_canvas_size(
+        self, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        region = self.region(
+            vw_annotation,
+            fetch_manifest,
+            safe_fetch,
+            units.ImageInfo(4913, 6609, 512),
+            width=100,
+            height=135,
+        )
+
+        self.assertEqual(region, "150,310,100,180/100,/0/default.jpg")
+
+    def test_an_unread_image_is_framed_by_its_canvas_at_256(
+        self, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        region = self.region(
+            vw_annotation,
+            fetch_manifest,
+            safe_fetch,
+            units.REFUSED,
+            width=1866,
+            height=2696,
+        )
+
+        self.assertEqual(region, "150,310,100,180/100,/0/default.jpg")
+
+    def test_a_small_image_counts_two_pixels_per_unit(
+        self, vw_annotation, fetch_manifest, safe_fetch
+    ):
+        region = self.region(
+            vw_annotation,
+            fetch_manifest,
+            safe_fetch,
+            units.ImageInfo(611, 947, 512),
+            width=611,
+            height=947,
+        )
+
+        self.assertEqual(region, "10,30,30,40/30,/0/default.jpg")
 
 
 class RegionSizeTests(SimpleTestCase):

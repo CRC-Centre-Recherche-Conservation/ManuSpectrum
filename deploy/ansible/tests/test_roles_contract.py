@@ -174,6 +174,30 @@ class HostRoleTests(unittest.TestCase):
             self.assertIn(line, text.splitlines())
         self.assertIn("[Journal]", text.splitlines())
 
+    def test_docker_scopes_get_a_zero_swap_limit_that_survives_a_reload(self):
+        text = (
+            ROLES_DIR / "host" / "templates" / "docker-scope-no-swap.conf.j2"
+        ).read_text(encoding="utf-8")
+        lines = text.splitlines()
+        self.assertIn("[Scope]", lines)
+        self.assertEqual(lines[lines.index("[Scope]") + 1], "MemorySwapMax=0")
+        self.assertNotIn("{{", text)
+        writes = [
+            t[1]
+            for t in role_tasks("host")
+            if module_of(t[1]) == "template"
+            and t[1]["ansible.builtin.template"]["dest"]
+            == "/etc/systemd/system/docker-.scope.d/10-manuspectrum-no-swap.conf"
+        ]
+        self.assertEqual(len(writes), 1)
+        self.assertEqual(writes[0]["notify"], "reload systemd")
+        self.assertEqual(writes[0]["ansible.builtin.template"]["mode"], "0644")
+        reload = [h for h in handlers("host") if h.get("listen") == "reload systemd"]
+        self.assertEqual([module_of(h) for h in reload], ["systemd_service"])
+        self.assertIs(
+            reload[0]["ansible.builtin.systemd_service"]["daemon_reload"], True
+        )
+
 
 class RehearsalMarkerTests(unittest.TestCase):
     def test_apply_writes_the_marker_only_on_a_rehearsal_host(self):

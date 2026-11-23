@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
-import PrimeVue from "primevue/config";
+import OpenVue from "openvue/config";
 
 import AnalysisExplorer from "@/manuspectrum/pages/AnalysisExplorer/AnalysisExplorer.vue";
 
@@ -63,7 +63,7 @@ vi.mock("maplibre-gl", async () =>
     ).maplibreModule(),
 );
 
-vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+vi.mock("@/arches_vue_components/application/generate-arches-url.ts", () => ({
     generateArchesURL: (name: string) => `/en/${name}`,
 }));
 
@@ -148,7 +148,7 @@ describe("AnalysisExplorer", () => {
     it("shows the Map view when it is chosen", async () => {
         window.history.replaceState(null, "", "/en/discover");
         const wrapper = mount(AnalysisExplorer, {
-            global: { plugins: [pinia, PrimeVue] },
+            global: { plugins: [pinia, OpenVue] },
         });
         await flushPromises();
         useExplorerStore().setView("map");
@@ -171,7 +171,7 @@ describe("AnalysisExplorer", () => {
         );
         window.history.replaceState(null, "", "/en/discover");
         const wrapper = mount(AnalysisExplorer, {
-            global: { plugins: [pinia, PrimeVue] },
+            global: { plugins: [pinia, OpenVue] },
         });
         useExplorerStore().setView("map");
         await flushPromises();
@@ -247,7 +247,7 @@ describe("AnalysisExplorer", () => {
     it("closes the Selection drawer on « Compare » and gives the focus to the Compare heading", async () => {
         window.history.replaceState(null, "", "/en/discover");
         const wrapper = mount(AnalysisExplorer, {
-            global: { plugins: [pinia, PrimeVue] },
+            global: { plugins: [pinia, OpenVue] },
             attachTo: document.body,
         });
         useExplorerStore().addToBasket(KEY);
@@ -399,7 +399,7 @@ describe("AnalysisExplorer", () => {
     it("names the Map & timeline and Compare views as screens for the folded page intro", async () => {
         window.history.replaceState(null, "", "/en/discover");
         const wrapper = mount(AnalysisExplorer, {
-            global: { plugins: [pinia, PrimeVue] },
+            global: { plugins: [pinia, OpenVue] },
         });
         await flushPromises();
         expect(document.body.dataset.explorerScreen).toBe("home");
@@ -443,7 +443,7 @@ describe("AnalysisExplorer", () => {
         window.history.replaceState(null, "", "/en/discover");
         const wrapper = mount(AnalysisExplorer, {
             props: { miradorUrl: "https://viewer.example/" },
-            global: { plugins: [pinia, PrimeVue] },
+            global: { plugins: [pinia, OpenVue] },
             attachTo: document.body,
         });
         await flushPromises();
@@ -523,7 +523,7 @@ describe("AnalysisExplorer", () => {
     it("moves the focus to the heading of the view chosen in the tabs, and back", async () => {
         window.history.replaceState(null, "", "/en/discover");
         const wrapper = mount(AnalysisExplorer, {
-            global: { plugins: [pinia, PrimeVue] },
+            global: { plugins: [pinia, OpenVue] },
             attachTo: document.body,
         });
         await flushPromises();
@@ -638,7 +638,7 @@ describe("AnalysisExplorer", () => {
             "/en/discover?screen=results&grain=analyses",
         );
         const wrapper = mount(AnalysisExplorer, {
-            global: { plugins: [pinia, PrimeVue] },
+            global: { plugins: [pinia, OpenVue] },
         });
         await flushPromises();
         const pushState = vi.spyOn(window.history, "pushState");

@@ -4,9 +4,12 @@ Usage:
     python manage.py test tests.test_iiif_memo --settings=tests.test_settings
 """
 
+import copy
 import time
 import uuid
 from unittest import mock
+
+import requests
 
 from django.conf import settings
 from django.core.cache import cache
@@ -17,8 +20,9 @@ from django.test.utils import CaptureQueriesContext
 from arches.app.models.models import TileModel
 
 from manuspectrum.utils import public_visibility
+from manuspectrum.utils.http import FetchedResponse
 
-from tests.explorer_fixtures import FEATURES, IIIFCase
+from tests.explorer_fixtures import FEATURES, SOURCE_MANIFEST, IIIFCase
 
 
 def memo_keys():
@@ -321,6 +325,79 @@ class MemoTests(IIIFCase):
         self.assertNotIn("ETag", built)
         self.assertEqual(page.status_code, 404)
 
+    def with_image_services(self):
+        """The source manifest with an image service on each canvas; returns the URL of page 3 (one rectangle)."""
+        manifest = copy.deepcopy(SOURCE_MANIFEST)
+        for number, canvas in enumerate(manifest["items"], start=1):
+            service = {
+                "id": f"https://example.org/image/{number}",
+                "type": "ImageService2",
+            }
+            canvas["items"] = [{"items": [{"body": {"service": [service]}}]}]
+        self.fetch.side_effect = lambda url: manifest
+        return f"/iiif/v3/annotation-collection/{self.documents['open'].pk}/page-3"
+
+    def test_a_page_targets_the_pixels_its_image_description_gives(self):
+        url = self.with_image_services()
+        info = FetchedResponse(
+            "https://example.org/image/3/info.json",
+            200,
+            {},
+            b'{"width": 4000, "height": 5000, "tiles": [{"width": 512}]}',
+        )
+        with (
+            self.settings(IIIF_IMAGE_INFO_READ=True),
+            mock.patch("manuspectrum.iiif.units.safe_fetch", return_value=info) as read,
+        ):
+            self.visitor.get(
+                f"/iiif/v3/annotation-collection/{self.documents['open'].pk}"
+            )
+            collection_reads = read.call_count
+            page = self.visitor.get(url)
+
+        self.assertEqual(collection_reads, 0)
+        self.assertEqual(
+            [call.args[0] for call in read.call_args_list],
+            ["https://example.org/image/3/info.json"],
+        )
+        self.assertIn(b'"xywh=160,160,320,320"', page.content)
+        self.assertIn("ETag", page)
+
+    def test_an_image_description_that_fails_keeps_the_page_for_the_degraded_lifetime(
+        self,
+    ):
+        url = self.with_image_services()
+        with (
+            self.settings(IIIF_IMAGE_INFO_READ=True),
+            mock.patch(
+                "manuspectrum.iiif.units.safe_fetch",
+                side_effect=requests.exceptions.ConnectTimeout(),
+            ),
+        ):
+            page = self.visitor.get(url)
+
+        (key,) = memo_keys()
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b'"xywh=320,320,640,640"', page.content)
+        self.assertLessEqual(self.remaining(key), settings.IIIF_DEGRADED_TTL)
+        self.assertNotIn("ETag", page)
+
+    def test_an_image_host_that_refuses_the_server_keeps_the_page_for_the_memo_lifetime(
+        self,
+    ):
+        url = self.with_image_services()
+        refused = FetchedResponse("https://example.org/image/3/info.json", 403, {}, b"")
+        with (
+            self.settings(IIIF_IMAGE_INFO_READ=True),
+            mock.patch("manuspectrum.iiif.units.safe_fetch", return_value=refused),
+        ):
+            page = self.visitor.get(url)
+
+        (key,) = memo_keys()
+        self.assertIn(b'"xywh=320,320,640,640"', page.content)
+        self.assertGreater(self.remaining(key), settings.IIIF_DEGRADED_TTL)
+        self.assertIn("ETag", page)
+
     def test_a_local_manifest_missing_from_the_database_is_degraded(self):
         node = self.nodes[("document", "facsimiles")]
         TileModel.objects.filter(
@@ -437,7 +514,7 @@ class GuardOnceTests(IIIFCase):
                 )
 
     def test_an_annotation_build_reads_the_annotated_row_once(self):
-        analysis = str(self.analyses["open"].pk)
+        analysis = self.analyses["open"].pk.hex
         for url in (self.annotation, self.content_state):
             with self.subTest(url=url):
                 cache.clear()

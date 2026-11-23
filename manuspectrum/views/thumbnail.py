@@ -1,6 +1,6 @@
 """Search thumbnails, cached at the edge of the request.
 
-Subclass of ``arches.app.views.thumbnail.ThumbnailView`` (Arches 8.0.x): same
+Subclass of ``arches.app.views.thumbnail.ThumbnailView`` (Arches 8.2.0): same
 resolution and same body, plus the validators a browser needs to stop asking.
 Every miss on this route costs the fetchers a IIIF manifest fetch and an image
 fetch from a library server, and search results request one per row.

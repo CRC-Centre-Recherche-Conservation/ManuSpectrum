@@ -101,6 +101,20 @@ class StackProofTests(unittest.TestCase):
         self.assertIn("steps.build.outcome == 'success'", trivy["if"])
         self.assertNotIn("steps.load.", trivy["if"])
 
+    def test_the_dockerfile_bases_are_literal_pinned_images(self):
+        text = (ROOT / "deploy" / "docker" / "Dockerfile").read_text()
+        stages = dict(
+            (name, image)
+            for image, name in re.findall(r"(?m)^FROM (\S+) AS (\S+)$", text)
+        )
+        for stage in ("uv", "python-deps", "frontend", "runtime"):
+            with self.subTest(stage=stage):
+                self.assertRegex(
+                    stages[stage], r"^[\w./-]+:[\w.-]+@sha256:[0-9a-f]{64}$"
+                )
+        self.assertEqual(stages["python-deps"], stages["runtime"])
+        self.assertNotRegex(text, r"(?m)^FROM \$")
+
     def test_the_dockerfile_labels_the_revision(self):
         text = (ROOT / "deploy" / "docker" / "Dockerfile").read_text()
         self.assertRegex(text, r"(?m)^ARG GIT_SHA=")
@@ -350,7 +364,10 @@ class LockfileTests(unittest.TestCase):
         run = "\n".join(s.get("run", "") for s in steps(job))
         self.assertIn("lock --check", run)
         self.assertIn("deploy/docker/Dockerfile", run)
-        self.assertIn("ARG UV_IMAGE=", (ROOT / "deploy/docker/Dockerfile").read_text())
+        self.assertRegex(
+            (ROOT / "deploy/docker/Dockerfile").read_text(),
+            r"(?m)^FROM ghcr\.io/astral-sh/uv:\S+ AS uv$",
+        )
         checkout = next(s for s in steps(job) if "checkout" in s.get("uses", ""))
         self.assertIs(checkout["with"]["persist-credentials"], False)
         self.assertIn("lockfile", jobs["conclusion"]["needs"])
@@ -377,6 +394,20 @@ class DependabotTests(unittest.TestCase):
         self.assertIn("docker-compose", ecosystems)
         for update in updates:
             self.assertEqual(update["target-branch"], "dev", update["directory"])
+
+    def test_docker_base_images_get_new_digests_of_the_same_tags_only(self):
+        docker = next(u for u in self.updates() if u["package-ecosystem"] == "docker")
+        self.assertEqual(docker["directory"], "/deploy/docker")
+        ignored = {
+            rule["dependency-name"]: set(rule["update-types"])
+            for rule in docker["ignore"]
+        }
+        minor_major = {"version-update:semver-major", "version-update:semver-minor"}
+        self.assertEqual(ignored["python"], minor_major)
+        self.assertEqual(ignored["node"], {"version-update:semver-major"})
+        self.assertEqual(
+            ignored["*astral-sh/uv"], minor_major | {"version-update:semver-patch"}
+        )
 
     def test_npm_groups_minor_and_patch(self):
         npm = next(u for u in self.updates() if u["package-ecosystem"] == "npm")
@@ -464,6 +495,28 @@ class StagingTests(unittest.TestCase):
 
     def test_publish_exposes_the_digest(self):
         self.assertIn("digest", self.workflow["jobs"]["publish"]["outputs"])
+
+    def test_every_published_build_rebuilds_the_runtime_stage(self):
+        builds = [
+            s
+            for s in steps(self.workflow["jobs"]["build"])
+            if "build-push-action" in s.get("uses", "")
+        ]
+        self.assertEqual(len(builds), 2)
+        for build in builds:
+            options = build["with"]
+            if "cache-from" in options:
+                self.assertEqual(options.get("no-cache-filters"), "runtime")
+                self.assertNotIn("cache-to", options)
+            else:
+                self.assertIs(options.get("no-cache"), True)
+
+    def test_the_runtime_stage_is_final_and_upgrades_the_debian_packages(self):
+        dockerfile = (ROOT / "deploy/docker/Dockerfile").read_text()
+        stages = re.split(r"^FROM\s", dockerfile, flags=re.M)
+        final = stages[-1]
+        self.assertRegex(final.splitlines()[0], r"\sAS\s+runtime\s*$")
+        self.assertIn("apt-get upgrade", final)
 
 
 class ReleaseTests(unittest.TestCase):
@@ -633,9 +686,9 @@ class ReleaseTests(unittest.TestCase):
 
 
 MAIN_CHECKS = [
-    "build_feature_branch (3.11)",
     "build_feature_branch (3.12)",
     "build_feature_branch (3.13)",
+    "build_feature_branch (3.14)",
     "check_python_coverage",
     "check_frontend_coverage",
 ]

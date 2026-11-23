@@ -1,6 +1,7 @@
 """Two-factor enrolment and the second-factor sign-in step (PP-4, T4)."""
 
 import base64
+import json
 from unittest import mock
 
 import pyotp
@@ -427,6 +428,19 @@ class CsrfFailureTests(TestCase):
         response = csrf_failure(request, "reason")
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response["Content-Type"], "application/json")
+
+    def test_an_api_path_answers_in_french(self):
+        from django.utils import translation
+
+        from manuspectrum.accounts.csrf_failure import csrf_failure
+
+        request = RequestFactory().post("/fr/api/anything")
+        request.user = self.alice
+        with translation.override("fr"):
+            response = csrf_failure(request, "reason")
+        body = json.loads(response.content)
+        self.assertEqual(body["title"], "Échec de la requête")
+        self.assertEqual(body["message"], "Permission refusée")
 
 
 class AdminResetTests(TestCase):

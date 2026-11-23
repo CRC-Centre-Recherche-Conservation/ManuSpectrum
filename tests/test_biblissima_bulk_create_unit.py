@@ -323,8 +323,8 @@ class LinkToProjectBatchTests(TestCase):
         current = [
             {
                 "resourceId": str(rid),
-                "ontologyProperty": "",
-                "inverseOntologyProperty": "",
+                "relationship": "",
+                "inverseRelationship": "",
                 "resourceXresourceId": "",
             }
             for rid in (existing_ids or [])
@@ -535,7 +535,7 @@ class LinkToProjectBatchTests(TestCase):
     @patch(PATCH_TILE)
     def test_project_ref_structure(self, MockTile):
         """The appended ref dict must match the exact 4-key shape expected by Arches:
-        resourceId, ontologyProperty, inverseOntologyProperty, resourceXresourceId."""
+        resourceId, relationship, inverseRelationship, resourceXresourceId."""
         new_id = str(uuid.uuid4())
         existing = self._existing_tile(existing_ids=[])
         self._setup_tile_query(MockTile, existing)
@@ -547,6 +547,6 @@ class LinkToProjectBatchTests(TestCase):
         self.assertEqual(len(saved_data), 1)
         ref = saved_data[0]
         self.assertEqual(ref["resourceId"], new_id)
-        self.assertEqual(ref["ontologyProperty"], "")
-        self.assertEqual(ref["inverseOntologyProperty"], "")
+        self.assertEqual(ref["relationship"], "")
+        self.assertEqual(ref["inverseRelationship"], "")
         self.assertEqual(ref["resourceXresourceId"], "")

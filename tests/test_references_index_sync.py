@@ -31,7 +31,7 @@ class ReferencesIndexSynchronousTests(TestCase):
             mock.patch.object(Resource, "get_root_ontology", return_value=None),
             mock.patch(f"{RESOURCE}.se"),
             mock.patch(
-                "arches_controlled_lists.search_indexes.reference_index."
+                "arches.extensions.controlled_lists.search_indexes.reference_index."
                 "ReferenceIndex.index_document"
             ) as sync_index,
         ):

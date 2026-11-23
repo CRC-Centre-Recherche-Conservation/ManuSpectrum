@@ -20,7 +20,14 @@ from manuspectrum.accounts import twofactor
 from manuspectrum.accounts.terms import TERMS_VERSION
 from manuspectrum.models import TermsAcceptance
 from manuspectrum.accounts.twofactor import decrypt_secret, encrypt_secret
-from tests.test_accounts_activation import browser_post, cross_site_click, open_link
+from tests.test_accounts_activation import (
+    ExpiredStepCases,
+    MailedLinkCases,
+    browser_post,
+    cross_site_click,
+    link_cookies,
+    open_link,
+)
 from tests.test_accounts_twofactor import PASSWORD, WRONG, enrol, stored
 from tests.totp import current_code
 
@@ -170,83 +177,9 @@ class ResetPageTests(TestCase):
         self.assertRedirects(response, self.page, fetch_redirect_response=False)
         return response
 
-    def test_the_link_shows_continue_then_moves_its_token_to_the_session(self):
-        token = self.path.rsplit("/", 1)[1]
-        landing = self.client.get(self.path)
-        self.assertEqual(landing.status_code, 200)
-        self.assertEqual(landing["Referrer-Policy"], "same-origin")
-        self.assertIn("no-store", landing["Cache-Control"])
-        self.assertNotContains(landing, token)
-        self.assertNotContains(landing, 'name="password"')
-        self.assertContains(landing, ">Continue</button>")
-        self.assertNotIn(twofactor.RESET_TOKEN_KEY, self.client.session)
-        response = self.client.post(self.path)
-        self.assertRedirects(response, self.page, fetch_redirect_response=False)
-        self.assertEqual(response["Referrer-Policy"], "same-origin")
-        self.assertNotIn(token, response["Location"])
-        page = self.client.get(self.page)
-        self.assertEqual(page.status_code, 200)
-        self.assertEqual(page["Referrer-Policy"], "same-origin")
-        self.assertNotContains(page, token)
-        self.assertContains(page, 'name="password"')
-
-    def test_the_continue_page_is_in_french_under_fr(self):
-        with translation.override("fr"):
-            response = self.client.get("/fr" + self.path.removeprefix("/en"))
-        self.assertContains(response, ">Continuer</button>")
-        self.assertContains(response, "Continuez pour saisir votre mot de passe")
-
-    def test_a_link_clicked_in_a_webmail_reaches_the_password_form(self):
-        """A cross-site click carries no session cookie over a redirect."""
-        client = Client(raise_request_exception=False, enforce_csrf_checks=True)
-        landing = cross_site_click(client, self.path)
-        self.assertEqual(landing.status_code, 200)
-        self.assertContains(landing, "Continue</button>")
-        response = browser_post(client, landing, self.path)
-        self.assertRedirects(response, self.page, fetch_redirect_response=False)
-        page = client.get(self.page)
-        self.assertEqual(page.status_code, 200)
-        self.assertContains(page, 'name="password"')
-
-    def test_a_signed_in_browser_clicking_in_a_webmail_reaches_the_password_form(self):
-        client = Client(raise_request_exception=False, enforce_csrf_checks=True)
-        other = User.objects.create_user("other", "other@manuspectrum.test", PASSWORD)
-        client.force_login(other)
-        cookie = client.cookies[settings.SESSION_COOKIE_NAME].value
-        landing = cross_site_click(client, self.path)
-        self.assertEqual(landing.status_code, 200)
-        # A new session cookie would replace the one the click did not send.
-        self.assertNotIn(settings.SESSION_COOKIE_NAME, landing.cookies)
-        self.assertEqual(client.cookies[settings.SESSION_COOKIE_NAME].value, cookie)
-        response = browser_post(client, landing, self.path)
-        self.assertRedirects(response, self.page, fetch_redirect_response=False)
-        self.assertContains(client.get(self.page), 'name="password"')
-
-    def test_opening_the_link_stores_nothing_and_does_not_use_it(self):
-        scanner = Client()
-        self.assertEqual(scanner.get(self.path).status_code, 200)
-        self.assertEqual(scanner.head(self.path).status_code, 200)
-        self.assertNotIn(settings.SESSION_COOKIE_NAME, scanner.cookies)
-        self.assertEqual(scanner.get(self.page).status_code, 410)
-        self.open()
-
-    def test_continue_without_the_csrf_token_is_refused(self):
-        client = Client(raise_request_exception=False, enforce_csrf_checks=True)
-        client.get(self.path)
-        response = client.post(self.path, HTTP_ORIGIN="http://testserver")
-        self.assertEqual(response.status_code, 403)
-        self.assertNotIn(twofactor.RESET_TOKEN_KEY, client.session)
-
-    def test_continue_on_a_bad_link_is_refused(self):
-        response = post(self.client, "/en/account/two-factor/reset/not-a-token")
-        self.assertEqual(response.status_code, 410)
-        self.assertNotIn(twofactor.RESET_TOKEN_KEY, self.client.session)
-
     def test_the_password_form_posts_from_the_browser_with_csrf_checks_on(self):
         client = Client(raise_request_exception=False, enforce_csrf_checks=True)
-        landing = client.get(self.path)
-        browser_post(client, landing, self.path)
-        page = client.get(self.page)
+        page = cross_site_click(client, self.path)
         response = browser_post(
             client, page, self.page, action="password", password=PASSWORD
         )
@@ -257,15 +190,13 @@ class ResetPageTests(TestCase):
         self.client.force_login(self.alice)
         self.alice.refresh_from_db()
         path = token_path(self.alice)
-        landing = self.client.get(path, **HTML)
-        self.assertEqual(landing.status_code, 200)
-        response = self.client.post(path, **HTML)
+        response = self.client.get(path, **HTML)
         self.assertRedirects(response, self.page, fetch_redirect_response=False)
         page = self.client.get(self.page, **HTML)
         self.assertEqual(page.status_code, 200)
         self.assertNotIn("terms", page.get("Location", ""))
 
-    def test_the_placeholder_without_a_session_token_is_refused(self):
+    def test_the_placeholder_without_the_cookie_is_refused(self):
         response = self.client.get(self.page)
         self.assertEqual(response.status_code, 410)
         self.assertEqual(response["Referrer-Policy"], "same-origin")
@@ -343,11 +274,16 @@ class ResetPageTests(TestCase):
             email="b@manuspectrum.test",
             password=make_password(PASSWORD, hasher="pbkdf2_sha256"),
         )
-        open_link(self.client, token_path(bob))
+        old_path = token_path(bob)
+        open_link(self.client, old_path)
         response = post(self.client, self.page, action="password", password=PASSWORD)
         self.assertEqual(response.status_code, 200)
         bob.refresh_from_db()
         self.assertTrue(bob.password.startswith("argon2$"), bob.password[:12])
+        renewed = link_cookies(response, "ms_two_factor_link")["en"].value
+        self.assertNotIn(old_path.rstrip("/").rsplit("/", 1)[1], renewed)
+        self.assertEqual(self.client.cookies["ms_two_factor_link_en"].value, renewed)
+        self.assertEqual(twofactor.user_for_reset(renewed.rsplit(":", 2)[0]), bob)
         secret = decrypt_secret(self.client.session["ms_reset_pending_mfa_secret"])
         done = post(self.client, self.page, action="confirm", code=current_code(secret))
         self.assertRedirects(done, reverse("root"), fetch_redirect_response=False)
@@ -375,6 +311,73 @@ class ResetPageTests(TestCase):
                 for _ in range(7)
             ]
         self.assertIn(429, statuses)
+
+
+@override_settings(ENABLE_TWO_FACTOR_AUTHENTICATION=True)
+class ResetLinkTests(MailedLinkCases, ExpiredStepCases, TestCase):
+    """The re-enrolment link: a cookie, a redirect, then the password page."""
+
+    cookie = "ms_two_factor_link"
+    other_cookie = "ms_reset_link"
+    marker = 'name="password"'
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.alice = User.objects.create_user("alice", "a@manuspectrum.test", PASSWORD)
+
+    def setUp(self):
+        cache.clear()
+        AccessAttempt.objects.all().delete()
+        self.link = token_path(self.alice)
+        self.form = "/en/account/two-factor/reset/enrol"
+        self.fr_link = "/fr" + self.link.removeprefix("/en")
+        self.fr_form = "/fr" + self.form.removeprefix("/en")
+        self.folders = {
+            code: f"/{code}/account/two-factor/reset/" for code, _ in settings.LANGUAGES
+        }
+
+    def client_for(self, **options):
+        return Client(raise_request_exception=False, **options)
+
+    def submit(self, client, page):
+        browser_post(client, page, self.form, action="password", password=PASSWORD)
+        secret = decrypt_secret(client.session["ms_reset_pending_mfa_secret"])
+        done = browser_post(
+            client, page, self.form, action="confirm", code=current_code(secret)
+        )
+        self.assertRedirects(done, reverse("root"), fetch_redirect_response=False)
+        self.assertEqual(decrypt_secret(stored(self.alice)), secret)
+        return done
+
+    def assert_invalid(self, response):
+        self.assertEqual(response.status_code, 410)
+        self.assertEqual(response["Referrer-Policy"], "same-origin")
+        self.assertNotContains(response, 'name="password"', status_code=410)
+
+    def test_the_form_page_holds_no_token(self):
+        client = self.client_for()
+        client.get(self.link)
+        page = client.get(self.form)
+        self.assertEqual(page["Referrer-Policy"], "same-origin")
+        self.assertNotContains(page, self.token())
+
+    def test_a_bad_token_is_refused(self):
+        response = self.client_for().get("/en/account/two-factor/reset/not-a-token")
+        self.assertEqual(response.status_code, 410)
+
+    def test_cancelling_keeps_the_link_working(self):
+        client = self.client_for()
+        client.get(self.link)
+        response = post(client, self.form, action="cancel")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(link_cookies(response, self.cookie)["en"]["max-age"], 900)
+        self.assertContains(client.get(self.form), self.marker)
+
+    def test_the_token_is_not_written_to_the_session(self):
+        client = self.client_for()
+        client.get(self.link)
+        client.get(self.form)
+        self.assertNotIn(settings.SESSION_COOKIE_NAME, client.cookies)
 
 
 class AdminActionTests(TestCase):

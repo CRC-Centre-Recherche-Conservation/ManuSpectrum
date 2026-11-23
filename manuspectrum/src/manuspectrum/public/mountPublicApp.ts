@@ -6,7 +6,7 @@ import { guardLocalStorage } from "@/manuspectrum/public/safe-storage.ts";
 import { PUBLIC_THEME } from "@/manuspectrum/themes/public-theme.ts";
 
 import type { App, Component } from "vue";
-import type { PrimeVueLocaleOptions } from "primevue/config";
+import type { PrimeVueLocaleOptions } from "openvue/config";
 
 export interface MountPublicAppOptions {
     component: Component;
@@ -14,7 +14,7 @@ export interface MountPublicAppOptions {
     initialProps?: Record<string, unknown>;
 }
 
-/** PrimeVue's built-in strings (aria labels, close buttons) in the page language; English for any language the site does not offer. */
+/** OpenVue's built-in strings (aria labels, close buttons) in the page language; English for any language the site does not offer. */
 export function primeVueLocale(lang: string): PrimeVueLocaleOptions {
     return lang.toLowerCase().startsWith("fr") ? fr : en;
 }

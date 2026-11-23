@@ -30,6 +30,14 @@ msgstr ""
 msgid "You must accept the terms of use to continue."
 msgstr "Vous devez accepter les conditions d'utilisation pour continuer."
 
+#: accounts/csrf_failure.py:48
+msgid "Request Failed"
+msgstr "Échec de la requête"
+
+#: accounts/csrf_failure.py:48
+msgid "Permission Denied"
+msgstr "Permission refusée"
+
 #: accounts/notices.py:83
 #, python-format
 msgid "in %(days)d day"
@@ -1297,14 +1305,6 @@ msgstr ""
 msgid "Accept and choose your password"
 msgstr "Accepter et choisir votre mot de passe"
 
-#: templates/accounts/activate_continue.htm:10
-msgid ""
-"Your invitation link is valid. Continue to read the terms of use and choose "
-"your password."
-msgstr ""
-"Votre lien d'invitation est valide. Continuez pour lire les conditions "
-"d'utilisation et choisir votre mot de passe."
-
 #: templates/accounts/activation_invalid.htm:3
 #: templates/accounts/activation_invalid.htm:4
 #: templates/accounts/two_factor_reset_invalid.htm:3
@@ -1495,14 +1495,6 @@ msgstr "Mot de passe"
 #: templates/accounts/two_factor_reset.htm:46
 msgid "Continue"
 msgstr "Continuer"
-
-#: templates/accounts/two_factor_reset_continue.htm:14
-msgid ""
-"Your link is valid. Continue to type your password and set up your "
-"authenticator again."
-msgstr ""
-"Votre lien est valide. Continuez pour saisir votre mot de passe et "
-"configurer à nouveau votre application d'authentification."
 
 #: templates/accounts/two_factor_reset_invalid.htm:7
 msgid "The link has expired, has already been used or is incorrect."
@@ -2300,12 +2292,6 @@ msgstr "Navigation principale"
 msgid "The Project"
 msgstr "Le Projet"
 
-#: templates/includes/ms_header.htm:12 templates/includes/ms_header.htm:16
-#: templates/includes/ms_header.htm:88 templates/includes/ms_header.htm:92
-#: templates/index.htm:404 templates/index.htm:406
-msgid "Explore"
-msgstr "Explorer"
-
 #: templates/includes/ms_header.htm:13 templates/includes/ms_header.htm:17
 #: templates/includes/ms_header.htm:89 templates/includes/ms_header.htm:93
 #: templates/index.htm:470 templates/index.htm:472
@@ -2517,8 +2503,8 @@ msgid "X-ray Fluorescence"
 msgstr "Fluorescence X"
 
 #: templates/index.htm:306 templates/index.htm:308
-msgid "X-ray Micro-Fluorescence"
-msgstr "Microfluorescence X"
+msgid "X-ray Fluorescence Imaging"
+msgstr "Imagerie de fluorescence de rayons X"
 
 #: templates/index.htm:311 templates/index.htm:313
 msgid "Fiber Optic Reflectance"
@@ -3948,10 +3934,6 @@ msgid ""
 msgstr ""
 "ManuSpectrum — base de données interopérable pour l'analyse physico-chimique"
 " du patrimoine culturel écrit."
-
-#: templates/registration/password_reset_continue.html:3
-msgid "Your link is valid. Continue to choose a new password."
-msgstr "Votre lien est valide. Continuez pour choisir un nouveau mot de passe."
 
 #: templates/registration/password_reset_email_html.html:17
 #, python-format
@@ -5503,8 +5485,8 @@ msgid "Observation · CRMsci"
 msgstr "Observation · CRMsci"
 
 #: templates/views/pages/conceptual-model.htm:109
-msgid "Analysis → Characterization"
-msgstr "Analyse → Caractérisation"
+msgid "Analysis → Interpretation"
+msgstr "Analyse → Interprétation"
 
 #: templates/views/pages/conceptual-model.htm:110
 msgid "Shared context"
@@ -5653,13 +5635,13 @@ msgstr "la mesure : instrument, opérateur, date"
 
 #: templates/views/pages/conceptual-model.htm:201
 #: templates/views/pages/conceptual-model.htm:203
-msgid "Characterization"
-msgstr "Caractérisation"
+msgid "Interpretation"
+msgstr "Interprétation"
 
 #: templates/views/pages/conceptual-model.htm:201
 #: templates/views/pages/conceptual-model.htm:203
-msgid "the interpretation — stored apart from the measurement"
-msgstr "l'interprétation — enregistrée à part de la mesure"
+msgid "the materials identified — stored apart from the measurement"
+msgstr "les matériaux identifiés — enregistrés à part de la mesure"
 
 #: templates/views/pages/conceptual-model.htm:210
 #: templates/views/pages/conceptual-model.htm:212
@@ -6458,23 +6440,6 @@ msgstr ""
 " Biblissima ou depuis le serveur IIIF de la bibliothèque qui conserve le "
 "document."
 
-#: templates/views/pages/privacy.htm:101
-msgid ""
-"Rich-text editor (CKEditor, part of Arches): each time it opens, it asks "
-"cke4.ckeditor.com (CKSource) whether its version is up to date. Its spell "
-"checker (SCAYT) is off by default; if you switch it on, the text you type is"
-" sent to WebSpellChecker (svc.webspellchecker.net), which does not state "
-"where it processes it: this is outside our control. We advise using your "
-"browser's spell checker instead."
-msgstr ""
-"Éditeur de texte enrichi (CKEditor, intégré à Arches) : à chaque ouverture, "
-"il demande à cke4.ckeditor.com (CKSource) si sa version est à jour. Son "
-"correcteur orthographique (SCAYT) est désactivé par défaut ; si vous "
-"l'activez, le texte que vous saisissez est envoyé à WebSpellChecker "
-"(svc.webspellchecker.net), qui n'indique pas où il le traite : cela échappe "
-"à notre contrôle. Nous conseillons d'utiliser plutôt le correcteur de votre "
-"navigateur."
-
 #: templates/views/pages/privacy.htm:102
 msgid ""
 "Thesaurus page of Arches (administrators only): the fonts are loaded from "
@@ -6527,14 +6492,14 @@ msgstr "Transferts hors de l'Union européenne"
 msgid ""
 "None by the platform, which is hosted in France. The exceptions are the "
 "services above that are stated to process data outside the European Union or"
-" whose location is not stated: Google Fonts, WebSpellChecker, Let's Encrypt "
-"and OpenFreeMap (served through Cloudflare, United States)."
+" whose location is not stated: Google Fonts, Let's Encrypt and OpenFreeMap "
+"(served through Cloudflare, United States)."
 msgstr ""
 "Aucun transfert par la plateforme, qui est hébergée en France. Les "
 "exceptions sont les services ci-dessus dont il est indiqué qu'ils traitent "
 "des données hors de l'Union européenne ou dont le lieu de traitement n'est "
-"pas indiqué : Google Fonts, WebSpellChecker, Let's Encrypt et OpenFreeMap "
-"(servi par Cloudflare, États-Unis)."
+"pas indiqué : Google Fonts, Let's Encrypt et OpenFreeMap (servi par "
+"Cloudflare, États-Unis)."
 
 #: templates/views/pages/privacy.htm:114
 msgid "Your rights"
@@ -7429,10 +7394,6 @@ msgstr "Référence"
 msgid "IIIF Manifest"
 msgstr "Manifeste IIIF"
 
-#: views/renderer_config.py:51
-msgid "<h1>Renderers do not exist</h1>"
-msgstr "<h1>Les rendus n'existent pas</h1>"
-
 #: views/renderer_config.py:129
 msgid "<h1>Renderers config does not exist</h1>"
 msgstr "<h1>La configuration de rendu n'existe pas</h1>"
@@ -7753,8 +7714,8 @@ msgid "Annotations and content states"
 msgstr "Annotations et états de contenu"
 
 #: templates/views/pages/data.htm
-msgid "annotation collections, characterizations and the content state of a zone, for Mirador and mirador-xyviewer."
-msgstr "collections d'annotations, caractérisations et état de contenu d'une zone, pour Mirador et mirador-xyviewer."
+msgid "annotation collections, interpretations and the content state of a zone, for Mirador and mirador-xyviewer."
+msgstr "collections d'annotations, interprétations et état de contenu d'une zone, pour Mirador et mirador-xyviewer."
 
 #: templates/views/pages/data.htm
 msgid "Spectra"
@@ -7887,3 +7848,50 @@ msgstr "Glisser pour comparer Hg / Ca"
 #: templates/index.htm
 msgid "Browse the corpus"
 msgstr "Parcourir le corpus"
+
+#: views/biblissima_proxy.py
+msgid "A linked place, person or group could not be found."
+msgstr "Un lieu, une personne ou un groupe lié est introuvable."
+
+#: views/biblissima_proxy.py
+msgid "The project chosen for this import could not be found."
+msgstr "Le projet choisi pour cet import est introuvable."
+
+#: views/biblissima_proxy.py
+msgid "Invalid Biblissima data."
+msgstr "Données Biblissima invalides."
+
+#: views/biblissima_proxy.py
+msgid "Resource creation failed."
+msgstr "La création de la ressource a échoué."
+
+#: views/biblissima_proxy.py
+msgid "Creation failed for this item."
+msgstr "La création de cet élément a échoué."
+
+#: templates/accounts/activation_invalid.htm:3
+#: templates/accounts/activation_invalid.htm:4
+#: templates/accounts/activation_invalid.htm:5
+#: templates/accounts/two_factor_reset_invalid.htm:3
+#: templates/accounts/two_factor_reset_invalid.htm:4
+#: templates/accounts/two_factor_reset_invalid.htm:5
+msgid "This page has expired"
+msgstr "Cette page a expiré"
+
+#: templates/accounts/activation_invalid.htm:8
+#: templates/accounts/two_factor_reset_invalid.htm:8
+#, python-format
+msgid ""
+"A page opened from a link in an e-mail stays open for %(minutes)s minutes. "
+"Open the link in your e-mail again."
+msgstr ""
+"Une page ouverte depuis un lien reçu par e-mail reste ouverte %(minutes)s "
+"minutes. Rouvrez le lien de votre e-mail."
+
+#: templates/views/pages/privacy.htm:130
+msgid ""
+"Carries the token of a link received by e-mail to its form, for 15 minutes; "
+"deleted once the form is sent."
+msgstr ""
+"Porte le jeton d'un lien reçu par e-mail jusqu'à son formulaire, pendant 15 "
+"minutes ; supprimé une fois le formulaire envoyé."

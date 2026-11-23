@@ -3,8 +3,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: dev@fargeo.com\n"
-"POT-Creation-Date: 2026-10-08 15:51:59\n"
-"PO-Revision-Date: 2026-10-08 15:51:59\n"
+"POT-Creation-Date: 2026-11-16 18:20:27\n"
+"PO-Revision-Date: 2026-11-16 18:20:27\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -90,14 +90,6 @@ msgstr ""
 
 #: cards_x_nodes_x_widgets:1
 msgid "Concept URI"
-msgstr ""
-
-#: cards_x_nodes_x_widgets:1
-msgid "Dragon"
-msgstr ""
-
-#: cards_x_nodes_x_widgets:1
-msgid "https://data.biblissima.fr/entity/Q291430"
 msgstr ""
 
 #: cards_x_nodes_x_widgets:1
@@ -254,10 +246,6 @@ msgid "Thesaurus SPARQL Endpoint"
 msgstr ""
 
 #: cards_x_nodes_x_widgets:1
-msgid "Characterization"
-msgstr ""
-
-#: cards_x_nodes_x_widgets:1
 msgid "Hexagon Size (in km)"
 msgstr ""
 
@@ -314,10 +302,6 @@ msgstr ""
 
 #: cards_x_nodes_x_widgets:1
 msgid "@id of the canvas in the manifest"
-msgstr ""
-
-#: cards_x_nodes_x_widgets:1
-msgid "Characterisation"
 msgstr ""
 
 #: cards_x_nodes_x_widgets:1
@@ -426,10 +410,6 @@ msgstr ""
 
 #: cards_x_nodes_x_widgets:1
 msgid "Mapbox Sprites"
-msgstr ""
-
-#: cards_x_nodes_x_widgets:1
-msgid "Influenced by Characterization observation"
 msgstr ""
 
 #: cards_x_nodes_x_widgets:1
@@ -630,10 +610,6 @@ msgstr ""
 
 #: cards_x_nodes_x_widgets:1
 msgid "Image"
-msgstr ""
-
-#: cards_x_nodes_x_widgets:1
-msgid "Location of characterization"
 msgstr ""
 
 #: cards_x_nodes_x_widgets:1
@@ -976,25 +952,6 @@ msgid ""
 msgstr ""
 
 #: cards:1
-msgid "Naming the characterization"
-msgstr ""
-
-#: cards:1
-msgid ""
-"<p>The <strong>Label</strong> is the name shown in search results and on the"
-" public site, so it must read alone. Recommended form, like the Analysis and"
-" Component names: the materials, the zone and folio, then the shelfmark of "
-"the document, with a plain hyphen between these three parts, in the form "
-"<code>&lt;materials&gt; - &lt;zone&gt; &lt;folio&gt; - "
-"&lt;shelfmark&gt;</code> (the layer is not part of the name; the zone and "
-"the folio are joined by a space, without hyphen).</p><p>Set "
-"<strong>Type</strong> to « preferred terms » for the main name; give its "
-"<strong>Language</strong> when you add the name in several languages. In "
-"<strong>Source</strong>, you may cite a record that names the "
-"characterization this way.</p>"
-msgstr ""
-
-#: cards:1
 msgid "Name of Project"
 msgstr ""
 
@@ -1057,24 +1014,6 @@ msgid ""
 "<code>https://initiale.irht.cnrs.fr/decor/…</code>, Type « record "
 "identifiers » and no Source; or a Biblissima page, Source « Biblissima ». A "
 "local working code is not entered here: put it in the name.</p>"
-msgstr ""
-
-#: cards:1
-msgid "What was characterized, and where"
-msgstr ""
-
-#: cards:1
-msgid ""
-"<p>In <strong>Object observed</strong>, choose the Component the "
-"characterization is about, e.g. an initial. In <strong>Color "
-"aspect</strong>, choose the colour of the layer as it appears today, among "
-"Silvery, Beige, White, Blue, Brown, Coppery, Golden, Grey, Yellow, Black, "
-"Orange, Pink, Red, Green and Violet; several colours are allowed. "
-"<strong>Origin color</strong> is free text for the original colour, if "
-"known.</p><p>In <strong>Location of characterization</strong>, draw the zone"
-" on the image and name it in <strong>Location appellation</strong>, e.g. "
-"<code>red area of the initial</code>. The colour you choose is also what "
-"visitors filter on.</p>"
 msgstr ""
 
 #: cards:1
@@ -1389,32 +1328,6 @@ msgid "Writing a statement"
 msgstr ""
 
 #: cards:1
-msgid ""
-"<p>One entry per text about the component, written in "
-"<strong>Content</strong> (required) and classed by <strong>Type</strong>: « "
-"description », « materials », « inscriptions », « note »… E.g. type « "
-"description »: <em>blue initial with a foliate extension in the "
-"margin</em>.</p><p>Give the <strong>Language</strong> of the text and, in "
-"<strong>Source</strong>, the URL of the catalogue or study it comes from, if"
-" any. Identified materials are not recorded here but as Characterization "
-"records.</p>"
-msgstr ""
-
-#: cards:1
-msgid ""
-"<p>One entry per text about the analysis, written in "
-"<strong>Content</strong> and classed by <strong>Type</strong>: « instrument "
-"settings » or « configuration » for the acquisition parameters (e.g. the "
-"step size and the dwell time of a mapping), « methodology », « conditions » "
-"or « note » for the rest. Pick a Type so that the statements can be told "
-"apart; the content is stored as formatted text.</p><p>Give the "
-"<strong>Language</strong> of the text when it matters and, in "
-"<strong>source</strong>, the URL of the document it comes from, if any. "
-"Identified materials are not recorded here but as Characterization "
-"records.</p>"
-msgstr ""
-
-#: cards:1
 msgid "Map Zoom"
 msgstr ""
 
@@ -1475,22 +1388,6 @@ msgstr ""
 
 #: cards:1
 msgid "Layer"
-msgstr ""
-
-#: cards:1
-msgid "Which layer is characterized"
-msgstr ""
-
-#: cards:1
-msgid ""
-"<p>In <strong>Layer type</strong>, choose the layer of the object that the "
-"materials below belong to: « Colored layer » for a pigment or a dye, « "
-"Preparatory layer » for a ground, « Script » for an ink, « Support » for the"
-" parchment, « Non-painted layer » for a layer that is not paint, « Auxiliary"
-" device » for an auxiliary device.</p><p>One layer per Characterization: if "
-"two layers were identified, create two records and link them in « Correlated"
-" characterizations ». Choose « Decoration » or its child « Decorative book »"
-" only when none of the other items fits.</p>"
 msgstr ""
 
 #: cards:1
@@ -1818,17 +1715,6 @@ msgid "Layers and parts described"
 msgstr ""
 
 #: cards:1
-msgid ""
-"<p>In <strong>Type</strong>, choose every layer or part that the description"
-" of the component mentions. Common cases: « Leaf » for a parchment folio, « "
-"Handwriting » for an ink text. The list has 44 terms (« Pictorial layer », «"
-" Primer », « Book block »…): type to search and pick the most specific. "
-"Several terms are allowed.</p><p>This says what is there, not what it is "
-"made of: the pigments and materials identified by analysis are recorded in "
-"Characterization records.</p>"
-msgstr ""
-
-#: cards:1
 msgid "Current location"
 msgstr ""
 
@@ -2111,10 +1997,6 @@ msgid ""
 msgstr ""
 
 #: cards:1
-msgid "Correlated characterizations"
-msgstr ""
-
-#: cards:1
 msgid ""
 "The inverse relation is not created automatically: if A lies above B, record"
 " « Lies below » on B. The same goes for « Confirms », « Contradicts », « "
@@ -2155,17 +2037,6 @@ msgstr ""
 
 #: cards:1
 msgid "Colours of the component"
-msgstr ""
-
-#: cards:1
-msgid ""
-"<p>In <strong>Color(s)</strong>, choose the colours you see on the "
-"component, one term per colour, e.g. « Red », « Blue » and « Yellow » for "
-"the initial above, or « Golden » for gilding. The list offers 15 colours "
-"(Silvery, Beige, White, Blue, Brown, Coppery, Golden, Grey, Yellow, Black, "
-"Orange, Pink, Red, Green, Violet).</p><p>These colours are what visitors use"
-" to find the component; the colour of each identified material is recorded "
-"in its Characterization record.</p>"
 msgstr ""
 
 #: cards:1
@@ -2285,18 +2156,6 @@ msgid ""
 " made in the laboratory. Choose an existing Place record; create it first if"
 " needed.</p><p>This is not where the document was produced or is kept: those"
 " places belong to the Document record.</p>"
-msgstr ""
-
-#: cards:1
-msgid ""
-"<p>One entry per text about the characterization, written in "
-"<strong>Content</strong> and classed by <strong>Type</strong>: « hypothesis "
-"», « note », « scientific analysis »… E.g. type « hypothesis »: <em>the "
-"layer could be a mixture, to be checked with a second "
-"technique</em>.</p><p>Give the <strong>Language</strong> of the text when it"
-" matters and, in <strong>Source</strong>, the URL of the document it comes "
-"from, if any. The main explanation of the identification goes in « Inference"
-" Making ».</p>"
 msgstr ""
 
 #: cards:1
@@ -2603,20 +2462,6 @@ msgid "Recording an inference"
 msgstr ""
 
 #: cards:1
-msgid ""
-"<p>The conclusion drawn from the observations. Write it in <strong>Inference"
-" making</strong> (required), e.g. <em>the darkening is consistent with the "
-"degradation of a lead-based pigment</em>, and rate it in "
-"<strong>Confidence</strong> (required): « Highly confidence », « Good "
-"Confidence », « Use with caution » or « Unsure ».</p><p>Give the "
-"<strong>Start Date</strong> (required) and <strong>End Date</strong> of the "
-"interpretation and its <strong>Authors of inference</strong>. In "
-"<strong>Influenced by Characterization observation</strong> choose the other"
-" Alteration records the inference builds on. The supporting analyses go in "
-"the sub-cards.</p>"
-msgstr ""
-
-#: cards:1
 msgid "Dimension"
 msgstr ""
 
@@ -2632,22 +2477,6 @@ msgid ""
 "centimeters »; then a second entry for the « width ».</p><p>Measure the "
 "object as it is now, binding included, once per dimension. The number of "
 "leaves is not a dimension: use « Composed of ».</p>"
-msgstr ""
-
-#: cards:1
-msgid "Observed by Characterisation"
-msgstr ""
-
-#: cards:1
-msgid "Characterizations of the modification"
-msgstr ""
-
-#: cards:1
-msgid ""
-"<p>In <strong>Characterisation</strong>, choose the Characterization records"
-" that observed this modification, e.g. one identifying a pigment that did "
-"not exist when the document was made.</p><p>Create the Characterization "
-"records first; the link is entered from this side.</p>"
 msgstr ""
 
 #: cards:1
@@ -3372,16 +3201,6 @@ msgid "Locating the component on the document"
 msgstr ""
 
 #: cards:1
-msgid ""
-"<p>In <strong>Location in Document</strong>, open the image of the document "
-"and draw the area of the component: a rectangle around an initial, a polygon"
-" around a miniature. In <strong>Location appellation</strong>, write the "
-"folio of the zone as <code>f31v</code>.</p><p>Without a drawn zone, the "
-"component cannot be shown on the image, and a characterization of the "
-"component that has no zone of its own cannot be placed on it either.</p>"
-msgstr ""
-
-#: cards:1
 msgid "Authors of Publication"
 msgstr ""
 
@@ -3507,18 +3326,6 @@ msgid ""
 "<strong>Observation notes</strong> says what the data show, e.g. <em>lead "
 "signal in the XRF spectrum</em>.</p><p>Create the Analysis records "
 "first.</p>"
-msgstr ""
-
-#: cards:1
-msgid ""
-"<p>One entry per text about the sample, written in <strong>Content</strong> "
-"and classed by <strong>Type</strong>: « description », « sampling », « "
-"conditions », « note »… E.g. type « description »: <em>flake of about 1 mm, "
-"red, from the edge of the letter</em>.</p><p>Give the "
-"<strong>Language</strong> of the text when it matters and, in "
-"<strong>Source</strong>, the URL of the document it comes from, if any. What"
-" the sample is made of is recorded in Characterization records, not "
-"here.</p>"
 msgstr ""
 
 #: cards:1
@@ -3779,4 +3586,183 @@ msgid ""
 "full text: <strong>Name</strong> and its <strong>Type</strong> (« preferred "
 "terms »); <strong>Language</strong> only when it is not English or French. "
 "E.g. <em>Opaque overpaint</em>.</p>"
+msgstr ""
+
+#: cards_x_nodes_x_widgets:1
+msgid "Interpretation"
+msgstr ""
+
+#: cards_x_nodes_x_widgets:1
+msgid "Location of interpretation"
+msgstr ""
+
+#: cards:1
+msgid "Naming the interpretation"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>The <strong>Label</strong> is the name shown in search results and on the"
+" public site, so it must read alone. Recommended form, like the Analysis and"
+" Component names: the materials, the zone and folio, then the shelfmark of "
+"the document, with a plain hyphen between these three parts, in the form "
+"<code>&lt;materials&gt; - &lt;zone&gt; &lt;folio&gt; - "
+"&lt;shelfmark&gt;</code> (the layer is not part of the name; the zone and "
+"the folio are joined by a space, without hyphen).</p><p>Set "
+"<strong>Type</strong> to « preferred terms » for the main name; give its "
+"<strong>Language</strong> when you add the name in several languages. In "
+"<strong>Source</strong>, you may cite a record that names the interpretation"
+" this way.</p>"
+msgstr ""
+
+#: cards:1
+msgid "What was interpreted, and where"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Object observed</strong>, choose the Component the "
+"interpretation is about, e.g. an initial. In <strong>Color aspect</strong>, "
+"choose the colour of the layer as it appears today, among Silvery, Beige, "
+"White, Blue, Brown, Coppery, Golden, Grey, Yellow, Black, Orange, Pink, Red,"
+" Green and Violet; several colours are allowed. <strong>Origin "
+"color</strong> is free text for the original colour, if known.</p><p>In "
+"<strong>Location of interpretation</strong>, draw the zone on the image and "
+"name it in <strong>Location appellation</strong>, e.g. <code>red area of the"
+" initial</code>. The colour you choose is also what visitors filter on.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Which layer is interpreted"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Layer type</strong>, choose the layer of the object that the "
+"materials below belong to: « Colored layer » for a pigment or a dye, « "
+"Preparatory layer » for a ground, « Script » for an ink, « Support » for the"
+" parchment, « Non-painted layer » for a layer that is not paint, « Auxiliary"
+" device » for an auxiliary device.</p><p>One layer per Interpretation: if "
+"two layers were identified, create two records and link them in « Correlated"
+" interpretations ». Choose « Decoration » or its child « Decorative book » "
+"only when none of the other items fits.</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per text about the analysis, written in "
+"<strong>Content</strong> and classed by <strong>Type</strong>: « instrument "
+"settings » or « configuration » for the acquisition parameters (e.g. the "
+"step size and the dwell time of a mapping), « methodology », « conditions » "
+"or « note » for the rest. Pick a Type so that the statements can be told "
+"apart; the content is stored as formatted text.</p><p>Give the "
+"<strong>Language</strong> of the text when it matters and, in "
+"<strong>source</strong>, the URL of the document it comes from, if any. "
+"Identified materials are not recorded here but as Interpretation "
+"records.</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per text about the component, written in "
+"<strong>Content</strong> (required) and classed by <strong>Type</strong>: « "
+"description », « materials », « inscriptions », « note »… E.g. type « "
+"description »: <em>blue initial with a foliate extension in the "
+"margin</em>.</p><p>Give the <strong>Language</strong> of the text and, in "
+"<strong>Source</strong>, the URL of the catalogue or study it comes from, if"
+" any. Identified materials are not recorded here but as Interpretation "
+"records.</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Type</strong>, choose every layer or part that the description"
+" of the component mentions. Common cases: « Leaf » for a parchment folio, « "
+"Handwriting » for an ink text. The list has 44 terms (« Pictorial layer », «"
+" Primer », « Book block »…): type to search and pick the most specific. "
+"Several terms are allowed.</p><p>This says what is there, not what it is "
+"made of: the pigments and materials identified by analysis are recorded in "
+"Interpretation records.</p>"
+msgstr ""
+
+#: cards:1
+msgid "Correlated interpretations"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Color(s)</strong>, choose the colours you see on the "
+"component, one term per colour, e.g. « Red », « Blue » and « Yellow » for "
+"the initial above, or « Golden » for gilding. The list offers 15 colours "
+"(Silvery, Beige, White, Blue, Brown, Coppery, Golden, Grey, Yellow, Black, "
+"Orange, Pink, Red, Green, Violet).</p><p>These colours are what visitors use"
+" to find the component; the colour of each identified material is recorded "
+"in its Interpretation record.</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per text about the interpretation, written in "
+"<strong>Content</strong> and classed by <strong>Type</strong>: « hypothesis "
+"», « note », « scientific analysis »… E.g. type « hypothesis »: <em>the "
+"layer could be a mixture, to be checked with a second "
+"technique</em>.</p><p>Give the <strong>Language</strong> of the text when it"
+" matters and, in <strong>Source</strong>, the URL of the document it comes "
+"from, if any. The main explanation of the identification goes in « Inference"
+" Making ».</p>"
+msgstr ""
+
+#: cards:1
+msgid "Observed by Interpretation"
+msgstr ""
+
+#: cards:1
+msgid "Interpretations of the modification"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Interpretation</strong>, choose the Interpretation records "
+"that observed this modification, e.g. one identifying a pigment that did not"
+" exist when the document was made.</p><p>Create the Interpretation records "
+"first; the link is entered from this side.</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>One entry per text about the sample, written in <strong>Content</strong> "
+"and classed by <strong>Type</strong>: « description », « sampling », « "
+"conditions », « note »… E.g. type « description »: <em>flake of about 1 mm, "
+"red, from the edge of the letter</em>.</p><p>Give the "
+"<strong>Language</strong> of the text when it matters and, in "
+"<strong>Source</strong>, the URL of the document it comes from, if any. What"
+" the sample is made of is recorded in Interpretation records, not here.</p>"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>In <strong>Location in Document</strong>, open the image of the document "
+"and draw the area of the component: a rectangle around an initial, a polygon"
+" around a miniature. In <strong>Location appellation</strong>, write the "
+"folio of the zone as <code>f31v</code>.</p><p>Without a drawn zone, the "
+"component cannot be shown on the image, and an interpretation of the "
+"component that has no zone of its own cannot be placed on it either.</p>"
+msgstr ""
+
+#: cards_x_nodes_x_widgets:1
+msgid "Influenced by Alteration"
+msgstr ""
+
+#: cards:1
+msgid ""
+"<p>The conclusion drawn from the observations. Write it in <strong>Inference"
+" making</strong> (required), e.g. <em>the darkening is consistent with the "
+"degradation of a lead-based pigment</em>, and rate it in "
+"<strong>Confidence</strong> (required): « Highly confidence », « Good "
+"Confidence », « Use with caution » or « Unsure ».</p><p>Give the "
+"<strong>Start Date</strong> (required) and <strong>End Date</strong> of the "
+"interpretation and its <strong>Authors of inference</strong>. In "
+"<strong>Influenced by Alteration</strong> choose the other Alteration "
+"records the inference builds on. The supporting analyses go in the sub-"
+"cards.</p>"
 msgstr ""

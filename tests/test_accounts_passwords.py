@@ -18,11 +18,12 @@ from django.utils import translation
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
+from manuspectrum.accounts import mailed_links
 from tests.test_accounts_activation import (
+    MailedLinkCases,
     browser_post,
-    cross_site_click,
     head_copies_of,
-    open_link,
+    link_cookies,
 )
 
 STRONG = "Gr33n-Lantern!Walks"
@@ -97,8 +98,8 @@ class PasswordRulesTests(TestCase):
     def reset(self, new_password):
         client = Client()
         link = reset_link(self.user)
-        self.assertEqual(client.get(link).status_code, 200)
-        landing = client.post(link, follow=True)
+        landing = client.get(link, follow=True)
+        self.assertEqual(landing.status_code, 200)
         return client.post(
             landing.redirect_chain[-1][0],
             {"new_password1": new_password, "new_password2": new_password},
@@ -162,8 +163,12 @@ class PasswordRulesTests(TestCase):
         self.assertTrue(self.user.check_password(STRONG))
 
 
-class PasswordResetLinkTests(TestCase):
-    """The mailed reset link: a « Continue » page, then Arches' form."""
+class PasswordResetLinkTests(MailedLinkCases, TestCase):
+    """The mailed reset link: a cookie, a redirect, then Arches' form."""
+
+    cookie = "ms_reset_link"
+    other_cookie = "ms_activation_link"
+    marker = 'name="new_password1"'
 
     @classmethod
     def setUpTestData(cls):
@@ -175,6 +180,27 @@ class PasswordResetLinkTests(TestCase):
         cache.clear()
         self.link = reset_link(self.user)
         self.form = placeholder_of(self.link)
+        self.fr_link = reset_link(self.user, "fr")
+        self.fr_form = placeholder_of(self.fr_link)
+        uid = urlsafe_base64_encode(force_bytes(self.user.pk))
+        self.folders = {code: f"/{code}/reset/{uid}/" for code, _ in settings.LANGUAGES}
+
+    def client_for(self, **options):
+        return Client(**options)
+
+    def submit(self, client, page):
+        done = browser_post(
+            client, page, self.form, new_password1=STRONG, new_password2=STRONG
+        )
+        self.assertRedirects(done, "/en/reset/done/", fetch_redirect_response=False)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password(STRONG))
+        return done
+
+    def assert_invalid(self, response):
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["validlink"])
+        self.assertNotContains(response, "<form")
 
     def test_the_route_is_answered_by_the_project_view(self):
         with translation.override("en"):
@@ -188,90 +214,51 @@ class PasswordResetLinkTests(TestCase):
         self.assertTrue(issubclass(view, ArchesPasswordResetConfirmView))
         self.assertEqual(path, "/en/reset/MQ/a-b/")
 
-    def test_a_valid_link_shows_continue_then_moves_its_token(self):
+    def test_the_form_page_holds_no_token(self):
         client = Client()
-        token = self.link.rsplit("/", 2)[1]
-        landing = client.get(self.link)
-        self.assertEqual(landing.status_code, 200)
-        self.assertEqual(landing["Referrer-Policy"], "same-origin")
-        self.assertIn("no-store", landing["Cache-Control"])
-        self.assertNotContains(landing, token)
-        self.assertNotContains(landing, 'name="new_password1"')
-        self.assertContains(landing, "Continue</button>")
-        response = client.post(self.link)
-        self.assertRedirects(response, self.form, fetch_redirect_response=False)
-        self.assertEqual(response["Referrer-Policy"], "same-origin")
-        page = client.get(self.form)
-        self.assertEqual(page.status_code, 200)
-        self.assertContains(page, 'name="new_password1"')
-        self.assertNotContains(page, token)
-
-    def test_the_continue_page_is_in_french_under_fr(self):
-        with translation.override("fr"):
-            response = Client().get(reset_link(self.user, "fr"))
-        self.assertContains(response, "Continuer</button>")
-        self.assertContains(response, "Continuez pour choisir un nouveau mot de passe")
-
-    def test_a_link_clicked_in_a_webmail_reaches_the_form(self):
-        client = Client(enforce_csrf_checks=True)
-        landing = cross_site_click(client, self.link)
-        self.assertEqual(landing.status_code, 200)
-        self.assertContains(landing, "Continue</button>")
-        response = browser_post(client, landing, self.link)
-        self.assertRedirects(response, self.form, fetch_redirect_response=False)
-        page = client.get(self.form)
-        self.assertContains(page, 'name="new_password1"')
-        done = browser_post(
-            client, page, self.form, new_password1=STRONG, new_password2=STRONG
-        )
-        self.assertRedirects(done, "/en/reset/done/", fetch_redirect_response=False)
-        self.user.refresh_from_db()
-        self.assertTrue(self.user.check_password(STRONG))
-
-    def test_a_signed_in_browser_keeps_its_session_after_a_cross_site_click(self):
-        other = User.objects.create_user("louis", "louis@manuspectrum.test", STRONG)
-        client = Client()
-        client.force_login(other)
-        cookie = client.cookies[settings.SESSION_COOKIE_NAME].value
-        landing = cross_site_click(client, self.link)
-        self.assertEqual(landing.status_code, 200)
-        self.assertNotIn(settings.SESSION_COOKIE_NAME, landing.cookies)
-        self.assertEqual(client.cookies[settings.SESSION_COOKIE_NAME].value, cookie)
-        self.assertEqual(client.session["_auth_user_id"], str(other.pk))
-
-    def test_opening_the_link_stores_nothing_and_does_not_use_it(self):
-        scanner = Client()
-        self.assertEqual(scanner.get(self.link).status_code, 200)
-        self.assertEqual(scanner.head(self.link).status_code, 200)
-        self.assertNotIn(settings.SESSION_COOKIE_NAME, scanner.cookies)
-        self.assertNotContains(scanner.get(self.form), 'name="new_password1"')
-        self.assertRedirects(
-            open_link(Client(), self.link), self.form, fetch_redirect_response=False
-        )
-
-    def test_continue_without_the_csrf_token_is_refused(self):
-        client = Client(enforce_csrf_checks=True)
         client.get(self.link)
-        response = client.post(self.link, HTTP_ORIGIN="http://testserver")
-        self.assertEqual(response.status_code, 403)
-        self.assertNotIn(INTERNAL_RESET_SESSION_TOKEN, client.session)
-        # The refusal is a page of the site at the URL of the link.
-        self.assertEqual(head_copies_of(response, self.link.rsplit("/", 2)[1]), [])
+        page = client.get(self.form)
+        self.assertContains(page, 'name="new_password1"')
+        self.assertNotContains(page, self.token())
+        self.assertEqual(head_copies_of(page, self.token()), [])
 
-    def test_a_bad_link_shows_no_continue_and_no_form(self):
+    def test_the_token_never_stays_in_the_session(self):
+        client = Client()
+        client.get(self.link)
+        client.get(self.form)
+        self.assertNotIn(INTERNAL_RESET_SESSION_TOKEN, client.session)
+        browser = Client()
+        self.assertEqual(browser.get(self.form).status_code, 200)
+        self.assertNotIn(settings.SESSION_COOKIE_NAME, browser.cookies)
+
+    def test_a_stale_session_token_does_not_unlock_the_form(self):
+        client = Client()
+        session = client.session
+        session[INTERNAL_RESET_SESSION_TOKEN] = self.token()
+        session.save()
+        client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key
+        self.assert_invalid(client.get(self.form))
+
+    def test_a_bad_link_shows_the_invalid_page_and_no_form(self):
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))
         client = Client()
-        for response in (
-            client.get(f"/en/reset/{uid}/bad-token/"),
-            client.post(f"/en/reset/{uid}/bad-token/"),
-        ):
-            self.assertEqual(response.status_code, 200)
-            self.assertFalse(response.context["validlink"])
-            self.assertNotContains(response, "<form")
+        response = client.get(f"/en/reset/{uid}/bad-token/")
+        self.assert_invalid(response)
         self.assertNotIn(INTERNAL_RESET_SESSION_TOKEN, client.session)
+        cookies = link_cookies(response, self.cookie)
+        self.assertEqual(set(cookies), {code for code, _ in settings.LANGUAGES})
+        for code, morsel in cookies.items():
+            self.assertEqual(morsel["max-age"], 0, code)
 
-    def test_other_methods_on_the_link_are_not_allowed(self):
-        self.assertEqual(Client().put(self.link).status_code, 405)
+    def test_a_refused_post_keeps_the_form_and_renews_the_cookie(self):
+        client = Client()
+        client.get(self.link)
+        response = client.post(self.form, {"new_password1": "a", "new_password2": "b"})
+        self.assertContains(response, 'name="new_password1"')
+        self.assertEqual(
+            link_cookies(response, self.cookie)["en"]["max-age"],
+            mailed_links.COOKIE_MAX_AGE,
+        )
 
 
 class PasswordHelpTextTests(SimpleTestCase):

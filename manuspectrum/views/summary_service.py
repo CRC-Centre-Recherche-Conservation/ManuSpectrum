@@ -54,7 +54,7 @@ from arches.app.models import models
 from arches.app.models.models import ResourceInstance
 from arches.app.search.mappings import RESOURCES_INDEX
 from arches.app.search.search_engine_factory import SearchEngineInstance
-from arches_controlled_lists.models import ListItemValue
+from arches.extensions.controlled_lists.models import ListItemValue
 
 from manuspectrum.functions.resource_summary import (
     SUMMARY_FUNCTION_ID,
