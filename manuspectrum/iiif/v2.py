@@ -19,9 +19,11 @@ box (``default``) and the SVG (``item``) for a point or a polygon, which
 Mirador 4 reads (``AnnotationResource.js``).
 """
 
+import re
+
 from django.conf import settings
 
-from manuspectrum.iiif import ids, services
+from manuspectrum.iiif import ids, services, sources
 from manuspectrum.iiif.constants import PRESENTATION_2, PRESENTATION_3
 from manuspectrum.iiif.language import to_v2
 
@@ -219,6 +221,125 @@ def layer(v3_collection, page_ids):
         converted["service"] = services.v2_auth1_block()
     if page_ids:
         converted["otherContent"] = [ids.as_version(p, 2) for p in page_ids]
+    return converted
+
+
+def _v2_service(service, service_id):
+    """The image service of a v2 image resource: its Image API version and level follow the v3 *service*."""
+    level = re.search(r"level([0-2])", str(service.get("profile") or ""))
+    level = level[1] if level else "2"
+    if "3" in str(service.get("type") or ""):
+        return {
+            "@context": "http://iiif.io/api/image/3/context.json",
+            "@id": service_id,
+            "profile": f"level{level}",
+        }
+    return {
+        "@context": "http://iiif.io/api/image/2/context.json",
+        "@id": service_id,
+        "profile": f"http://iiif.io/api/image/2/level{level}.json",
+    }
+
+
+def _v2_image(painting, canvas_id):
+    """The ``oa:Annotation`` painting an image on *canvas_id*, from one v3 painting annotation."""
+    body = painting.get("body")
+    if isinstance(body, list):
+        body = body[0] if body else None
+    body = body if isinstance(body, dict) else {}
+    resource = {"@id": body.get("id"), "@type": "dctypes:Image"}
+    for key in ("format", "width", "height"):
+        if body.get(key):
+            resource[key] = body[key]
+    for service in sources.painting_services(painting):
+        service_id = service.get("id") or service.get("@id")
+        if isinstance(service_id, str) and service_id:
+            resource["service"] = _v2_service(service, service_id)
+            break
+    return {
+        "@type": "oa:Annotation",
+        "motivation": "sc:painting",
+        "resource": resource,
+        "on": canvas_id,
+    }
+
+
+def _canvas(v3_canvas, source_canvas):
+    """The ``sc:Canvas`` of a manifest: the v2 *source_canvas* as is, else built from the v3 canvas.
+
+    ``otherContent`` lists the v2 form of each annotation page the v3 canvas references.
+    """
+    canvas_id = v3_canvas["id"]
+    if isinstance(source_canvas, dict) and "@id" in source_canvas:
+        canvas = dict(sources._rewritten(source_canvas))
+        canvas["@id"] = canvas_id
+        canvas["images"] = [
+            {**image, "on": canvas_id} if isinstance(image, dict) else image
+            for image in canvas.get("images") or []
+        ]
+    else:
+        canvas = {"@id": canvas_id, "@type": "sc:Canvas"}
+        _labelled(canvas, v3_canvas)
+        canvas["width"] = v3_canvas.get("width")
+        canvas["height"] = v3_canvas.get("height")
+        canvas["images"] = [
+            _v2_image(painting, canvas_id)
+            for page in v3_canvas.get("items") or []
+            for painting in page.get("items") or []
+        ]
+    if v3_canvas.get("rights") and "license" not in canvas:
+        canvas["license"] = v3_canvas["rights"]
+    statement = v3_canvas.get("requiredStatement")
+    if statement and "attribution" not in canvas:
+        canvas["attribution"] = to_v2(statement["value"])
+    part_of = (v3_canvas.get("partOf") or [{}])[0]
+    if part_of.get("id") and "within" not in canvas:
+        canvas["within"] = ids.as_version(part_of["id"], 2)
+    if v3_canvas.get("annotations"):
+        canvas["otherContent"] = [
+            {"@id": ids.as_version(ref["id"], 2), "@type": "sc:AnnotationList"}
+            for ref in v3_canvas["annotations"]
+        ]
+    return canvas
+
+
+def manifest(v3, source_canvases):
+    """The ``sc:Manifest`` of a v3 Manifest; *source_canvases* maps canvas ids to the source manifest's own canvases.
+
+    One ``sc:Sequence`` holds the canvases. ``summary`` becomes ``description``,
+    ``requiredStatement`` the ``attribution``, ``homepage`` ``related`` and
+    ``thumbnail`` a resource ``@id``.
+    """
+    converted = {
+        "@context": _context(v3),
+        "@id": ids.as_version(v3["id"], 2),
+        "@type": "sc:Manifest",
+    }
+    _labelled(converted, v3)
+    if v3.get("summary"):
+        converted["description"] = to_v2(v3["summary"])
+    if v3.get("metadata"):
+        converted["metadata"] = [
+            {"label": to_v2(m["label"]), "value": to_v2(m["value"])}
+            for m in v3["metadata"]
+        ]
+    statement = v3.get("requiredStatement")
+    if statement:
+        converted["attribution"] = to_v2(statement["value"])
+    for v3_key, v2_key in (("homepage", "related"), ("rendering", "rendering")):
+        if v3.get(v3_key):
+            converted[v2_key] = [_resource(link) for link in v3[v3_key]]
+    if v3.get("thumbnail"):
+        converted["thumbnail"] = {"@id": v3["thumbnail"][0]["id"]}
+    converted["sequences"] = [
+        {
+            "@type": "sc:Sequence",
+            "canvases": [
+                _canvas(canvas, source_canvases.get(canvas["id"]))
+                for canvas in v3.get("items", [])
+            ],
+        }
+    ]
     return converted
 
 

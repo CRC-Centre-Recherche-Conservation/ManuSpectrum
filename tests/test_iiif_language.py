@@ -228,7 +228,7 @@ class CatalogueTests(SimpleTestCase):
             "Colour: %(colours)s",
             "%(file)s, series",
             "Without a position on the image",
-            "Selection of %(count)d page of %(document)s",
+            "Selection of %(what)s on %(pages)s of %(document)s",
         ):
             with self.subTest(msgid=msgid):
                 self.assertIn(msgid, msgids)

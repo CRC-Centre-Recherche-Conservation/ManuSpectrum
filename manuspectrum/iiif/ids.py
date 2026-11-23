@@ -74,6 +74,27 @@ def explorer_part(scope_digest, *parts):
     return _url(f"iiif/v3/explorer-manifest/{scope_digest}{tail}")
 
 
+def manifest(resource_id, version=3):
+    """The IIIF manifest (Presentation *version*) of the Document or Component *resource_id*."""
+    return _url(f"iiif/v{version}/manifest/{resource_id}")
+
+
+def manifest_part(resource_id, *parts):
+    """A resource the manifest of *resource_id* creates (converted painting annotations); it need not dereference."""
+    tail = "".join(f"/{quote(str(part), safe='')}" for part in parts)
+    return f"{manifest(resource_id)}{tail}"
+
+
+def explorer_export(query):
+    """The data package of the scope *query*."""
+    return _url(f"api/explorer/export?{query}")
+
+
+def explorer_series(query):
+    """The series CSV of the scope *query*."""
+    return _url(f"api/explorer/series.csv?{query}")
+
+
 def selection_manifest(kind, resource_id):
     """The Explorer manifest of the Selection holding the whole analysis or identified material *resource_id*."""
     prefix = "ch" if kind == "characterization" else "an"

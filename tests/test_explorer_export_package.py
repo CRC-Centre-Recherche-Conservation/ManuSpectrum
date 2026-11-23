@@ -15,6 +15,7 @@ from unittest import mock
 from arches.app.models.models import IIIFManifest
 from django.http import QueryDict
 
+from tests.explorer_fixtures import MANIFEST
 from tests.test_explorer_api import FETCH, MANIFEST_JSON, CorpusCase
 from tests.test_explorer_service import XRF
 
@@ -234,8 +235,17 @@ class LayoutTests(PackageCase):
 
         manifest = json.loads(members["manifest.json"].data)
         self.assertEqual(manifest["type"], "Manifest")
-        self.assertIn(f"document={self.documents['open'].pk}", manifest["id"])
+        self.assertEqual(manifest["id"], ids.manifest(self.documents["open"].pk))
         self.assertEqual(members["manifest.json"].media_type, "application/ld+json")
+
+    def test_export_document_manifest_json_is_document_manifest(self):
+        members = self.members(self.document_query())
+
+        manifest = json.loads(members["manifest.json"].data)
+        self.assertEqual(manifest["id"], ids.manifest(self.documents["open"].pk))
+        pages = [p for c in manifest["items"] for p in c.get("annotations", ())]
+        self.assertTrue(pages)
+        self.assertTrue(all("items" in p for p in pages))
 
     def test_a_scope_placing_no_canvas_ships_no_manifest(self):
         members = self.members(f"ids=an:{self.pk('embargoed')}:-")
@@ -384,8 +394,9 @@ class TablesTests(PackageCase):
 
         self.assertIn("manifest.json", {m.arcname for m in members})
         urls = [call.args[0] for call in fetched.call_args_list]
-        self.assertIn(IMAGING, urls)
-        self.assertEqual(len(urls), len(set(urls)), urls)
+        self.assertEqual(urls.count(IMAGING), 1, urls)
+        self.assertEqual(urls.count(MANIFEST), 1, urls)
+        self.assertEqual(set(urls), {IMAGING, MANIFEST})
 
     def test_an_imaging_manifest_that_cannot_be_fetched_is_named_in_the_readme(self):
         self.tile(self.analyses["open"], "chemical_imaging_manifest", IMAGING)

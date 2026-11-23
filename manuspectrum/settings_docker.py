@@ -19,7 +19,7 @@ pointed at its instance in place; KEY_PREFIX and the other entries are kept.
 import os
 import re
 import sys
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit
 
 from django.core.exceptions import ImproperlyConfigured
 
@@ -124,6 +124,29 @@ def env_token(name):
     return value
 
 
+def env_web_url(name):
+    """Return the variable `name` as an absolute https:// address without credentials, "" when unset or blank."""
+    value = get_optional_env_variable(name, "").strip()
+    if not value:
+        return ""
+    try:
+        parts = urlsplit(value)
+        host = parts.hostname
+    except ValueError:
+        parts = host = None
+    if (
+        parts is None
+        or parts.scheme != "https"
+        or not host
+        or "@" in parts.netloc
+        or re.search(r"[\s\x00-\x1f\x7f]", value)
+    ):
+        raise ImproperlyConfigured(
+            f"{name} must be an absolute https:// address without credentials"
+        )
+    return value
+
+
 DEBUG = False
 
 SECRET_KEY = read_secret("MANUSPECTRUM_SECRET_KEY")
@@ -174,6 +197,7 @@ RELATED_RESOURCES_EXPORT_LIMIT = env_positive_int(
 EXPLORER_UI_ONLY = env_choice(
     "EXPLORER_UI_ONLY", ("enforce", "observe", "off"), "enforce"
 )
+EXPLORER_MIRADOR_URL = env_web_url("EXPLORER_MIRADOR_URL")
 GOOGLE_SITE_VERIFICATION = env_token("GOOGLE_SITE_VERIFICATION")
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
