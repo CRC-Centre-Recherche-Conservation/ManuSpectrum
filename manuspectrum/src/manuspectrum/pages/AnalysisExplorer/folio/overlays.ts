@@ -4,6 +4,7 @@ import { imageUrl } from "utils/iiif-image";
 import {
     markedZones,
     shapeBounds,
+    zoneUnitFor,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import { safeHref } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 
@@ -143,7 +144,8 @@ export function layerImageChain(
  * for `place.canvas` and holds a box (`UNPLACED` marks an entry that holds
  * only a capture); otherwise it is stretched into the bounding box of the
  * analysis's marked zone on this page (`markedZones`, read with the canvas's
- * `place.unit`; indicative), at the
+ * `zoneUnitFor`: the zone's own unit, else `place.live`, the unit of the
+ * page's live layer, else `place.unit`, the canvas's; indicative), at the
  * layer's own aspect ratio, centred and contained in it (`fitInside`; the
  * zone's box when the layer's size is unknown). An analysis with only a point
  * here lays nothing.
@@ -160,13 +162,19 @@ export function folioOverlays(
         canvas: string | null;
         registration: Registration | null;
         unit?: ZoneUnit | null;
+        live?: ZoneUnit | null;
     },
 ): FolioOverlay[] {
     if (!analysis) return [];
     const zone = markedZones(annotations).find(
         (entry) => entry.analysis === analysis.id,
     );
-    const bounds = zone ? shapeBounds(zone.shape, place?.unit ?? null) : null;
+    const bounds = zone
+        ? shapeBounds(
+              zone.shape,
+              zoneUnitFor(zone, place?.live ?? null, place?.unit ?? null),
+          )
+        : null;
     if (!bounds) return [];
     const held = place?.registration ?? null;
     const registered =

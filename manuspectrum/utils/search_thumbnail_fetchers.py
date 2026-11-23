@@ -20,7 +20,14 @@ from arches.app.utils.search_thumbnail_fetcher_factory import (
     SearchThumbnailFetcherFactory,
 )
 from manuspectrum.iiif import units
-from manuspectrum.iiif.sources import ManifestReader, canvases_of, manifest_json
+from manuspectrum.iiif.frames import frame_of
+from manuspectrum.iiif.zones import annotation_zones
+from manuspectrum.iiif.sources import (
+    ManifestReader,
+    canvases_of,
+    local_manifest_id,
+    manifest_json,
+)
 from manuspectrum.utils.http import safe_fetch
 from manuspectrum.utils.iiif_tools import (
     CanvasIIIF,
@@ -156,13 +163,17 @@ def _canvas_names(manifest):
     return names
 
 
-def _image_frame(service, width, height):
+def _image_frame(service, width, height, frame=None):
     """``(zoom, width, height)`` of the image a zone was drawn on: the zoom of its stored units (``units.native_zoom``) and the size a region is cut in.
 
-    From the service's info.json when it is read; else from the canvas size
-    (``units.assumed_unit``), or the zoom of ``units.UNKNOWN_SCALE`` and no
-    bound for a canvas the manifest does not list.
+    A zone's own stamp (*frame*, a ``units.Frame``) gives them without a
+    read. Otherwise from the service's info.json when it is read; else from
+    the canvas size (``units.assumed_unit``), or the zoom of
+    ``units.UNKNOWN_SCALE`` and no bound for a canvas the manifest does not
+    list.
     """
+    if frame is not None:
+        return int(math.log2(frame.unit)), frame.width, frame.height
     info = units.image_info(service)
     if isinstance(info, units.ImageInfo):
         zoom = units.native_zoom(info.width, info.height, info.tile)
@@ -191,24 +202,48 @@ def _extent(geometry, radius, zoom):
         return None
 
 
+def _is_number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _readable_manifest(url):
+    """True for an http(s) manifest URL or a local ``/manifest/<uuid>`` path (``sources.local_manifest_id``)."""
+    if not isinstance(url, str):
+        return False
+    return url.startswith(("http://", "https://")) or local_manifest_id(url) is not None
+
+
 def _zone_region_url(annotation, manifests):
     """IIIF region URL of one annotation zone, or None when it cannot be shown.
 
     Polygons and Points are accepted. The zone's canvas is found in its
     manifest by id or image service, and the region is asked of that canvas's
-    image service (the stored name when the canvas is unknown or has none),
-    in the pixels of that image (``_image_frame``). A canvas missing from the
-    manifest is bounded only when the stored service's info.json is read. A
-    zone drawn outside a bounded image gives None.
+    image service (the stored name when the canvas is unknown or has none), in
+    the pixels of the frame stamped on the zone, else of that image
+    (``_image_frame``). A canvas missing from the manifest is bounded when the
+    zone is stamped or the stored service's info.json is read. A zone drawn
+    outside a bounded image gives None, and so does a zone whose manifest is
+    neither http(s) nor local, whose coordinates cannot be read or, for a
+    Point, whose radius is not a number; those are refused before any manifest
+    or image description is read.
     """
-    feature = annotation.feature or {}
+    feature = annotation.feature if isinstance(annotation.feature, dict) else {}
     properties = feature.get("properties") or {}
+    geometry = feature.get("geometry") or {}
+    if not isinstance(properties, dict) or not isinstance(geometry, dict):
+        return None
     stored = rewrite_legacy_url(annotation.canvas or "")
     manifest_url = properties.get("manifest")
-    geometry = feature.get("geometry") or {}
-    if not stored or not manifest_url or not geometry.get("coordinates"):
+    if not stored or not _readable_manifest(manifest_url):
+        return None
+    if not geometry.get("coordinates"):
         return None
     if geometry.get("type") not in ("Polygon", "Point"):
+        return None
+    radius = properties.get("radius", DEFAULT_POINT_RADIUS)
+    if geometry["type"] == "Point" and not _is_number(radius):
+        return None
+    if _extent(geometry, radius, 0) is None:
         return None
     names = manifests.names(manifest_url)
     if names is None:
@@ -220,8 +255,7 @@ def _zone_region_url(annotation, manifests):
     )
     service = (service or stored).rstrip("/")
 
-    zoom, width, height = _image_frame(service, width, height)
-    radius = properties.get("radius", DEFAULT_POINT_RADIUS)
+    zoom, width, height = _image_frame(service, width, height, frame_of(feature))
     if width != sys.maxsize:
         extent = _extent(geometry, radius, zoom)
         if extent is None:
@@ -265,20 +299,25 @@ class _Manifests:
         return self._names[url]
 
 
-def _zone_payload(resource):
-    """The image of the first zone of *resource* that has a region, or None.
+def _annotations(resource):
+    """The annotation zones of *resource* in feature id order, read off its tiles in one query (``zones.annotation_zones``).
+
+    No nodegroup permission is applied: the resource-level read is checked by
+    ``CachedThumbnailView`` before any fetcher runs.
+    """
+    return annotation_zones(resource.resourceinstanceid)
+
+
+def _zone_payload(zones):
+    """The image of the first of *zones* (``_annotations``) that has a region, or None.
 
     Zones are taken in feature id order, the Explorer's first zone. Only that
     zone's image is requested: its failure ends the search, and so does a
     manifest that cannot be read.
     """
-    from arches.app.models.models import VwAnnotation
-
     manifests = _Manifests()
 
-    for annotation in VwAnnotation.objects.filter(resourceinstance=resource).order_by(
-        "feature_id"
-    ):
+    for annotation in zones:
         url = _zone_region_url(annotation, manifests)
         if url:
             return _cached_image(url)
@@ -288,9 +327,7 @@ def _zone_payload(resource):
 
 
 def _has_zone(resource):
-    from arches.app.models.models import VwAnnotation
-
-    return VwAnnotation.objects.filter(resourceinstance=resource).exists()
+    return bool(_annotations(resource))
 
 
 def _manifest_url(resource):
@@ -388,9 +425,8 @@ class ComponentThumbnailFetcher(_SourceFetcher):
         return _has_zone(self.resource)
 
     def _payload(self):
-        if not _has_zone(self.resource):
-            return _NO_SOURCE
-        return _zone_payload(self.resource)
+        zones = _annotations(self.resource)
+        return _zone_payload(zones) if zones else _NO_SOURCE
 
 
 @SearchThumbnailFetcherFactory.register("60c85aba-f079-45bc-997f-21cdd4f77b6d")
@@ -418,6 +454,7 @@ class AnalysisThumbnailFetcher(_SourceFetcher):
                 payload = None
             if payload:
                 return payload
-        if not _has_zone(self.resource):
+        zones = _annotations(self.resource)
+        if not zones:
             return None if manifest_url else _NO_SOURCE
-        return _zone_payload(self.resource)
+        return _zone_payload(zones)

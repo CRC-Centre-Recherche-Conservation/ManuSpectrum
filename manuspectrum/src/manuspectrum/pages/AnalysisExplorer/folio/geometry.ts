@@ -18,10 +18,11 @@ export type LatLng = [number, number];
 
 /**
  * Where the canvas pixel (`x`, `y`) lies on the page's leaflet-iiif layer.
- * `unit` is the canvas's `zoneUnit`: the pixels the server counted per stored
- * Leaflet unit. Dividing by it gives back the stored coordinates, the ones the
- * Arches IIIF viewer draws over the same layer, whatever the size and the
- * tiles of the image. Without a unit, `ANNOTATION_SCALE` on both axes.
+ * `unit` is the zone's (`zoneUnitFor`): its own when its frame is not
+ * measured, else the live layer's (`liveUnit`), else the canvas's `zoneUnit`;
+ * the canvas pixels per Leaflet unit. Dividing by it gives back the
+ * coordinates the Arches IIIF viewer draws over the same layer, whatever the
+ * size and the tiles of the image. Without a unit, `ANNOTATION_SCALE` on both axes.
  */
 export function toLatLng(
     x: number,
@@ -31,6 +32,42 @@ export function toLatLng(
     const perX = unit?.x || ANNOTATION_SCALE;
     const perY = unit?.y || ANNOTATION_SCALE;
     return [y === 0 ? 0 : -y / perY, x / perX];
+}
+
+/** The frame of a live leaflet-iiif layer: its `maxNativeZoom` and the image size its info.json gave. */
+export interface LayerFrame {
+    zoom: number;
+    width: number;
+    height: number;
+}
+
+/**
+ * The unit of a canvas's zones on a live layer: the canvas pixels per Leaflet
+ * unit of a layer that spans `frame.width / 2^zoom` units for the
+ * `canvas.width` pixels of the canvas. Measured, so `read` is true.
+ */
+export function liveUnit(
+    frame: LayerFrame,
+    canvas: { width: number; height: number },
+): ZoneUnit {
+    return {
+        x: (2 ** frame.zoom * canvas.width) / frame.width,
+        y: (2 ** frame.zoom * canvas.height) / frame.height,
+        read: true,
+    };
+}
+
+/**
+ * The unit a zone is placed with: its own when the server could not measure
+ * its frame (it stays where Arches draws it), else the live layer's, else the
+ * canvas's `zoneUnit`.
+ */
+export function zoneUnitFor(
+    zone: { unit?: ZoneUnit | null },
+    live: ZoneUnit | null,
+    fallback: ZoneUnit | null,
+): ZoneUnit | null {
+    return zone.unit ?? live ?? fallback;
 }
 
 function corners(shape: Shape): [number, number][] {
@@ -90,7 +127,7 @@ export function shapeCorner(
 export interface ComponentOutline {
     id: string;
     name: Label;
-    shapes: Shape[];
+    zones: { shape: Shape; unit: ZoneUnit | null }[];
 }
 
 /** The Components of `payload` outlined on the canvas `canvasId`, in the payload's order; a Component with no extent there is left out. */
@@ -103,15 +140,18 @@ export function componentOutlines(
     );
     if (position < 0) return [];
     return payload.components.flatMap((component) => {
-        const shapes = component.zones
-            .filter(
-                (zone) =>
-                    zone.canvas === position &&
-                    shapeBounds(zone.shape) !== null,
-            )
-            .map((zone) => zone.shape);
-        return shapes.length > 0
-            ? [{ id: component.id, name: component.name, shapes }]
+        const zones = component.zones.filter(
+            (zone) =>
+                zone.canvas === position && shapeBounds(zone.shape) !== null,
+        );
+        return zones.length > 0
+            ? [
+                  {
+                      id: component.id,
+                      name: component.name,
+                      zones: zones.map(({ shape, unit }) => ({ shape, unit })),
+                  },
+              ]
             : [];
     });
 }

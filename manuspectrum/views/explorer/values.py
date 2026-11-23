@@ -403,19 +403,22 @@ def _pixel(coordinate, width, height, unit):
 
 
 def shape_of(geometry, width, height, unit=DEFAULT_ZONE_UNIT):
-    """Contract ``Shape`` of an annotation geometry, in canvas pixels; None for an unknown or empty geometry.
+    """Contract ``Shape`` of an annotation geometry, in canvas pixels; None for an unknown, empty or unreadable geometry.
 
     Coordinates are Arches' annotation space (Leaflet CRS.Simple, y upwards):
     *unit* gives the canvas pixels of one stored unit on each axis
     (``iiif.units``). Every point is brought inside *width* x *height*. A
     polygon of four axis-aligned corners is a ``rect``.
     """
-    kind = (geometry or {}).get("type")
-    coordinates = (geometry or {}).get("coordinates")
-    if kind == "Point" and coordinates:
+    geometry = geometry if isinstance(geometry, dict) else {}
+    kind = geometry.get("type")
+    coordinates = geometry.get("coordinates")
+    if not isinstance(coordinates, list) or not coordinates:
+        return None
+    if kind == "Point":
         point = _pixel(coordinates, width, height, unit)
         return {"type": "point", "x": point[0], "y": point[1]} if point else None
-    if kind == "Polygon" and coordinates and coordinates[0]:
+    if kind == "Polygon" and isinstance(coordinates[0], list) and coordinates[0]:
         points = [
             p for p in (_pixel(c, width, height, unit) for c in coordinates[0]) if p
         ]

@@ -285,6 +285,7 @@ describe("FolioMap", () => {
         const summary = characterization(1, {
             zone: {
                 canvas: "https://iiif.example/c1",
+                unit: null,
                 shape: { type: "rect", x: 10, y: 10, w: 300, h: 300 },
                 source: "own",
             },
@@ -308,6 +309,7 @@ describe("FolioMap", () => {
             characterization(1, {
                 zone: {
                     canvas: "https://iiif.example/c1",
+                    unit: null,
                     shape: { type: "rect", x: 10, y: 10, w: 300, h: 300 },
                     source: "own",
                 },
@@ -317,6 +319,7 @@ describe("FolioMap", () => {
             sample(2, {
                 zone: {
                     canvas: "https://iiif.example/c1",
+                    unit: null,
                     shape: { type: "point", x: 2000, y: 1000 },
                 },
             }),
@@ -500,6 +503,7 @@ describe("FolioMap", () => {
             ],
             zone: {
                 canvas: "https://iiif.example/c1",
+                unit: null,
                 shape: { type: "rect", x: 10, y: 10, w: 300, h: 300 },
                 source: "own",
             },
@@ -1541,6 +1545,68 @@ describe("FolioMap", () => {
             Math.abs(parseFloat(host.style.left) - 110 * 4),
         ).toBeLessThanOrEqual(1);
         wrapper.unmount();
+    });
+
+    it("places a measured zone by the frame of the live layer once it is read, an unmeasured one by its own unit", async () => {
+        const stub = stubIiifLayer({ size: { w: 4000, h: 6000 } });
+        const make = stub.getMockImplementation() as (url: string) => object;
+        stub.mockImplementation((infoUrl: string) =>
+            Object.assign(make(infoUrl), { x: 4000, y: 6000 }),
+        );
+        const shape = {
+            type: "rect",
+            x: 1600,
+            y: 800,
+            w: 320,
+            h: 160,
+        } as const;
+        const wrapper = mountFolio({
+            annotations: [
+                annotation(3, {
+                    key: "m",
+                    dataKind: "chemical-imaging",
+                    shape,
+                }),
+                annotation(4, {
+                    key: "u",
+                    dataKind: "chemical-imaging",
+                    shape,
+                    unit: { x: 8, y: 8, read: false },
+                }),
+            ],
+            canvas: {
+                ...canvasWithImage(),
+                zoneUnit: { x: 16, y: 16, read: false },
+            },
+        });
+        await flushPromises();
+        const left = (n: number) =>
+            parseFloat(
+                (
+                    wrapper.find(`#folio-marker-${uuid(100 + n)}`)
+                        .element as HTMLElement
+                ).closest<HTMLElement>(".folio-marker-host")!.style.left,
+            );
+        // maxNativeZoom 5 over a 4000 px canvas served at 4000 px: 32 px per unit; 4 layer pixels per unit at zoom 2.
+        expect(Math.abs(left(3) - (1760 / 32) * 4)).toBeLessThanOrEqual(1);
+        expect(Math.abs(left(4) - (1760 / 8) * 4)).toBeLessThanOrEqual(1);
+        wrapper.unmount();
+    });
+
+    it("reports the live unit with the canvas it was read on once the frame resolves, and null on unmount", async () => {
+        const stub = stubIiifLayer({ size: { w: 4000, h: 6000 } });
+        const make = stub.getMockImplementation() as (url: string) => object;
+        stub.mockImplementation((infoUrl: string) =>
+            Object.assign(make(infoUrl), { x: 4000, y: 6000 }),
+        );
+        const wrapper = mountFolio();
+        await flushPromises();
+        const canvas = canvasWithImage();
+        expect(wrapper.emitted("live-unit")).toEqual([
+            [{ canvas: canvas.id, unit: { x: 32, y: 32, read: true } }],
+        ]);
+        wrapper.unmount();
+        expect(wrapper.emitted("live-unit")?.at(-1)).toEqual([null]);
     });
 
     it("fits an imageless page to its markers once, not on every redraw", async () => {
