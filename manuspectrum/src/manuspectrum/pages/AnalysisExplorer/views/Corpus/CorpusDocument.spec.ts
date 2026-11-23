@@ -26,6 +26,7 @@ import {
     toQuery,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 import { sizedContainer } from "@/manuspectrum/pages/AnalysisExplorer/testing/leaflet.ts";
+import { EXPLORER_VIEWS } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 import {
     analysisPayload,
     annotation,
@@ -1323,6 +1324,70 @@ describe("CorpusDocument", () => {
         expect(back.text()).toBe("Data Lab home");
         await back.trigger("click");
         expect(store.corpusScreen).toBe("home");
+    });
+
+    it("says Back to Compare when opened from Compare, and returns to that view", async () => {
+        stubFetch();
+        const { wrapper, store } = mountScreen((store) => {
+            store.setView("compare");
+            store.openInDocument({
+                document: uuid(1),
+                canvas: null,
+                focus: { kind: "analysis", id: uuid(101) },
+            });
+        });
+        await flushPromises();
+        const back = wrapper.find(".return-pill");
+        expect(back.text()).toBe("Back to Compare");
+        await back.trigger("click");
+        expect(store.view).toBe("compare");
+        expect(store.document).toBeNull();
+    });
+
+    it("does not offer Compare when that view is unavailable, and leads to the Corpus screen back() falls back to", async () => {
+        const entry = EXPLORER_VIEWS.find((view) => view.id === "compare")!;
+        (entry as { available: boolean }).available = false;
+        try {
+            stubFetch();
+            const { wrapper, store } = mountScreen((store) => {
+                store.setView("compare");
+                store.openInDocument({
+                    document: uuid(1),
+                    canvas: null,
+                    focus: { kind: "analysis", id: uuid(101) },
+                });
+                store.documentOrigin = "compare";
+            });
+            await flushPromises();
+            const back = wrapper.find(".return-pill");
+            expect(back.text()).toBe("Data Lab home");
+            await back.trigger("click");
+            expect(store.view).toBe("corpus");
+            expect(store.corpusScreen).toBe("home");
+        } finally {
+            (entry as { available: boolean }).available = true;
+        }
+    });
+
+    it("keeps the document when the card opened from Compare closes, without stepping back in the history", async () => {
+        window.history.replaceState(null, "", "/en/discover?view=compare");
+        const back = vi.spyOn(window.history, "back");
+        stubFetch();
+        const { wrapper, store } = mountScreen((store) => {
+            store.setView("compare");
+            store.openInDocument({
+                document: uuid(1),
+                canvas: null,
+                focus: { kind: "analysis", id: uuid(101) },
+            });
+        });
+        await flushPromises();
+        wrapper.findComponent({ name: "AnalysisCard" }).vm.$emit("close");
+        await flushPromises();
+        expect(back).not.toHaveBeenCalled();
+        expect(store.document?.id).toBe(uuid(1));
+        expect(store.focus).toBeNull();
+        back.mockRestore();
     });
 
     it("opens on the first page with results when filters are active and no page is named", async () => {

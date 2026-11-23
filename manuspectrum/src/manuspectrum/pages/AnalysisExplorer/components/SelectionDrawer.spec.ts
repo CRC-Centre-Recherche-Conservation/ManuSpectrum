@@ -4,6 +4,7 @@ import OpenVue from "openvue/config";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import SelectionDrawer from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionDrawer.vue";
+import SelectionPanel from "@/manuspectrum/pages/AnalysisExplorer/components/SelectionPanel.vue";
 
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import { uuid } from "@/manuspectrum/pages/AnalysisExplorer/testing/fixtures.ts";
@@ -132,6 +133,19 @@ describe("SelectionDrawer", () => {
 
         expect(button.attributes("aria-expanded")).toBe("false");
         expect(document.activeElement).toBe(button.element);
+        wrapper.unmount();
+    });
+
+    it("closes when its panel navigates to a document, leaving the focus to the screen", async () => {
+        const { wrapper } = mountDrawer();
+        const button = wrapper.find("button.opener");
+        await button.trigger("click");
+        await flushPromises();
+        const panel = wrapper.findComponent(SelectionPanel);
+        panel.vm.$emit("navigate");
+        await flushPromises();
+        expect(button.attributes("aria-expanded")).toBe("false");
+        expect(document.activeElement).not.toBe(button.element);
         wrapper.unmount();
     });
 });
