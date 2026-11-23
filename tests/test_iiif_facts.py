@@ -14,11 +14,17 @@ from django.core.files.base import ContentFile
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from arches.app.models.models import File, IIIFManifest, ResourceInstance, TileModel
+from arches.app.models.models import (
+    File,
+    IIIFManifest,
+    Node,
+    ResourceInstance,
+    TileModel,
+)
 
 from manuspectrum.iiif import facts
 from manuspectrum.iiif.sources import canvas_index
-from manuspectrum.iiif.zones import annotation_features
+from manuspectrum.iiif.zones import annotation_zones, located_features
 from tests.explorer_fixtures import (
     CANVAS,
     FEATURES,
@@ -195,7 +201,7 @@ class ZoneTests(FactsCase):
 
         with CaptureQueriesContext(connection) as queries:
             found = list(
-                annotation_features(
+                located_features(
                     node,
                     [str(self.analyses["open"].pk)],
                     canvas_index([]),
@@ -207,6 +213,163 @@ class ZoneTests(FactsCase):
         self.assertEqual(
             {rid for rid, _, _, _ in found}, {str(self.analyses["open"].pk)}
         )
+        self.assertEqual(len(queries), 1)
+        self.assertNotIn("vw_annotations", queries[0]["sql"])
+
+
+class UnreadableFeaturesTests(FactsCase):
+    def test_a_non_array_features_value_does_not_hide_the_valid_zones(self):
+        node = self.nodes[("analysis", "literal_location_of_analysis")]
+        analysis = self.analyses["open"]
+        TileModel.objects.filter(
+            resourceinstance=analysis, nodegroup_id=node.nodegroup_id
+        ).delete()
+        valid = uuid.uuid4()
+        self.zone(analysis, [(str(valid), CANVAS, POINT)])
+        for bad in (1, {}):
+            self.tile(analysis, "literal_location_of_analysis", {"features": bad})
+        found = list(
+            located_features(
+                node, [str(analysis.pk)], canvas_index([]), {node.nodegroup_id}
+            )
+        )
+        self.assertEqual([feature for _, feature, _, _ in found], [valid])
+
+
+class MalformedZoneTests(FactsCase):
+    def setUp(self):
+        super().setUp()
+        self.node = self.nodes[("analysis", "literal_location_of_analysis")]
+        self.analysis = self.analyses["open"]
+        TileModel.objects.filter(
+            resourceinstance=self.analysis, nodegroup_id=self.node.nodegroup_id
+        ).delete()
+
+    def tile_of(self, features):
+        self.tile(
+            self.analysis,
+            "literal_location_of_analysis",
+            {"type": "FeatureCollection", "features": features},
+        )
+
+    def read(self):
+        return [
+            (rid, fid, canvas, convert()[0])
+            for rid, fid, canvas, convert in located_features(
+                self.node,
+                [str(self.analysis.pk)],
+                canvas_index([]),
+                {self.node.nodegroup_id},
+            )
+        ]
+
+    def feature(self, fid, **kwargs):
+        value = {
+            "id": fid,
+            "type": "Feature",
+            "geometry": POINT,
+            "properties": {"canvas": CANVAS},
+        }
+        value.update(kwargs)
+        return value
+
+    def test_features_that_cannot_be_read_are_skipped_and_the_order_stays(self):
+        a, b = sorted(str(uuid.uuid4()) for _ in range(2))
+        self.tile_of(
+            [
+                self.feature(b),
+                self.feature("x"),
+                self.feature(5),
+                self.feature([]),
+                1,
+                "text",
+                None,
+                self.feature(a),
+                self.feature(str(uuid.uuid4()), properties="x"),
+                self.feature(str(uuid.uuid4()), properties={"canvas": 5}),
+                self.feature(str(uuid.uuid4()), geometry=[1]),
+            ]
+        )
+        found = [str(feature) for _, feature, _, _ in self.read()]
+        self.assertEqual(found[:2], [a, b])
+        self.assertEqual(len(found), 2)
+
+    def test_zones_without_an_id_are_read_after_those_with_one(self):
+        a = str(uuid.uuid4())
+        self.tile_of([self.feature(None), self.feature(a), self.feature("")])
+        found = [feature for _, feature, _, _ in self.read()]
+        self.assertEqual([str(f) if f else None for f in found], [a, None, None])
+
+    def test_geometries_whose_coordinates_cannot_be_read_are_skipped(self):
+        a, b = sorted(str(uuid.uuid4()) for _ in range(2))
+        odd = [
+            {"type": "Polygon", "coordinates": bad}
+            for bad in (5, True, {"a": 1}, [5], [True], "ab", [[5]], [])
+        ] + [
+            {"type": "Point", "coordinates": bad}
+            for bad in (5, True, {"a": 1}, "ab", [[1, 2]])
+        ]
+        self.tile_of(
+            [self.feature(b)]
+            + [self.feature(str(uuid.uuid4()), geometry=g) for g in odd]
+            + [self.feature(a)]
+        )
+
+        found = [str(feature) for _, feature, _, _ in self.read()]
+        doc = self.facts()
+        zones = next(
+            fact for fact in doc.analyses if fact.id == str(self.analysis.pk)
+        ).zones
+
+        self.assertEqual(found, [a, b])
+        self.assertEqual([zone.feature for zone in zones], [a, b])
+
+    def test_annotation_zones_skip_the_unusable_and_keep_feature_id_order(self):
+        a, b = sorted(str(uuid.uuid4()) for _ in range(2))
+        self.tile_of([self.feature(b), self.feature("x"), 3, self.feature(a)])
+        zones = annotation_zones(str(self.analysis.pk))
+        self.assertEqual([z.feature["id"] for z in zones], [a, b])
+        self.assertEqual({z.canvas for z in zones}, {CANVAS})
+
+    def test_annotation_zones_skip_a_geojson_node_of_the_same_nodegroup(self):
+        geojson = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            graph_id=self.node.graph_id,
+            nodegroup_id=self.node.nodegroup_id,
+            name="Zone geometry",
+            alias="zone_geometry_beside_annotation",
+            datatype="geojson-feature-collection",
+            istopnode=False,
+        )
+        kept, other = str(uuid.uuid4()), str(uuid.uuid4())
+        TileModel.objects.create(
+            resourceinstance=self.analysis,
+            nodegroup_id=self.node.nodegroup_id,
+            data={
+                str(self.node.nodeid): {
+                    "type": "FeatureCollection",
+                    "features": [self.feature(kept)],
+                },
+                str(geojson.nodeid): {
+                    "type": "FeatureCollection",
+                    "features": [self.feature(other)],
+                },
+            },
+        )
+        zones = annotation_zones(str(self.analysis.pk))
+        self.assertEqual([z.feature["id"] for z in zones], [kept])
+
+    def test_annotation_zones_are_read_beside_unreadable_tiles_in_one_query(self):
+        valid = str(uuid.uuid4())
+        self.tile_of([self.feature(valid, properties={"canvas": 5})])
+        for bad in ({"features": 1}, {}, {"features": {}}, None):
+            self.tile(self.analysis, "literal_location_of_analysis", bad)
+        self.tile(self.analysis, "literal_location_of_analysis", {"features": "x"})
+
+        with CaptureQueriesContext(connection) as queries:
+            zones = annotation_zones(str(self.analysis.pk))
+
+        self.assertEqual([(z.feature["id"], z.canvas) for z in zones], [(valid, None)])
         self.assertEqual(len(queries), 1)
         self.assertNotIn("vw_annotations", queries[0]["sql"])
 

@@ -8,8 +8,8 @@ import type {
 export type ItemKey = string;
 export type ExplorerView = "corpus" | "map" | "compare";
 export type CorpusScreen = "home" | "results" | "document";
-// the Corpus screen a document screen was entered from
-export type DocumentOrigin = Exclude<CorpusScreen, "document">;
+// the screen a document screen was entered from; `compare` lives in memory only, never in the address
+export type DocumentOrigin = Exclude<CorpusScreen, "document"> | "compare";
 export type BasketKind =
     | "analysis"
     | "analysis-file"

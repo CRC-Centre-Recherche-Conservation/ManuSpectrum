@@ -5,7 +5,10 @@ export type HistoryMode = "push" | "replace" | "none";
 export interface UrlStateBinding<S> {
     snapshot: () => S;
     toQuery: (state: S) => URLSearchParams;
-    apply: (query: URLSearchParams) => void;
+    /** Applies a query; `entryState` is what the history entry carries (`null` when none). */
+    apply: (query: URLSearchParams, entryState: unknown) => void;
+    /** What each history entry written carries in `history.state`, beside the address; absent: nothing. */
+    entryState?: () => unknown;
     historyMode: (previous: S, next: S) => HistoryMode;
 }
 
@@ -59,7 +62,9 @@ export function rewriteHeaderLinks(
  * replaceState. A state change writes history in the mode the binding
  * chooses, and only when the canonical query differs from the location, so
  * applying a popstate never writes history. The header links follow every
- * change.
+ * change. A binding's `entryState` is stored in `history.state` with each
+ * entry it writes, and handed back to `apply` with the location, on start and
+ * on popstate, so a state that is not in the address is kept per entry.
  */
 export function useUrlState<S>(binding: UrlStateBinding<S>): void {
     function write(mode: "push" | "replace"): void {
@@ -67,16 +72,27 @@ export function useUrlState<S>(binding: UrlStateBinding<S>): void {
         if (search !== window.location.search) {
             const url = `${window.location.pathname}${search}${window.location.hash}`;
             if (mode === "push") {
-                window.history.pushState(null, "", url);
+                window.history.pushState(
+                    binding.entryState?.() ?? null,
+                    "",
+                    url,
+                );
             } else {
-                window.history.replaceState(null, "", url);
+                window.history.replaceState(
+                    binding.entryState?.() ?? null,
+                    "",
+                    url,
+                );
             }
         }
         rewriteHeaderLinks(window.location);
     }
 
     function adoptLocation(): void {
-        binding.apply(new URLSearchParams(window.location.search));
+        binding.apply(
+            new URLSearchParams(window.location.search),
+            window.history.state ?? null,
+        );
         write("replace");
     }
 

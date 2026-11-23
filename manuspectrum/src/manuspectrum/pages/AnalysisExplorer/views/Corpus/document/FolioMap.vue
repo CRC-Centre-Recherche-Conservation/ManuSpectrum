@@ -23,6 +23,7 @@ import {
     markedZones,
     shapeCentre,
     shapeFeature,
+    zoneUnitFor,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/geometry.ts";
 import {
     layerSizeOf,
@@ -45,6 +46,10 @@ import {
     offsetInside,
     readingOrder,
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/roving.ts";
+import {
+    followLiveUnit,
+    unitKey,
+} from "@/manuspectrum/pages/AnalysisExplorer/folio/live-unit.ts";
 import { techniqueKey } from "@/manuspectrum/pages/AnalysisExplorer/folio/techniques.ts";
 import {
     folioLayerOf,
@@ -56,6 +61,7 @@ import type {
     DocumentCanvas,
     DocumentComponent,
     SampleSummary,
+    ZoneUnit,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { CaptureFailure } from "@/manuspectrum/pages/AnalysisExplorer/folio/capture.ts";
 import type {
@@ -64,6 +70,7 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/folio/registration.ts";
 import type { AnchoredControl } from "@/manuspectrum/pages/AnalysisExplorer/folio/anchored-control.ts";
 import type { Annotation } from "@/manuspectrum/pages/AnalysisExplorer/folio/document-view.ts";
+import type { LiveReport } from "@/manuspectrum/pages/AnalysisExplorer/folio/live-unit.ts";
 import type { LaidLayers } from "@/manuspectrum/pages/AnalysisExplorer/folio/laid-layers.ts";
 import type { FolioOverlay } from "@/manuspectrum/pages/AnalysisExplorer/folio/overlays.ts";
 import type { PageLayer } from "@/manuspectrum/pages/AnalysisExplorer/folio/page-layer.ts";
@@ -154,6 +161,7 @@ const emit = defineEmits<{
     "capture-failed": [key: string, reason: CaptureFailure];
     "layer-reset": [key: string];
     "layer-place": [key: string, box: Box];
+    "live-unit": [report: LiveReport | null];
 }>();
 defineExpose({ focusTarget, focusCurrent });
 
@@ -212,8 +220,18 @@ let adjustment: Adjustment | null = null;
 const hasImage = computed((): boolean => Boolean(props.canvas?.image.service));
 /** The unit of the page's zones (`toLatLng`). */
 const unit = computed(() => props.canvas?.zoneUnit ?? null);
+/** What the page's live layer gave once its info.json is read, with the canvas it was laid for; null until then. */
+const live = ref<LiveReport | null>(null);
+
+/** The unit `zone` is placed with: its own, else the live layer's, else the canvas's (`zoneUnitFor`). */
+function placedWith(zone: { unit: ZoneUnit | null }): ZoneUnit | null {
+    return zoneUnitFor(zone, live.value?.unit ?? null, unit.value);
+}
 
 watch(() => props.canvas?.id, drawPage);
+/** What the zones are placed with, as a key: a frame that gives the unit already used redraws nothing. */
+const placedKey = computed(() => unitKey(live.value?.unit ?? unit.value));
+watch(live, () => emit("live-unit", live.value));
 watch(
     () => [
         props.annotations,
@@ -226,6 +244,7 @@ watch(
         props.samples,
         props.components,
         props.lit,
+        placedKey.value,
     ],
     drawMarks,
 );
@@ -274,6 +293,7 @@ onMounted(() => {
 useResizeObserver(host, () => map?.invalidateSize({ animate: false }));
 
 onBeforeUnmount(() => {
+    emit("live-unit", null);
     page?.remove();
     page = null;
     stopAdjusting(true);
@@ -476,11 +496,21 @@ function drawPage(): void {
     page?.remove();
     page = null;
     pageFailed.value = false;
+    live.value = null;
     const service = props.canvas?.image.service;
-    if (!service) return;
-    page = layPage(map, service, () => {
+    if (!service || !props.canvas) return;
+    const laid = layPage(map, service, () => {
         pageFailed.value = true;
     });
+    page = laid;
+    void followLiveUnit(
+        laid,
+        { id: props.canvas.id, ...props.canvas.image },
+        () => page === laid,
+        (report) => {
+            live.value = report;
+        },
+    );
 }
 
 /**
@@ -570,7 +600,7 @@ function drawComponentZones(): L.GeoJSON {
                           ? shapeFeature(
                                 zone.shape,
                                 { id: component.id },
-                                unit.value,
+                                placedWith(zone),
                             )
                           : null;
                   return feature ? [feature] : [];
@@ -622,7 +652,7 @@ function drawMarks(): void {
     });
     for (const annotation of markedZones(props.annotations)) {
         if (!isShown(annotation)) continue;
-        const centre = shapeCentre(annotation.shape, unit.value);
+        const centre = shapeCentre(annotation.shape, placedWith(annotation));
         if (!centre) continue;
         const marker = L.marker(centre, {
             icon: markerIcon(annotation),
@@ -635,7 +665,7 @@ function drawMarks(): void {
     const shownSamples = props.view === "samples" ? props.samples : [];
     for (const sample of shownSamples) {
         const centre = sample.zone
-            ? shapeCentre(sample.zone.shape, unit.value)
+            ? shapeCentre(sample.zone.shape, placedWith(sample.zone))
             : null;
         if (!centre) continue;
         const target = `${SAMPLE_PREFIX}${sample.id}`;
@@ -662,7 +692,7 @@ function drawMarks(): void {
                 analysis: annotation.analysis,
                 colour: style?.colour ?? null,
             },
-            unit.value,
+            placedWith(annotation),
         );
         if (feature) frameFeatures.push(feature);
     }
@@ -698,7 +728,7 @@ function drawMarks(): void {
                     ? shapeFeature(
                           sample.zone.shape,
                           { id: sample.id },
-                          unit.value,
+                          placedWith(sample.zone),
                       )
                     : null;
             return feature ? [feature] : [];
@@ -720,7 +750,7 @@ function drawMarks(): void {
                       ? shapeFeature(
                             summary.zone.shape,
                             { id: summary.id },
-                            unit.value,
+                            placedWith(summary.zone),
                         )
                       : null;
                   return feature ? [feature] : [];

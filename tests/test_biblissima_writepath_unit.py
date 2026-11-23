@@ -835,6 +835,191 @@ class AnnotationTargetGuardTests(TestCase):
 
         self.assertEqual(self._page_corner(location_tiles), [200, -250])
 
+    def _feature(self, location_tiles):
+        from manuspectrum.views.biblissima_proxy import COMP_LOCATION_DOC_NODE
+
+        return location_tiles[0].data[COMP_LOCATION_DOC_NODE]["features"][0]
+
+    def _build_read(self, body, canvas=None):
+        from manuspectrum.utils.http import FetchedResponse
+
+        info = FetchedResponse(
+            "https://example.com/iiif/image/info.json", 200, {}, body
+        )
+        data = _make_minimal_component_data()
+        if canvas:
+            for key, value in zip(("canvasWidth", "canvasHeight"), canvas):
+                if value is None:
+                    data.pop(key, None)
+                else:
+                    data[key] = value
+        view = _make_builder_view()
+        with (
+            self.settings(IIIF_IMAGE_INFO_READ=True),
+            patch("manuspectrum.iiif.units.safe_fetch", return_value=info),
+            patch(
+                "manuspectrum.utils.http.socket.getaddrinfo",
+                return_value=[
+                    (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))
+                ],
+            ),
+        ):
+            view._create_component_tiles(
+                str(uuid.uuid4()),
+                str(uuid.uuid4()),
+                data,
+                deps={"parentDocument": str(uuid.uuid4())},
+                concepts={},
+                created_deps={},
+            )
+        from manuspectrum.views.biblissima_proxy import COMP_LOCATION_DOC_NG
+
+        return [
+            t for t in view._tile_buffer if str(t.nodegroup_id) == COMP_LOCATION_DOC_NG
+        ]
+
+    def test_whole_page_zone_carries_its_frame(self):
+        tiles = self._build_read(
+            b'{"width": 4913, "height": 6609, "tiles": [{"width": 512}]}',
+            canvas=("4913", "6609"),
+        )
+
+        feature = self._feature(tiles)
+        self.assertEqual(
+            feature["geometry"]["coordinates"],
+            [[[0, 0], [307.0625, 0], [307.0625, -413.0625], [0, -413.0625], [0, 0]]],
+        )
+        self.assertEqual(
+            {k: v for k, v in feature["properties"].items() if k.startswith("ms")},
+            {
+                "msUnit": 16,
+                "msImageWidth": 4913,
+                "msImageHeight": 6609,
+                "msFrame": "read",
+            },
+        )
+
+    def test_whole_page_zone_on_a_refusing_host_is_estimated(self):
+        _, tiles = self._build("93.184.216.34")
+
+        properties = self._feature(tiles)["properties"]
+        self.assertEqual(properties["msFrame"], "estimated")
+        self.assertEqual(properties["msImageWidth"], 800)
+        self.assertEqual(properties["msImageHeight"], 1000)
+        self.assertEqual(properties["msUnit"], 4)
+
+    def test_whole_page_zone_on_an_unavailable_host_is_estimated_and_warned(self):
+        from manuspectrum.iiif import units
+
+        with (
+            patch(
+                "manuspectrum.views.biblissima_proxy.image_info",
+                return_value=units.UNAVAILABLE,
+            ),
+            self.assertLogs("manuspectrum.views.biblissima_proxy", "WARNING") as logs,
+        ):
+            _, tiles = self._build("93.184.216.34")
+
+        self.assertEqual(self._feature(tiles)["properties"]["msFrame"], "estimated")
+        self.assertIn("assumed unit", "\n".join(logs.output))
+
+    def _frame_of(self, tiles):
+        properties = self._feature(tiles)["properties"]
+        return {k: v for k, v in properties.items() if k.startswith("ms")}
+
+    def _corner(self, tiles):
+        return self._feature(tiles)["geometry"]["coordinates"][0][2]
+
+    BIG = b'{"width": 4913, "height": 6609, "tiles": [{"width": 512}]}'
+    BIG_FRAME = {
+        "msUnit": 16,
+        "msImageWidth": 4913,
+        "msImageHeight": 6609,
+        "msFrame": "read",
+    }
+
+    def test_whole_page_zone_is_in_image_units_whatever_the_canvas_size(self):
+        tiles = self._build_read(self.BIG, canvas=("1000", "1000"))
+
+        self.assertEqual(self._corner(tiles), [307.0625, -413.0625])
+        self.assertEqual(self._frame_of(tiles), self.BIG_FRAME)
+
+    def test_whole_page_zone_without_a_canvas_size_is_in_image_units(self):
+        tiles = self._build_read(self.BIG, canvas=(None, None))
+
+        self.assertEqual(self._corner(tiles), [307.0625, -413.0625])
+        self.assertEqual(self._frame_of(tiles), self.BIG_FRAME)
+
+    def test_a_kept_read_older_than_the_stamp_bound_is_read_again(self):
+        from manuspectrum.iiif import units
+        from manuspectrum.utils.http import FetchedResponse
+        from tests.test_iiif_units import later
+
+        kept = FetchedResponse(
+            "https://example.com/iiif/image/info.json", 200, {}, self.BIG
+        )
+        with (
+            self.settings(IIIF_IMAGE_INFO_READ=True),
+            patch("manuspectrum.iiif.units.safe_fetch", return_value=kept),
+        ):
+            units.image_info("https://example.com/iiif/image")
+        with later(7200):
+            tiles = self._build_read(
+                b'{"width": 4913, "height": 6609, "tiles": [{"width": 1024}]}',
+                canvas=("4913", "6609"),
+            )
+
+        self.assertEqual(self._frame_of(tiles)["msUnit"], 8)
+
+    def test_an_absurd_image_size_writes_the_zone_unstamped(self):
+        with self.assertLogs("manuspectrum.views.biblissima_proxy", "WARNING") as logs:
+            tiles = self._build_read(
+                b'{"width": 5000000, "height": 6000000, "tiles": [{"width": 512}]}',
+                canvas=("800", "1000"),
+            )
+
+        self.assertIn("without a frame", "\n".join(logs.output))
+        self.assertNotIn("assumed unit", "\n".join(logs.output))
+        self.assertEqual(self._frame_of(tiles), {})
+        self.assertEqual(self._corner(tiles), [305.175781, -366.210937])
+
+    def test_an_absurd_canvas_on_a_refusing_host_is_unstamped_and_assumed(self):
+        with self.assertLogs("manuspectrum.views.biblissima_proxy", "WARNING") as logs:
+            tiles = self._build_read(b"{}", canvas=("2000000", "3000000"))
+
+        self.assertIn("without a frame", "\n".join(logs.output))
+        self.assertEqual(self._frame_of(tiles), {})
+        self.assertEqual(self._corner(tiles), [122.070313, -183.105469])
+
+    def test_a_negative_canvas_size_counts_as_missing(self):
+        tiles = self._build_read(b"{}", canvas=("-5", "1000"))
+
+        self.assertEqual(self._corner(tiles), [250, -62.5])
+
+    def test_canvas_sides_are_positive_whole_numbers_or_default(self):
+        for bad in (
+            True,
+            12.5,
+            float("inf"),
+            float("nan"),
+            10**400,
+            10**9 + 1,
+            0,
+            -5,
+            "x",
+            None,
+            [],
+        ):
+            self.assertEqual(bp._canvas_side(bad, 7), 7, repr(bad))
+        for good, expected in (
+            ("800", 800),
+            (800, 800),
+            (800.0, 800),
+            ("١٢", 12),
+            (10**9, 10**9),
+        ):
+            self.assertEqual(bp._canvas_side(good, 7), expected, repr(good))
+
     def test_an_unread_image_is_logged_with_its_host_only(self):
         with self.assertLogs("manuspectrum.views.biblissima_proxy", "WARNING") as logs:
             self._build("93.184.216.34")

@@ -26,6 +26,7 @@ import {
     toQuery,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 import { sizedContainer } from "@/manuspectrum/pages/AnalysisExplorer/testing/leaflet.ts";
+import { EXPLORER_VIEWS } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 import {
     analysisPayload,
     annotation,
@@ -112,6 +113,7 @@ const FolioStub = defineComponent({
         "captured",
         "capture-failed",
         "layer-reset",
+        "live-unit",
     ],
     setup(_props, { expose }) {
         expose({ focusTarget, focusCurrent });
@@ -631,6 +633,7 @@ describe("CorpusDocument", () => {
                     characterization(1, {
                         zone: {
                             canvas: "https://iiif.example/c1",
+                            unit: null,
                             shape: { type: "point", x: 1, y: 1 },
                             source: "own",
                         },
@@ -638,6 +641,7 @@ describe("CorpusDocument", () => {
                     characterization(2, {
                         zone: {
                             canvas: "https://iiif.example/c1",
+                            unit: null,
                             shape: { type: "point", x: 2, y: 2 },
                             source: "own",
                         },
@@ -720,6 +724,7 @@ describe("CorpusDocument", () => {
                         ],
                         zone: {
                             canvas: "https://iiif.example/c1",
+                            unit: null,
                             shape: { type: "point", x: 10, y: 10 },
                             source: "own",
                         },
@@ -730,6 +735,7 @@ describe("CorpusDocument", () => {
                     sample(2, {
                         zone: {
                             canvas: "https://iiif.example/c2",
+                            unit: null,
                             shape: { type: "point", x: 10, y: 10 },
                         },
                     }),
@@ -1325,6 +1331,70 @@ describe("CorpusDocument", () => {
         expect(store.corpusScreen).toBe("home");
     });
 
+    it("says Back to Compare when opened from Compare, and returns to that view", async () => {
+        stubFetch();
+        const { wrapper, store } = mountScreen((store) => {
+            store.setView("compare");
+            store.openInDocument({
+                document: uuid(1),
+                canvas: null,
+                focus: { kind: "analysis", id: uuid(101) },
+            });
+        });
+        await flushPromises();
+        const back = wrapper.find(".return-pill");
+        expect(back.text()).toBe("Back to Compare");
+        await back.trigger("click");
+        expect(store.view).toBe("compare");
+        expect(store.document).toBeNull();
+    });
+
+    it("does not offer Compare when that view is unavailable, and leads to the Corpus screen back() falls back to", async () => {
+        const entry = EXPLORER_VIEWS.find((view) => view.id === "compare")!;
+        (entry as { available: boolean }).available = false;
+        try {
+            stubFetch();
+            const { wrapper, store } = mountScreen((store) => {
+                store.setView("compare");
+                store.openInDocument({
+                    document: uuid(1),
+                    canvas: null,
+                    focus: { kind: "analysis", id: uuid(101) },
+                });
+                store.documentOrigin = "compare";
+            });
+            await flushPromises();
+            const back = wrapper.find(".return-pill");
+            expect(back.text()).toBe("Data Lab home");
+            await back.trigger("click");
+            expect(store.view).toBe("corpus");
+            expect(store.corpusScreen).toBe("home");
+        } finally {
+            (entry as { available: boolean }).available = true;
+        }
+    });
+
+    it("keeps the document when the card opened from Compare closes, without stepping back in the history", async () => {
+        window.history.replaceState(null, "", "/en/discover?view=compare");
+        const back = vi.spyOn(window.history, "back");
+        stubFetch();
+        const { wrapper, store } = mountScreen((store) => {
+            store.setView("compare");
+            store.openInDocument({
+                document: uuid(1),
+                canvas: null,
+                focus: { kind: "analysis", id: uuid(101) },
+            });
+        });
+        await flushPromises();
+        wrapper.findComponent({ name: "AnalysisCard" }).vm.$emit("close");
+        await flushPromises();
+        expect(back).not.toHaveBeenCalled();
+        expect(store.document?.id).toBe(uuid(1));
+        expect(store.focus).toBeNull();
+        back.mockRestore();
+    });
+
     it("opens on the first page with results when filters are active and no page is named", async () => {
         stubFetch({
             annotations: [
@@ -1803,6 +1873,29 @@ describe("CorpusDocument", () => {
             const { wrapper, folio } = await mountLaidLayer();
             expect(folio.props("overlays")).toHaveLength(1);
             expect(folio.props("adjusting")).toBeNull();
+            wrapper.unmount();
+        });
+
+        it("places the layer with the live unit of the page shown, never with one read on another page", async () => {
+            const { wrapper, folio } = await mountLaidLayer();
+            const canvas = (folio.props("canvas") as { id: string }).id;
+            const fallback = folio.props("overlays")[0].bounds;
+            folio.vm.$emit("live-unit", {
+                canvas,
+                unit: { x: 2, y: 2, read: true },
+            });
+            await flushPromises();
+            const live = folio.props("overlays")[0].bounds;
+            expect(live).not.toEqual(fallback);
+            folio.vm.$emit("live-unit", {
+                canvas: "https://iiif.example/another-page",
+                unit: { x: 2, y: 2, read: true },
+            });
+            await flushPromises();
+            expect(folio.props("overlays")[0].bounds).toEqual(fallback);
+            folio.vm.$emit("live-unit", null);
+            await flushPromises();
+            expect(folio.props("overlays")[0].bounds).toEqual(fallback);
             wrapper.unmount();
         });
 

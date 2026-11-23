@@ -24,7 +24,7 @@ const PHONE_QUERY = "(max-width: 30rem)";
  * colour. `open()` is exposed for the notices (`SELECTION_DRAWER_KEY`).
  * Closing it (Escape, its close button) gives the focus back to the element
  * that opened it if it is still on the page, else to the button; « Compare »
- * closes it and leaves the focus to the Compare view.
+ * and a link to a document close it and leave the focus to the screen shown.
  */
 const store = useExplorerStore();
 const { $gettext, interpolate } = useGettext();
@@ -32,8 +32,8 @@ const phone = useMediaQuery(PHONE_QUERY);
 const button = useTemplateRef<HTMLButtonElement>("button");
 
 const open = ref(false);
-/** Closed by « Compare »: the focus goes to the Compare view, not back to the button. */
-const leftForCompare = ref(false);
+/** Closed by « Compare » or by a link to a document: the focus goes to the screen shown, not back to the button. */
+const leftForScreen = ref(false);
 /** What opened the drawer, when it was not the button. */
 let opener: Element | null = null;
 
@@ -51,8 +51,8 @@ const label = computed(() =>
 
 watch(open, async (isOpen, wasOpen) => {
     if (isOpen || !wasOpen) return;
-    if (leftForCompare.value) {
-        leftForCompare.value = false;
+    if (leftForScreen.value) {
+        leftForScreen.value = false;
         return;
     }
     await nextTick();
@@ -72,8 +72,8 @@ function openFrom(from?: Element | null): void {
 
 defineExpose({ open: openFrom });
 
-function closeForCompare(): void {
-    leftForCompare.value = true;
+function closeForScreen(): void {
+    leftForScreen.value = true;
     open.value = false;
 }
 </script>
@@ -121,7 +121,10 @@ function closeForCompare(): void {
                 },
             }"
         >
-            <SelectionPanel @compare="closeForCompare" />
+            <SelectionPanel
+                @compare="closeForScreen"
+                @navigate="closeForScreen"
+            />
         </Drawer>
     </div>
 </template>

@@ -13,12 +13,8 @@ import { useGettext } from "vue3-gettext";
 import FocusSlotDot from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusSlotDot.vue";
 
 import { useMenuButton } from "@/manuspectrum/pages/AnalysisExplorer/composables/useMenuButton.ts";
+import { useOpenInDocument } from "@/manuspectrum/pages/AnalysisExplorer/composables/useOpenInDocument.ts";
 import { LINKED_SELECTION_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
-import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
-import {
-    documentHref,
-    snapshotOf,
-} from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 import {
     circled,
     focusHue,
@@ -71,7 +67,7 @@ const MODES: readonly FocusMode[] = ["any", "all"];
  */
 const linked = inject(LINKED_SELECTION_KEY)!;
 
-const store = useExplorerStore();
+const opener = useOpenInDocument();
 const { $gettext, $ngettext, interpolate } = useGettext();
 
 const buttonId = useId();
@@ -213,15 +209,6 @@ function documentName(target: DocumentTarget): string {
     );
 }
 
-function hrefOf(target: DocumentTarget): string {
-    return documentHref(
-        snapshotOf(store),
-        target.document,
-        target.canvas,
-        target.focus,
-    );
-}
-
 function cancelHover(): void {
     if (hoverTimer !== null) clearTimeout(hoverTimer);
     hoverTimer = null;
@@ -304,10 +291,8 @@ function clearAll(): void {
     hide(true);
 }
 
-function openTarget(target: DocumentTarget): void {
-    hide(false);
-    store.openDocument(target.document, target.canvas);
-    store.focusOn(target.focus);
+function openTarget(target: DocumentTarget, event: MouseEvent): void {
+    if (opener.open(target, event)) hide(false);
 }
 </script>
 
@@ -442,8 +427,8 @@ function openTarget(target: DocumentTarget): void {
                     <a
                         v-if="targets.length === 1"
                         class="open-document"
-                        :href="hrefOf(targets[0])"
-                        @click.prevent="openTarget(targets[0])"
+                        :href="opener.hrefOf(targets[0])"
+                        @click="openTarget(targets[0], $event)"
                     >
                         <span>{{ $gettext("Open in the document") }}</span>
                     </a>
@@ -486,8 +471,8 @@ function openTarget(target: DocumentTarget): void {
                                 <a
                                     role="menuitem"
                                     tabindex="-1"
-                                    :href="hrefOf(target)"
-                                    @click.prevent="openTarget(target)"
+                                    :href="opener.hrefOf(target)"
+                                    @click="openTarget(target, $event)"
                                     >{{ documentName(target) }}</a
                                 >
                             </li>

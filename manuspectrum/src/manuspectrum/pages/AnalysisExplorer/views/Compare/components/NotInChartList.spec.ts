@@ -130,19 +130,42 @@ describe("NotInChartList", () => {
         expect(line(wrapper, 1).find("a.action").exists()).toBe(false);
     });
 
-    it("opens an analysis that holds nothing to show in its document, in a new tab", () => {
+    it("opens an analysis that holds nothing to show in its document, in the same tab", async () => {
         const wrapper = mountList();
         const link = line(wrapper, 2).find("a.action");
         expect(link.text()).toBe("Open the analysis");
         expect(link.attributes("aria-label")).toBe(
-            "Open the analysis MS1_f12_XRF_03 in a new tab",
+            "Open the analysis MS1_f12_XRF_03",
         );
-        expect(link.attributes("target")).toBe("_blank");
-        expect(link.attributes("rel")).toBe("noopener");
+        expect(link.attributes("target")).toBeUndefined();
+        expect(link.attributes("rel")).toBeUndefined();
         const href = link.attributes("href")!;
         expect(href.startsWith("?")).toBe(true);
         expect(href).toContain(HIT.document.id);
         expect(href).toContain(HIT.id);
+        await link.trigger("click");
+        const store = useExplorerStore();
+        expect(store.document?.id).toBe(HIT.document.id);
+        expect(store.focus).toEqual({ kind: "analysis", id: HIT.id });
+    });
+
+    it("leaves a Ctrl-click on « Open the analysis » to the browser", () => {
+        const wrapper = mountList();
+        const link = line(wrapper, 2).find("a.action");
+        let handled = true;
+        link.element.addEventListener("click", (event) => {
+            handled = event.defaultPrevented;
+            event.preventDefault();
+        });
+        link.element.dispatchEvent(
+            new MouseEvent("click", {
+                bubbles: true,
+                cancelable: true,
+                ctrlKey: true,
+            }),
+        );
+        expect(handled).toBe(false);
+        expect(useExplorerStore().document).toBeNull();
     });
 
     it("takes an item no longer available out of the Selection on demand", async () => {

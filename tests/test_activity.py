@@ -9,7 +9,10 @@ from arches.app.models.models import (
     ETLModule,
     GraphModel,
     LoadEvent,
+    Node,
+    NodeGroup,
     ResourceInstance,
+    TileModel,
     WorkflowHistory,
 )
 from celery.signals import worker_ready
@@ -577,6 +580,64 @@ class GaugeTests(ActivityCase):
         self.assertEqual(
             sample("manuspectrum_workflows", state="open", kind="other"), 1
         )
+
+    def test_annotation_zones_are_counted_by_stamp_state(self):
+        group = NodeGroup.objects.create(nodegroupid=uuid.uuid4(), cardinality="n")
+        node = Node.objects.create(
+            nodeid=uuid.uuid4(),
+            graph=self.analysis,
+            nodegroup=group,
+            name="zone",
+            alias="zone",
+            datatype="annotation",
+            istopnode=False,
+        )
+        resource = ResourceInstance.objects.create(
+            graph=self.analysis, resource_instance_lifecycle_state_id=ACTIVE
+        )
+        stamp = {"msUnit": 16, "msImageWidth": 10, "msImageHeight": 20}
+
+        def feature(**props):
+            return {"id": str(uuid.uuid4()), "properties": props}
+
+        def tile(value):
+            TileModel.objects.bulk_create(
+                [
+                    TileModel(
+                        tileid=uuid.uuid4(),
+                        resourceinstance=resource,
+                        nodegroup=group,
+                        data={str(node.pk): value},
+                    )
+                ]
+            )
+
+        tile(
+            {
+                "features": [
+                    feature(**stamp, msFrame="read"),
+                    feature(**stamp, msFrame="import-legacy"),
+                    feature(**stamp, msFrame="estimated"),
+                    feature(canvas="x"),
+                    feature(**stamp, msFrame="bogus"),
+                    feature(**{**stamp, "msUnit": 16.0}, msFrame="read"),
+                    feature(**{**stamp, "msUnit": 3}, msFrame="read"),
+                    feature(**{**stamp, "msUnit": 2**21}, msFrame="read"),
+                    feature(**{**stamp, "msImageWidth": 0}, msFrame="read"),
+                    feature(**{**stamp, "msImageHeight": "20"}, msFrame="read"),
+                    feature(msUnit=16, msFrame="read"),
+                    feature(**{**stamp, "msUnit": 10**30}, msFrame="read"),
+                    "odd",
+                    {"id": "no-properties"},
+                ]
+            }
+        )
+        tile({"features": "not a list"})
+        tile(None)
+        activity.publish_gauges(NOW)
+        self.assertEqual(sample("manuspectrum_annotation_zones", state="measured"), 2)
+        self.assertEqual(sample("manuspectrum_annotation_zones", state="estimated"), 1)
+        self.assertEqual(sample("manuspectrum_annotation_zones", state="unstamped"), 11)
 
     def test_the_last_run_time_is_set(self):
         activity.publish_gauges(NOW)

@@ -7,6 +7,7 @@ import type {
     SynthesisCoverage,
     SynthesisResponse,
     Technique,
+    ZoneUnit,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
     BasketItem,
@@ -85,7 +86,7 @@ export interface FolioMark {
     slots: number[];
     name: Label;
     technique: Technique | null;
-    shapes: Shape[];
+    zones: { shape: Shape; unit: ZoneUnit | null }[];
 }
 
 /**
@@ -103,10 +104,8 @@ export function folioMarks(
     const marks: FolioMark[] = [];
     for (const analysis of payload.analyses) {
         const held = slots.get(analysis.id);
-        const shapes = analysis.zones
-            .filter((zone) => zone.canvas === position)
-            .map((zone) => zone.shape);
-        if (!held || shapes.length === 0) continue;
+        const zones = analysis.zones.filter((zone) => zone.canvas === position);
+        if (!held || zones.length === 0) continue;
         marks.push({
             id: analysis.id,
             kind: "analysis",
@@ -116,7 +115,7 @@ export function folioMarks(
                 analysis.technique === null
                     ? null
                     : payload.techniques[analysis.technique] ?? null,
-            shapes,
+            zones: zones.map(({ shape, unit }) => ({ shape, unit })),
         });
     }
     for (const summary of payload.characterizations) {
@@ -128,7 +127,7 @@ export function folioMarks(
             slots: [...held],
             name: summary.name,
             technique: null,
-            shapes: [summary.zone.shape],
+            zones: [{ shape: summary.zone.shape, unit: summary.zone.unit }],
         });
     }
     return marks.sort((a, b) => a.slots[0] - b.slots[0]);
