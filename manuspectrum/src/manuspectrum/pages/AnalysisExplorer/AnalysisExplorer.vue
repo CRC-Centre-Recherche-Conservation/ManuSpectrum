@@ -90,7 +90,8 @@ const railWidth = useRailWidth();
 useUrlState({
     snapshot: () => snapshotOf(store),
     toQuery,
-    apply: (query) => applySnapshot(store, fromQuery(query)),
+    apply: (query, entry) => applySnapshot(store, fromQuery(query), entry),
+    entryState: () => ({ documentOrigin: store.documentOrigin }),
     historyMode,
 });
 

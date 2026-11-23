@@ -558,6 +558,64 @@ class DocumentRouteTests(CorpusCase):
             payload["canvases"][0]["zoneUnit"], {"x": 32.0, "y": 32.0, "read": False}
         )
 
+    def stamp_zones(self, analysis, unit, source="browser"):
+        node = self.nodes[("analysis", "literal_location_of_analysis")]
+        for tile in TileModel.objects.filter(
+            resourceinstance=analysis, nodegroup_id=node.nodegroup_id
+        ):
+            for feature in tile.data[str(node.nodeid)]["features"]:
+                feature["properties"].update(
+                    {
+                        "msUnit": unit,
+                        "msImageWidth": 4000,
+                        "msImageHeight": 5000,
+                        "msFrame": source,
+                    }
+                )
+            TileModel.objects.filter(pk=tile.pk).update(data=tile.data)
+
+    def test_stamped_document_reads_no_image_description(self):
+        for key in ("open", "on_document", "draft"):
+            self.stamp_zones(self.analyses[key], 16)
+        with (
+            self.settings(IIIF_IMAGE_INFO_READ=True),
+            mock.patch(
+                "manuspectrum.iiif.units.safe_fetch",
+                side_effect=AssertionError("info.json read"),
+            ),
+        ):
+            payload = self.get(self.documents["open"].pk).json()
+
+        mine = self.by_id(payload)[str(self.analyses["open"].pk)]
+        self.assertEqual(
+            mine["zones"][0]["shape"], {"type": "point", "x": 160, "y": 320}
+        )
+        self.assertIsNone(mine["zones"][0]["unit"])
+        self.assertEqual(
+            payload["canvases"][0]["zoneUnit"], {"x": 16.0, "y": 16.0, "read": True}
+        )
+
+    def test_estimated_zone_carries_its_unit(self):
+        self.stamp_zones(self.analyses["open"], 32, source="estimated")
+
+        payload = self.get(self.documents["open"].pk).json()
+
+        mine = self.by_id(payload)[str(self.analyses["open"].pk)]
+        self.assertEqual(
+            mine["zones"][0]["shape"], {"type": "point", "x": 320, "y": 640}
+        )
+        self.assertEqual(
+            mine["zones"][0]["unit"], {"x": 32.0, "y": 32.0, "read": False}
+        )
+
+    def test_an_assumed_unit_is_carried_by_the_zone_it_converted(self):
+        payload = self.get(self.documents["open"].pk).json()
+
+        mine = self.by_id(payload)[str(self.analyses["open"].pk)]
+        self.assertEqual(
+            mine["zones"][0]["unit"], {"x": 32.0, "y": 32.0, "read": False}
+        )
+
     def test_an_analysis_names_its_component(self):
         payload = self.get(self.documents["open"].pk).json()
 

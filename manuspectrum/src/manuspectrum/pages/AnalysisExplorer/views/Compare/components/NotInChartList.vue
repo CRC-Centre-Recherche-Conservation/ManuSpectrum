@@ -5,19 +5,18 @@ import { useGettext } from "vue3-gettext";
 import FocusPip from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/components/FocusPip.vue";
 
 import { useLinkedMarks } from "@/manuspectrum/pages/AnalysisExplorer/composables/useLinkedMarks.ts";
+import { useOpenInDocument } from "@/manuspectrum/pages/AnalysisExplorer/composables/useOpenInDocument.ts";
 import { safeHref } from "@/manuspectrum/pages/AnalysisExplorer/format.ts";
 import { SCREEN_FOCUS_KEY } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
+import { analysisPlace } from "@/manuspectrum/pages/AnalysisExplorer/selection/place.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
 import { useExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
-import {
-    documentHref,
-    snapshotOf,
-} from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 import {
     analysisNode,
     slotNode,
 } from "@/manuspectrum/pages/AnalysisExplorer/views/Compare/linked/node-id.ts";
 
+import type { DocumentTarget } from "@/manuspectrum/pages/AnalysisExplorer/selection/place.ts";
 import type { AnalysisHit } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
     NotInChartEntry,
@@ -42,6 +41,7 @@ const { $gettext, interpolate } = useGettext();
 const list = useTemplateRef<HTMLUListElement>("list");
 const screenFocus = inject(SCREEN_FOCUS_KEY, null);
 const marks = useLinkedMarks();
+const opener = useOpenInDocument();
 
 function recordOf(entry: NotInChartEntry): string[] {
     return entry.analysis ? [analysisNode(entry.analysis.id)] : [];
@@ -87,7 +87,7 @@ function downloadLabel(entry: NotInChartEntry): string {
 
 function openLabel(analysis: AnalysisHit): string {
     return interpolate(
-        $gettext("Open the analysis %{name} in a new tab"),
+        $gettext("Open the analysis %{name}"),
         { name: analysis.name.value },
         true,
     );
@@ -113,16 +113,11 @@ async function remove(key: string): Promise<void> {
 }
 
 /** The document screen of `analysis`, on its page and focused on it. */
-function analysisHref(analysis: AnalysisHit): string {
-    return documentHref(
-        snapshotOf(store),
-        analysis.document.id,
-        analysis.canvas,
-        {
-            kind: "analysis",
-            id: analysis.id,
-        },
-    );
+function targetOf(analysis: AnalysisHit): DocumentTarget {
+    return {
+        ...analysisPlace(analysis),
+        focus: { kind: "analysis", id: analysis.id },
+    };
 }
 </script>
 
@@ -180,10 +175,9 @@ function analysisHref(analysis: AnalysisHit): string {
             <a
                 v-else-if="opensAnalysis(entry)"
                 class="action"
-                :href="analysisHref(entry.analysis!)"
-                target="_blank"
-                rel="noopener"
+                :href="opener.hrefOf(targetOf(entry.analysis!))"
                 :aria-label="openLabel(entry.analysis!)"
+                @click="opener.open(targetOf(entry.analysis!), $event)"
             >
                 <span>{{ $gettext("Open the analysis") }}</span>
             </a>

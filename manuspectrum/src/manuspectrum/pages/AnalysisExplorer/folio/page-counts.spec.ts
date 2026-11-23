@@ -27,6 +27,7 @@ describe("pageCounts", () => {
                 characterization(1, {
                     zone: {
                         canvas: C2,
+                        unit: null,
                         shape: { type: "point", x: 1, y: 1 },
                         source: "own",
                     },

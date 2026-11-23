@@ -77,17 +77,20 @@ import {
 } from "@/manuspectrum/pages/AnalysisExplorer/intro-bar.ts";
 import { analysisKey } from "@/manuspectrum/pages/AnalysisExplorer/selection/entries.ts";
 import { slotLabel } from "@/manuspectrum/pages/AnalysisExplorer/store/basket.ts";
+import { isViewAvailable } from "@/manuspectrum/pages/AnalysisExplorer/views/registry.ts";
 import { warmViewer } from "@/manuspectrum/pages/AnalysisExplorer/viewers/registry.ts";
 import {
     hasActiveFilters,
     selectedFacets,
     useExplorerStore,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
+import { liveFor } from "@/manuspectrum/pages/AnalysisExplorer/folio/live-unit.ts";
 import {
     snapshotOf,
     toQuery,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/url.ts";
 
+import type { LiveReport } from "@/manuspectrum/pages/AnalysisExplorer/folio/live-unit.ts";
 import type {
     CharacterizationSummary,
     DocumentCanvas,
@@ -95,6 +98,7 @@ import type {
     Label,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type {
+    DocumentOrigin,
     Focus,
     FolioView,
 } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
@@ -538,6 +542,8 @@ const zones = computed<ReadonlySet<string>>(
                 .map((entry) => entry.analysis),
         ),
 );
+/** What `FolioMap` last read of its live layer; it counts only for the canvas it was read on (`liveFor`). */
+const liveReport = ref<LiveReport | null>(null);
 const overlays = computed(() =>
     folioOverlays(
         analysis.data.value?.id === focusedAnalysis.value
@@ -548,6 +554,7 @@ const overlays = computed(() =>
         {
             canvas: currentCanvas.value?.id ?? null,
             unit: currentCanvas.value?.zoneUnit ?? null,
+            live: liveFor(currentCanvas.value?.id ?? null, liveReport.value),
             registration:
                 focusedAnalysis.value === null
                     ? null
@@ -657,11 +664,18 @@ const resultsLabel = computed(() => {
               );
     return interpolate(text, { n: shown.total }, true);
 });
-const backLabel = computed(() =>
-    store.documentOrigin === "results"
+/** Where the back link leads: Compare while that view is available, else the Corpus screen `backToCompare` falls back to. */
+const backTarget = computed<DocumentOrigin>(() => {
+    if (store.documentOrigin !== "compare" || isViewAvailable("compare"))
+        return store.documentOrigin;
+    return hasActiveFilters(store.filters) ? "results" : "home";
+});
+const backLabel = computed(() => {
+    if (backTarget.value === "compare") return $gettext("Back to Compare");
+    return backTarget.value === "results"
         ? resultsLabel.value
-        : $gettext("Data Lab home"),
-);
+        : $gettext("Data Lab home");
+});
 const drawerVisible = computed({
     get: () => narrow.value && cardOpen.value,
     set: (visible: boolean) => {
@@ -1039,6 +1053,10 @@ function selectCanvas(canvasId: string): void {
 }
 
 function back(): void {
+    if (store.documentOrigin === "compare") {
+        store.backToCompare();
+        return;
+    }
     store.setCorpusScreen(store.documentOrigin);
 }
 
@@ -1248,6 +1266,7 @@ function goHome(): void {
                             :caption="folioCaption"
                             stage="soft"
                             @select="onSelect"
+                            @live-unit="liveReport = $event"
                             @layer-adjust="onLayerAdjust"
                             @layer-turn="onLayerTurn"
                             @layer-place="onLayerPlace"

@@ -257,7 +257,12 @@ SHAPES = {
         "zones": list,
         "component": (str, type(None)),
     },
-    "AnalysisZone": {"canvas": int, "shape": dict, "feature": str},
+    "AnalysisZone": {
+        "canvas": int,
+        "shape": dict,
+        "feature": str,
+        "unit": ("ZoneUnit", None),
+    },
     "DocumentComponent": {
         "id": str,
         "name": "Label",
