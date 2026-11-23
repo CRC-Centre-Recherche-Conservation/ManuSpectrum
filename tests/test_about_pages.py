@@ -555,11 +555,10 @@ class LegalPagesTests(TestCase):
                 "iiif.unicaen.fr",
                 "tiles.openfreemap.org",
                 "vtiles.openhistoricalmap.org",
-                "cke4.ckeditor.com",
-                "svc.webspellchecker.net",
                 "fonts.googleapis.com",
             ):
                 self.assertIn(host, html, f"{lang}: {host}")
+            self.assertNotIn("CKEditor", html)
             self.assertNotIn("No other page and no other Explorer view", html)
             self.assertNotIn("Aucune autre page", html)
 

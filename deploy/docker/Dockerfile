@@ -67,9 +67,8 @@ COPY --from=frontend /app/node_modules ./node_modules
 COPY --chmod=0755 deploy/docker/check-explorer-bundle.sh /tmp/check-explorer-bundle.sh
 RUN /tmp/check-explorer-bundle.sh webpack/webpack-stats.json
 # No HTML page is published under /static/: the node_modules packages ship
-# sample, test and documentation pages (CKEditor 4 samples carry a known XSS),
-# and nothing the site loads is an .html or .htm static file. The build fails
-# if one gets through.
+# sample, test and documentation pages, and nothing the site loads is an .html
+# or .htm static file. The build fails if one gets through.
 RUN set -a && . /tmp/placeholder.env && set +a \
     && python manage.py collectstatic --noinput --ignore '*.html' --ignore '*.htm' \
     && if find static -type f \( -iname '*.html' -o -iname '*.htm' \) | grep .; then \
