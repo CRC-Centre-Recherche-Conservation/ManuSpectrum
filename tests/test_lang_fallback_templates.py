@@ -41,3 +41,21 @@ class TextWidgetTemplateTests(SimpleTestCase):
         for match in re.finditer(r"ko let:(.*?)-->", html, re.S):
             self.assertNotIn("--", match.group(1))
         self.assertIn("msShown", html)
+
+
+class RichTextWidgetTemplateTests(SimpleTestCase):
+    def render(self):
+        return get_template("views/components/widgets/rich-text.htm").render({})
+
+    def test_the_rich_text_template_extends_the_core_one(self):
+        html = self.render()
+        self.assertIn("views/components/rich-text-editor", html)
+        self.assertIn("ms-lang-fallback", html)
+
+    def test_the_core_rich_text_report_expression_is_replaced(self):
+        self.assertNotIn("html: currentText || $root.translations.none", self.render())
+
+    def test_no_template_tag_is_left(self):
+        html = self.render()
+        self.assertNotIn("{%", html)
+        self.assertNotIn("{{", html)

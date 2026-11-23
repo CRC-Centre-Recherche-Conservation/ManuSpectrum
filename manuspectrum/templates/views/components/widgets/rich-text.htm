@@ -1,0 +1,45 @@
+{% extends "views/components/widgets/rich-text.htm" %}
+{% load i18n %}
+
+{% block report %}
+<!-- ko let: { {% include "views/components/widgets/ms-lang-fallback/shown.htm" %} } -->
+<!-- ko if: !ko.unwrap(hideEmptyNodes) || !!msShown.text -->
+<dt data-bind="text: label, class: nodeCssClasses"></dt>
+<dd data-bind="class: nodeCssClasses">
+<!-- ko if: msShown.text -->
+<!-- ko if: msShown.code -->
+<div class="ms-lang-fallback-line">
+{% include "views/components/widgets/ms-lang-fallback/marker.htm" %}
+</div>
+<!-- /ko -->
+<div data-bind="html: msShown.text, attr: {lang: msShown.code}"></div>
+<!-- /ko -->
+<!-- ko ifnot: msShown.text -->
+<span data-bind="text: $root.translations.none"></span>
+<!-- /ko -->
+</dd>
+<!-- /ko -->
+<!-- /ko -->
+{% endblock report %}
+
+{% block display_value %}
+<!-- ko let: { {% include "views/components/widgets/ms-lang-fallback/shown.htm" %} } -->
+<!-- ko if: msShown.text && !ko.unwrap(displayfullvalue) -->
+<em>
+    <span data-bind="text: '[' + $root.translations.richText + ']', class: nodeCssClasses"></span>
+</em>
+{% include "views/components/widgets/ms-lang-fallback/marker.htm" %}
+<!-- /ko -->
+<!-- ko if: msShown.text && ko.unwrap(displayfullvalue) === true -->
+<!-- ko if: msShown.code -->
+<div class="ms-lang-fallback-line">
+{% include "views/components/widgets/ms-lang-fallback/marker.htm" %}
+</div>
+<!-- /ko -->
+<div data-bind="html: msShown.text, attr: {lang: msShown.code}, class: nodeCssClasses"></div>
+<!-- /ko -->
+<!-- ko ifnot: msShown.text -->
+<span data-bind="text: $root.translations.none, class: nodeCssClasses"></span>
+<!-- /ko -->
+<!-- /ko -->
+{% endblock display_value %}

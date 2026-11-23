@@ -999,5 +999,22 @@ class CoreWidgetTemplateTests(unittest.TestCase):
             condition,
             base,
             "Arches' widget base template changed: re-check "
-            "manuspectrum/templates/views/components/widgets/text.htm against it.",
+            "manuspectrum/templates/views/components/widgets/text.htm and rich-text.htm against it.",
+        )
+
+    def test_core_rich_text_template_keeps_the_blocks_we_replace(self):
+        source = self.CORE_TEXT.with_name("rich-text.htm").read_text()
+        expected = (
+            "{% block report %}",
+            "{% block display_value %}",
+            "html: currentText || $root.translations.none",
+            "'[' + $root.translations.richText + ']'",
+            "ko.unwrap(displayfullvalue)",
+        )
+        missing = [piece for piece in expected if piece not in source]
+        self.assertEqual(
+            missing,
+            [],
+            "Arches' rich-text widget template changed: re-check "
+            "manuspectrum/templates/views/components/widgets/rich-text.htm against it.",
         )

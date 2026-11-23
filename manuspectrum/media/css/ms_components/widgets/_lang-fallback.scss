@@ -15,3 +15,12 @@
     vertical-align: middle;
     cursor: help;
 }
+
+// Rich text: the marker sits on its own line above the content
+.ms-lang-fallback-line {
+    margin-bottom: 4px;
+
+    .ms-lang-fallback {
+        margin-inline-start: 0;
+    }
+}
