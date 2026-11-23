@@ -1,4 +1,4 @@
-"""Check, stamp and unstamp the image frame of the annotation zones already stored.
+"""Check, stamp, verify and unstamp the image frame of the annotation zones already stored.
 
 ``check`` counts the zones per stamp state (the gauge's counts: ``data`` only,
 provisional edits not counted) and lists the images of the unstamped zones of
@@ -49,6 +49,19 @@ read the tile before a batch committed can write its own copy back over the
 stamp; the zone then follows that save's own stamping rule
 (``frames.stamp_collection``).
 
+``verify`` compares the stamp of every stamped zone (``data`` and provisional
+edits) with the live frame of its image service, one image-description read per
+service and run (``Measures``): same, different, refused (a 403 or an answer
+that is not an image description), unreadable (a failed read or a host marked
+down; never a pass: the exit status is 1), or ``import-legacy`` (counted apart,
+never different). A host that refuses this server is measured in a browser:
+``--refused-out DIR`` writes one console script per such host
+(``iiif/frame_check.js``), whose copied JSON ``--frames FILE`` reads
+(``iiif.frame_scope``); the file answers only for a service the server could not
+read. With ``--apply --journal PATH`` the only write is a requalification: an
+``estimated`` stamp equal to the measured frame gets that frame's ``msFrame``
+source, through the same locked, guarded batches and journal as ``stamp``.
+
 ``unstamp --journal PATH`` puts every ``before`` back, only where the zone's
 canvas, geometry digest and properties still equal the journaled ones; a zone
 changed since is listed and left alone. Restoring the whole ``properties``
@@ -70,6 +83,7 @@ import time
 import uuid
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import urlsplit
 
@@ -79,7 +93,7 @@ from django.db import transaction
 from arches.app.models.models import Node, TileModel
 
 from manuspectrum.constants.biblissima import COMP_LOCATION_DOC_NODE
-from manuspectrum.iiif import frame_writes, frames, units
+from manuspectrum.iiif import frame_scope, frame_writes, frames, units
 from manuspectrum.iiif.units import Frame
 from manuspectrum.observability import activity
 from manuspectrum.views.explorer.values import rewrite_legacy_url
@@ -90,6 +104,16 @@ LEGACY_SIZE = (4000, 5000)
 BATCH = 200
 RETRIES = 2
 RETRY_WAIT_MAX = 300
+REFUSED_STATE = "refused"
+UNREADABLE_STATE = "unreadable"
+CHECK_SCRIPT = Path(frames.__file__).with_name("frame_check.js")
+BUCKETS = (
+    ("same", "same"),
+    ("different", "different"),
+    (REFUSED_STATE, "refused or not an image description"),
+    (UNREADABLE_STATE, "unreadable"),
+    ("legacy", "import-legacy"),
+)
 
 
 def annotation_nodes():
@@ -383,6 +407,121 @@ def apply_batch(batch, journal):
     return written
 
 
+class Measures:
+    """The live frame of each image service, read once per service and run.
+
+    ``frame(service)`` is the ``read`` ``Frame`` when this server reads the
+    image description; otherwise, when *frames_file* names the service, the
+    ``browser`` ``Frame`` of its entry; otherwise ``"refused"`` (a refusal or an
+    answer that is not an image description) or ``"unreadable"`` (a failed read
+    or a host marked down).
+    """
+
+    def __init__(self, frames_file=None):
+        self.frames_file = frames_file
+        self._frames = {}
+
+    def frame(self, service):
+        if service not in self._frames:
+            self._frames[service] = self._measure(service)
+        return self._frames[service]
+
+    def _measure(self, service):
+        info = frame_writes.fresh_info(service)
+        if isinstance(info, units.ImageInfo):
+            try:
+                return units.frame_from_info(info, "read")
+            except ValueError:
+                return REFUSED_STATE
+        listed = self.frames_file.frames.get(service) if self.frames_file else None
+        if listed is not None:
+            try:
+                return units.frame_from_info(listed, "browser")
+            except ValueError:
+                pass
+        return UNREADABLE_STATE if info == units.UNAVAILABLE else REFUSED_STATE
+
+
+def _size_of(frame):
+    return f"{frame.unit}x{frame.width}x{frame.height}"
+
+
+def _host_of(service):
+    return urlsplit(service).hostname or ""
+
+
+def _matching_stamped(value, node_id, fid, digest, canvas, frame):
+    """The features of *value*'s collection *node_id* still carrying the planned *frame* on the planned canvas and geometry."""
+    collection = value.get(node_id) if isinstance(value, dict) else None
+    if not frame_writes._is_collection(collection):
+        return []
+    return [
+        f
+        for f in collection["features"]
+        if isinstance(f, dict)
+        and f.get("id") == fid
+        and isinstance(f.get("properties"), dict)
+        and frames.frame_of(f) == frame
+        and frames.canvas_of(f) == canvas
+        and frames.geometry_digest(f.get("geometry")) == digest
+    ]
+
+
+def requalify_batch(batch, journal):
+    """Give the planned zones of the tiles of *batch* (``[(tile id, entries)]``) the ``msFrame`` of their measure; return ``(written, [(tile id, feature id)] changed since)``.
+
+    Locks, guards and journals like ``apply_batch``; only ``msFrame`` changes.
+    An entry is ``(node id, user id, feature id, digest, canvas, stamped
+    frame, new source)``.
+    """
+    written, changed, all_lines = 0, [], []
+    with transaction.atomic():
+        rows = {
+            row[0]: row
+            for row in TileModel.objects.select_for_update()
+            .filter(pk__in=[tile_id for tile_id, _ in batch])
+            .order_by("pk")
+            .values_list("tileid", "data", "provisionaledits")
+        }
+        for tile_id, entries in batch:
+            if tile_id not in rows:
+                changed.extend((tile_id, entry[2]) for entry in entries)
+                continue
+            data, edits = copy.deepcopy(rows[tile_id][1]), copy.deepcopy(
+                rows[tile_id][2]
+            )
+            lines, changes = [], {}
+            for node_id, user_id, fid, digest, canvas, frame, source in entries:
+                value = frame_writes._value_of(data, edits, user_id)
+                found = _matching_stamped(value, node_id, fid, digest, canvas, frame)
+                if not found:
+                    changed.append((tile_id, fid))
+                for feature in found:
+                    before = copy.deepcopy(feature["properties"])
+                    feature["properties"]["msFrame"] = source
+                    lines.append(
+                        {
+                            "tile": str(tile_id),
+                            "node": node_id,
+                            "provisional": user_id,
+                            "feature": fid,
+                            "canvas": canvas,
+                            "digest": digest,
+                            "before": before,
+                            "after": copy.deepcopy(feature["properties"]),
+                        }
+                    )
+                    changes["data" if user_id is None else "provisionaledits"] = (
+                        data if user_id is None else edits
+                    )
+            if lines:
+                TileModel.objects.filter(pk=tile_id).update(**changes)
+                all_lines += lines
+                written += len(lines)
+        _append(journal, all_lines)
+    return written, changed
+
+
 def _append(fd, lines):
     """Write *lines* to the journal *fd* and fsync it; on a failure the file is cut back to where it was and the error is raised.
 
@@ -600,10 +739,15 @@ def _close_journal(fd, path):
     return not empty
 
 
+def _script_name(host):
+    """The file name of the console script of *host*."""
+    return "".join(c if c.isalnum() or c in ".-" else "_" for c in host) + ".js"
+
+
 class Command(BaseCommand):
     help = (
-        "Check, stamp (dry by default) or unstamp the image frame of stored "
-        "annotation zones."
+        "Check, stamp, verify (dry by default) or unstamp the image frame of "
+        "stored annotation zones."
     )
 
     def add_arguments(self, parser):
@@ -625,6 +769,27 @@ class Command(BaseCommand):
             default=RETRIES,
             help="Further passes over the services left unavailable, each after the host-down marks expired (0: none).",
         )
+        verify = sub.add_parser(
+            "verify", help="Compare the stored frames with the image hosts."
+        )
+        verify.add_argument("--service", help="Only the zones of this image service.")
+        verify.add_argument("--host", help="Only the zones of this image host.")
+        verify.add_argument(
+            "--frames", help="Frames file measured in a browser (frame_check.js)."
+        )
+        verify.add_argument(
+            "--refused-out",
+            help="Directory receiving one console script per host that refuses this server.",
+        )
+        verify.add_argument(
+            "--apply",
+            action="store_true",
+            help="Requalify the estimates equal to the measure.",
+        )
+        verify.add_argument(
+            "--journal", help="New JSONL journal file, required with --apply."
+        )
+        verify.add_argument("--batch", type=int, default=BATCH)
         unstamp = sub.add_parser("unstamp", help="Restore the journaled values.")
         unstamp.add_argument("--journal", required=True)
         unstamp.add_argument("--apply", action="store_true")
@@ -806,6 +971,195 @@ class Command(BaseCommand):
                 "and fills the image-info cache; it writes nothing else."
             )
             self._out("Pass --apply --journal PATH to write.")
+
+    def _refused_scripts_check(self, directory, hosts):
+        """``CommandError`` when *directory* is missing or already holds the script of one of *hosts*."""
+        if not os.path.isdir(directory):
+            raise CommandError(f"--refused-out {directory} is not a directory")
+        for host in sorted(hosts):
+            path = os.path.join(directory, _script_name(host))
+            if os.path.lexists(path):
+                raise CommandError(f"{path} exists; nothing was read or written")
+
+    def _write_scripts(self, directory, refused):
+        """Write ``DIR/<host>.js`` for each host of *refused* (``{host: [service]}``) and say how to use it."""
+        for host, services in sorted(refused.items()):
+            path = os.path.join(directory, _script_name(host))
+            script = CHECK_SCRIPT.read_text(encoding="utf-8").replace(
+                "__SERVICES__", json.dumps(sorted(services))
+            )
+            try:
+                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o640)
+            except OSError as error:
+                raise CommandError(f"cannot create {path}: {error}") from error
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(script)
+            parts = urlsplit(sorted(services)[0])
+            self._out(
+                f"{path}: {len(services)} service(s). Open a tab on {parts.scheme}://{parts.netloc}, "
+                "paste the script in its console, save the copied JSON as a file, "
+                "then run verify again with --frames FILE."
+            )
+
+    def _verify(self, options):
+        apply_changes = options["apply"]
+        journal_path = options["journal"]
+        if apply_changes and not journal_path:
+            raise CommandError("--apply needs --journal PATH (a new file)")
+        frames_file = None
+        if options["frames"]:
+            try:
+                frames_file = frame_scope.read_frames_file(options["frames"])
+            except ValueError as error:
+                raise CommandError(f"{options['frames']}: {error}") from error
+        nodes = annotation_nodes()
+        zones = list(stamped_zones(nodes, options["service"], options["host"]))
+        by_service = defaultdict(list)
+        for zone in zones:
+            by_service[zone.canvas].append(zone)
+        directory = options["refused_out"]
+        if directory:
+            self._refused_scripts_check(
+                directory, {_host_of(canvas) for canvas in by_service}
+            )
+        journal = open_journal(journal_path) if apply_changes else None
+        failed = False
+        try:
+            measures = Measures(frames_file)
+            buckets = defaultdict(lambda: defaultdict(lambda: [set(), 0]))
+            different, plan = Counter(), defaultdict(list)
+            refused = defaultdict(list)
+            for canvas in sorted(by_service):
+                measured = measures.frame(canvas)
+                host = _host_of(canvas)
+                if measured == REFUSED_STATE:
+                    refused[host].append(canvas)
+                for zone in by_service[canvas]:
+                    if isinstance(measured, str):
+                        key = measured
+                    elif zone.frame.unit == measured.unit and (
+                        zone.frame.width,
+                        zone.frame.height,
+                    ) == (measured.width, measured.height):
+                        key = "same"
+                        if zone.frame.source == units.ESTIMATED:
+                            plan[zone.tile_id].append(
+                                (
+                                    zone.node_id,
+                                    zone.user_id,
+                                    zone.feature_id,
+                                    zone.digest,
+                                    canvas,
+                                    zone.frame,
+                                    measured.source,
+                                )
+                            )
+                    elif zone.frame.source == "import-legacy":
+                        key = "legacy"
+                    else:
+                        key = "different"
+                        different[
+                            (canvas, _size_of(zone.frame), _size_of(measured))
+                        ] += 1
+                    cell = buckets[host][key]
+                    cell[0].add(canvas)
+                    cell[1] += 1
+            written, changed = 0, []
+            if apply_changes:
+                items = list(plan.items())
+                for start in range(0, len(items), options["batch"]):
+                    try:
+                        done, skipped = requalify_batch(
+                            items[start : start + options["batch"]], journal
+                        )
+                    except OSError as error:
+                        raise CommandError(f"journal write failed: {error}") from error
+                    written += done
+                    changed.extend(skipped)
+        except BaseException:
+            failed = True
+            raise
+        finally:
+            if journal is not None:
+                kept = _close_journal(journal, journal_path)
+                if kept and failed:
+                    self._stopped_note(journal_path)
+        self._report(
+            frames_file, zones, buckets, different, plan, written, changed, options
+        )
+        if directory and refused:
+            self._write_scripts(directory, refused)
+        count = lambda key: sum(b[key][1] for b in buckets.values() if key in b)
+        if apply_changes:
+            self._out(
+                self.style.SUCCESS(
+                    f"{written} zone(s) requalified"
+                    + (f"; journal: {journal_path}" if written else "")
+                )
+            )
+            self._out("Now run:  python manage.py es reindex_database")
+        elif plan:
+            self._out(
+                self.style.WARNING(
+                    f"{sum(len(e) for e in plan.values())} estimated zone(s) would be requalified (dry run)"
+                )
+            )
+            self._out("Pass --apply --journal PATH to write.")
+        problems = []
+        if count("different"):
+            problems.append(
+                f"{count('different')} zone(s) differ from their image host"
+            )
+        if count(UNREADABLE_STATE):
+            problems.append(
+                f"not verified: {count(UNREADABLE_STATE)} zone(s) unreadable, run again"
+            )
+        if problems:
+            raise CommandError("; ".join(problems))
+        if count(REFUSED_STATE):
+            self._out(
+                self.style.WARNING(
+                    f"{count(REFUSED_STATE)} zone(s) not verified: refused by their host; "
+                    "measure them in a browser (--refused-out DIR, then --frames FILE)"
+                )
+            )
+
+    def _report(
+        self, frames_file, zones, buckets, different, plan, written, changed, options
+    ):
+        unstamped = activity.annotation_zone_counts()["unstamped"]
+        self._out(
+            f"Unstamped zones: {unstamped}"
+            + ("; run stamp to stamp them" if unstamped else "")
+        )
+        if frames_file:
+            self._out(
+                f"Frames file: measured {frames_file.measured_at} from {frames_file.origin}"
+            )
+            tiles = defaultdict(set)
+            for service, info in frames_file.frames.items():
+                tiles[_host_of(service)].add(info.tile)
+            for host, widths in sorted(tiles.items()):
+                self._out(
+                    f"  tile width measured on {host}: "
+                    + ", ".join(str(w) for w in sorted(widths))
+                )
+        if not zones:
+            self._out("No stamped zone to verify.")
+        for host in sorted(buckets):
+            self._out(f"{host}:")
+            for key, label in BUCKETS:
+                if key in buckets[host]:
+                    services, count = buckets[host][key]
+                    self._out(f"  {label}: {len(services)} service(s), {count} zone(s)")
+        if different:
+            self._out("Stored frame \u2192 live frame:")
+        for (canvas, stamped, live), count in sorted(different.items()):
+            self._out(f"  {canvas}: {stamped} \u2192 {live} ({count} zone(s))")
+        for entry, reason in (frames_file.failed if frames_file else []):
+            self._out(f"Frames file, not measured: {entry}: {reason}")
+        for tile_id, fid in changed:
+            self._out(f"  changed since: zone {fid} of tile {tile_id}")
 
     def _stopped_note(self, journal_path):
         """Tell where the journal of a stopped run is and how to undo it; never raises."""
