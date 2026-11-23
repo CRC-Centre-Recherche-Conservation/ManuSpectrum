@@ -230,8 +230,8 @@ class CleaningTests(SimpleTestCase):
         tile = FakeTile(
             data={
                 node: [
-                    {"resourceId": keeper, "ontologyProperty": "P1"},
-                    {"resourceId": target, "ontologyProperty": "P1"},
+                    {"resourceId": keeper, "relationship": "P1"},
+                    {"resourceId": target, "relationship": "P1"},
                 ]
             }
         )
@@ -240,7 +240,7 @@ class CleaningTests(SimpleTestCase):
 
         self.assertEqual(
             tile.data,
-            {node: [{"resourceId": keeper, "ontologyProperty": "P1"}]},
+            {node: [{"resourceId": keeper, "relationship": "P1"}]},
         )
         tile.save.assert_called_once_with()
 

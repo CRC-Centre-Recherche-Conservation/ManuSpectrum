@@ -647,12 +647,12 @@ class ListsHashTests(TestCase):
     """The SQL digest behind the fingerprint, against real list rows."""
 
     def make_list(self, name="Materials"):
-        from arches_controlled_lists.models import List
+        from arches.extensions.controlled_lists.models import List
 
         return List.objects.create(name=name)
 
     def make_item(self, controlled_list, sortorder=1, guide=False):
-        from arches_controlled_lists.models import ListItem
+        from arches.extensions.controlled_lists.models import ListItem
 
         return ListItem.objects.create(
             list=controlled_list, sortorder=sortorder, guide=guide

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { defineComponent, h, ref } from "vue";
 import { createPinia, setActivePinia } from "pinia";
-import PrimeVue from "primevue/config";
+import OpenVue from "openvue/config";
 
 import ActiveFiltersBar from "@/manuspectrum/pages/AnalysisExplorer/components/ActiveFiltersBar.vue";
 import {
@@ -65,7 +65,7 @@ vi.mock("@/manuspectrum/pages/AnalysisExplorer/views/Map/webgl.ts", () => ({
     webglAvailable: () => webgl.available,
 }));
 
-vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+vi.mock("@/arches_vue_components/application/generate-arches-url.ts", () => ({
     generateArchesURL: (name: string) => `/en/${name}`,
 }));
 
@@ -200,7 +200,7 @@ async function mountView(): Promise<VueWrapper> {
     wrapper = mount(MapView, {
         attachTo: document.body,
         global: {
-            plugins: [pinia, PrimeVue],
+            plugins: [pinia, OpenVue],
             provide: { [ANNOUNCE_KEY as symbol]: announce },
         },
     });
@@ -255,7 +255,7 @@ describe("MapView", () => {
         wrapper = mount(Shell, {
             attachTo: document.body,
             global: {
-                plugins: [pinia, PrimeVue],
+                plugins: [pinia, OpenVue],
                 provide: {
                     [ANNOUNCE_KEY as symbol]: announce,
                     [FACET_LABELS_KEY as symbol]: labels,
@@ -289,7 +289,7 @@ describe("MapView", () => {
         wrapper = mount(Shell, {
             attachTo: document.body,
             global: {
-                plugins: [pinia, PrimeVue],
+                plugins: [pinia, OpenVue],
                 provide: {
                     [ANNOUNCE_KEY as symbol]: announce,
                     [FACET_LABELS_KEY as symbol]: labels,

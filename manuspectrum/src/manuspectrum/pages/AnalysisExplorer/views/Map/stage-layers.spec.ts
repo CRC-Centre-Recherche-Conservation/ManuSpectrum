@@ -62,7 +62,7 @@ function evaluate(
     state: Record<string, unknown> = {},
     zoom = 6,
 ): unknown {
-    const compiled = createExpression(value);
+    const compiled = createExpression(value, "layers[0].paint.test");
     if (compiled.result !== "success") {
         throw new Error(JSON.stringify(compiled.value));
     }

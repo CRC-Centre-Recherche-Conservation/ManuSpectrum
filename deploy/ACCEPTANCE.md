@@ -338,7 +338,7 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   only `ok:` lines, exit 0. **(CI too)** Among them, the three that fail most
   often on a new host:
   - `ok: database collation and encoding` (`en_US.utf8|UTF8`);
-  - `ok: standard_conforming_strings` (the value is `off`: Arches needs it);
+  - `ok: standard_conforming_strings` (the value is `on`, PostgreSQL's default: Arches 8.2's own SQL needs it);
   - `ok: admin does not use Arches' default password` (the check passes when `admin`'s password is no longer `admin`);
   - `ok: /healthz for the public name` (`200`) then
     `ok: /healthz for Host localhost (not allowed)` (`400`): gunicorn answers
@@ -828,13 +828,12 @@ change shows within a minute (reload after waiting). Browser in a private window
     on `/en/`; toggling an overlay keeps the French labels;
   - an editor draws a point and a polygon on a Place card (map widget), saves, and sees them on the
     report map; popups and hover work on the search map;
-  - no address search box on the maps (removed until Arches 8.2);
+  - no address search box on the Knockout maps (Arches 8.2's Nominatim geocoder is dropped);
   - the console shows no `access token` or Mapbox error, and the Network tab no request to
-    `*.mapbox.com`;
+    `*.mapbox.com` nor `nominatim.openstreetmap.org`;
 - [ ] the Network tab shows no request outside the domain (spec §6.2) except the expected third
   parties of the privacy policy (`tiles.openfreemap.org`, the holding institutions' IIIF servers,
-  `iiif.unicaen.fr` on the homepage; for signed-in editors `cke4.ckeditor.com`, and
-  `svc.webspellchecker.net` only if the spell checker is switched on; Google Fonts on the thesaurus page), and no 4xx or 5xx except the expected ones; the console lists
+  `iiif.unicaen.fr` on the homepage; Google Fonts on the thesaurus page), and no 4xx or 5xx except the expected ones; the console lists
   the CSP Report-Only violations: copy them into the issue for F5.
 - [ ] *CSP reports reach the server*: on any page, force a violation of `object-src 'none'` from the console:
   `document.body.append(Object.assign(document.createElement('object'), {data: 'https://csp-test.invalid/x?k=1'}))`.

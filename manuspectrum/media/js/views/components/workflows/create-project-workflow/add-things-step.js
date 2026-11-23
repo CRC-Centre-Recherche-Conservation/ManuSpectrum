@@ -199,8 +199,8 @@ const viewModel = function(params) {
     const buildResourceInstanceList = (resources) => {
         return resources.map((resource) => ({
             resourceId: resource.resourceinstanceid,
-            ontologyProperty: "",
-            inverseOntologyProperty: ""
+            relationship: "",
+            inverseRelationship: ""
         }));
     };
 

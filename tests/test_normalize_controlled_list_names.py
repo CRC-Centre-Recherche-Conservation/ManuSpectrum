@@ -13,7 +13,7 @@ from django.core.management import call_command
 from django.test import TestCase
 
 from arches.app.models.models import Concept, Language, Value
-from arches_controlled_lists.models import List
+from arches.extensions.controlled_lists.models import List
 
 
 def _language(code):

@@ -16,7 +16,7 @@ import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/resp
 import type { EffectScope } from "vue";
 import type { Filters } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
-vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+vi.mock("@/arches_vue_components/application/generate-arches-url.ts", () => ({
     generateArchesURL: (route: string) => `/en/${route}`,
 }));
 

@@ -1,6 +1,6 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import PrimeVue from "primevue/config";
+import OpenVue from "openvue/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, inject, ref } from "vue";
 
@@ -61,7 +61,7 @@ import type { DocumentShown } from "@/manuspectrum/pages/AnalysisExplorer/testin
 import type { ExplorerStore } from "@/manuspectrum/pages/AnalysisExplorer/store/explorer.ts";
 import type { LayerToggles } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";
 
-vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+vi.mock("@/arches_vue_components/application/generate-arches-url.ts", () => ({
     generateArchesURL: (
         name: string,
         parameters: Record<string, string> = {},
@@ -230,7 +230,7 @@ function mountScreen(
         attachTo: options.attachTo,
         props: { documentId: uuid(1) },
         global: {
-            plugins: [pinia, PrimeVue],
+            plugins: [pinia, OpenVue],
             provide: options.provide,
             stubs: {
                 FolioMap: FolioStub,

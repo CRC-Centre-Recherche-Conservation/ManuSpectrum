@@ -251,7 +251,7 @@ class UuidLocationTests(SimpleTestCase):
         target = str(uuid.uuid4())
         node = str(uuid.uuid4())
         tile = FakeTile(
-            data={node: [{"resourceId": target, "ontologyProperty": "P1"}]},
+            data={node: [{"resourceId": target, "relationship": "P1"}]},
         )
 
         result = _run([_row(tile.tileid, node, target)], [tile])

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, inject, nextTick, ref, useTemplateRef, watch } from "vue";
 import { useMediaQuery } from "@vueuse/core";
-import Drawer from "primevue/drawer";
-import RadioButton from "primevue/radiobutton";
+import Drawer from "openvue/drawer";
+import RadioButton from "openvue/radiobutton";
 import { useGettext } from "vue3-gettext";
 
-import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
+import { generateArchesURL } from "@/arches_vue_components/application/generate-arches-url.ts";
 
 import BusyStatus from "@/manuspectrum/pages/AnalysisExplorer/components/BusyStatus.vue";
 import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";

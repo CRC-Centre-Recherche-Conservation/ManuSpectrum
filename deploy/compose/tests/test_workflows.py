@@ -686,9 +686,9 @@ class ReleaseTests(unittest.TestCase):
 
 
 MAIN_CHECKS = [
-    "build_feature_branch (3.11)",
     "build_feature_branch (3.12)",
     "build_feature_branch (3.13)",
+    "build_feature_branch (3.14)",
     "check_python_coverage",
     "check_frontend_coverage",
 ]

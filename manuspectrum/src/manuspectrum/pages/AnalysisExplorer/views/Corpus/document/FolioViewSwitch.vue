@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import SelectButton from "primevue/selectbutton";
+import SelectButton from "openvue/selectbutton";
 import { useGettext } from "vue3-gettext";
 
 import type { FolioView } from "@/manuspectrum/pages/AnalysisExplorer/store/types.ts";

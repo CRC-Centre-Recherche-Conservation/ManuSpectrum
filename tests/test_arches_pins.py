@@ -1,7 +1,9 @@
 """Where Arches imposes a version, the project follows it.
 
-Arches pins exact versions in its own `package.json` (the `arches` and
-`arches-dev-dependencies` packages) and in its Python requirements. The rule
+Arches pins exact versions in its own `package.json` (`dependencies` for what
+its runtime ships, `peerDependencies` for its build and test tooling; the
+controlled lists and Vue components applications are bundled in the package)
+and in its Python requirements. The rule
 is generic: whatever Arches pins exactly and the project also declares must
 equal Arches' pin, unless `DIVERGENCES` names it with a reason. Everything
 Arches leaves open stays free.
@@ -31,7 +33,7 @@ from packaging.utils import canonicalize_name
 
 ROOT = Path(__file__).resolve().parents[1]
 
-ARCHES_PACKAGES = ("arches", "arches-dev-dependencies")
+ARCHES_PACKAGES = ("arches",)
 ARCHES_APPLICATIONS = (
     "arches-controlled-lists",
     "arches-querysets",
@@ -39,24 +41,22 @@ ARCHES_APPLICATIONS = (
     "arches-vue-components",
 )
 EXACT_VERSION = re.compile(r"^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$")
-ARCHES_REF = re.compile(r"#stable/(\d+\.\d+\.\d+)$")
+ARCHES_REF = re.compile(
+    r"#(?:stable/(?P<stable>\d+\.\d+\.\d+)"
+    r"|v(?P<alpha>\d+\.\d+\.\d+)-alpha\.(?P<number>\d+))$"
+)
 
 # Names Arches pins exactly that the project declares at another version.
 DIVERGENCES = {
     "vue": "Security fix: 3.5.44, same minor as Arches' 3.5.20 (b870ea7e).",
-    "webpack": "Dependabot keeps webpack current (5.110.x); "
-    "arches-dev-dependencies keeps its own nested 5.105.4.",
-    "webpack-dev-server": "Override 5.2.7 clears an advisory present in 5.2.5.",
+    "webpack-dev-server": "Override 5.2.7 clears an advisory present in 5.2.6.",
     "@babel/core": "Override ^7.29.6 clears advisories present in 7.29.0.",
-    "@primeuix/themes": "Only the public theme imports it (definePreset, palette), "
-    "whose output equals 1.2.3's; Arches keeps its own nested 1.2.3.",
 }
 
 # (parent package, name) pairs whose nested copy is the parent's own pin, not
 # a second copy of an Arches pin.
 NESTED_ALLOWED = {
-    ("arches-vue-components", "@primeuix/themes"): "pins 1.0.1 itself",
-    ("arches_vue_components", "@primeuix/themes"): "pins 1.0.1 itself",
+    ("geojson-rbush", "@types/geojson"): "pins 7946.0.8 itself",
 }
 
 
@@ -71,11 +71,11 @@ def load_project(root=ROOT):
 
 
 def arches_exact_pins(lock):
-    """Name -> version for every exact pin of arches and arches-dev-dependencies."""
+    """Name -> version for every exact pin of Arches' runtime and tooling."""
     pins = {}
     for package in ARCHES_PACKAGES:
         entry = lock["packages"][f"node_modules/{package}"]
-        for section in ("dependencies", "devDependencies"):
+        for section in ("dependencies", "devDependencies", "peerDependencies"):
             for name, spec in (entry.get(section) or {}).items():
                 if EXACT_VERSION.match(spec):
                     pins[name] = spec
@@ -83,11 +83,14 @@ def arches_exact_pins(lock):
 
 
 def declared_specs(package):
-    """Name -> spec of our dependencies, devDependencies and string overrides."""
+    """Name -> spec of our dependencies, devDependencies and string overrides.
+
+    An override written `$name` only refers to the dependency of that name.
+    """
     specs = {}
     for section in ("dependencies", "devDependencies", "overrides"):
         for key, spec in (package.get(section) or {}).items():
-            if not isinstance(spec, str):
+            if not isinstance(spec, str) or spec.startswith("$"):
                 continue
             name = ("@" + key[1:].split("@")[0]) if key[0] == "@" else key.split("@")[0]
             specs[name] = spec
@@ -194,6 +197,26 @@ def uv_ignore_problems(project):
     return problems
 
 
+def ref_version(ref):
+    """The uv.lock spelling of the Arches version a git ref names, or None.
+
+    `#stable/8.2.0` is `8.2.0`; `#v8.2.0-alpha.25` is `8.2.0a25`.
+    """
+    match = ARCHES_REF.search(ref)
+    if not match:
+        return None
+    if match.group("stable"):
+        return match.group("stable")
+    return f"{match.group('alpha')}a{match.group('number')}"
+
+
+def expected_ref(version):
+    match = re.fullmatch(r"(\d+\.\d+\.\d+)a(\d+)", version)
+    if match:
+        return f"#v{match.group(1)}-alpha.{match.group(2)}"
+    return f"#stable/{version}"
+
+
 def version_problems(project):
     uv_versions = [
         p["version"] for p in project["uv"]["package"] if p["name"] == "arches"
@@ -208,14 +231,14 @@ def version_problems(project):
             ref = (package.get(section) or {}).get(name)
             if ref is None:
                 continue
-            match = ARCHES_REF.search(ref)
-            if not match or match.group(1) != version:
+            if ref_version(ref) != version:
                 problems.append(
                     f"package.json {name} is {ref!r} but uv.lock has arches "
-                    f"{version}: use `#stable/{version}`."
+                    f"{version}: use `{expected_ref(version)}`."
                 )
     lock_version = project["lock"]["packages"]["node_modules/arches"]["version"]
-    if lock_version != version:
+    release = re.match(r"\d+\.\d+\.\d+", version).group(0)
+    if lock_version not in (version, release):
         problems.append(
             f"package-lock.json has arches {lock_version}, uv.lock {version}."
         )
@@ -309,8 +332,8 @@ class CheckBehaviourTests(unittest.TestCase):
 
     def test_a_range_over_an_exact_pin_fails(self):
         project = self.project()
-        project["package"]["dependencies"]["primevue"] = "^4.3.7"
-        self.assertTrue(any("primevue" in p for p in spec_problems(project)))
+        project["package"]["dependencies"]["openvue"] = "^1.0.0"
+        self.assertTrue(any("openvue" in p for p in spec_problems(project)))
 
     def test_a_stale_divergence_fails(self):
         project = self.project()
@@ -330,10 +353,10 @@ class CheckBehaviourTests(unittest.TestCase):
             for u in project["dependabot"]["updates"]
             if u["package-ecosystem"] == "npm"
         )
-        npm["ignore"] = [r for r in npm["ignore"] if r["dependency-name"] != "primevue"]
+        npm["ignore"] = [r for r in npm["ignore"] if r["dependency-name"] != "openvue"]
         problems = dependabot_problems(project)
         self.assertEqual(len(problems), 1)
-        self.assertIn("primevue", problems[0])
+        self.assertIn("openvue", problems[0])
 
     def test_an_extra_ignore_fails(self):
         project = self.project()
@@ -342,8 +365,8 @@ class CheckBehaviourTests(unittest.TestCase):
             for u in project["dependabot"]["updates"]
             if u["package-ecosystem"] == "npm"
         )
-        npm["ignore"].append({"dependency-name": "pinia"})
-        self.assertTrue(any("pinia" in p for p in dependabot_problems(project)))
+        npm["ignore"].append({"dependency-name": "papaparse"})
+        self.assertTrue(any("papaparse" in p for p in dependabot_problems(project)))
 
     def test_an_ignore_limited_to_update_types_is_not_a_pin(self):
         project = self.project()
@@ -354,21 +377,21 @@ class CheckBehaviourTests(unittest.TestCase):
         )
         npm["ignore"].append(
             {
-                "dependency-name": "pinia",
+                "dependency-name": "papaparse",
                 "update-types": ["version-update:semver-major"],
             }
         )
         npm["ignore"] = [
             (
                 {**r, "update-types": ["version-update:semver-major"]}
-                if r["dependency-name"] == "primevue"
+                if r["dependency-name"] == "openvue"
                 else r
             )
             for r in npm["ignore"]
         ]
         problems = dependabot_problems(project)
         self.assertEqual(len(problems), 1)
-        self.assertIn("primevue", problems[0])
+        self.assertIn("openvue", problems[0])
 
     def test_a_nested_second_copy_fails(self):
         project = self.project()
@@ -388,15 +411,26 @@ class CheckBehaviourTests(unittest.TestCase):
 
     def test_an_arches_version_mismatch_fails(self):
         project = self.project()
-        project["package"]["devDependencies"][
-            "arches-dev-dependencies"
-        ] = "archesproject/arches-dev-dependencies#stable/8.1.4"
+        project["package"]["dependencies"][
+            "arches"
+        ] = "archesproject/arches#stable/8.1.4"
         self.assertTrue(any("8.1.4" in p for p in version_problems(project)))
+
+    def test_an_alpha_ref_of_another_number_fails(self):
+        project = self.project()
+        project["uv"]["package"] = [
+            {**p, "version": "8.2.0a25"} if p["name"] == "arches" else p
+            for p in project["uv"]["package"]
+        ]
+        project["package"]["dependencies"][
+            "arches"
+        ] = "archesproject/arches#v8.2.0-alpha.24"
+        self.assertTrue(any("alpha.25" in p for p in version_problems(project)))
 
     def test_a_pyproject_range_excluding_the_locked_arches_fails(self):
         project = self.project()
         deps = project["pyproject"]["project"]["dependencies"]
-        deps[:] = ["arches>=8.0,<8.1" if d.startswith("arches>=") else d for d in deps]
+        deps[:] = ["arches>=8.0,<8.1" if d.startswith("arches==") else d for d in deps]
         self.assertTrue(
             any("pyproject.toml requires" in p for p in version_problems(project))
         )

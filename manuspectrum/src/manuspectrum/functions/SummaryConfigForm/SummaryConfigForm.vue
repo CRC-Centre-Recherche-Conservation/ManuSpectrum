@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watchEffect } from "vue";
 import { useGettext } from "vue3-gettext";
-import { useConfirm } from "primevue/useconfirm";
+import { useConfirm } from "openvue/useconfirm";
 
-import Button from "primevue/button";
-import ConfirmDialog from "primevue/confirmdialog";
-import Message from "primevue/message";
+import Button from "openvue/button";
+import ConfirmDialog from "openvue/confirmdialog";
+import Message from "openvue/message";
 
 import FieldRow from "@/manuspectrum/functions/SummaryConfigForm/components/FieldRow.vue";
 import RollupEditor from "@/manuspectrum/functions/SummaryConfigForm/components/RollupEditor.vue";
@@ -38,7 +38,7 @@ import type {
 
 const DETACHED_EVENT = "detached" as const;
 const SYNCED_EVENT = "synced" as const;
-// PrimeVue's confirmation bus is shared by every Vue application of the page:
+// OpenVue's confirmation bus is shared by every Vue application of the page:
 // the group keeps this dialog and another application's from answering each other.
 const REMOVAL_GROUP = "summary-config-removal";
 

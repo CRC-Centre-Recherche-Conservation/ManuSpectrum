@@ -1,4 +1,4 @@
-import { generateArchesURL } from "@/arches/utils/generate-arches-url.ts";
+import { generateArchesURL } from "@/arches_vue_components/application/generate-arches-url.ts";
 
 import type { Series } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 

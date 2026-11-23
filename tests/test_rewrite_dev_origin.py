@@ -16,7 +16,7 @@ from arches.app.models.models import (
     TileModel,
     Value,
 )
-from arches_controlled_lists.models import List, ListItem
+from arches.extensions.controlled_lists.models import List, ListItem
 
 WEB = "http://dev.example:8000"
 CANTALOUPE = "http://dev.example:8183"

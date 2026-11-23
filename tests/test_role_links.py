@@ -78,8 +78,8 @@ class RoleLinksTests(TestCase):
             nodegroup=cls.nodegroup,
             data={
                 str(cls.node.nodeid): [
-                    {"resourceId": str(cls.first.pk), "ontologyProperty": ""},
-                    {"resourceId": str(cls.second.pk), "ontologyProperty": ""},
+                    {"resourceId": str(cls.first.pk), "relationship": ""},
+                    {"resourceId": str(cls.second.pk), "relationship": ""},
                 ]
             },
         )
@@ -159,7 +159,7 @@ class PairRuleTests(TestCase):
         ids = [str(uuid.uuid4()) for _ in range(7)]
         cls.values = [
             [
-                {"resourceId": ids[0], "ontologyProperty": ""},
+                {"resourceId": ids[0], "relationship": ""},
                 {"resourceid": ids[1]},
                 ids[2],
                 {"resourceId": ""},

@@ -31,7 +31,6 @@ because an administrator created it. People ask for one through the contact page
    or similar passwords are refused), then sets up two-factor authentication with an
    authenticator application at `/<lang>/account/two-factor`.
 4. An invitation never activated shows in the monthly report (below) after three months.
-5. Advise editors not to switch on the spell checker (SCAYT) of the rich-text editor: it sends the typed text to a third party (WebSpellChecker); the browser's own spell checker does not.
 
 ### Who can do what
 
@@ -110,8 +109,8 @@ IIIF manifest widget, which then shows « An error occurred while creating the m
 Arches opens a tool page only for a holder of `view_plugin` on that tool, and lists a bulk data
 manager module only for a holder of `view_etlmodule` on that module; a superuser holds both
 everywhere. Behind the pages, Arches lets only `Resource Editor` write records, keep a
-workflow's progress and run the bulk data manager. The grants (migration `0016`) are the
-reference:
+workflow's progress and run the bulk data manager. The grants (migration `0016`, and `0018` for
+the Arches JSON importer) are the reference:
 
 | Tool | Groups |
 |---|---|
@@ -126,7 +125,7 @@ reference:
 
 | Bulk data manager module | Shown to |
 |---|---|
-| Imports: branch Excel, tile Excel, single CSV, JSON-LD | `Resource Editor` |
+| Imports: branch Excel, tile Excel, single CSV, JSON-LD, Arches JSON | `Resource Editor` |
 | Edits: replace, trim, case, concept, migrate to reference | `Resource Editor` |
 | Exports: branch Excel, tile Excel | `Resource Exporter` |
 | Deletion | superusers only |

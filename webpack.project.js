@@ -11,8 +11,9 @@
  *   Without this group, the `vendors` group of webpack.common.js (enforced on
  *   every chunk) moves it into a node_modules chunk shared with other modules.
  * - CSS is minified whenever JS is (`optimization.minimize`: production).
- *   webpack-merge appends this list to the production one, after its Terser;
- *   no `'...'` here, or the default Terser would run as well. Each stylesheet
+ *   The production configuration sets no minimizer and relies on webpack's
+ *   built-in JavaScript one, which any `minimizer` list replaces: the `'...'`
+ *   token keeps it, in front of the CSS minimizer. Each stylesheet
  *   entry of webpack/webpack-utils/build-filepath-lookup.js also emits its
  *   JavaScript stub under a .css name in `css/css/`; those are left alone.
  */
@@ -20,7 +21,7 @@ const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 
 module.exports = {
     optimization: {
-        minimizer: [new CssMinimizerPlugin({ exclude: /^css\/css\// })],
+        minimizer: ['...', new CssMinimizerPlugin({ exclude: /^css\/css\// })],
         splitChunks: {
             cacheGroups: {
                 plotly: {

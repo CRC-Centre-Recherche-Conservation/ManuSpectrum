@@ -138,7 +138,9 @@ def patched_orm(
     stack.enter_context(mock.patch.multiple("arches.app.models.models", **targets))
     if list_overrides:
         stack.enter_context(
-            mock.patch.multiple("arches_controlled_lists.models", **list_overrides)
+            mock.patch.multiple(
+                "arches.extensions.controlled_lists.models", **list_overrides
+            )
         )
     else:
         stack.enter_context(
@@ -795,7 +797,7 @@ class ControlledListFiguresTests(TestCase):
     """The #124 rule against real rows: bound lists only, guide items excluded."""
 
     def setUp(self):
-        from arches_controlled_lists.models import List, ListItem
+        from arches.extensions.controlled_lists.models import List, ListItem
 
         self.bound = List.objects.create(name="Materials")
         self.other = List.objects.create(name="Unbound")
@@ -831,7 +833,7 @@ class ControlledListFiguresTests(TestCase):
         self.assertEqual(set(figures), {str(self.bound.id)})
 
     def test_a_list_with_no_item_counts_zero(self):
-        from arches_controlled_lists.models import List
+        from arches.extensions.controlled_lists.models import List
 
         empty = List.objects.create(name="Empty")
         self.assertEqual(
