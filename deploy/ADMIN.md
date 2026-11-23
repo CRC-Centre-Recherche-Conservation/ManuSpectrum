@@ -507,9 +507,9 @@ be reached).
   image-description read per service) and lists, per host, the services that are the same, different, refused
   (the host answers this server with a refusal), unreadable or `import-legacy`. Dry by default, it exits
   non-zero when a service is different or unreadable (a run where a host was down is not a pass). For a refused
-  host (Gallica), `verify --refused-out DIR` writes one console script per host: open a tab of that host
-  (`https://<host>/`), paste the script in the browser console (it reads each `info.json` at one per second and
-  copies a JSON), save the copy to a file and run `verify --frames FILE`. With
+  host (Gallica), `verify --refused-out DIR` writes one console script per origin (scheme, host and port): open a
+  tab on the origin the command names, paste the script in the browser console (it reads each `info.json` at one
+  per second and copies a JSON), save the copy to a file and run `verify --frames FILE`. With
   `--apply --journal PATH` the only write is a requalification: an `estimated` stamp equal to the measure becomes
   `browser` or `read`.
 - **Rebase.** `rebase --service URL | --host HOSTNAME [--frames FILE] [--resize] [--since YYYY-MM-DD]` carries the
@@ -547,22 +547,24 @@ drawn before the change are in the old frame.
    `--apply --journal` with a new file).
 6. `make -C deploy manage ARGS="es reindex_database"`; reopen editing.
 7. A few days later, a dry `annotation_frames unstamp --journal <rebase journal>`: any « geometry reverted by a later
-   save » is a zone an old editor tab saved back, now carrying the new stamp on old-frame geometry. Run
-   `unstamp --apply` of that journal, which puts the old stamp back on such zones (their other properties and their
-   geometry stay), then `rebase` again with a new journal. The `unstamp` also undoes the zones of that journal that were not saved back, and the new `rebase` moves them again (keep editing closed between the two); a zone already restored is reported « already restored ».
+   save » is a zone an old editor tab saved back, now carrying the new stamp on old-frame geometry. For each such
+   zone, run `annotation_frames unstamp --journal <rebase journal> --zone TILE:FEATURE --apply`, which puts the old
+   stamp back on that zone alone (its other properties and its geometry stay), then
+   `annotation_frames rebase --service URL --zone TILE:FEATURE --apply --journal <new journal>`, which moves it
+   whatever its stamp source and without `--since`. A zone already restored is reported « already restored ».
 
 Undo: `unstamp --journal PATH` (dry run, then `--apply`), newest journal first when several touched the same
 zones, then reindex.
 
-When to run `verify`: after the first `stamp` in production (with the refused-host browser check and
-`verify --frames FILE --apply --journal PATH`, so the stock leaves `estimated`; when `verify --frames` then shows
+When to run `verify`: after the first `stamp` in production (with the refused-host browser check and `verify
+--frames FILE --apply --journal PATH`, so the stock leaves `estimated`; when `verify --frames` then shows
 `estimated` zones different from the measure, the estimate was wrong at stamp time: set the right
-`IIIF_IMAGE_TILE_HINTS` entry, `unstamp --apply` the stamp journal, `stamp --apply` again with a new journal, then
-`verify --frames FILE --apply --journal PATH`; these zones were drawn on the real frame, never `rebase` them), at each
-release rehearsal and Arches
-upgrade, after re-encoding the platform's own images (`verify --host <own host>`), and once a year for refused
-hosts. Cantaloupe's minimum tile size is pinned in `compose.yaml` to `IIIF_OWN_IMAGE_TILE`, so a Cantaloupe change does
-not move it silently.
+`IIIF_IMAGE_TILE_HINTS` entry and restart web, `unstamp --apply` the stamp journal, `stamp --apply` again with a new
+journal, then `verify --frames FILE --apply --journal PATH`; zones saved after the stamp or edited since are not in
+the stamp journal: `relabel` them (a dry `rebase` lists their ids); these zones were drawn on the real frame, never
+`rebase` them), at each release rehearsal and Arches upgrade, after re-encoding the platform's own images (`verify
+--host <own host>`), and once a year for refused hosts. Cantaloupe's minimum tile size is pinned in `compose.yaml`
+to `IIIF_OWN_IMAGE_TILE`, so a Cantaloupe change does not move it silently.
 
 Tell the editors: if the existing zones of an image look moved, stop drawing on that document and tell an
 administrator.

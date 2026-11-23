@@ -532,15 +532,15 @@ class RebaseSinceTests(RebaseCase):
             self.feature(tile, "z")["geometry"]["coordinates"], [20.0, -40.0]
         )
 
-    def test_a_tile_row_decides_before_the_creation_of_its_resource(self):
+    def test_the_creation_of_a_resource_since_wins_over_a_row_of_its_tile(self):
         old = point("old", (320, 640), 32, stamp=self.stamp)
         tile = self.tile(old)
         self.create_row(tile)
         self.log(tile, {self.node: collection(old)})
-        self.apply("--since", self.SINCE)
-        self.assertEqual(
-            self.feature(tile, "old")["geometry"]["coordinates"], [20.0, -40.0]
-        )
+        before = copy.deepcopy(self.feature(tile, "old"))
+        out, _error = self.apply("--since", self.SINCE)
+        self.assertEqual(self.feature(tile, "old"), before)
+        self.assertIn(f"drawn or moved since {self.SINCE}", out)
 
     def test_a_provisional_zone_of_a_resource_created_since_is_listed(self):
         node = self.node
@@ -629,11 +629,11 @@ class RebaseWriteTests(RebaseCase):
         self.run_command("unstamp", "--journal", self.journal, "--apply")
         self.assertEqual(self.snapshot(), before)
 
-    def stale_save(self, tile, stale):
-        """Save *tile* through ``Tile.save`` with the feature *stale* (the geometry of a tab opened before the rebase)."""
+    def stale_save(self, tile, *stale):
+        """Save *tile* through ``Tile.save`` with the features *stale* (the geometry of a tab opened before the rebase)."""
         row = Tile.objects.get(pk=tile.pk)
         node = str(self.annotation.pk)
-        row.data = {node: collection(stale), str(self.other.pk): None}
+        row.data = {node: collection(*stale), str(self.other.pk): None}
         row.serialized_graph = {
             "nodes": [
                 {"nodeid": node, "datatype": "annotation"},
@@ -676,7 +676,7 @@ class RebaseWriteTests(RebaseCase):
             f"geometry reverted by a later save: zone z of tile {tile.pk}", out
         )
         self.assertNotIn("changed since", out)
-        self.assertIn("--apply puts their old stamp back", out)
+        self.assertIn("--zone TILE:FEATURE --apply (puts the old stamp back", out)
         self.assertEqual(self.snapshot(), before)
 
     @override_settings(IIIF_IMAGE_INFO_READ=True)
@@ -1051,3 +1051,119 @@ class RebaseReportTests(RebaseCase):
         out, _error = self.apply()
         self.assertEqual(len(self.journal_lines()), 2)
         self.assertIn("rebased: 2 zone(s)", self.section(out, SVC))
+
+
+class UnstampZoneTests(RebaseCase):
+    SINCE = "2026-11-10"
+
+    def stamp(self, unit=32, source="estimated"):
+        return Frame(unit, *SIZE, source).stamp()
+
+    def unstamp(self, *args):
+        out = StringIO()
+        call_command(
+            "annotation_frames",
+            "unstamp",
+            "--journal",
+            self.journal,
+            *args,
+            stdout=out,
+            stderr=StringIO(),
+        )
+        return out.getvalue()
+
+    def two_zones(self):
+        self.answers = {SVC: live(16)}
+        node = str(self.annotation.pk)
+        stale = point("z", (320, 640), 32, stamp=self.stamp())
+        stale["properties"]["note"] = "edited in a stale tab"
+        other = point("y", (640, 640), 32, stamp=self.stamp())
+        tile = self.tile(copy.deepcopy(stale), copy.deepcopy(other))
+        EditLog.objects.create(
+            tileinstanceid=str(tile.pk),
+            timestamp=datetime(2026, 11, 15),
+            edittype="tile edit",
+            oldvalue={node: collection(stale, other)},
+        )
+        return tile, stale
+
+    @override_settings(IIIF_IMAGE_INFO_READ=True)
+    def test_a_since_rebase_is_repaired_zone_by_zone_end_to_end(self):
+        tile, stale = self.two_zones()
+        self.apply("--since", self.SINCE)
+        self.assertEqual(
+            self.feature(tile, "y")["geometry"]["coordinates"], [40.0, -40.0]
+        )
+        RebaseWriteTests.stale_save(self, tile, stale, self.feature(tile, "y"))
+        self.assertEqual(self.feature(tile, "z")["properties"]["msUnit"], 16)
+        out = self.unstamp("--zone", f"{tile.pk}:z", "--apply")
+        self.assertIn(
+            f"stamp put back on reverted geometry: zone z of tile {tile.pk}", out
+        )
+        z, y = self.feature(tile, "z"), self.feature(tile, "y")
+        self.assertEqual(z["geometry"], stale["geometry"])
+        self.assertEqual(
+            {k: v for k, v in z["properties"].items() if k.startswith("ms")},
+            self.stamp(),
+        )
+        self.assertEqual(z["properties"]["note"], "edited in a stale tab")
+        self.assertEqual(y["geometry"]["coordinates"], [40.0, -40.0])
+        self.assertEqual(frames.frame_of(y), Frame(16, *SIZE, "read"))
+        again = os.path.join(self.dir.name, "again.jsonl")
+        _out, error = self.rebase(
+            "--service", SVC, "--zone", f"{tile.pk}:z", "--apply", "--journal", again
+        )
+        self.assertIsNone(error)
+        moved = self.feature(tile, "z")
+        self.assertEqual(moved["geometry"]["coordinates"], [20.0, -40.0])
+        self.assertEqual(frames.frame_of(moved), Frame(16, *SIZE, "read"))
+        self.assertEqual(self.feature(tile, "y"), y)
+
+    def test_a_zone_absent_from_the_journal_is_listed_and_nothing_is_written(self):
+        tile, _stale = self.two_zones()
+        self.apply("--since", self.SINCE)
+        before = self.snapshot()
+        out = self.unstamp("--zone", f"{tile.pk}:nope", "--apply")
+        self.assertEqual(self.snapshot(), before)
+        self.assertIn(f"not in the journal: zone nope of tile {tile.pk}", out)
+        self.assertIn("0 of 0 journaled zone(s) restored", out)
+
+    def test_only_the_named_zone_is_restored(self):
+        tile, _stale = self.two_zones()
+        self.apply("--since", self.SINCE)
+        out = self.unstamp("--zone", f"{tile.pk}:z", "--apply")
+        self.assertIn("1 of 1 journaled zone(s) restored", out)
+        self.assertEqual(
+            self.feature(tile, "z")["geometry"]["coordinates"], [10.0, -20.0]
+        )
+        self.assertEqual(
+            self.feature(tile, "y")["geometry"]["coordinates"], [40.0, -40.0]
+        )
+
+    def test_a_bad_zone_argument_is_refused(self):
+        with self.assertRaisesMessage(CommandError, "expected TILE-UUID:FEATURE-ID"):
+            self.unstamp("--zone", "nope")
+
+
+class RebaseOddityTests(RebaseCase):
+    def test_since_is_said_to_be_ignored_with_zone(self):
+        self.answers = {SVC: live(16)}
+        tile = self.tile(
+            point("z", (320, 640), 32, stamp=Frame(32, *SIZE, "read").stamp())
+        )
+        out, _error = self.rebase("--since", "2026-11-10", "--zone", f"{tile.pk}:z")
+        self.assertIn("--since is ignored with --zone", out)
+        out, _error = self.rebase("--zone", f"{tile.pk}:z")
+        self.assertNotIn("--since is ignored", out)
+
+    def test_two_stamps_on_the_same_id_geometry_and_canvas_are_both_planned(self):
+        self.answers = {SVC: live(16)}
+        first = point("z", (320, 640), 32, stamp=Frame(32, *SIZE, "read").stamp())
+        second = point("z", (320, 640), 32, stamp=Frame(32, *SIZE, "browser").stamp())
+        tile = self.tile(first, second)
+        self.apply()
+        data = self.row(tile).data[str(self.annotation.pk)]["features"]
+        self.assertEqual(
+            [f["geometry"]["coordinates"] for f in data], [[20.0, -40.0]] * 2
+        )
+        self.assertEqual(len(self.journal_lines()), 2)

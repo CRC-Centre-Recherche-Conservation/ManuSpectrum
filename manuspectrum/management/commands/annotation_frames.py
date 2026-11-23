@@ -55,8 +55,8 @@ service and run (``Measures``): same, different, refused (a 403 or an answer
 that is not an image description), unreadable (a failed read or a host marked
 down; never a pass: the exit status is 1), or ``import-legacy`` (counted apart,
 never different). A host that refuses this server is measured in a browser:
-``--refused-out DIR`` writes one console script per such host
-(``iiif/frame_check.js``), whose copied JSON ``--frames FILE`` reads
+``--refused-out DIR`` writes one console script per such origin (scheme, host
+and port; ``iiif/frame_check.js``), whose copied JSON ``--frames FILE`` reads
 (``iiif.frame_scope``); the file answers only for a service the server could not
 read. With ``--apply --journal PATH`` the only write is a requalification: an
 ``estimated`` stamp equal to the measured frame gets that frame's ``msFrame``
@@ -71,8 +71,8 @@ kept. An ``estimated`` zone is never rebased without ``--since DATE`` (the day
 the host changed): its stamp may describe the old frame on geometry drawn
 after the change. With ``--since``, only a zone that existed unchanged before
 that date moves (judged from the edit log: the tile's ``oldvalue`` or the
-user's provisional value, or, for a tile with no row of its own, the ``create``
-row of its resource: a resource created since held no zone before); a zone
+user's provisional value; every tile of a resource with a ``create`` row from
+that date on is new, whatever its own rows say); a zone
 drawn or moved since is listed for review (looks moved: ``rebase --zone``;
 looks right: ``relabel``). ``--zone TILE:FEATURE`` (repeatable) rebases only
 the named zones, which skip the ``estimated``/``--since`` gate but still need a
@@ -84,8 +84,8 @@ supplies a browser measure for a refused one; an unreadable one exits
 non-zero). Dry by default; ``--apply --journal PATH`` writes through the same
 locked, guarded batches, journaling ``geometry_before``. Run it with editing
 closed: an editor tab opened before it saves the old geometry back; ``unstamp
---apply`` of its journal then puts the old stamp back on such a zone, and
-``rebase`` again moves it.
+--journal PATH --zone TILE:FEATURE --apply`` then puts the old stamp back on
+such a zone alone, and ``rebase --zone TILE:FEATURE`` moves it.
 
 ``relabel --service URL --zone TILE:FEATURE`` (repeatable) gives the named
 zones the measured live frame of the service and leaves their geometry
@@ -93,9 +93,11 @@ untouched: for a zone drawn after a host change that carries the old frame.
 A zone on another service, already equal, not found or changed since the read
 is listed and left. Same dry run, ``--apply --journal`` and reindex reminder.
 
-``unstamp --journal PATH`` puts every ``before`` back, only where the zone's
-canvas, geometry digest and properties still equal the journaled ones; a zone
-changed since is listed and left alone. Restoring the whole ``properties``
+``unstamp --journal PATH [--zone TILE:FEATURE ...]`` puts every ``before``
+back (with ``--zone``, of the named zones only; a named zone with no line is
+listed « not in the journal »), only where the zone's canvas, geometry digest
+and properties still equal the journaled ones; a zone changed since is listed
+and left alone. Restoring the whole ``properties``
 object gives the stored ``data`` back value for value (jsonb keeps no key
 order). A journal line may carry ``geometry_before`` (the feature's geometry
 before a verb that moves zones): ``unstamp`` puts it back with ``before``. A
@@ -911,7 +913,7 @@ def values_before(tile_ids, since):
     the current value is the old one, unless the tile's resource has a
     ``create`` row from *since* on (``Resource.bulk_save``, the CSV import,
     writes no row per tile): the tile is then in ``created`` and held no zone
-    before, wherever a row of its own does not say otherwise.
+    before, whatever the rows of the tile itself say.
     """
     tile_ids = list(tile_ids)
     resource_of = {
@@ -1012,7 +1014,7 @@ class Command(BaseCommand):
         )
         verify.add_argument(
             "--refused-out",
-            help="Directory receiving one console script per host that refuses this server.",
+            help="Directory receiving one console script per origin (scheme, host, port) that refuses this server.",
         )
         verify.add_argument(
             "--apply",
@@ -1075,6 +1077,12 @@ class Command(BaseCommand):
         relabel.add_argument("--batch", type=int, default=BATCH)
         unstamp = sub.add_parser("unstamp", help="Restore the journaled values.")
         unstamp.add_argument("--journal", required=True)
+        unstamp.add_argument(
+            "--zone",
+            action="append",
+            metavar="TILE:FEATURE",
+            help="Only the journal lines of this zone (repeatable).",
+        )
         unstamp.add_argument("--apply", action="store_true")
         unstamp.add_argument("--batch", type=int, default=BATCH)
 
@@ -1510,12 +1518,12 @@ class Command(BaseCommand):
                 gated
                 and since
                 and (
-                    (
+                    zone.tile_id in before.created
+                    or (
                         key in before
                         and (zone.node_id, zone.feature_id, zone.digest)
                         not in before[key]
                     )
-                    or (key not in before and zone.tile_id in before.created)
                 )
             ):
                 per[canvas]["listed"].append(
@@ -1533,6 +1541,7 @@ class Command(BaseCommand):
                 zone.feature_id,
                 zone.digest,
                 canvas,
+                zone.frame,
             )
             if once in seen:
                 continue
@@ -1560,6 +1569,8 @@ class Command(BaseCommand):
             raise CommandError("--apply needs --journal PATH (a new file)")
         since = _since_of(options["since"]) if options["since"] else None
         named = self._zone_arguments(options["zone"]) if options["zone"] else None
+        if named and since:
+            self._out("--since is ignored with --zone")
         frames_file = None
         if options["frames"]:
             try:
@@ -1630,8 +1641,9 @@ class Command(BaseCommand):
                 "Run with editing closed: an editor tab opened before the rebase saves "
                 "the old geometry back. A few days later, dry-run `unstamp` of this "
                 "journal: any \u00ab geometry reverted by a later save \u00bb is a zone "
-                "to repair: run `unstamp --apply` of this journal, which puts the old "
-                "stamp back on such zones, then `rebase` again with a new journal."
+                "to repair: run `unstamp --journal <this journal> --zone TILE:FEATURE "
+                "--apply`, which puts the old stamp back on that zone alone, then "
+                "`rebase --service URL --zone TILE:FEATURE --apply --journal <new>`."
             )
         else:
             self._out(
@@ -1792,7 +1804,20 @@ class Command(BaseCommand):
             logger.warning("journal kept at %s", journal_path, exc_info=True)
 
     def _unstamp(self, options):
+        named = self._zone_arguments(options["zone"]) if options["zone"] else None
         grouped = read_journal(options["journal"], self.stderr.write)
+        missing = []
+        if named:
+            kept, present = {}, set()
+            for tile_id, lines in grouped.items():
+                chosen = [
+                    line for line in lines if (tile_id, str(line["feature"])) in named
+                ]
+                present.update((tile_id, str(line["feature"])) for line in chosen)
+                if chosen:
+                    kept[tile_id] = chosen
+            grouped = kept
+            missing = sorted(named - present, key=str)
         tiles = list(grouped)
         total = sum(len(lines) for lines in grouped.values())
         restored, changed = 0, []
@@ -1803,19 +1828,23 @@ class Command(BaseCommand):
             restored += done
             changed.extend(skipped)
         self._out("")
+        for tile_id, fid in missing:
+            self._out(f"  not in the journal: zone {fid} of tile {tile_id}")
         for line, reason in changed:
             self._out(f"  {reason}: zone {line['feature']} of tile {line['tile']}")
         reverted = sum(1 for _line, reason in changed if reason == REVERTED_REASON)
         put_back = sum(1 for _line, reason in changed if reason == PUT_BACK_REASON)
         if reverted:
             self._out(
-                f"{reverted} zone(s) with reverted geometry: --apply puts their old "
-                "stamp back; then run rebase again with a new journal."
+                f"{reverted} zone(s) with reverted geometry: for each, run unstamp --journal "
+                "<this journal> --zone TILE:FEATURE --apply (puts the old stamp back "
+                "on it alone), then rebase --service URL --zone TILE:FEATURE --apply "
+                "--journal <new journal>."
             )
         if put_back:
             self._out(
-                f"{put_back} zone(s) have their old stamp back: run rebase again "
-                "with a new journal."
+                f"{put_back} zone(s) have their old stamp back: run rebase --service URL "
+                "--zone TILE:FEATURE --apply --journal <new journal> for each."
             )
         summary = f"{restored} of {total} journaled zone(s) " + (
             "restored" if options["apply"] else "would be restored"
