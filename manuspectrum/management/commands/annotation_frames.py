@@ -53,7 +53,11 @@ stamp; the zone then follows that save's own stamping rule
 canvas, geometry digest and properties still equal the journaled ones; a zone
 changed since is listed and left alone. Restoring the whole ``properties``
 object gives the stored ``data`` back value for value (jsonb keeps no key
-order). Dry by default as well.
+order). A journal line may carry ``geometry_before`` (the feature's geometry
+before a verb that moves zones): ``unstamp`` puts it back with ``before``. A
+line whose feature already has the digest of ``geometry_before`` and the
+``after`` properties is listed as « geometry reverted by a later save ». Dry by
+default as well.
 """
 
 import copy
@@ -65,7 +69,9 @@ import shlex
 import time
 import uuid
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
@@ -115,6 +121,54 @@ def collections_of(data, edits, nodes):
             if str(node_id) in nodes:
                 found.append((user_id, str(node_id), collection))
     return found
+
+
+@dataclass(frozen=True)
+class StampedZone:
+    """A feature carrying a valid stamp, with where it is stored."""
+
+    tile_id: uuid.UUID
+    node_id: str
+    user_id: str | None
+    feature_id: str
+    canvas: str
+    digest: str
+    frame: Frame
+
+
+def stamped_zones(nodes, service=None, host=None, tiles=None):
+    """Every feature with a valid stamp in the ``data`` and provisional edits of the annotation tiles (those in *tiles* when given).
+
+    *service* keeps the zones of that canvas (``rewrite_legacy_url`` and no
+    trailing slash); *host* those whose canvas host equals it, case folded.
+    A feature without a usable id or canvas is never yielded.
+    """
+    if service is not None:
+        service = rewrite_legacy_url(service).rstrip("/")
+    if host is not None:
+        host = host.lower()
+    for tile_id, data, edits in tiles_of(nodes, tiles):
+        for user_id, node_id, collection in collections_of(data, edits, nodes):
+            features = collection.get("features")
+            for feature in features if isinstance(features, list) else []:
+                frame = frames.frame_of(feature)
+                fid = feature.get("id") if isinstance(feature, dict) else None
+                canvas = frames.canvas_of(feature)
+                if frame is None or not canvas or not frames.valid_id(fid):
+                    continue
+                if service is not None and canvas != service:
+                    continue
+                if host is not None and (urlsplit(canvas).hostname or "") != host:
+                    continue
+                yield StampedZone(
+                    tile_id,
+                    node_id,
+                    user_id,
+                    fid,
+                    canvas,
+                    frames.geometry_digest(feature.get("geometry")),
+                    frame,
+                )
 
 
 def whole_page(frame):
@@ -404,9 +458,11 @@ def restore_batch(batch, lines_by_tile, apply_changes=True):
                     None,
                 )
                 if target is None:
-                    changed.append((line, "changed since"))
+                    changed.append((line, _unmatched_reason(line, value)))
                     continue
                 target["properties"] = line["before"]
+                if "geometry_before" in line:
+                    target["geometry"] = line["geometry_before"]
                 restored += 1
                 changes[
                     "data" if line["provisional"] is None else "provisionaledits"
@@ -414,6 +470,26 @@ def restore_batch(batch, lines_by_tile, apply_changes=True):
             if changes and apply_changes:
                 TileModel.objects.filter(pk=tile_id).update(**changes)
     return restored, changed
+
+
+def _unmatched_reason(line, value):
+    """Why the zone of journal *line* is not restored: a later save put the geometry of ``geometry_before`` back, or it changed since."""
+    if "geometry_before" in line:
+        collection = value.get(line["node"]) if isinstance(value, dict) else None
+        features = (
+            collection["features"] if frame_writes._is_collection(collection) else []
+        )
+        digest = frames.geometry_digest(line["geometry_before"])
+        if any(
+            isinstance(f, dict)
+            and f.get("id") == line["feature"]
+            and f.get("properties") == line["after"]
+            and frames.canvas_of(f) == line["canvas"]
+            and frames.geometry_digest(f.get("geometry")) == digest
+            for f in features
+        ):
+            return "geometry reverted by a later save"
+    return "changed since"
 
 
 def _journal_line(text):
@@ -432,6 +508,8 @@ def _journal_line(text):
     for key in ("before", "after"):
         if not isinstance(line[key], dict):
             raise ValueError(f"{key} is not an object")
+    if "geometry_before" in line and not isinstance(line["geometry_before"], dict):
+        raise ValueError("geometry_before is not an object")
     return line
 
 

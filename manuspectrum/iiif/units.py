@@ -226,18 +226,22 @@ def _fetch(service, seconds):
         return get()
 
 
+def info_from_json(obj):
+    """``ImageInfo`` of a decoded info.json *obj*, or None when it does not describe an image."""
+    if not isinstance(obj, dict):
+        return None
+    width, height = obj.get("width"), obj.get("height")
+    if not (_whole(width) and _whole(height)):
+        return None
+    return ImageInfo(int(width), int(height), tile_width(obj))
+
+
 def _parsed(response):
     """``ImageInfo`` of an info.json response, or None when it does not describe an image."""
     try:
-        info = response.json()
+        return info_from_json(response.json())
     except ValueError:
         return None
-    if not isinstance(info, dict):
-        return None
-    width, height = info.get("width"), info.get("height")
-    if not (_whole(width) and _whole(height)):
-        return None
-    return ImageInfo(int(width), int(height), tile_width(info))
 
 
 def _kept(held, max_age):
