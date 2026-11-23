@@ -1,5 +1,5 @@
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
-import PrimeVue from "primevue/config";
+import OpenVue from "openvue/config";
 import { afterEach, describe, expect, it } from "vitest";
 
 import CitationBlock from "@/manuspectrum/pages/AnalysisExplorer/components/CitationBlock.vue";
@@ -18,7 +18,7 @@ function citation(overrides: Partial<Citation> = {}): Citation {
 function mountBlock(given: Citation) {
     return mount(CitationBlock, {
         props: { citation: given },
-        global: { plugins: [PrimeVue] },
+        global: { plugins: [OpenVue] },
     });
 }
 

@@ -74,7 +74,7 @@ from django.db.models import Q, TextField
 from django.db.models.functions import Cast
 
 from arches.app.models.models import Concept, IIIFManifest, TileModel, Value
-from arches_controlled_lists.models import ListItem
+from arches.extensions.controlled_lists.models import ListItem
 
 from manuspectrum.management.commands.export_pkg import LEAK_RULES
 

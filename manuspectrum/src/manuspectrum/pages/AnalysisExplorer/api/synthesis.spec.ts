@@ -13,7 +13,7 @@ import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/resp
 
 import type { SynthesisResponse } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 
-vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+vi.mock("@/arches_vue_components/application/generate-arches-url.ts", () => ({
     generateArchesURL: (name: string) => `/en/${name}`,
 }));
 

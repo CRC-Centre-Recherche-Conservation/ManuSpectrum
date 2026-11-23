@@ -1,5 +1,5 @@
 import { mount } from "@vue/test-utils";
-import PrimeVue from "primevue/config";
+import OpenVue from "openvue/config";
 import { describe, expect, it } from "vitest";
 
 import FolioViewSwitch from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/document/FolioViewSwitch.vue";
@@ -9,7 +9,7 @@ import type { FolioView } from "@/manuspectrum/pages/AnalysisExplorer/store/type
 function mountSwitch(view: FolioView, available: FolioView[]) {
     return mount(FolioViewSwitch, {
         props: { view, available },
-        global: { plugins: [PrimeVue] },
+        global: { plugins: [OpenVue] },
     });
 }
 

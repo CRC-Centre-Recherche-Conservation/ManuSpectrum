@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, ref } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import PrimeVue from "primevue/config";
+import OpenVue from "openvue/config";
 
 import CorpusResults from "@/manuspectrum/pages/AnalysisExplorer/views/Corpus/CorpusResults.vue";
 
@@ -37,7 +37,7 @@ import type {
 } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { ResultsMemo } from "@/manuspectrum/pages/AnalysisExplorer/injection-keys.ts";
 
-vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+vi.mock("@/arches_vue_components/application/generate-arches-url.ts", () => ({
     generateArchesURL: (name: string) => `/en/${name}`,
 }));
 
@@ -58,7 +58,7 @@ function mountResults({
     const wrapper = mount(CorpusResults, {
         attachTo: attach ? document.body : undefined,
         global: {
-            plugins: [pinia, PrimeVue],
+            plugins: [pinia, OpenVue],
             provide: {
                 [FACET_LABELS_KEY as symbol]: labels,
                 [RESULTS_MEMO_KEY as symbol]: memo,

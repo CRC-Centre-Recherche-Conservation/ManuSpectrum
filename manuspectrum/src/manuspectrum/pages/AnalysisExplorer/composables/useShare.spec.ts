@@ -12,7 +12,7 @@ import { jsonResponse } from "@/manuspectrum/pages/AnalysisExplorer/testing/resp
 
 import type { OfferedScope } from "@/manuspectrum/pages/AnalysisExplorer/share/scope.ts";
 
-vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+vi.mock("@/arches_vue_components/application/generate-arches-url.ts", () => ({
     generateArchesURL: (name: string) => `/en/${name}`,
 }));
 

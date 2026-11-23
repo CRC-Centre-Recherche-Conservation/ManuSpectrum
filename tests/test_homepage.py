@@ -93,7 +93,7 @@ class ArchesPayloadTests(TestCase):
     def test_homepage_carries_no_arches_payload(self):
         for lang in ("en", "fr"):
             html = self.client.get(f"/{lang}/").content.decode()
-            for marker in ("arches-translations", "arches-urls", "CKEDITOR_BASEPATH"):
+            for marker in ("arches-translations", "arches-urls", "arches-data"):
                 self.assertNotIn(marker, html, f"{marker} on /{lang}/")
 
 
@@ -200,7 +200,7 @@ class AboutPagePayloadTests(TestCase):
             "/en/about/contact",
         ):
             html = self.client.get(path).content.decode()
-            for marker in ("arches-urls", "arches-data", "CKEDITOR_BASEPATH"):
+            for marker in ("arches-urls", "arches-data"):
                 self.assertNotIn(marker, html, f"{marker} on {path}")
             self.assertNotIn("biblissima-", html, path)
 

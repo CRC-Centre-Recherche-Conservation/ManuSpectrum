@@ -1,7 +1,7 @@
 """Image Service Manager writes, limited to Resource Editor and Resource Reviewer.
 
 Subclass of ``arches.app.views.manifest_manager.ManifestManagerView``
-(Arches 8.1.5; identical on dev/8.2.x and dev/9.0.x). ``post`` and
+(Arches 8.2.0). ``post`` and
 ``delete`` pass ``group_required`` first, as Arches' ``TileData`` guards its
 own writes; ``get`` and the bodies are the core view's. The page itself may
 be open more widely (its ``view_plugin`` grants, deploy/ADMIN.md);

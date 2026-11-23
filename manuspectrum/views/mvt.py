@@ -1,6 +1,6 @@
 """Vector tiles of the geometry nodes, with an empty tile a browser may keep.
 
-Subclass of ``arches.app.views.api.geo.MVT`` (Arches 8.1.5, geo.py:196-204).
+Subclass of ``arches.app.views.api.geo.MVT`` (Arches 8.2.0, geo.py:196-204).
 ``get`` is rewritten rather than wrapped: the core view raises the same
 ``Http404`` for a node the reader cannot see and for a tile with no feature,
 and only the second is an answer worth keeping. The tile is still built by

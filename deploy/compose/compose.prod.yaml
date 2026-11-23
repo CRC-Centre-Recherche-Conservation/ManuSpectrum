@@ -17,7 +17,6 @@
 services:
   postgres:
     command: ["postgres",
-              "-c", "standard_conforming_strings=off",
               "-c", "max_connections=60",
               "-c", "shared_buffers=1GB",
               "-c", "effective_cache_size=3GB",

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, nextTick, ref, useTemplateRef, watch } from "vue";
 import { useMediaQuery } from "@vueuse/core";
-import Drawer from "primevue/drawer";
+import Drawer from "openvue/drawer";
 import { useGettext } from "vue3-gettext";
 
 import IconButton from "@/manuspectrum/pages/AnalysisExplorer/components/IconButton.vue";

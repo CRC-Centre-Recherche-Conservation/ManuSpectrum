@@ -1,5 +1,5 @@
 /**
- * Shadow of arches/app/media/js/views/components/iiif-viewer.js (Arches 8.1.4).
+ * Shadow of arches/app/media/js/views/components/iiif-viewer.js (Arches 8.2.0).
  *
  * Wrapper, no core code copied: the core module is imported through the
  * `arches/arches/app` alias (webpack.common.js) and applied as is.

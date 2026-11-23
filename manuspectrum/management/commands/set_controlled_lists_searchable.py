@@ -26,7 +26,7 @@ reindexing happens.
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from arches_controlled_lists.models import List
+from arches.extensions.controlled_lists.models import List
 
 
 class Command(BaseCommand):

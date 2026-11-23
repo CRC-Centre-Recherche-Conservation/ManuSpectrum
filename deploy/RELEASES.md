@@ -195,8 +195,8 @@ the first tag is pushed; the chain relies on all of them.
   `branch-guard` (a pull request into main comes from dev, a release branch or
   a hotfix branch), `dependency-review` (no new dependency version with a high
   or critical advisory) and, from `main.yml` (the Arches template),
-  `build_feature_branch (3.11)`, `build_feature_branch (3.12)`,
-  `build_feature_branch (3.13)`, `check_python_coverage` and
+  `build_feature_branch (3.12)`, `build_feature_branch (3.13)`,
+  `build_feature_branch (3.14)`, `check_python_coverage` and
   `check_frontend_coverage`. `conclusion`, `gitleaks`, `branch-guard` and
   `dependency-review` run on every pull request, with no `paths:` filter, so
   the checks are never missing. The jobs of `stack-proof.yml` are called
@@ -215,8 +215,8 @@ the first tag is pushed; the chain relies on all of them.
    person who tags.
 2. `main` and the integration branch are protected (no force-push), and the
    required checks are `conclusion`, `gitleaks`, `branch-guard`,
-   `dependency-review`, `build_feature_branch (3.11)`, `build_feature_branch (3.12)`,
-   `build_feature_branch (3.13)`, `check_python_coverage` and
+   `dependency-review`, `build_feature_branch (3.12)`, `build_feature_branch (3.13)`,
+   `build_feature_branch (3.14)`, `check_python_coverage` and
    `check_frontend_coverage`.
 3. The default workflow token permission is `read`.
 4. Merge, then wait for the warm-cache run on the integration branch (and, for

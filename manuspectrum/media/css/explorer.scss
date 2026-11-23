@@ -2,7 +2,7 @@
 // mount point. Components carry their own scoped styles; the colour tokens
 // come from _ms-chrome's :root (css/pages). Imports tokens only: css/pages
 // already ships the chrome, and a second copy would duplicate the reset.
-// The rules on `body.ms-page--app` also reach what PrimeVue teleports to
+// The rules on `body.ms-page--app` also reach what OpenVue teleports to
 // <body> (drawers), which the mount point does not contain.
 @import 'ms-tokens';
 @import url(node_modules/leaflet/dist/leaflet.css);

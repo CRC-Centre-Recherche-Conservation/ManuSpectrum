@@ -4,7 +4,7 @@
  * Covers the three things the module owns: the refcounted page cache (one
  * request per resource, abort only when the last reader leaves a pending
  * request, resolved entries kept under a cap), the batch warm-up, and the two
- * popup binders (Mapbox cleanup, Leaflet host lifecycle).
+ * popup binders (MapLibre cleanup, Leaflet host lifecycle).
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -22,7 +22,7 @@ const { generateArchesURL } = vi.hoisted(() => {
         'manuspectrum:api-summary-batch': '/{language_code}/api/summary',
     };
     return {
-        generateArchesURL: vi.fn((name, params = {}, languageCode) =>
+        generateArchesURL: vi.fn((name, params = {}, queryParameters, languageCode) =>
             Object.entries({ ...params, language_code: languageCode }).reduce(
                 (url, [key, value]) => url.replaceAll(`{${key}}`, String(value)),
                 routes[name],
@@ -30,7 +30,7 @@ const { generateArchesURL } = vi.hoisted(() => {
     };
 });
 
-vi.mock('@/arches/utils/generate-arches-url.ts', () => ({ generateArchesURL }));
+vi.mock('@/arches_vue_components/application/generate-arches-url.ts', () => ({ generateArchesURL }));
 
 const { leafletPopups } = vi.hoisted(() => ({ leafletPopups: [] }));
 
@@ -67,7 +67,7 @@ import {
     _cacheSize,
     _resetCacheForTests,
     acquireSummary,
-    attachMapboxPopupCleanup,
+    attachMapLibrePopupCleanup,
     bindLeafletSummaryPopup,
     invalidateSummary,
     summaryUrl,
@@ -123,6 +123,7 @@ describe('summaryUrl', () => {
         expect(generateArchesURL).toHaveBeenCalledWith(
             'manuspectrum:api-summary',
             { resourceid: ID },
+            undefined,
             'fr',
         );
     });
@@ -356,6 +357,7 @@ describe('warmSummaryCache', () => {
         expect(generateArchesURL).toHaveBeenCalledWith(
             'manuspectrum:api-summary-batch',
             {},
+            undefined,
             'fr',
         );
         expect(fetchMock.mock.calls[0][0]).toBe(
@@ -435,10 +437,10 @@ describe('warmSummaryCache', () => {
     });
 });
 
-describe('attachMapboxPopupCleanup', () => {
+describe('attachMapLibrePopupCleanup', () => {
     const build = () => {
         const content = document.createElement('div');
-        content.innerHTML = '<button class="mapboxgl-popup-close-button"></button>';
+        content.innerHTML = '<button class="maplibregl-popup-close-button"></button>';
         document.body.appendChild(content);
         const handlers = {};
         const popup = {
@@ -452,23 +454,23 @@ describe('attachMapboxPopupCleanup', () => {
     it('returns the data it was handed', () => {
         const { data } = build();
 
-        expect(attachMapboxPopupCleanup(data)).toBe(data);
+        expect(attachMapLibrePopupCleanup(data)).toBe(data);
     });
 
     it('translates the close button label', () => {
         const { content, data } = build();
 
-        attachMapboxPopupCleanup(data);
+        attachMapLibrePopupCleanup(data);
 
         expect(
-            content.querySelector('.mapboxgl-popup-close-button').getAttribute('aria-label'),
+            content.querySelector('.maplibregl-popup-close-button').getAttribute('aria-label'),
         ).toBe('Fermer');
     });
 
     it('closes the popup on Escape', () => {
         const { content, data, popup } = build();
 
-        attachMapboxPopupCleanup(data);
+        attachMapLibrePopupCleanup(data);
         content.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
 
         expect(popup.remove).toHaveBeenCalledTimes(1);
@@ -478,7 +480,7 @@ describe('attachMapboxPopupCleanup', () => {
         const { content, data, handlers, popup } = build();
         const cleanNode = vi.spyOn(ko, 'cleanNode');
 
-        attachMapboxPopupCleanup(data);
+        attachMapLibrePopupCleanup(data);
         handlers.close();
 
         expect(cleanNode).toHaveBeenCalledWith(content);
@@ -489,7 +491,7 @@ describe('attachMapboxPopupCleanup', () => {
     it('moves focus into the card when the popup opens', () => {
         const { content, data } = build();
 
-        attachMapboxPopupCleanup(data);
+        attachMapLibrePopupCleanup(data);
 
         expect(document.activeElement).toBe(content);
     });
@@ -500,7 +502,7 @@ describe('attachMapboxPopupCleanup', () => {
         trigger.focus();
         const { data, handlers } = build();
 
-        attachMapboxPopupCleanup(data);
+        attachMapLibrePopupCleanup(data);
         handlers.close();
 
         expect(document.activeElement).toBe(trigger);
@@ -512,7 +514,7 @@ describe('attachMapboxPopupCleanup', () => {
         trigger.focus();
         const { data, handlers } = build();
 
-        attachMapboxPopupCleanup(data);
+        attachMapLibrePopupCleanup(data);
         trigger.remove();
 
         expect(() => handlers.close()).not.toThrow();
@@ -526,7 +528,7 @@ describe('attachMapboxPopupCleanup', () => {
         trigger.focus();
         const { data, handlers } = build();
 
-        attachMapboxPopupCleanup(data);
+        attachMapLibrePopupCleanup(data);
         elsewhere.focus();
         handlers.close();
 
@@ -536,8 +538,8 @@ describe('attachMapboxPopupCleanup', () => {
     it('attaches once per popup', () => {
         const { data, popup } = build();
 
-        attachMapboxPopupCleanup(data);
-        attachMapboxPopupCleanup(data);
+        attachMapLibrePopupCleanup(data);
+        attachMapLibrePopupCleanup(data);
 
         expect(popup.on).toHaveBeenCalledTimes(1);
     });
@@ -545,7 +547,7 @@ describe('attachMapboxPopupCleanup', () => {
     it('closes the popup on the legacy Esc key name', () => {
         const { content, data, popup } = build();
 
-        attachMapboxPopupCleanup(data);
+        attachMapLibrePopupCleanup(data);
         content.dispatchEvent(new KeyboardEvent('keydown', { key: 'Esc' }));
 
         expect(popup.remove).toHaveBeenCalledTimes(1);
@@ -554,7 +556,7 @@ describe('attachMapboxPopupCleanup', () => {
     it('leaves another key alone', () => {
         const { content, data, popup } = build();
 
-        attachMapboxPopupCleanup(data);
+        attachMapLibrePopupCleanup(data);
         content.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
 
         expect(popup.remove).not.toHaveBeenCalled();
@@ -564,17 +566,17 @@ describe('attachMapboxPopupCleanup', () => {
         const { content, data, popup } = build();
         content.innerHTML = '';
 
-        expect(() => attachMapboxPopupCleanup(data)).not.toThrow();
+        expect(() => attachMapLibrePopupCleanup(data)).not.toThrow();
         expect(popup.on).toHaveBeenCalledTimes(1);
     });
 
     it('tolerates data with no popup, and a popup with no content', () => {
         const orphan = { on: vi.fn() };
 
-        expect(attachMapboxPopupCleanup(undefined)).toBeUndefined();
-        expect(() => attachMapboxPopupCleanup({ popupFeatures: [] })).not.toThrow();
-        expect(() => attachMapboxPopupCleanup({ popupFeatures: [{ mapCard: {} }] })).not.toThrow();
-        attachMapboxPopupCleanup({ popupFeatures: [{ mapCard: { popup: orphan } }] });
+        expect(attachMapLibrePopupCleanup(undefined)).toBeUndefined();
+        expect(() => attachMapLibrePopupCleanup({ popupFeatures: [] })).not.toThrow();
+        expect(() => attachMapLibrePopupCleanup({ popupFeatures: [{ mapCard: {} }] })).not.toThrow();
+        attachMapLibrePopupCleanup({ popupFeatures: [{ mapCard: { popup: orphan } }] });
         expect(orphan.on).not.toHaveBeenCalled();
     });
 });

@@ -25,7 +25,7 @@ import type { Item } from "@/manuspectrum/pages/AnalysisExplorer/api/types.ts";
 import type { RequestStatus } from "@/manuspectrum/pages/AnalysisExplorer/composables/useRequest.ts";
 import type { SelectionItems } from "@/manuspectrum/pages/AnalysisExplorer/composables/useSelectionItems.ts";
 
-vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+vi.mock("@/arches_vue_components/application/generate-arches-url.ts", () => ({
     generateArchesURL: () => "/en/api/explorer/items",
 }));
 

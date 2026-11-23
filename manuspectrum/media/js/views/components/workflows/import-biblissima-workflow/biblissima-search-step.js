@@ -32,7 +32,7 @@ import arches from 'arches';
 import 'bindings/select2-query';
 import 'bindings/thumb-fallback';
 import noUiSlider from 'nouislider';
-import { generateArchesURL } from '@/arches/utils/generate-arches-url.ts';
+import { generateArchesURL } from '@/arches_vue_components/application/generate-arches-url.ts';
 import {
     suggestAjaxOptions,
     suggestInputTooLong,

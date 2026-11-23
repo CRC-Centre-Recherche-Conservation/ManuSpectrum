@@ -10,7 +10,7 @@ from unittest import mock
 from django.test import SimpleTestCase, override_settings
 
 from arches.app.models.models import Node, TileModel
-from arches_controlled_lists.models import List, ListItem, ListItemValue
+from arches.extensions.controlled_lists.models import List, ListItem, ListItemValue
 
 from manuspectrum.constants.imaging_layers import (
     ANALYSIS_GRAPH_ID,
@@ -432,7 +432,9 @@ class WriteTests(RuleCase):
         self.assertIsNone(band.data[node("elements")])
 
     def test_references_are_stored_as_the_reference_datatype_transforms_them(self):
-        from arches_controlled_lists.datatypes.datatypes import ReferenceDataType
+        from arches.extensions.controlled_lists.datatypes.datatypes import (
+            ReferenceDataType,
+        )
 
         ((element, _),) = self.written("MS59-deconv_Pb")
         node = self.layer_node

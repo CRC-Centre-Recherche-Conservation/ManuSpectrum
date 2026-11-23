@@ -13,7 +13,7 @@ from django.db import connection
 from django.test import override_settings
 from django.test.utils import CaptureQueriesContext
 
-from arches_controlled_lists.models import List, ListItem
+from arches.extensions.controlled_lists.models import List, ListItem
 
 from tests.explorer_contract import assert_shape
 from tests.explorer_fixtures import (

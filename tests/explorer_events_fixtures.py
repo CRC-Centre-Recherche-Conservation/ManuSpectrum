@@ -79,9 +79,9 @@ class EventsCase(ServiceCase):
             cls.components["open"],
             "component",
             date_start_of_production_time="1380-01-01",
-            production_date_end_of_the_begin_="1385-12-31",
+            production_date_end_of_the_begin="1385-12-31",
             date_end_of_production_time="1390-12-31",
-            production_date_end_of_the_end_="1395-12-31",
+            production_date_end_of_the_end="1395-12-31",
             type_of_production_time=True,
         )
         cls.components["bare"] = new("component", "f. 2r — bare")
