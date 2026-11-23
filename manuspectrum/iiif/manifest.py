@@ -1,4 +1,7 @@
-"""The IIIF-shaped parts of the Explorer's Presentation 3 manifest (spec §11.1).
+"""The IIIF-shaped parts of the Presentation 3 manifests of the Explorer and of a Document.
+
+The header shared by both (``Header``, ``manifest_header``, ``provider``,
+``required_statement``) lives here.
 
 A canvas of the manifest does not carry its annotations: it references the
 pages of its Document's collections (``pages.page_reference``), the analyses
@@ -15,6 +18,8 @@ interface strings in every configured language. ``homepage`` lists the
 Explorer page of the scope once per configured language, each with its
 ``language``.
 """
+
+from dataclasses import dataclass
 
 from django.conf import settings
 from django.urls import reverse
@@ -119,24 +124,70 @@ def canvas_annotations(document_id, name, n, canvas_label, references, embedded=
     return found
 
 
-def manifest_label(kind, folios, documents, subject_name, document_name):
-    """The project's name for a project scope, else « Selection of n pages of <document> » or « … of k documents »."""
+def _counted(analyses, materials):
+    """« 81 analyses and 3 identified materials »; a zero count is left out, None when both are zero."""
+    parts = []
+    if analyses:
+        parts.append(
+            lang.ngettext_map(
+                "%(count)d analysis",
+                "%(count)d analyses",
+                analyses,
+                count=analyses,
+            )
+        )
+    if materials:
+        parts.append(
+            lang.ngettext_map(
+                "%(count)d identified material",
+                "%(count)d identified materials",
+                materials,
+                count=materials,
+            )
+        )
+    if len(parts) == 2:
+        return lang.gettext_map(
+            "%(first)s and %(second)s", first=parts[0], second=parts[1]
+        )
+    return parts[0] if parts else None
+
+
+def manifest_label(
+    kind,
+    folios,
+    documents,
+    subject_name,
+    document_name,
+    analyses=0,
+    materials=0,
+):
+    """The project's name for a project scope, else « Selection of 2 analyses on 10 pages of <document> » or « … of k documents ».
+
+    The counts are those of ``summary_counts``; without an analysis or an
+    identified material the analyses count is written as zero.
+    """
     if kind == "project":
         return subject_name
+    what = _counted(analyses, materials) or lang.ngettext_map(
+        "%(count)d analysis", "%(count)d analyses", 0, count=0
+    )
+    pages_map = lang.ngettext_map(
+        "%(count)d page", "%(count)d pages", folios, count=folios
+    )
     if documents == 1:
-        return lang.ngettext_map(
-            "Selection of %(count)d page of %(document)s",
-            "Selection of %(count)d pages of %(document)s",
-            folios,
-            count=folios,
+        return lang.gettext_map(
+            "Selection of %(what)s on %(pages)s of %(document)s",
+            what=what,
+            pages=pages_map,
             document=document_name,
         )
-    return lang.ngettext_map(
-        "Selection of %(count)d page of %(documents)d documents",
-        "Selection of %(count)d pages of %(documents)d documents",
-        folios,
-        count=folios,
-        documents=documents,
+    return lang.gettext_map(
+        "Selection of %(what)s on %(pages)s of %(documents)s",
+        what=what,
+        pages=pages_map,
+        documents=lang.ngettext_map(
+            "%(count)d document", "%(count)d documents", documents, count=documents
+        ),
     )
 
 
@@ -178,3 +229,112 @@ def unlocated_metadata(entries):
 
 def drafts_summary():
     return lang.gettext_map("Contains drafts")
+
+
+@dataclass(frozen=True)
+class Header:
+    """The descriptive head of a manifest; empty parts are left out of its output."""
+
+    label: dict
+    summary: dict | None
+    metadata: tuple
+    homepage: tuple
+    rendering: tuple = ()
+    thumbnail: list | None = None
+
+
+def required_statement():
+    """The ``requiredStatement``: who publishes the data, in every language."""
+    return {
+        "label": lang.gettext_map("Attribution"),
+        "value": lang.gettext_map(
+            "Data published by %(name)s; the rights of each image are stated on its canvas.",
+            name=settings.APP_TITLE,
+        ),
+    }
+
+
+def provider():
+    """The ``provider``: the site, one Agent with its home page in each configured language."""
+    homes = []
+    for code in lang.languages():
+        with translation.override(code):
+            path = reverse("root").lstrip("/")
+        homes.append(
+            {
+                "id": f"{settings.PUBLIC_SERVER_ADDRESS}{path}",
+                "type": "Text",
+                "format": "text/html",
+                "label": lang.none(settings.APP_TITLE),
+                "language": [code],
+            }
+        )
+    return [
+        {
+            "id": settings.PUBLIC_SERVER_ADDRESS,
+            "type": "Agent",
+            "label": lang.none(settings.APP_TITLE),
+            "homepage": homes,
+        }
+    ]
+
+
+def manifest_header(header):
+    """The head properties of *header* in manifest order, each left out when empty."""
+    out = {"label": header.label}
+    if header.summary:
+        out["summary"] = header.summary
+    if header.metadata:
+        out["metadata"] = list(header.metadata)
+    out["requiredStatement"] = required_statement()
+    out["provider"] = provider()
+    if header.homepage:
+        out["homepage"] = list(header.homepage)
+    if header.rendering:
+        out["rendering"] = list(header.rendering)
+    if header.thumbnail:
+        out["thumbnail"] = header.thumbnail
+    return out
+
+
+def summary_counts(analyses, materials, pages_count, document_name, documents):
+    """« 81 analyses and 3 identified materials on 10 pages of <document> »; a zero count is left out.
+
+    *document_name* names the one document; with several, « k documents ».
+    """
+    what = _counted(analyses, materials)
+    pages_map = lang.ngettext_map(
+        "%(count)d page", "%(count)d pages", pages_count, count=pages_count
+    )
+    if documents == 1 and document_name:
+        document = document_name
+    else:
+        document = lang.ngettext_map(
+            "%(count)d document", "%(count)d documents", documents, count=documents
+        )
+    if not what:
+        return pages_map
+    return lang.gettext_map(
+        "%(what)s on %(pages)s of %(document)s",
+        what=what,
+        pages=pages_map,
+        document=document,
+    )
+
+
+def imaging_metadata(entries):
+    """The « Chemical imaging » ``metadata`` entry: one link per ``(manifest id, label map)`` of *entries*, labelled by the stored label, else by the manifest id; None without a link."""
+    maps = [
+        lang.linked(label or lang.none(href), href, markup=True)
+        for href, label in entries
+    ]
+    joined = lang.joined(maps, sep="; ")
+    if not any(joined.values()):
+        return None
+    return {
+        "label": lang.gettext_map("Chemical imaging"),
+        "value": {
+            code: [f"<span>{text}</span>" for text in texts]
+            for code, texts in joined.items()
+        },
+    }

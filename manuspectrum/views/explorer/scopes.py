@@ -24,6 +24,7 @@ from django.conf import settings
 from django.urls import reverse
 from django.utils import translation
 
+from manuspectrum.iiif import ids
 from manuspectrum.iiif.sources import ManifestReader, manifest_json
 from manuspectrum.utils.public_visibility import anonymous_user, readable_nodegroup_ids
 from manuspectrum.utils.role_links import role_node
@@ -513,6 +514,16 @@ def citation_home(scope, analysis_id, projects, label_of):
     return Home(home, label_of[home]["value"], permalink(home))
 
 
+def spectra_count(content):
+    """The readable spectra (``xy`` files) of the analyses of *content*."""
+    return sum(
+        1
+        for row in content.rows
+        for e in content.files[row["id"]]
+        if e.get("dataKind") == "xy" and e.get("role") == "readable"
+    )
+
+
 def scope_content(scope, keys=()):
     """``ScopeContent`` of *scope*; *keys* are further ``ROLES`` read with the content keys."""
     bundle, language = scope.bundle, scope.language
@@ -629,6 +640,17 @@ def _per_document(scope):
     }
 
 
+def _manifest_link(scope, offer, language):
+    if offer != "manifest":
+        return None
+    if scope.kind == "document" and not scope.canvases_all:
+        return {
+            "url": ids.manifest(scope.subject),
+            "path": reverse("iiif-v3-manifest", args=[scope.subject]),
+        }
+    return product_link("iiif-v3-explorer-manifest", scope.query, language)
+
+
 def share_payload(scope, accessed):
     """``SharePayload`` of *scope*: counts, citations, availability, export estimate and product links.
 
@@ -639,7 +661,9 @@ def share_payload(scope, accessed):
     does (``export_size``); over the limits, a scope whose items span
     several documents lists one export per document, holding the scope's
     items there (``_per_document``). ``manifest`` is given only when the scope's
-    manifest holds a canvas within the canvas bound (``manifest_offer``);
+    manifest holds a canvas within the canvas bound (``manifest_offer``); for a
+    document scope without ``canvases=all`` it links the document's own
+    manifest (``ids.manifest``), else the scope's Explorer manifest;
     ``manifestTooLarge`` says the manifest is over that bound. ``seriesCsv`` for a
     Selection holding spectra only. Each product is a ``product_link``: the
     panel follows its ``path`` and copies or hands external viewers its
@@ -651,12 +675,7 @@ def share_payload(scope, accessed):
     content = scope_content(scope)
     rows = content.rows
     files_count, bytes_count, over = export_size(stored_sizes(scope, content))
-    spectra = sum(
-        1
-        for row in rows
-        for e in content.files[row["id"]]
-        if e.get("dataKind") == "xy" and e.get("role") == "readable"
-    )
+    spectra = spectra_count(content)
     split = _per_document(scope) if over else {}
     offer = manifest_offer(scope)
     documents = []
@@ -701,11 +720,7 @@ def share_payload(scope, accessed):
             "documents": documents,
         },
         "links": {
-            "manifest": (
-                product_link("iiif-v3-explorer-manifest", scope.query, language)
-                if offer == "manifest"
-                else None
-            ),
+            "manifest": _manifest_link(scope, offer, language),
             "manifestTooLarge": offer == "tooLarge",
             "seriesCsv": (
                 product_link("explorer-series-csv", scope.query, language)
