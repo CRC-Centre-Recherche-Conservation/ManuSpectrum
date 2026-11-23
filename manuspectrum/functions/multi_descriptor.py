@@ -46,9 +46,32 @@ class MultiDescriptor(AbstractPrimaryDescriptorsFunction):
     Function for processing multi-card resource descriptors by extracting node values
     based on node aliases rather than node names.
 
-    The "Undefined" fallback is translated in ``context["language"]``, the
+    A node blank in the descriptor's language is read in the other languages
+    of ``settings.LANGUAGES`` before the template is judged empty. The
+    "Undefined" fallback is translated in ``context["language"]``, the
     language the descriptor is stored under.
     """
+
+    def _display_value(self, datatype, tile, node, language):
+        """Display value of ``node`` in ``language``, else in another site language.
+
+        The other languages are tried in the order of ``settings.LANGUAGES``;
+        a value that is ``None`` or only whitespace counts as blank. Without a
+        requested ``language`` the datatype reads the active one, which is then
+        not tried again. When every language is blank, the first value read is
+        returned as it is.
+        """
+        value = datatype.get_display_value(tile, node, language=language)
+        if value is not None and str(value).strip():
+            return value
+        tried = language or get_language()
+        for code, _name in settings.LANGUAGES:
+            if code == tried:
+                continue
+            other = datatype.get_display_value(tile, node, language=code)
+            if other is not None and str(other).strip():
+                return other
+        return value
 
     def _graph_nodes(self, resource, context):
         """Nodes of the resource's graph, read once per graph and ``context``.
@@ -146,9 +169,7 @@ class MultiDescriptor(AbstractPrimaryDescriptorsFunction):
                             datatype_factory = DataTypeFactory()
 
                         datatype = datatype_factory.get_instance(node.datatype)
-                        value = datatype.get_display_value(
-                            tile, node, language=language
-                        )
+                        value = self._display_value(datatype, tile, node, language)
 
                         if value is None:
                             value = ""
