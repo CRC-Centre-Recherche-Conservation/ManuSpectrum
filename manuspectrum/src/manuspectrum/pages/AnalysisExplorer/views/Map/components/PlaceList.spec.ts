@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mount } from "@vue/test-utils";
-import PrimeVue from "primevue/config";
+import OpenVue from "openvue/config";
 
 import PlaceList from "@/manuspectrum/pages/AnalysisExplorer/views/Map/components/PlaceList.vue";
 
@@ -50,7 +50,7 @@ function mountList(
 ) {
     return mount(PlaceList, {
         props: { summaries: SUMMARIES, unplaced: 0, selected: null, ...props },
-        global: { plugins: [PrimeVue] },
+        global: { plugins: [OpenVue] },
     });
 }
 

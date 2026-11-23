@@ -24,7 +24,7 @@ from arches.app.models.models import (
     ResourceInstance,
     TileModel,
 )
-from arches_controlled_lists.models import List, ListItem, ListItemValue
+from arches.extensions.controlled_lists.models import List, ListItem, ListItemValue
 
 from manuspectrum.views import biblissima_proxy as bp
 from tests.test_biblissima_write_transaction_unit import (

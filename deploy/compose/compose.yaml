@@ -65,7 +65,6 @@ services:
   postgres:
     <<: *service
     image: postgis/postgis:17-3.5@sha256:01a6a70e41e6c4467c8f55f6063555ed72db2d6662cd0d571040d42eadaeb6f6
-    command: ["postgres", "-c", "standard_conforming_strings=off"]
     environment:
       POSTGRES_USER: ${PGUSERNAME:?set PGUSERNAME in .env}
       POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
@@ -90,7 +89,7 @@ services:
 
   elasticsearch:
     <<: *service
-    image: elasticsearch:8.19.21@sha256:ae1f398ec8734a63eb7f719cecc2ea33e2bb46e23bdf24641dec86fd256bf594
+    image: elasticsearch:9.5.5@sha256:b7b0f24e9b5e90656ffe69804b3a48907499ab2b9cd67f02b7af3aff1b026a89
     environment:
       discovery.type: single-node
       xpack.security.enabled: "true"
@@ -177,6 +176,10 @@ services:
       CANTALOUPE_CACHE_SERVER_DERIVATIVE_ENABLED: "true"
       CANTALOUPE_CACHE_SERVER_DERIVATIVE: FilesystemCache
       CANTALOUPE_CACHE_SERVER_DERIVATIVE_TTL_SECONDS: "2592000"
+      # The image default never purges expired derivatives.
+      CANTALOUPE_CACHE_SERVER_WORKER_ENABLED: "true"
+      # Viewers ask for JPEG; the image default of 80 shows blocks on fine detail when zoomed.
+      CANTALOUPE_PROCESSOR_JPG_QUALITY: "90"
       CANTALOUPE_CACHE_SERVER_INFO_ENABLED: "true"
       CANTALOUPE_FILESYSTEMCACHE_PATHNAME: /var/cache/cantaloupe
       CANTALOUPE_LOG_APPLICATION_CONSOLEAPPENDER_ENABLED: "true"
@@ -327,7 +330,7 @@ services:
     # nginx-unprivileged listens on 80 and 443 with no capability: Docker sets
     # net.ipv4.ip_unprivileged_port_start=0 in the container.
     # Runs as the service account, which owns the media files and the log directory.
-    image: nginxinc/nginx-unprivileged:1.30.5-alpine@sha256:15c994d10d6d78658721c3bcafff14cb281fba2a4bdf9d5ba92c416a472516e3
+    image: nginx/nginx-unprivileged:1.30.7-alpine-slim@sha256:8432c57ac86f178741af2b89948bd9087cb9df1c415bc1ab4d23735c4f0e3e61
     user: "${APP_UID:?set APP_UID in .env}:${APP_GID:?set APP_GID in .env}"
     read_only: true
     ports:

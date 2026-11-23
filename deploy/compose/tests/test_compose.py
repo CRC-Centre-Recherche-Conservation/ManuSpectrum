@@ -33,12 +33,12 @@ PROD_LIMITS = {
     "web": 4 * GIB,
     "worker": 2 * GIB,
     "beat": 256 * MIB,
-    "cantaloupe": 1792 * MIB,
+    "cantaloupe": 2560 * MIB,
     "redis-broker": 256 * MIB,
     "redis-cache": 768 * MIB,
     "nginx": 512 * MIB,
 }
-PROD_LIMITS_CEILING = 17.5 * GIB
+PROD_LIMITS_CEILING = 18.25 * GIB
 OBS_LIMITS = {
     "prometheus": 1024 * MIB,
     # The cgroup limit counts the page cache Grafana reads its files through.
@@ -50,7 +50,7 @@ OBS_LIMITS = {
     "blackbox-exporter": 64 * MIB,
 }
 OBS_LIMITS_CEILING = 3 * GIB
-TOTAL_LIMITS_CEILING = 20.5 * GIB
+TOTAL_LIMITS_CEILING = 21.25 * GIB
 OBS_EXTERNAL_VOLUMES = {"prometheus_data": "ms_prometheus_data"}
 OBS_SECRETS = {"grafana_admin_password", "pg_monitor_password"}
 
@@ -320,6 +320,14 @@ class ComposeStackTests(unittest.TestCase):
             environment["CANTALOUPE_LOG_ACCESS_CONSOLEAPPENDER_ENABLED"], "false"
         )
 
+    def test_cantaloupe_purges_expired_derivatives(self):
+        environment = self.base["services"]["cantaloupe"]["environment"]
+        self.assertEqual(environment["CANTALOUPE_CACHE_SERVER_WORKER_ENABLED"], "true")
+
+    def test_cantaloupe_serves_jpeg_at_quality_90(self):
+        environment = self.base["services"]["cantaloupe"]["environment"]
+        self.assertEqual(environment["CANTALOUPE_PROCESSOR_JPG_QUALITY"], "90")
+
     def test_every_service_restarts_logs_and_drops_privileges(self):
         for label, name, service in self.each_service():
             with self.subTest(stack=label, service=name):
@@ -478,7 +486,12 @@ class ComposeStackTests(unittest.TestCase):
         for label, stack in self.stacks.items():
             postgres = stack["services"]["postgres"]
             with self.subTest(stack=label):
-                self.assertIn("standard_conforming_strings=off", postgres["command"])
+                # Arches 8.2's db_data.sql escapes quotes with backslashes in
+                # ordinary literals: only the default (on) reads them.
+                self.assertNotIn(
+                    "standard_conforming_strings",
+                    " ".join(postgres.get("command") or []),
+                )
                 self.assertEqual(
                     postgres["environment"]["POSTGRES_INITDB_ARGS"],
                     "--encoding=UTF8 --locale=en_US.utf8",
@@ -529,7 +542,7 @@ class ComposeStackTests(unittest.TestCase):
         self.assertEqual(elasticsearch["ES_JAVA_OPTS"], "-Xms2g -Xmx2g")
         self.assertEqual(elasticsearch["xpack.ml.enabled"], "false")
         java = services["cantaloupe"]["environment"]["JAVA_TOOL_OPTIONS"].split()
-        self.assertIn("-Xmx1g", java)
+        self.assertIn("-Xmx1536m", java)
         self.assertIn("-XX:+ExitOnOutOfMemoryError", java)
 
     def test_production_limits_stay_within_the_budget(self):
@@ -549,7 +562,6 @@ class ComposeStackTests(unittest.TestCase):
             item.split("=", 1) for item in command if re.match(r"^[a-z_.]+=", item)
         )
         for key, value in {
-            "standard_conforming_strings": "off",
             "shared_buffers": "1GB",
             "effective_cache_size": "3GB",
             "work_mem": "16MB",

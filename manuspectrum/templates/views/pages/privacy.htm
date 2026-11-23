@@ -98,7 +98,6 @@
 <h3>{% trans "Signed-in editors and administrators only" %}</h3>
 <ul>
     <li>{% trans "Biblissima import workflow: the thumbnails are loaded from the Biblissima portal or from the IIIF server of the holding library." %}</li>
-    <li>{% trans "Rich-text editor (CKEditor, part of Arches): each time it opens, it asks cke4.ckeditor.com (CKSource) whether its version is up to date. Its spell checker (SCAYT) is off by default; if you switch it on, the text you type is sent to WebSpellChecker (svc.webspellchecker.net), which does not state where it processes it: this is outside our control. We advise using your browser's spell checker instead." %}</li>
     <li>{% trans "Thesaurus page of Arches (administrators only): the fonts are loaded from Google Fonts (fonts.googleapis.com, fonts.gstatic.com), operated by Google, which may process the request outside the European Union." %}</li>
 </ul>
 
@@ -109,7 +108,7 @@
 <p>{% trans "No analytics or tracking service, no Google reCAPTCHA, no advertising, no social network widget. The Mapbox map service of Arches is not configured." %}</p>
 
 <h2>{% trans "Transfers outside the European Union" %}</h2>
-<p>{% trans "None by the platform, which is hosted in France. The exceptions are the services above that are stated to process data outside the European Union or whose location is not stated: Google Fonts, WebSpellChecker, Let's Encrypt and OpenFreeMap (served through Cloudflare, United States)." %}</p>
+<p>{% trans "None by the platform, which is hosted in France. The exceptions are the services above that are stated to process data outside the European Union or whose location is not stated: Google Fonts, Let's Encrypt and OpenFreeMap (served through Cloudflare, United States)." %}</p>
 
 <h2>{% trans "Your rights" %}</h2>
 <p>{% trans "You can access and obtain a copy of the data concerning you, object to the processing of this data or have it rectified. You also have the right to restriction of the processing of your data. You can exercise these rights by contacting:" %}</p>
@@ -127,6 +126,7 @@
         <tr><td><code>{{ session_cookie_name }}</code></td><td>{% trans "Keeps you signed in." %}</td></tr>
         <tr><td><code>{{ csrf_cookie_name }}</code></td><td>{% trans "Protects forms against forged requests." %}</td></tr>
         <tr><td><code>{{ language_cookie_name }}</code></td><td>{% trans "Remembers the language you chose." %}</td></tr>
+        <tr><td><code>ms_activation_link_&lt;language&gt;</code>, <code>ms_reset_link_&lt;language&gt;</code>, <code>ms_two_factor_link_&lt;language&gt;</code></td><td>{% trans "Carries the token of a link received by e-mail to its form, for 15 minutes; deleted once the form is sent." %}</td></tr>
     </tbody>
 </table>
 <p>{% trans "There is no tracker, no analytics service and no advertising cookie. The Data Lab keeps your selection and layout in your browser's local storage; they are never sent to the server." %}</p>

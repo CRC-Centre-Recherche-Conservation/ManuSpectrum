@@ -293,7 +293,7 @@ def controlled_list_figures(list_ids):
     if not list_ids:
         return {}
     try:
-        from arches_controlled_lists.models import List
+        from arches.extensions.controlled_lists.models import List
 
         rows = (
             List.objects.filter(id__in=list_ids)

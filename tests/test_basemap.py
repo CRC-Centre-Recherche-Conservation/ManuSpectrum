@@ -18,9 +18,21 @@ from django.test import SimpleTestCase, TestCase
 from manuspectrum import basemaps
 
 migration = importlib.import_module("manuspectrum.migrations.0013_openfreemap_basemap")
+arches_82 = importlib.import_module(
+    "manuspectrum.migrations.0017_openfreemap_basemap_on_arches_82"
+)
 
 MAPBOX_SOURCES = ("mapbox-streets", "mapbox-satellite")
-CORE_SOURCES = {*MAPBOX_SOURCES, "geocode-point", "search-query"}
+MAPTOOLKIT_SOURCES = {
+    "mtk",
+    "naturalearth",
+    "bathymetry_vector",
+    "rgb-tiles-blur-min",
+    "rgb-tiles-blur-med",
+    "rgb-tiles-blur-max",
+}
+CORE_SOURCES = {*MAPTOOLKIT_SOURCES, "geocode-point", "search-query"}
+MAPBOX_ROWS = {*MAPBOX_SOURCES, "geocode-point", "search-query"}
 
 
 def layer_names():
@@ -52,12 +64,13 @@ class VendoredStyleTests(SimpleTestCase):
             self.assertIn(credit, attribution)
 
     def test_settings_point_at_the_openfreemap_sprite_and_glyphs(self):
-        self.assertEqual(django_settings.MAPBOX_SPRITES, basemaps.SPRITES_URL)
-        self.assertEqual(django_settings.MAPBOX_GLYPHS, basemaps.GLYPHS_URL)
+        self.assertEqual(django_settings.MAPLIBRE_SPRITES, basemaps.SPRITES_URL)
+        self.assertEqual(django_settings.MAPLIBRE_GLYPHS, basemaps.GLYPHS_URL)
 
-    def test_core_map_rows_are_the_mapbox_ones(self):
+    def test_core_map_rows_are_the_maptoolkit_ones_of_arches_82(self):
         layers, sources = basemaps.core_map_rows()
-        self.assertEqual(set(layers), {"satellite", "streets"})
+        self.assertEqual(set(layers), {"streets"})
+        self.assertTrue(basemaps.references_source(layers["streets"], "mtk"))
         self.assertEqual(set(sources), CORE_SOURCES)
 
 
@@ -74,13 +87,12 @@ class FrozenSnapshotTests(SimpleTestCase):
         self.assertEqual(self.frozen["sprites"], basemaps.SPRITES_URL)
         self.assertEqual(self.frozen["glyphs"], basemaps.GLYPHS_URL)
 
-    def test_it_equals_the_core_rows_of_arches(self):
-        layers, sources = basemaps.core_map_rows()
-        self.assertEqual(self.frozen["core_layers"], layers)
-        self.assertEqual(
-            self.frozen["mapbox_sources"],
-            {name: sources[name] for name in MAPBOX_SOURCES},
-        )
+    def test_it_holds_the_mapbox_rows_of_arches_8_1(self):
+        self.assertEqual(set(self.frozen["core_layers"]), {"satellite", "streets"})
+        self.assertEqual(set(self.frozen["mapbox_sources"]), set(MAPBOX_SOURCES))
+        for name, source in self.frozen["mapbox_sources"].items():
+            with self.subTest(source=name):
+                self.assertTrue(basemaps.needs_mapbox(source))
         self.assertEqual(self.frozen["mapbox_sprites"], basemaps.MAPBOX_SPRITES_URL)
         self.assertEqual(self.frozen["mapbox_glyphs"], basemaps.MAPBOX_GLYPHS_URL)
 
@@ -176,20 +188,21 @@ class MigrationTests(TestCase):
         )
         self.assertEqual(before, after)
 
-    def test_reverse_restores_the_rows_of_arches(self):
+    def test_reverse_restores_the_rows_of_arches_8_1(self):
         self.reverse()
-        core_layers, core_sources = basemaps.core_map_rows()
         self.assertEqual(
             {
                 layer.name: layer.layerdefinitions
                 for layer in models.MapLayer.objects.all()
             },
-            core_layers,
+            migration.FROZEN["core_layers"],
         )
-        self.assertEqual(
-            {source.name: source.source for source in models.MapSource.objects.all()},
-            core_sources,
-        )
+        self.assertEqual(source_names(), MAPBOX_ROWS)
+        for name in MAPBOX_SOURCES:
+            self.assertEqual(
+                models.MapSource.objects.get(name=name).source,
+                migration.FROZEN["mapbox_sources"][name],
+            )
 
     def test_reverse_never_recreates_the_mapzen_rows_arches_deleted(self):
         self.reverse()
@@ -255,6 +268,138 @@ class MigrationTests(TestCase):
         self.assertEqual(self.value(sprites), basemaps.MAPBOX_SPRITES_URL)
         self.assertEqual(self.value(glyphs), basemaps.MAPBOX_GLYPHS_URL)
         self.assertEqual(self.value(custom), "https://fonts.example/{range}")
+
+
+class Arches82MigrationTests(TestCase):
+    """Migration 0017 on the shape of a fresh 8.2 database and of a migrated one."""
+
+    maptoolkit_layers = [{"id": "land", "type": "fill", "source": "mtk"}]
+    sprites = arches_82.MAPTOOLKIT_SPRITES
+    glyphs = arches_82.MAPTOOLKIT_GLYPHS
+
+    def forward(self):
+        arches_82.forward(apps, None)
+
+    def fresh_shape(self):
+        """The rows `setup_db` leaves on Arches 8.2, before the project migrations."""
+        models.MapLayer.objects.filter(name="streets").update(
+            layerdefinitions=self.maptoolkit_layers
+        )
+        models.MapSource.objects.filter(name="openfreemap").delete()
+        for name in MAPTOOLKIT_SOURCES:
+            models.MapSource.objects.update_or_create(
+                name=name,
+                defaults={
+                    "source": {"type": "vector", "url": f"https://t.example/{name}"}
+                },
+            )
+
+    def migrated_shape(self):
+        """The rows of an 8.1 database after 0013, then Arches' `12913`."""
+        for name in MAPTOOLKIT_SOURCES:
+            models.MapSource.objects.get_or_create(
+                name=name, defaults={"source": {"type": "vector", "url": "x"}}
+            )
+
+    def streets(self):
+        return models.MapLayer.objects.get(name="streets").layerdefinitions
+
+    def tile(self, node_id, value, resource_id=None):
+        return MigrationTests.tile(self, node_id, value, resource_id)
+
+    def value(self, tile):
+        return MigrationTests.value(self, tile)
+
+    def test_a_fresh_database_ends_on_bright_from_openfreemap_alone(self):
+        self.fresh_shape()
+        self.forward()
+        self.assertEqual(self.streets(), basemaps.bright_layers())
+        self.assertEqual(
+            models.MapSource.objects.get(name="openfreemap").source,
+            basemaps.OPENFREEMAP_SOURCE,
+        )
+        self.assertEqual(
+            source_names(), {"openfreemap", "geocode-point", "search-query"}
+        )
+
+    def test_a_migrated_database_loses_only_the_sources_arches_added(self):
+        self.migrated_shape()
+        self.forward()
+        self.assertEqual(self.streets(), basemaps.bright_layers())
+        self.assertEqual(
+            source_names(), {"openfreemap", "geocode-point", "search-query"}
+        )
+
+    def test_a_source_a_layer_still_draws_from_is_kept(self):
+        self.fresh_shape()
+        models.MapLayer.objects.create(
+            name="mine",
+            layerdefinitions=[{"id": "m", "type": "raster", "source": "naturalearth"}],
+            icon="",
+        )
+        self.forward()
+        self.assertIn("naturalearth", source_names())
+        self.assertNotIn("mtk", source_names())
+
+    def test_a_streets_layer_the_project_replaced_is_left_alone(self):
+        self.migrated_shape()
+        mine = [{"id": "mine", "type": "background"}]
+        models.MapLayer.objects.filter(name="streets").update(layerdefinitions=mine)
+        self.forward()
+        self.assertEqual(self.streets(), mine)
+
+    def test_forward_twice_changes_nothing(self):
+        self.fresh_shape()
+        self.forward()
+        snapshot = (
+            list(models.MapLayer.objects.values_list("name", "layerdefinitions")),
+            sorted(models.MapSource.objects.values_list("name", "source")),
+        )
+        self.forward()
+        self.assertEqual(
+            snapshot,
+            (
+                list(models.MapLayer.objects.values_list("name", "layerdefinitions")),
+                sorted(models.MapSource.objects.values_list("name", "source")),
+            ),
+        )
+
+    def test_sprites_and_glyphs_move_only_from_the_maptoolkit_defaults(self):
+        sprites = self.tile(basemaps.SPRITES_NODE_ID, self.sprites)
+        glyphs = self.tile(basemaps.GLYPHS_NODE_ID, self.glyphs)
+        custom = self.tile(
+            basemaps.SPRITES_NODE_ID, "https://sprites.example/s", uuid.uuid4()
+        )
+        self.forward()
+        self.assertEqual(self.value(sprites), basemaps.SPRITES_URL)
+        self.assertEqual(self.value(glyphs), basemaps.GLYPHS_URL)
+        self.assertEqual(self.value(custom), "https://sprites.example/s")
+
+    def test_reverse_changes_nothing(self):
+        self.fresh_shape()
+        self.forward()
+        before = list(models.MapLayer.objects.values_list("name", "layerdefinitions"))
+        for operation in arches_82.Migration.operations:
+            operation.reverse_code(apps, None)
+        self.assertEqual(
+            before,
+            list(models.MapLayer.objects.values_list("name", "layerdefinitions")),
+        )
+
+    def test_it_runs_after_the_arches_migration_it_relies_on_and_0016(self):
+        dependencies = arches_82.Migration.dependencies
+        self.assertIn(("models", "12913_migrate_to_maplibre"), dependencies)
+        self.assertIn(("manuspectrum", "0016_workflow_plugin_access"), dependencies)
+
+    def test_the_sources_it_removes_are_the_ones_arches_82_adds(self):
+        arches_12913 = importlib.import_module(
+            "arches.app.models.migrations.12913_migrate_to_maplibre"
+        )
+        self.assertEqual(
+            set(arches_82.MAPTOOLKIT_SOURCES), set(arches_12913.NEW_MAP_SOURCES)
+        )
+        self.assertEqual(arches_82.MAPTOOLKIT_SPRITES, arches_12913.NEW_SPRITES_DEFAULT)
+        self.assertEqual(arches_82.MAPTOOLKIT_GLYPHS, arches_12913.NEW_GLYPHS_DEFAULT)
 
 
 class ApplyBrightTests(TestCase):

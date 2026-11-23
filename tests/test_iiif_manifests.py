@@ -584,3 +584,208 @@ class LocalManifestUuidTests(SimpleTestCase):
             url = ids.manifest(str(uuid.uuid4()), version)
             self.assertIsNone(local_manifest_uuid(url))
             self.assertIsNone(local_manifest_uuid(urlsplit(url).path))
+
+
+class LegacyRedirectTests(StoredManifestCase):
+    """The bare ``/manifest/<uuid>`` every manifest tile stores leads to the IIIF route when a client can read it there."""
+
+    def legacy(self, stored=None):
+        return f"/manifest/{(stored or self.imaging).globalid}"
+
+    def core(self, language="en", stored=None):
+        return f"/{language}/manifest/{(stored or self.imaging).globalid}"
+
+    def test_a_named_manifest_redirects_to_the_iiif_route_with_cors(self):
+        response = self.visitor.get(self.legacy(), HTTP_ORIGIN=DEMO)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response["Location"], ids.stored_manifest(self.imaging.globalid)
+        )
+        self.assertEqual(response["Access-Control-Allow-Origin"], "*")
+        self.assertNotIn("Access-Control-Allow-Credentials", response)
+        self.assertEqual(response["Cache-Control"], "private, no-store")
+        vary = response["Vary"].lower()
+        self.assertIn("cookie", vary)
+        self.assertIn("authorization", vary)
+
+    def test_a_same_origin_request_keeps_arches_route(self):
+        for headers in (
+            {"HTTP_SEC_FETCH_SITE": "same-origin"},
+            {"HTTP_ORIGIN": BASE.rstrip("/")},
+        ):
+            with self.subTest(**headers):
+                response = self.visitor.get(self.legacy(), **headers)
+
+                self.assertEqual(response["Location"], self.core())
+                self.assertEqual(response["Access-Control-Allow-Origin"], "*")
+                vary = response["Vary"].lower()
+                self.assertIn("sec-fetch-site", vary)
+                self.assertIn("origin", vary)
+
+    def test_the_editing_scenario_keeps_arches_json_before_and_after_a_tile_names_it(
+        self,
+    ):
+        created = self.stored("Just created")
+        same_origin = {"HTTP_SEC_FETCH_SITE": "same-origin"}
+
+        def arches_answer():
+            response = self.visitor.get(self.legacy(created), **same_origin)
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(response["Location"], self.core(stored=created))
+            followed = self.visitor.get(response["Location"], **same_origin)
+            self.assertEqual(followed.status_code, 200)
+            self.assertEqual(followed.json(), created.manifest)
+            self.assertEqual(
+                followed.json()["@id"],
+                f"http://localhost:8000/manifest/{created.globalid}",
+            )
+
+        arches_answer()
+        self.tile(
+            self.analyses["on_document"],
+            "chemical_imaging_manifest",
+            f"/manifest/{created.globalid}",
+        )
+        cache.clear()
+        arches_answer()
+        cross_site = self.visitor.get(
+            self.legacy(created), HTTP_SEC_FETCH_SITE="cross-site"
+        )
+        self.assertEqual(cross_site["Location"], ids.stored_manifest(created.globalid))
+
+    def test_a_failed_lookup_keeps_arches_route_and_is_logged(self):
+        with (
+            patch(
+                "manuspectrum.views.iiif.manifests.stored_manifests.named_for",
+                side_effect=RuntimeError("database gone"),
+            ),
+            self.assertLogs("manuspectrum.views.iiif.manifests", "ERROR"),
+        ):
+            response = self.visitor.get(self.legacy(), HTTP_ORIGIN=DEMO)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], self.core())
+        self.assertEqual(response["Access-Control-Allow-Origin"], "*")
+
+    def test_other_fetch_sites_go_to_the_iiif_route(self):
+        for site in ("cross-site", "same-site", "none"):
+            with self.subTest(site=site):
+                response = self.visitor.get(self.legacy(), HTTP_SEC_FETCH_SITE=site)
+
+                self.assertEqual(
+                    response["Location"], ids.stored_manifest(self.imaging.globalid)
+                )
+
+    def test_the_target_then_dereferences_cross_origin(self):
+        response = self.visitor.get(self.legacy(), HTTP_ORIGIN=DEMO)
+
+        self.assert_dereferences(response["Location"])
+
+    def test_the_query_string_is_dropped(self):
+        response = self.visitor.get(self.legacy() + "?a=1")
+
+        self.assertEqual(
+            response["Location"], ids.stored_manifest(self.imaging.globalid)
+        )
+
+    def test_a_head_request_redirects_too(self):
+        response = self.visitor.head(self.legacy())
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response["Location"], ids.stored_manifest(self.imaging.globalid)
+        )
+
+    def test_a_preflight_is_a_204_never_a_redirect(self):
+        response = self.visitor.options(
+            self.legacy(),
+            HTTP_ORIGIN=DEMO,
+            HTTP_ACCESS_CONTROL_REQUEST_METHOD="GET",
+            HTTP_ACCESS_CONTROL_REQUEST_HEADERS="authorization",
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertNotIn("Location", response)
+        self.assertEqual(response["Access-Control-Allow-Origin"], "*")
+        self.assertNotIn("Access-Control-Allow-Credentials", response)
+        self.assertIn("authorization", response["Access-Control-Allow-Headers"].lower())
+
+    def test_the_headers_stay_wildcard_whatever_the_cors_middleware_allows(self):
+        with self.settings(
+            CORS_ALLOW_ALL_ORIGINS=False,
+            CORS_ALLOWED_ORIGINS=[DEMO],
+            CORS_ALLOW_CREDENTIALS=True,
+        ):
+            response = self.visitor.get(self.legacy(), HTTP_ORIGIN=DEMO)
+            preflight = self.visitor.options(
+                self.legacy(),
+                HTTP_ORIGIN="https://other.example",
+                HTTP_ACCESS_CONTROL_REQUEST_METHOD="GET",
+            )
+
+        for answer in (response, preflight):
+            self.assertEqual(answer["Access-Control-Allow-Origin"], "*")
+            self.assertNotIn("Access-Control-Allow-Credentials", answer)
+
+    def test_a_manifest_no_tile_names_goes_to_arches_route(self):
+        orphan = self.stored("Just created")
+
+        response = self.visitor.get(self.legacy(orphan), HTTP_ORIGIN=DEMO)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response["Location"], self.core(stored=orphan))
+        self.assertEqual(response["Access-Control-Allow-Origin"], "*")
+
+    def test_an_unknown_id_goes_to_arches_route(self):
+        unknown = uuid.uuid4()
+
+        response = self.visitor.get(f"/manifest/{unknown}")
+
+        self.assertEqual(response["Location"], f"/en/manifest/{unknown}")
+
+    def test_the_language_follows_the_request(self):
+        orphan = self.stored("Just created")
+
+        response = self.visitor.get(self.legacy(orphan), HTTP_ACCEPT_LANGUAGE="fr")
+
+        self.assertEqual(response["Location"], self.core("fr", orphan))
+
+    def test_an_embargoed_manifest_goes_to_arches_route_for_the_visitor(self):
+        self.embargo(self.analyses["open"])
+
+        response = self.visitor.get(self.legacy())
+
+        self.assertEqual(response["Location"], self.core())
+
+    def test_a_signed_in_reader_of_the_embargoed_manifest_is_sent_to_the_iiif_route(
+        self,
+    ):
+        self.embargo(self.analyses["open"])
+        reader = Client()
+        reader.force_login(self.editor)
+
+        response = reader.get(self.legacy())
+
+        self.assertEqual(
+            response["Location"], ids.stored_manifest(self.imaging.globalid)
+        )
+
+    def test_an_invalid_bearer_is_read_as_the_visitor(self):
+        response = Client().get(self.legacy(), **bearer("msiiif1.forged"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response["Location"], ids.stored_manifest(self.imaging.globalid)
+        )
+
+    def test_a_write_is_not_allowed(self):
+        self.assertEqual(self.visitor.post(self.legacy()).status_code, 405)
+
+    def test_the_route_is_bare_and_arches_route_is_untouched(self):
+        self.assertEqual(resolve(self.legacy()).url_name, "manifest-legacy")
+        self.assertEqual(resolve(self.core()).url_name, "manifest")
+        self.assertEqual(
+            reverse("manifest", kwargs={"id": str(self.imaging.globalid)}),
+            self.core(),
+        )

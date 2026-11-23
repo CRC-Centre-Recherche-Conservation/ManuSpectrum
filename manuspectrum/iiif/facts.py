@@ -6,7 +6,7 @@ the Document (``doc_manifest`` role, through ``sources.manifest_json``), the
 analyses observing the subject that ``visible_set(reader).analyses`` keeps
 (restrictions and D33 decided there) through a relation nodegroup the reader
 may read, and of each analysis the tiles of the nodegroups the reader may
-read: its zones (``zones.annotation_features``), every file of every file-list
+read: its zones (``zones.located_features``), every file of every file-list
 tile, its name, technique, dates, operators, instrument, conditions, projects,
 dataset and imaging manifests. Nothing here depends on the request language:
 names and labels are language maps.
@@ -63,7 +63,7 @@ from manuspectrum.iiif.sources import (
     manifest_id,
     manifest_json,
 )
-from manuspectrum.iiif.zones import FeatureRows, annotation_features
+from manuspectrum.iiif.zones import FeatureRows, located_features
 from manuspectrum.models import RendererConfig
 from manuspectrum.utils.public_visibility import (
     hidden_resource_ids,
@@ -116,12 +116,22 @@ REFUSED = Refused()
 
 @dataclass(frozen=True)
 class Zone:
-    """One located zone: its feature id, canvas id, 1-based canvas position and pixel shape."""
+    """One located zone: its feature id, canvas id, 1-based canvas position and pixel shape.
+
+    *found* is the shape, or the function converting it
+    (``zones.canvas_and_convert``): ``shape`` then reads the canvas's unit
+    the first time it is asked, so a zone that is only counted or placed
+    costs no request.
+    """
 
     feature: str
     canvas: str
     position: int
-    shape: dict | None
+    found: object
+
+    @property
+    def shape(self):
+        return self.found() if callable(self.found) else self.found
 
 
 @dataclass(frozen=True)
@@ -767,15 +777,15 @@ def listed_source(url, listed):
 
 def _located(node, resource_ids, dims, position, readable):
     """``{resource id: [Zone, …]}`` of the features of *node* on a canvas listed in *position*."""
-    return _on_listed(annotation_features(node, resource_ids, dims, readable), position)
+    return _on_listed(located_features(node, resource_ids, dims, readable), position)
 
 
 def _on_listed(features, position):
-    """``{resource id: [Zone, …]}`` of the resolved *features* on a canvas listed in *position*."""
+    """``{resource id: [Zone, …]}`` of the resolved *features* (``FeatureRows.located``) on a canvas listed in *position*."""
     zones = defaultdict(list)
-    for rid, feature, canvas, shape in features:
+    for rid, feature, canvas, convert in features:
         if canvas in position:
-            zones[rid].append(Zone(str(feature), canvas, position[canvas], shape))
+            zones[rid].append(Zone(str(feature), canvas, position[canvas], convert))
     return zones
 
 
@@ -833,9 +843,9 @@ class CharacterizationZones:
         if not ids:
             return {}
         dims, position = source.dims, source.position
-        own = _on_listed(self._own.features(ids, dims), position)
+        own = _on_listed(self._own.located(ids, dims), position)
         observed = {o for c in ids for o in self._observed.get(c, ())}
-        components = _on_listed(self._components.features(observed, dims), position)
+        components = _on_listed(self._components.located(observed, dims), position)
         placed = {}
         for c in ids:
             if own.get(c):

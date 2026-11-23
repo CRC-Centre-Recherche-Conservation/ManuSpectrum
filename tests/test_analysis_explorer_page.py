@@ -98,7 +98,7 @@ class AnalysisExplorerPageTests(TestCase):
             r'<script src="[^"]*/js/views/pages/analysis-explorer\.\w+\.js"\s+defer></script>',
         )
         self.assertRegex(
-            html, r'<link href="[^"]*/css/explorer\.\w+\.css" rel="stylesheet" />'
+            html, r'<link href="[^"]*/css/explorer\.\w+\.css" rel="stylesheet"\s*/>'
         )
 
     def test_header_tab_is_current_on_the_page(self):

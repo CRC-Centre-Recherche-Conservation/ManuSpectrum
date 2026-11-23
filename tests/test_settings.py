@@ -99,6 +99,10 @@ SILENCED_SYSTEM_CHECKS.append(
 # Disable manifest fetch rate-limiting in tests (no real time.sleep).
 MANIFEST_FETCH_RATE_LIMITS = {}
 
+# No info.json is requested for the canvases of the fixtures; the tests of the
+# zone unit switch the read on over a patched fetch.
+IIIF_IMAGE_INFO_READ = False
+
 # The suite asserts on the synchronous indexing path and must not depend on the
 # developer's settings_local.py, nor enqueue real messages on the broker. Tests
 # covering the async path turn it on with override_settings.

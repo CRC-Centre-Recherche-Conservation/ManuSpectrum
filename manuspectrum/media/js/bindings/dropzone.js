@@ -1,5 +1,5 @@
 /**
- * Shadow of arches/app/media/js/bindings/dropzone.js (Arches 8.1.4).
+ * Shadow of arches/app/media/js/bindings/dropzone.js (Arches 8.2.0).
  *
  * Diff vs original:
  *   - a node-disposal callback aborts in-flight uploads, drops the instance's

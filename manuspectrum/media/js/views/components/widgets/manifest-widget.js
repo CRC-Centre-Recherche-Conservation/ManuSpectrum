@@ -6,6 +6,7 @@ import 'bindings/select2-query';
 import 'bindings/dropzone';
 import WidgetViewModel from 'viewmodels/widget';
 import arches from 'arches';
+import { iiifManifestUrl } from 'utils/manifest-link';
 import manifestWidgetTemplate from 'templates/views/components/widgets/manifest-widget.htm';
 
 const viewModel = function(params) {
@@ -398,9 +399,14 @@ const viewModel = function(params) {
         return url || '';
     });
 
+    // Report link: the IIIF URL of a local manifest, whatever @id its JSON carries.
+    self.manifestReportUrl = ko.pureComputed(function() {
+        return iiifManifestUrl(self.manifestUrl(), location.origin) || self.manifestDisplayUrl();
+    });
+
     self.displayValue = ko.pureComputed(function() {
         if (self.state === 'report') {
-            return self.manifestDisplayUrl() || self.value() || '';
+            return self.manifestReportUrl() || self.value() || '';
         }
         return self.manifestLabel() || self.manifestDisplayUrl() || '';
     });

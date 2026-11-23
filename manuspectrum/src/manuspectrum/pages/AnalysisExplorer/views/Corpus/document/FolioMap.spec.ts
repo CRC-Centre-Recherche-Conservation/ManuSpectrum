@@ -1519,6 +1519,30 @@ describe("FolioMap", () => {
         wrapper.unmount();
     });
 
+    it("places a zone by the unit of its canvas", async () => {
+        const zones = [
+            annotation(3, {
+                key: "first",
+                dataKind: "chemical-imaging",
+                shape: { type: "rect", x: 1600, y: 800, w: 320, h: 160 },
+            }),
+        ];
+        const wrapper = mountFolio({
+            annotations: zones,
+            canvas: {
+                ...canvasWithImage(),
+                zoneUnit: { x: 16, y: 16, read: true },
+            },
+        });
+        await flushPromises();
+        const host = wrapper.find(".folio-marker-host").element as HTMLElement;
+        // Centre (1760, 880) px at 16 px per unit: [-55, 110], 4 layer pixels per unit at zoom 2.
+        expect(
+            Math.abs(parseFloat(host.style.left) - 110 * 4),
+        ).toBeLessThanOrEqual(1);
+        wrapper.unmount();
+    });
+
     it("fits an imageless page to its markers once, not on every redraw", async () => {
         const fitBounds = vi.spyOn(L.Map.prototype, "fitBounds");
         const wrapper = mountFolio({

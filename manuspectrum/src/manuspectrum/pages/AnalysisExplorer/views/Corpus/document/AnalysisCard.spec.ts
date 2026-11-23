@@ -1,6 +1,6 @@
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import PrimeVue from "primevue/config";
+import OpenVue from "openvue/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, ref, shallowRef } from "vue";
 
@@ -61,7 +61,7 @@ function mountCard(
         props: { handle, analysisId, feature },
         attachTo: attach ? document.body : undefined,
         global: {
-            plugins: [pinia, PrimeVue],
+            plugins: [pinia, OpenVue],
             stubs: { SpectrumPreview: true },
             provide: {
                 [MIRADOR_URL_KEY as symbol]: mirador,
@@ -400,7 +400,7 @@ describe("AnalysisCard", () => {
             ]),
             {
                 global: {
-                    plugins: [pinia, PrimeVue],
+                    plugins: [pinia, OpenVue],
                     stubs: { SpectrumPreview: true },
                 },
             },

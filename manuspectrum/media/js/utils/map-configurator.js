@@ -1,37 +1,38 @@
 /*
- * Shadows arches/app/media/js/utils/map-configurator.js (Arches 8.1.5), the
+ * Shadows arches/app/media/js/utils/map-configurator.js (Arches 8.2.0), the
  * project hook that `viewmodels/map.js` calls at the start and at the end of the
  * map `load` handler. The core file is two empty functions.
  *
- * Difference: without a Mapbox key (the OpenFreeMap basemap needs none) the
- * `MapboxGeocoder` control that `viewmodels/map.js` adds in that handler is
- * skipped, because its `onAdd` throws without an access token and stops the
- * rest of the handler (popups, hover, draw mode). `preConfig` makes
- * `map.addControl` ignore a MapboxGeocoder, `postConfig` puts it back.
+ * Differences:
+ * - The back office uses no third-party geocoder. `viewmodels/map.js` adds a
+ *   `MaplibreGeocoder` backed by OpenStreetMap Nominatim, with its credit in
+ *   the attribution control. `preConfig` makes `map.addControl` ignore that
+ *   control and drop the Nominatim credit from the attribution control,
+ *   `postConfig` puts `addControl` back.
+ * - `postConfig` follows the page language on the OpenFreeMap labels: on a
+ *   French page every symbol layer whose `text-field` reads a name tries
+ *   `name:fr` first; when a feature has no `name:fr`, the style's own
+ *   expression is the fallback.
+ *   The style stays as the vendored JSON; nothing is fetched again. The core
+ *   view models call `map.setStyle(style)` again when the layers change, which
+ *   brings the vendored labels back: `postConfig` also installs an own
+ *   `setStyle` that rewrites the labels (French page) and adds the missing
+ *   fonts (below) of the style it is given, then calls the map's own method.
+ * - Both also give a font to every symbol layer that has a `text-field` and no
+ *   `text-font` (any page language, any source): the Arches resource layers
+ *   (`geojson_feature_collection_layer_template.txt`, the cluster count label)
+ *   declare none, and MapLibre then asks the glyph server for its default
+ *   stack, "Open Sans Regular, Arial Unicode MS Regular", which OpenFreeMap
+ *   does not serve (404). The font is one the basemap style itself uses.
  *
- * `postConfig` also follows the page language on the OpenFreeMap labels: on a
- * French page every symbol layer whose `text-field` reads a name tries `name:fr`
- * first; when a feature has no `name:fr`, the style's own expression is the
- * fallback.
- * The style stays as the vendored JSON; nothing is fetched again. The core view
- * models call `map.setStyle(style)` again when the layers change, which brings
- * the vendored labels back: `postConfig` also installs an own `setStyle` that
- * rewrites the labels (French page) and adds the missing fonts (below) of the
- * style it is given, then calls the map's own method.
- *
- * Both also give a font to every symbol layer that has a `text-field` and no
- * `text-font` (any page language, any source): the Arches resource layers
- * (`geojson_feature_collection_layer_template.txt`, the cluster count label)
- * declare none, and MapLibre then asks the glyph server for its Mapbox default
- * stack, "Open Sans Regular, Arial Unicode MS Regular", which OpenFreeMap does
- * not serve (404). The font is one the basemap style itself uses.
- *
- * Remove this file at Arches 8.2, whose map view model has no Mapbox geocoder.
+ * The Vue map's geocoder has its own override,
+ * `src/arches_vue_components/components/MapComponent/utils/geocoder-api.ts`.
  * After adding or deleting a shadow, stop `npm start`, delete
  * `node_modules/.cache/webpack` and start again.
  */
 import arches from "arches";
-import MapboxGeocoder from "mapbox-gl-geocoder";
+import MaplibreGeocoder from "@maplibre/maplibre-gl-geocoder";
+import { geocoderAttribution } from "utils/maplibre-geocoder-api";
 
 const BASEMAP_SOURCE = "openfreemap";
 
@@ -126,10 +127,11 @@ const adaptOnSetStyle = (map) => {
 
 const mapConfigurator = {
     preConfig: function (map) {
-        if (arches.mapboxApiKey) return;
         const addControl = map.addControl;
         map.addControl = function (control, position) {
-            if (control instanceof MapboxGeocoder) return this;
+            if (control instanceof MaplibreGeocoder) return this;
+            if (control?.options?.customAttribution === geocoderAttribution)
+                control.options.customAttribution = undefined;
             return addControl.call(this, control, position);
         };
     },

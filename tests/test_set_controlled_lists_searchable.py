@@ -2,7 +2,8 @@
 
 The point of the command is that it goes through `save()` rather than
 `bulk_update`, because that is what indexes the list. These tests pin the
-selection logic; the indexing itself belongs to arches_controlled_lists.
+selection logic; the indexing itself belongs to
+arches.extensions.controlled_lists.
 """
 
 import uuid
@@ -13,7 +14,7 @@ from unittest import mock
 from django.core.management import call_command
 from django.test import TestCase
 
-from arches_controlled_lists.models import List
+from arches.extensions.controlled_lists.models import List
 
 
 def _list(searchable=False):

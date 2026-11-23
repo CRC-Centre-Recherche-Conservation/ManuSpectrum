@@ -9,7 +9,7 @@ import {
     watch,
 } from "vue";
 import { usePreferredReducedMotion } from "@vueuse/core";
-import maplibregl from "maplibre-gl";
+import { Map as MapLibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useGettext } from "vue3-gettext";
 
@@ -49,7 +49,6 @@ import type {
     JumpToOptions,
     LayerSpecification,
     LngLatBoundsLike,
-    Map as MapLibreMap,
     MapMouseEvent,
     VectorTileSource,
 } from "maplibre-gl";
@@ -193,7 +192,7 @@ onMounted(() => {
     if (!container.value) return;
     try {
         const created = markRaw(
-            new maplibregl.Map({
+            new MapLibreMap({
                 container: container.value,
                 style: {
                     ...baseStyle(props.colours),
@@ -213,9 +212,10 @@ onMounted(() => {
             }),
         );
         created.on("load", () => onLoad(created));
-        created.on("error", (event: { sourceId?: string }) => {
-            if (event.sourceId === BASE_SOURCE) baseFailed.value = true;
-            if (!ready && !event.sourceId) dropQueued();
+        created.on("error", (event) => {
+            const { sourceId } = event as { sourceId?: string };
+            if (sourceId === BASE_SOURCE) baseFailed.value = true;
+            if (!ready && !sourceId) dropQueued();
         });
         map.value = created;
     } catch (error: unknown) {
@@ -376,7 +376,11 @@ function recolour(current: MapLibreMap, colours: MapColours): void {
         >;
         for (const [name, value] of Object.entries(paint)) {
             if (JSON.stringify(old[name]) !== JSON.stringify(value)) {
-                current.setPaintProperty(layer.id, name, value);
+                current.setPaintProperty(
+                    layer.id,
+                    name as Parameters<MapLibreMap["setPaintProperty"]>[1],
+                    value as Parameters<MapLibreMap["setPaintProperty"]>[2],
+                );
             }
         }
     }

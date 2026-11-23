@@ -136,15 +136,17 @@
     to { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
+// Same measure as `.ms-container`, so the hero lines up with the sections below.
 .ms-hero-content {
     position: relative;
     z-index: 2;
-    max-width: 860px;
-    padding: 0 2rem;
+    width: 100%;
+    max-width: 1240px;
+    padding: 0 var(--ms-gutter);
 }
 
 .ms-hero-logo {
-    width: clamp(280px, 40vw, 480px);
+    width: clamp(280px, 40vw, 560px);
     aspect-ratio: 600 / 95;
     margin: 0 auto 2.5rem;
     opacity: 0;
@@ -322,11 +324,13 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
 
 .ms-hero-tagline {
     font-family: var(--font-display);
-    font-size: clamp(1.5rem, 3.5vw, 2.6rem);
+    font-size: clamp(1.5rem, 3.5vw, 3rem);
     font-weight: 300;
-    line-height: 1.35;
+    line-height: 1.3;
     color: var(--ink);
-    margin-bottom: 1.5rem;
+    max-width: 22em;
+    margin: 0 auto 1.5rem;
+    text-wrap: balance;
     opacity: 0;
     transform: translateY(20px);
     animation: hero-fade-in 1.2s var(--ease-out-expo) 0.5s forwards;
@@ -343,10 +347,11 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
 .ms-hero-description {
     font-size: 1.02rem;
     color: var(--ink-muted);
-    max-width: 580px;
+    max-width: 44rem;
     margin: 0 auto 2.5rem;
     font-weight: 300;
     line-height: 1.7;
+    text-wrap: pretty;
     opacity: 0;
     transform: translateY(20px);
     animation: hero-fade-in 1.2s var(--ease-out-expo) 0.8s forwards;
@@ -369,7 +374,7 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
 // Buttons
 .ms-hero-tools {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 18rem));
+    grid-template-columns: repeat(2, minmax(0, 22rem));
     gap: 1rem 1.5rem;
     justify-content: center;
 }
@@ -397,6 +402,7 @@ body:has(.ms-logo-dialog[open]) { overflow: hidden; }
     font-weight: 400;
     line-height: 1.5;
     color: var(--ink-muted);
+    text-wrap: balance;
 }
 
 .ms-btn-outline {
@@ -1432,12 +1438,12 @@ a.ms-feature-tag--link i {
 }
 
 .ms-search-box {
-    max-width: 840px;
-    margin: 0 auto;
     position: relative;
 }
 
 #ms-search-form {
+    max-width: 840px;
+    margin-inline: auto;
     display: flex;
     flex-wrap: wrap;
     align-items: stretch;
@@ -1676,7 +1682,6 @@ a.ms-search-chip {
     .ms-section { padding: 4.5rem 0; }
     .ms-hero-logo { width: clamp(200px, 65vw, 320px); }
     .ms-hero { padding: 5.5rem 0 3rem; }
-    .ms-hero-content { padding: 0 var(--ms-gutter); }
     .ms-hero-tools { grid-template-columns: 1fr; width: 100%; }
     .ms-hero-tool .ms-btn { max-width: none; width: 100%; }
     .ms-hero-tool-note { text-align: center; }

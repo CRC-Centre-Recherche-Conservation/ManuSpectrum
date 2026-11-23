@@ -25,13 +25,12 @@ because an administrator created it. People ask for one through the contact page
    password)**. An account that is inactive, has no e-mail or already has a password is
    skipped with a message. A failed send is reported and counted (`AccountMailFailures`):
    fix the relay (`runbooks/application.md`), then send a new invitation.
-3. The person opens the link, presses « Continue », reads and accepts the terms of use (a required checkbox;
+3. The person opens the link, reads and accepts the terms of use (a required checkbox;
    the acceptance is stored with its date and the version of the terms), chooses a
    password (12 characters or more, upper and lower case, a digit and a symbol; common
    or similar passwords are refused), then sets up two-factor authentication with an
    authenticator application at `/<lang>/account/two-factor`.
 4. An invitation never activated shows in the monthly report (below) after three months.
-5. Advise editors not to switch on the spell checker (SCAYT) of the rich-text editor: it sends the typed text to a third party (WebSpellChecker); the browser's own spell checker does not.
 
 ### Who can do what
 
@@ -110,8 +109,8 @@ IIIF manifest widget, which then shows « An error occurred while creating the m
 Arches opens a tool page only for a holder of `view_plugin` on that tool, and lists a bulk data
 manager module only for a holder of `view_etlmodule` on that module; a superuser holds both
 everywhere. Behind the pages, Arches lets only `Resource Editor` write records, keep a
-workflow's progress and run the bulk data manager. The grants (migration `0016`) are the
-reference:
+workflow's progress and run the bulk data manager. The grants (migration `0016`, and `0018` for
+the Arches JSON importer) are the reference:
 
 | Tool | Groups |
 |---|---|
@@ -126,7 +125,7 @@ reference:
 
 | Bulk data manager module | Shown to |
 |---|---|
-| Imports: branch Excel, tile Excel, single CSV, JSON-LD | `Resource Editor` |
+| Imports: branch Excel, tile Excel, single CSV, JSON-LD, Arches JSON | `Resource Editor` |
 | Edits: replace, trim, case, concept, migrate to reference | `Resource Editor` |
 | Exports: branch Excel, tile Excel | `Resource Exporter` |
 | Deletion | superusers only |
@@ -166,7 +165,7 @@ reference:
   pages, reached from the link on the User page). The list shows the **Two-factor
   authentication** column and filter, the User page an « Account » section. The action clears the secret and mails
   the person a personal link (`account/two-factor/reset/...`, valid 24 hours, single use):
-  they press « Continue », type their password, scan the new QR code, confirm one code and are signed in. A
+  they type their password, scan the new QR code, confirm one code and are signed in. A
   wrong password counts as a failed sign-in (lockout). **Send the two-factor enrolment link
   (superuser)** mails the link again to the selected accounts that hold no secret (lost
   mail, expired link). An account without an address or inactive gets no mail: the action
@@ -558,7 +557,12 @@ What the update does, in order:
 2. **Pre-update backup.** `make backup TAG=pre-update` from the running version
    (`BACKUP.md`). If the backup fails, nothing is changed.
 3. **Switch.** It records the update as in flight, checks out the tag, rewrites
-   the image in `.env` and runs `make up`.
+   the image in `.env`, recreates the running services whose configuration
+   from the checkout changed after they started (nginx, Prometheus, Grafana…:
+   a container keeps a mounted single file as it was when it started, and
+   reads a mounted directory again only when it restarts; PostgreSQL too when
+   `deploy/compose/postgres/init` changed, a restart that leaves its data as they
+   are) and runs `make up`. A failed recreation fails the update, which rolls back.
 4. **Readiness.** It polls `/readyz` inside the `web` container until it answers
    200, for at most `RELEASE_READY_WAIT_SECONDS` (600 s by default, counted from
    the start of the switch). The maximum is **1800 s** (inventory variable

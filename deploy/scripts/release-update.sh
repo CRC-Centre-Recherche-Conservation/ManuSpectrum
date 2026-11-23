@@ -26,13 +26,17 @@
 #   5 `make backup TAG=pre-update` from the current version
 #   6 take the lock of the backup on our own descriptor and hold it; a
 #     scheduled slot past its window after the backup is REASON=late
-#   7 write `inflight`, check out the tag, rewrite the .env image, `make up`
+#   7 write `inflight`, check out the tag, rewrite the .env image, recreate the
+#     running services whose configuration from the checkout changed after they
+#     started (release_stale_services: single-file bind mounts keep the old
+#     file), `make up`; a failed recreation fails the switch after `make up`
 #   8 poll /readyz until one deadline (start of step 7 + RELEASE_READY_WAIT_SECONDS)
 #   9 success: previous <- current <- armed, clear armed, pending, inflight;
 #     local images of the repository that are neither current, previous nor
 #     armed (by digest) are removed
 #  10 any failure of 7-8, SIGTERM or SIGINT included: check out the previous
-#     commit, put its image back, `make up`, wait again; `rollbacks` counts it
+#     commit, put its image back, recreate as in 7 (a failure is only logged),
+#     `make up`, wait again; `rollbacks` counts it
 # The data are never restored, `init` and `load-snapshot` never run: a failed
 # rollback only mails the restore commands.
 #
@@ -320,11 +324,42 @@ check_window "after the backup"
 # shellcheck disable=SC2317  # run by the trap
 on_signal() { TERMINATED=1; }
 
+COMPOSE_DIR="$APP_DIR/deploy/compose"
+COMPOSE=(docker compose --project-directory "$COMPOSE_DIR" --env-file "$ENV_FILE"
+  -f "$COMPOSE_DIR/compose.yaml" -f "$COMPOSE_DIR/compose.prod.yaml")
+
 probe() { # prints the HTTP status of /readyz inside the web container, or nothing
-  local compose_dir="$APP_DIR/deploy/compose"
-  timeout 60 docker compose --project-directory "$compose_dir" --env-file "$ENV_FILE" \
-    -f "$compose_dir/compose.yaml" -f "$compose_dir/compose.prod.yaml" \
+  timeout 60 "${COMPOSE[@]}" \
     exec -T web curl -s -m 15 -o /dev/null -w '%{http_code}' -H 'Host: web' http://127.0.0.1:8000/readyz 2>/dev/null
+}
+
+# Recreates the running services (one-off containers excluded) whose bind
+# mounts from the checkout changed after they started. Status 1 when the
+# recreation fails. A host where the containers or their mounts cannot be read
+# recreates nothing and says so; containers `docker inspect` could not read
+# are left out.
+recreate_stale() {
+  local ids lines stale
+  if ! ids="$("${COMPOSE[@]}" ps -q)"; then
+    log "cannot list the running containers: none recreated"
+    return 0
+  fi
+  [ -n "$ids" ] || return 0
+  # shellcheck disable=SC2086  # one container id per word
+  lines="$(docker inspect --format '{{if eq (index .Config.Labels "com.docker.compose.oneoff") "False"}}{{index .Config.Labels "com.docker.compose.service"}} {{.State.StartedAt}}{{range .Mounts}}{{if eq .Type "bind"}} {{.Source}}{{end}}{{end}}{{end}}' $ids)" ||
+    log "docker inspect failed for some containers: the others are checked"
+  if ! stale="$(release_stale_services "$APP_DIR" <<<"$lines")"; then
+    log "cannot compare the mounts with the checkout: none recreated"
+    return 0
+  fi
+  stale="$(tr '\n' ' ' <<<"$stale")"
+  stale="${stale% }"
+  [ -n "$stale" ] || return 0
+  log "recreating the services whose configuration changed: $stale"
+  # shellcheck disable=SC2086  # one service per word
+  "${COMPOSE[@]}" up -d --no-deps --force-recreate $stale && return 0
+  log "recreating $stale failed"
+  return 1
 }
 
 wait_ready() { # wait_ready DEADLINE (value of SECONDS): 0 ready, 1 deadline, 2 signal
@@ -342,15 +377,24 @@ wait_ready() { # wait_ready DEADLINE (value of SECONDS): 0 ready, 1 deadline, 2 
 }
 
 # Puts COMMIT and IMAGE on the host and starts the stack; then waits for readiness.
-switch_to() { # switch_to LABEL COMMIT IMAGE
-  local label="$1" commit="$2" image="$3" deadline=$((SECONDS + WAIT + 1))  # SECONDS counts whole seconds: never stop early
+# A failed recreation still lets `make up` start the stack; it fails the switch
+# to a new release (SWITCH_FAILURE says why), not a rollback, where readiness decides.
+SWITCH_FAILURE=""
+switch_to() { # switch_to LABEL COMMIT IMAGE [rollback]
+  local label="$1" commit="$2" image="$3" mode="${4-}" recreate_failed=0 deadline=$((SECONDS + WAIT + 1))  # SECONDS counts whole seconds: never stop early
   log "switching to $label"
   git -C "$APP_DIR" checkout --quiet --detach "$commit" || return 1
   git -C "$APP_DIR" submodule update --init || return 1
   release_env_set_image "$ENV_FILE" "$image" || return 1
   [ "$TERMINATED" = 0 ] || return 2
+  recreate_stale || recreate_failed=1
+  [ "$TERMINATED" = 0 ] || return 2
   make -C "$APP_DIR/deploy" up ENV_FILE="$ENV_FILE" UP_WAIT_TIMEOUT="$WAIT" || return 1
   [ "$TERMINATED" = 0 ] || return 2
+  if [ "$recreate_failed" = 1 ] && [ "$mode" != rollback ]; then
+    SWITCH_FAILURE="the services whose configuration changed could not be recreated"
+    return 1
+  fi
   wait_ready "$deadline"
 }
 
@@ -399,10 +443,10 @@ fi
 # --- 10 rollback
 
 trap '' TERM INT
-if [ "$switched" = 2 ]; then reason="interrupted by a signal"; else reason="the application was not ready within ${WAIT}s"; fi
+if [ "$switched" = 2 ]; then reason="interrupted by a signal"; elif [ -n "$SWITCH_FAILURE" ]; then reason="$SWITCH_FAILURE"; else reason="the application was not ready within ${WAIT}s"; fi
 log "step 10: $TAG failed ($reason); rolling back to $CUR_TAG"
 TERMINATED=0
-switch_to "$CUR_TAG" "$CUR_COMMIT" "$CUR_IMAGE"
+switch_to "$CUR_TAG" "$CUR_COMMIT" "$CUR_IMAGE" rollback
 rolled=$?
 
 if [ "$rolled" = 0 ]; then

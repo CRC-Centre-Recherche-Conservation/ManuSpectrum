@@ -3,7 +3,7 @@ import ko from 'knockout';
 import arches from 'arches';
 import WidgetViewModel from 'viewmodels/widget';
 import 'bindings/select2-query';
-import { generateArchesURL } from '@/arches/utils/generate-arches-url.ts';
+import { generateArchesURL } from '@/arches_vue_components/application/generate-arches-url.ts';
 import {
     mapSuggestItemToValue,
     renderSuggestItem,

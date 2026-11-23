@@ -17,6 +17,7 @@ from django.test.utils import CaptureQueriesContext
 from arches.app.models.models import File, IIIFManifest, ResourceInstance, TileModel
 
 from manuspectrum.iiif import facts
+from manuspectrum.iiif.sources import canvas_index
 from manuspectrum.iiif.zones import annotation_features
 from tests.explorer_fixtures import (
     CANVAS,
@@ -195,7 +196,10 @@ class ZoneTests(FactsCase):
         with CaptureQueriesContext(connection) as queries:
             found = list(
                 annotation_features(
-                    node, [str(self.analyses["open"].pk)], {}, {node.nodegroup_id}
+                    node,
+                    [str(self.analyses["open"].pk)],
+                    canvas_index([]),
+                    {node.nodegroup_id},
                 )
             )
 

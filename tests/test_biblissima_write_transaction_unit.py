@@ -190,9 +190,8 @@ class UnitaryCreateStagesBeforeTheTransactionTests(WriteTransactionHarness):
     def test_the_flush_reuses_the_graph_read_for_staging(self):
         self._create_document()
 
-        self.resource.set_serialized_graph.assert_called_once()
         self.assertIs(
-            self.resource.set_serialized_graph.call_args.args[0],
+            self.resource.serialized_graph,
             self.mock_resource_cls.return_value.get_serialized_graph.return_value,
         )
 

@@ -350,4 +350,4 @@ class SingleCreateWriteBudgetTests(TestCase):
     def test_other_failure_stays_a_500(self):
         response, payload = self._post(RuntimeError("boom"))
         self.assertEqual(response.status_code, 500)
-        self.assertEqual(payload["error"], "Resource creation failed")
+        self.assertEqual(payload["error"], "Resource creation failed.")

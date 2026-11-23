@@ -33,7 +33,7 @@ from arches.app.models.models import (
     ResourceInstance,
     TileModel,
 )
-from arches_controlled_lists.models import ListItem, ListItemValue
+from arches.extensions.controlled_lists.models import ListItem, ListItemValue
 
 from manuspectrum.constants.licenses import effective_license
 from manuspectrum.iiif.facts import CharacterizationZones, listed_source
@@ -46,7 +46,11 @@ from manuspectrum.iiif.sources import (
     manifest_json,
     manifest_source,
 )
-from manuspectrum.iiif.zones import annotation_features, first_zone
+from manuspectrum.iiif.zones import (
+    annotation_features,
+    first_zone,
+    located_features,
+)
 from manuspectrum.models import RendererConfig
 from manuspectrum.utils.public_visibility import (
     VisibleSet,
@@ -2604,6 +2608,9 @@ def document_payload(document_id, user, language, ticket=None):
     ``techniques`` holds each technique of its analyses by uri; each analysis
     names its technique by that uri and lists its zones, each on a canvas
     given by its position in ``canvases`` and named by its ``feature`` id.
+    Every shape is in the pixels of its canvas, whose ``zoneUnit`` gives the
+    pixels of one stored annotation unit (``iiif.units``) and whether the
+    image's description gave it.
     A zone on a canvas the manifest does not list is left out; an analysis
     without zones is not located on a page and names the Component it
     observed (``component``, None on the document). ``components`` lists the
@@ -2636,7 +2643,8 @@ def document_payload(document_id, user, language, ticket=None):
     )
     canvases = canvases_of(manifest_json(manifest_url)) if manifest_url else []
     source = manifest_source(manifest_url) if manifest_url else None
-    dims = canvas_index(canvases)
+    placing = listed_source(manifest_url or "", canvases)
+    dims = placing.dims
     position = {canvas["id"]: index for index, canvas in enumerate(canvases)}
     zones = defaultdict(list)
     for analysis, feature, canvas, shape in annotation_features(
@@ -2670,7 +2678,7 @@ def document_payload(document_id, user, language, ticket=None):
         user,
         language,
         components_of=bundle.material_components,
-        source=listed_source(manifest_url or "", canvases),
+        source=placing,
         objects_of=bundle.links["objects"],
         analysis_rows=bundle.by_id,
     )
@@ -2700,6 +2708,14 @@ def document_payload(document_id, user, language, ticket=None):
         for zone in {z["canvas"]: z for z in entry["zones"]}.values()
     )
     per_canvas_char = Counter(s["zone"]["canvas"] for s in summaries if s["zone"])
+    samples = sample_summaries(
+        [row["id"] for row in rows],
+        visible,
+        user,
+        language,
+        dims,
+        sample_of=bundle.links["samples"],
+    )
     return {
         "id": document_id,
         "name": label_of[document_id],
@@ -2711,6 +2727,7 @@ def document_payload(document_id, user, language, ticket=None):
                 **c,
                 "analysisCount": per_canvas[index],
                 "characterizationCount": per_canvas_char[c["id"]],
+                "zoneUnit": zone_unit_payload(dims, c["id"]),
             }
             for index, c in enumerate(canvases)
         ],
@@ -2731,15 +2748,14 @@ def document_payload(document_id, user, language, ticket=None):
         + sum(1 for s in summaries if s["unpublished"]),
         "unpublished": document_id in visible.unpublished,
         "certaintyScale": certainty_scale(language),
-        "samples": sample_summaries(
-            [row["id"] for row in rows],
-            visible,
-            user,
-            language,
-            dims,
-            sample_of=bundle.links["samples"],
-        ),
+        "samples": samples,
     }
+
+
+def zone_unit_payload(dims, canvas):
+    """``ZoneUnit`` of *canvas*: the canvas pixels of one stored annotation unit, as the shapes of the payload were converted; None when it holds no zone."""
+    unit = dims.unit_used(canvas)
+    return unit.payload() if unit else None
 
 
 FILE_KEYS = ("files", "micro", "imaging", *LAYER_KEYS)
@@ -3042,7 +3058,7 @@ def content_states(analysis_id, document_id, user):
     features = sorted(
         {
             feature
-            for _, feature, canvas, _ in annotation_features(
+            for _, feature, canvas, _ in located_features(
                 role_node(*ROLES["zone"]),
                 [analysis_id],
                 canvas_index(canvases),

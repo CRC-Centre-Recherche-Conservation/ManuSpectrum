@@ -85,6 +85,11 @@ set_cgroup() { # set_cgroup ID COUNT [systemd|cgroupfs]
   [ "${3:-systemd}" = systemd ] || dir="$TMP/cgroup/docker/$1"
   mkdir -p "$dir"
   printf 'low 0\nhigh 0\nmax 0\noom 0\noom_kill %s\n' "$2" >"$dir/memory.events"
+  [ -f "$dir/memory.stat" ] || set_memstat "$dir" 104857600 1048576
+}
+set_memstat() { # set_memstat CGROUP-DIR ANON SHMEM: memory.stat with a large page cache
+  printf 'anon %s\nfile 943718400\nkernel 10485760\nshmem %s\nactive_file 838860800\ninactive_file 104857600\n' \
+    "$2" "$3" >"$1/memory.stat"
 }
 set_containers() {
   rm -rf "$TMP/cgroup" "$OUT/.manuspectrum-container-oom.state"
@@ -245,6 +250,72 @@ sed -i 's/2026-10-09T01:00:00Z/2026-10-09T02:00:00Z/' "$TMP/inspect"
 run containers
 [ "$(oom web)" = 2 ]
 assert "oom: the fallback counts a new exit" $?
+
+# unreclaimable memory: anon + shmem of memory.stat, the page cache left out
+unrec() { sample "manuspectrum_container_memory_unreclaimable_bytes{container=\"$1\"}" $F; }
+set_containers
+set_memstat "$TMP/cgroup/system.slice/docker-$IDA.scope" 934281216 2097152
+run containers
+[ "$(unrec web)" = 936378368 ] && [ "$(unrec redis-cache)" = 105906176 ]
+assert "memory: unreclaimable is anon plus shmem, without the page cache" $?
+grep -q '^# TYPE manuspectrum_container_memory_unreclaimable_bytes gauge$' "$OUT/$F"
+assert "memory: unreclaimable is a gauge" $?
+rm -rf "$TMP/cgroup"
+set_cgroup "$IDA" 0 cgroupfs
+run containers
+[ "$(unrec web)" = 105906176 ]
+assert "memory: the cgroupfs layout (docker/<id>) is read too" $?
+printf 'anon 5\nfile 7\n' >"$TMP/cgroup/docker/$IDA/memory.stat"
+run containers
+! grep -q 'unreclaimable_bytes{container="web"}' "$OUT/$F" && [ "$(sample 'manuspectrum_container_metrics_errors' $F)" = 0 ]
+assert "memory: a memory.stat without shmem gives no sample and no error" $?
+rm -rf "$TMP/cgroup"
+run containers
+! grep -q 'unreclaimable_bytes{' "$OUT/$F" && grep -q 'memory_working_set_bytes{container="web"}' "$OUT/$F"
+assert "memory: without memory.stat only the working set is written" $?
+printf '%s\n' \
+  "$IDA|web|true|healthy|0|false|0001-01-01T00:00:00Z|0" \
+  "$IDB|worker|false|none|0|false|0001-01-01T00:00:00Z|0" >"$TMP/inspect"
+set_cgroup "$IDA" 0
+set_cgroup "$IDB" 0
+run containers
+[ -n "$(unrec web)" ] && ! grep -q 'unreclaimable_bytes{container="worker"}' "$OUT/$F"
+assert "memory: a stopped container has no unreclaimable sample" $?
+
+# swap: memory.swap.current in bytes, and whether memory.swap.max lets it swap
+swapb() { sample "manuspectrum_container_memory_swap_bytes{container=\"$1\"}" $F; }
+swapok() { sample "manuspectrum_container_swap_allowed{container=\"$1\"}" $F; }
+set_containers
+d="$TMP/cgroup/system.slice/docker-$IDA.scope"
+printf '0\n' >"$d/memory.swap.max"
+printf '0\n' >"$d/memory.swap.current"
+d="$TMP/cgroup/system.slice/docker-$IDB.scope"
+printf 'max\n' >"$d/memory.swap.max"
+printf '602931200\n' >"$d/memory.swap.current"
+run containers
+[ "$(swapb web)" = 0 ] && [ "$(swapb redis-cache)" = 602931200 ]
+assert "swap: memory.swap.current is exported in bytes" $?
+[ "$(swapok web)" = 0 ] && [ "$(swapok redis-cache)" = 1 ]
+assert "swap: a container whose memory.swap.max is not 0 is marked as allowed to swap" $?
+grep -q '^# TYPE manuspectrum_container_memory_swap_bytes gauge$' "$OUT/$F" && grep -q '^# TYPE manuspectrum_container_swap_allowed gauge$' "$OUT/$F"
+assert "swap: both series are gauges" $?
+printf '1048576\n' >"$d/memory.swap.max"
+run containers
+[ "$(swapok redis-cache)" = 1 ]
+assert "swap: a finite non-zero memory.swap.max is allowed too" $?
+rm -f "$TMP/cgroup/system.slice/docker-$IDB.scope/memory.swap.max" "$TMP/cgroup/system.slice/docker-$IDB.scope/memory.swap.current"
+printf 'garbage\n' >"$TMP/cgroup/system.slice/docker-$IDA.scope/memory.swap.max"
+run containers
+! grep -q 'container_swap_allowed{' "$OUT/$F" && ! grep -q 'memory_swap_bytes{container="redis-cache"}' "$OUT/$F" && [ "$(sample 'manuspectrum_container_metrics_errors' $F)" = 0 ]
+assert "swap: unreadable or malformed files give no sample and no error" $?
+set_containers
+printf '0\n' >"$TMP/cgroup/system.slice/docker-$IDA.scope/memory.swap.max"
+printf '%s\n' \
+  "$IDA|web|false|none|0|false|0001-01-01T00:00:00Z|0" \
+  "$IDB|redis-cache|true|none|0|false|0001-01-01T00:00:00Z|0" >"$TMP/inspect"
+run containers
+! grep -q 'swap_allowed{container="web"}' "$OUT/$F"
+assert "swap: a stopped container has no swap sample" $?
 
 # a malformed id never reaches a path
 set_containers

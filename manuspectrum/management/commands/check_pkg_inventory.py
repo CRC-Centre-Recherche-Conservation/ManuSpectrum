@@ -33,7 +33,7 @@ from arches.app.models.system_settings import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
 
-from arches_controlled_lists.models import List, ListItem, ListItemValue
+from arches.extensions.controlled_lists.models import List, ListItem, ListItemValue
 
 from manuspectrum import basemaps
 from manuspectrum.management.commands.export_pkg import (

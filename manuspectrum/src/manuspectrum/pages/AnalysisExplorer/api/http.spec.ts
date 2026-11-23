@@ -14,7 +14,7 @@ import {
     setFullSeriesRoom,
 } from "@/manuspectrum/pages/AnalysisExplorer/api/http.ts";
 
-vi.mock("@/arches/utils/generate-arches-url.ts", () => ({
+vi.mock("@/arches_vue_components/application/generate-arches-url.ts", () => ({
     generateArchesURL: (
         name: string,
         parameters: Record<string, string> = {},

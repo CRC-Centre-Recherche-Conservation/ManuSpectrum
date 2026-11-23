@@ -66,8 +66,8 @@ SEED_CONFIGS = {
             ),
             _rollup(
                 "characterizations",
-                "Characterizations",
-                "Caractérisations",
+                "Interpretations",
+                "Interprétations",
                 [_hop("characterization", "object_observed", "incoming")],
                 distinct="identified_material",
                 limit=10,
@@ -99,8 +99,8 @@ SEED_CONFIGS = {
             ),
             _rollup(
                 "characterizations",
-                "Characterizations",
-                "Caractérisations",
+                "Interpretations",
+                "Interprétations",
                 [_hop("characterization", "object_observed", "incoming")],
                 distinct="identified_material",
                 limit=10,
@@ -122,8 +122,8 @@ SEED_CONFIGS = {
         "rollups": [
             _rollup(
                 "characterizations",
-                "Characterizations",
-                "Caractérisations",
+                "Interpretations",
+                "Interprétations",
                 [_hop("characterization", "evidence_analyses", "incoming")],
                 distinct="identified_material",
                 limit=10,
