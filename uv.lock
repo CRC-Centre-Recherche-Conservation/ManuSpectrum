@@ -42,7 +42,7 @@ wheels = [
 
 [[package]]
 name = "arches"
-version = "8.2.0a25"
+version = "8.2.0a27"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "arcgis2geojson" },
@@ -86,9 +86,9 @@ dependencies = [
     { name = "semantic-version" },
     { name = "sparqlwrapper" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1b/2a/7cf54ee871d19c2a4fbc881adac2594fa1f99752ce63775f50f77324982e/arches-8.2.0a25.tar.gz", hash = "sha256:ebc032321c56c39f1b1d58f352c8ac866525111f4727f072e803267cc2cb4141", size = 26556726, upload-time = "2026-11-09T16:33:04.086Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/90/26/5f609c3359210ac070344a0ef42994edb53021753ddbf555fcd1e5c592fa/arches-8.2.0a27.tar.gz", hash = "sha256:44ace2886d37d1dca6a226b2516be810677a9857bd28f0ea5bd9e6429310b54e", size = 26571042, upload-time = "2026-11-21T00:11:45.807Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a9/4a/553b0d02d23cc7b3752427e3b26373af98fe0ae586ce8036543abb47225d/arches-8.2.0a25-py3-none-any.whl", hash = "sha256:00b0b2db87e22fc02a9e3406b6e2dedf4653a1db03357417a68d3985c8bcb890", size = 27307484, upload-time = "2026-11-09T16:33:00.635Z" },
+    { url = "https://files.pythonhosted.org/packages/02/b5/b7aa337894632d847a7d6c9bc0a88981c1892c841a581aa814615c20b434/arches-8.2.0a27-py3-none-any.whl", hash = "sha256:f9c77238810e16917ef1397011f23e78613f6e02b50db5a9ada97f37b836e54d", size = 27324566, upload-time = "2026-11-21T00:11:33.899Z" },
 ]
 
 [[package]]
@@ -1241,7 +1241,7 @@ prod = [
 
 [package.metadata]
 requires-dist = [
-    { name = "arches", specifier = "==8.2.0a25" },
+    { name = "arches", specifier = "==8.2.0a27" },
     { name = "argon2-cffi", specifier = ">=25.1,<26" },
     { name = "bibtexparser", specifier = ">=2.1.0,<3" },
     { name = "defusedcsv", specifier = ">=3,<4" },

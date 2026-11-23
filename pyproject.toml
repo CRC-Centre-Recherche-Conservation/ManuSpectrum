@@ -23,7 +23,7 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "arches==8.2.0a25",
+    "arches==8.2.0a27",
     # Imported by the project; floors from pip-audit (CVE-2026-41066 +
     # LP#2165901, CVE-2025-67221).
     "lxml>=6.1.3",

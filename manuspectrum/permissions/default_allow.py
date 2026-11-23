@@ -1,7 +1,7 @@
 """Arches' default-allow permission framework, with a bounded restricted-ids search.
 
 Subclass of ``arches.app.permissions.arches_default_allow.
-ArchesDefaultAllowPermissionFramework`` (Arches 8.2.0a25), selected by ``PERMISSION_FRAMEWORK``. Only
+ArchesDefaultAllowPermissionFramework`` (Arches 8.2.0a27), selected by ``PERMISSION_FRAMEWORK``. Only
 ``get_restricted_instances`` differs, and only in its Elasticsearch branch (a
 non-superuser, ``allresources=False``): every other path is the parent's.
 ``filter_resource_queryset`` raises as the default-allow framework does: the
