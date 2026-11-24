@@ -25,7 +25,7 @@ closes the import-time connections in each worker. Forwarded headers are
 trusted from any address because the container publishes no port: only the
 Compose network (nginx, from PP-3) reaches it.
 
-nginx writes the access log (rotated on the host, one year); gunicorn writes only
+nginx writes the access log (rotated on the host, about a month, see BACKUP.md); gunicorn writes only
 its error log, to stderr. With `PROMETHEUS_MULTIPROC_DIR` set (Compose),
 `child_exit` archives a dead worker's metric files
 (`manuspectrum/observability/multiproc.py`) so the directory stays bounded; the
