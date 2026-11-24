@@ -19,6 +19,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 import requests
 from django.core.cache import cache
+from django.db import connection
 from django.test import override_settings
 
 from arches.app.models.models import (
@@ -1058,6 +1059,133 @@ class UnusableZoneTests(AnnotationFramesCase):
         out = self.run_command("check")
         self.assertIn("No unstamped zone.", out)
         self.assertNotIn(DOWN_SERVICE, out)
+
+
+class CheckMalformedValuesTests(AnnotationFramesCase):
+    HEADER = "Malformed annotation values (Arches' annotation view fails on them):"
+
+    def raw_tile(self, value, node=None):
+        return TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            resourceinstance=self.resource,
+            nodegroup=self.nodegroup,
+            data={str(node or self.annotation.pk): value},
+        )
+
+    def test_a_features_value_that_is_not_a_list_is_listed_with_tile_and_node(self):
+        tile = self.raw_tile({"type": "FeatureCollection", "features": {"id": "x"}})
+        out = self.run_command("check")
+        self.assertIn(self.HEADER, out)
+        self.assertIn(
+            f"  tile {tile.pk} node {self.annotation.pk}: features is not a list", out
+        )
+        self.assertIn("1 malformed annotation value(s).", out)
+
+    def test_a_feature_id_that_is_not_a_uuid_is_listed_for_a_string_and_a_number(self):
+        tile = self.tile(zone(str(uuid.uuid4())), zone("not-a-uuid"), zone(5))
+        out = self.run_command("check")
+        base = f"  tile {tile.pk} node {self.annotation.pk} feature"
+        self.assertIn(f"{base} 1 (id 'not-a-uuid'): feature id is not a UUID", out)
+        self.assertIn(f"{base} 2 (id 5): feature id is not a UUID", out)
+        self.assertNotIn(f"{base} 0", out)
+        self.assertIn("2 malformed annotation value(s).", out)
+
+    def test_values_the_view_tolerates_are_not_listed(self):
+        good = zone(str(uuid.uuid4()))
+        self.tile(good, "not a feature", None, {**zone("x"), "id": None})
+        self.raw_tile({"type": "FeatureCollection"})
+        self.raw_tile("not a collection")
+        out = self.run_command("check")
+        self.assertIn("No malformed annotation value.", out)
+        self.assertNotIn(self.HEADER, out)
+
+    def test_a_null_features_value_is_listed(self):
+        tile = self.raw_tile({"type": "FeatureCollection", "features": None})
+        out = self.run_command("check")
+        self.assertIn(
+            f"  tile {tile.pk} node {self.annotation.pk}: features is not a list", out
+        )
+
+    def test_ids_postgresql_refuses_are_listed_and_the_ones_it_accepts_are_not(self):
+        raw = str(uuid.uuid4())
+        refused = [
+            f"urn:uuid:{raw}",
+            "{" + raw,
+            raw + "}",
+            raw[:8] + "--" + raw[9:],
+            raw + "\n",
+            "0x" + raw.replace("-", "")[2:],
+        ]
+        accepted = [raw.upper(), "{" + raw + "}", raw.replace("-", ""), 5 * 10**31]
+        tile = self.tile(*[zone(i) for i in refused + accepted])
+        out = self.run_command("check")
+        self.assertIn(f"{len(refused)} malformed annotation value(s).", out)
+        for index in range(len(refused)):
+            self.assertIn(
+                f"tile {tile.pk} node {self.annotation.pk} feature {index} ", out
+            )
+
+    def test_tile_data_that_is_not_an_object_is_listed(self):
+        tile = TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            resourceinstance=self.resource,
+            nodegroup=self.nodegroup,
+            data={},
+        )
+        TileModel.objects.filter(pk=tile.pk).update(data=["x"])
+        out = self.run_command("check")
+        self.assertIn(f"  tile {tile.pk}: tile data is not an object", out)
+
+    def test_tile_data_that_is_json_null_is_listed(self):
+        tile = TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            resourceinstance=self.resource,
+            nodegroup=self.nodegroup,
+            data={},
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE tiles SET tiledata = 'null'::jsonb WHERE tileid = %s", [tile.pk]
+            )
+        out = self.run_command("check")
+        self.assertIn(f"  tile {tile.pk}: tile data is not an object", out)
+
+    def test_other_nodes_and_provisional_edits_are_not_read(self):
+        bad = collection(zone("not-a-uuid"))
+        TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            resourceinstance=self.resource,
+            nodegroup=self.nodegroup,
+            data={str(self.other.pk): {"features": {}}},
+            provisionaledits={"7": {"value": {str(self.annotation.pk): bad}}},
+        )
+        self.assertIn("No malformed annotation value.", self.run_command("check"))
+
+    def test_an_annotation_key_in_a_tile_of_another_nodegroup_is_not_read(self):
+        other_group = NodeGroup.objects.create(nodegroupid=uuid.uuid4())
+        Node.objects.create(
+            nodeid=uuid.uuid4(),
+            graph=self.graph,
+            nodegroup=other_group,
+            name="second",
+            alias="second",
+            datatype="annotation",
+            istopnode=False,
+        )
+        TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            resourceinstance=self.resource,
+            nodegroup=other_group,
+            data={str(self.annotation.pk): {"features": {}}},
+        )
+        self.assertIn("No malformed annotation value.", self.run_command("check"))
+
+    def test_the_listing_is_bounded_and_the_total_counted(self):
+        self.tile(*[zone(f"bad-{n}") for n in range(60)])
+        out = self.run_command("check")
+        self.assertEqual(out.count("feature id is not a UUID"), 50)
+        self.assertIn("  ... and 10 more", out)
+        self.assertIn("60 malformed annotation value(s).", out)
 
 
 class RetryScopeTests(AnnotationFramesCase):

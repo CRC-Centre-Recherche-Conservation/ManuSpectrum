@@ -8,7 +8,7 @@ from collections import defaultdict
 
 from django.core.management.base import BaseCommand
 
-from arches.app.models.models import VwAnnotation
+from arches.app.models.models import TileModel
 
 from manuspectrum.utils import manifest_registry
 
@@ -16,19 +16,26 @@ from manuspectrum.utils import manifest_registry
 def referenced_manifests():
     """``{manifest URL: [annotation count, [canvas ids]]}`` of every http(s) manifest named by a stored annotation.
 
-    Reads Arches' annotation view: the approved features of every annotation
-    node. One canvas per URL: the first seen.
+    Reads the approved ``data`` of the annotation nodegroups' tiles through
+    ``manifest_registry.annotation_features``, not Arches' annotation view
+    (8.2.0a27, ``arches/app/models/migrations/10710_fix_whatisthis.py``), which
+    fails on the whole query for one malformed value. A collection whose
+    ``features`` is not a list is skipped; a feature naming a manifest counts
+    whatever its id. One canvas per URL: the first seen.
     """
+    nodes = manifest_registry.annotation_node_groups()
     found = defaultdict(lambda: [0, []])
-    for feature in VwAnnotation.objects.values_list("feature", flat=True).iterator():
-        named = manifest_registry.feature_manifest(feature)
-        if named is None:
-            continue
-        url, canvas = named
-        entry = found[url]
-        entry[0] += 1
-        if canvas and not entry[1]:
-            entry[1].append(canvas)
+    rows = TileModel.objects.filter(nodegroup_id__in=set(nodes.values()))
+    for group, data in rows.values_list("nodegroup_id", "data").iterator(
+        chunk_size=500
+    ):
+        for _node, url, canvas in manifest_registry.annotation_features(
+            data, nodes, group
+        ):
+            entry = found[url]
+            entry[0] += 1
+            if canvas and not entry[1]:
+                entry[1].append(canvas)
     return dict(found)
 
 

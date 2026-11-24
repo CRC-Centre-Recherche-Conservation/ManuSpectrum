@@ -20,7 +20,7 @@ from django.core.cache import cache
 from django.core.validators import URLValidator, ValidationError
 from django.db import connection, transaction
 
-from arches.app.models.models import IIIFManifest
+from arches.app.models.models import IIIFManifest, Node
 
 from manuspectrum.iiif.sources import local_manifest_uuid
 from manuspectrum.utils.budget import BudgetSpent
@@ -330,22 +330,49 @@ def feature_manifest(feature):
     return manifest, canvas if isinstance(canvas, str) else None
 
 
+def annotation_node_groups():
+    """``{node id: nodegroup id}`` of the annotation nodes, ids as strings."""
+    return {
+        str(node_id): group
+        for node_id, group in Node.objects.filter(datatype="annotation").values_list(
+            "nodeid", "nodegroup_id"
+        )
+    }
+
+
+def annotation_features(data, nodes=None, nodegroup_id=None):
+    """``(node id, manifest URL, canvas id or None)`` of every feature of the annotation collections of tile *data* that names an http(s) manifest.
+
+    A collection is any dict whose ``features`` is a list, as the zone readers
+    take it; a feature that is not a mapping naming a manifest is skipped. With
+    *nodes* (``annotation_node_groups()``), only the keys of annotation nodes of
+    the tile's own nodegroup *nodegroup_id* are read, as Arches' annotation view
+    pairs them (8.2.0a27, ``10710_fix_whatisthis.py``).
+    """
+    if not isinstance(data, dict):
+        return
+    for node_id, value in data.items():
+        if nodes is not None:
+            group = nodes.get(str(node_id))
+            if group is None or group != nodegroup_id:
+                continue
+        if not isinstance(value, dict) or not isinstance(value.get("features"), list):
+            continue
+        for feature in value["features"]:
+            named = feature_manifest(feature)
+            if named is not None:
+                yield node_id, *named
+
+
 def annotation_manifests(data):
-    """``{node id: {manifest URL: [canvas ids]}}`` of the http(s) manifests named by the collections (any dict whose ``features`` is a list, as the zone readers take it) of tile ``data``.
+    """``{node id: {manifest URL: [canvas ids]}}`` of the http(s) manifests named by the collections of tile ``data`` (``annotation_features``).
 
     The one rule for which manifests an annotation names; canvas ids are kept
     in the order first seen, once each.
     """
     found = {}
-    for nodeid, value in (data or {}).items():
-        if not isinstance(value, dict) or not isinstance(value.get("features"), list):
-            continue
-        for feature in value["features"]:
-            named = feature_manifest(feature)
-            if named is None:
-                continue
-            url, canvas = named
-            canvases = found.setdefault(nodeid, {}).setdefault(url, [])
-            if canvas and canvas not in canvases:
-                canvases.append(canvas)
+    for nodeid, url, canvas in annotation_features(data):
+        canvases = found.setdefault(nodeid, {}).setdefault(url, [])
+        if canvas and canvas not in canvases:
+            canvases.append(canvas)
     return found

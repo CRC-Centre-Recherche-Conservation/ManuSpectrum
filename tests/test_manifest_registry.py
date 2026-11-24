@@ -22,10 +22,15 @@ from arches.app.models.models import (
     Node,
     NodeGroup,
     ResourceInstance,
+    TileModel,
+    VwAnnotation,
 )
 from arches.app.models.tile import Tile
 
 from manuspectrum.iiif import sources
+from manuspectrum.management.commands.register_manifests import (
+    referenced_manifests,
+)
 from manuspectrum.utils import manifest_registry as registry
 from manuspectrum.utils.budget import BudgetSpent
 from manuspectrum.utils.http import UnsafeURLError
@@ -622,3 +627,95 @@ class RegisterManifestsCommandTests(AnnotationFixtures):
             report = self.run_command("--apply")
         self.assertEqual(fetch.call_count, 2)
         self.assertIn("FAILED unreachable\t1\t" + URL, report)
+
+
+class RegisterManifestsMalformedValueTests(AnnotationFixtures):
+    def setUp(self):
+        super().setUp()
+        NodeGroup.objects.filter(pk=self.nodegroup.pk).update(cardinality="n")
+
+    def stored(self, value):
+        return TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            resourceinstance=self.resource,
+            nodegroup=self.nodegroup,
+            data={str(self.annotation.pk): value},
+        )
+
+    def good(self, fid):
+        collection = feature_collection()
+        collection["features"][0]["id"] = str(uuid.uuid4()) if fid is None else fid
+        return collection
+
+    def run_command(self):
+        out = io.StringIO()
+        call_command("register_manifests", stdout=out)
+        return out.getvalue()
+
+    def test_malformed_values_are_skipped_and_the_good_one_is_listed(self):
+        self.stored(self.good(None))
+        self.stored({"type": "FeatureCollection", "features": {"id": "x"}})
+        self.stored(self.good("not-a-uuid"))
+        self.stored(self.good(5))
+        report = self.run_command()
+        self.assertIn("would register\t3\t" + URL, report)
+        self.assertIn("dry run: 1 would register", report)
+
+    def test_tile_data_that_is_not_an_object_is_skipped(self):
+        self.stored(self.good(None))
+        tile = self.stored(self.good(None))
+        TileModel.objects.filter(pk=tile.pk).update(data=["x"])
+        self.assertEqual(referenced_manifests(), {URL: [1, [SERVICE]]})
+
+    def test_referenced_manifests_keep_count_and_first_canvas(self):
+        self.stored(self.good(None))
+        self.stored({"type": "FeatureCollection", "features": {"id": "x"}})
+        self.stored(self.good("not-a-uuid"))
+        self.assertEqual(referenced_manifests(), {URL: [2, [SERVICE]]})
+
+    def test_well_formed_tiles_read_as_arches_annotation_view_does(self):
+        other_url = "https://example.org/iiif/book2/manifest"
+        self.stored(self.good(None))
+        self.stored(feature_collection(other_url, "https://example.org/c2"))
+        self.stored(feature_collection(manifest="ftp://example.org/m"))
+        self.stored(None)
+        TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            resourceinstance=self.resource,
+            nodegroup=self.nodegroup,
+            data={str(self.other.pk): feature_collection()},
+            provisionaledits={
+                "7": {"value": {str(self.annotation.pk): feature_collection()}}
+            },
+        )
+        expected = {}
+        for feature in VwAnnotation.objects.values_list("feature", flat=True):
+            named = registry.feature_manifest(feature)
+            if named is None:
+                continue
+            entry = expected.setdefault(named[0], [0, []])
+            entry[0] += 1
+            if named[1] and not entry[1]:
+                entry[1].append(named[1])
+        other_group = NodeGroup.objects.create(nodegroupid=uuid.uuid4())
+        Node.objects.create(
+            nodeid=uuid.uuid4(),
+            graph=self.graph,
+            nodegroup=other_group,
+            name="second",
+            alias="second",
+            datatype="annotation",
+            istopnode=False,
+        )
+        TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            resourceinstance=self.resource,
+            nodegroup=other_group,
+            data={
+                str(self.annotation.pk): feature_collection(
+                    "https://example.org/iiif/book3/manifest"
+                )
+            },
+        )
+        self.assertEqual(expected.keys(), {URL, other_url})
+        self.assertEqual(referenced_manifests(), expected)

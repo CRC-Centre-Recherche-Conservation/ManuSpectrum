@@ -1,18 +1,19 @@
 """Check, stamp, verify and unstamp the image frame of the annotation zones already stored.
 
 ``check`` counts the zones per stamp state (the gauge's counts: ``data`` only,
-provisional edits not counted) and lists the images of the unstamped zones of
-``data``; it reads the database only. ``stamp`` gives each unstamped zone the
-frame it was drawn in (``frames.STAMP_KEYS``). A feature of the Biblissima
-import's location node (``COMP_LOCATION_DOC_NODE``) that is the whole-page
-rectangle the import wrote before stamping existed, at any power-of-two unit
-(32 before 1.0.3, the read or assumed unit since), gets ``import-legacy``; any
-other zone gets ``frame_writes.frame_for_service`` of its image, one call per
-distinct image service and manifest, the registered manifests loaded once per
-run. Each image description is read at most once per pass, again over the
-network unless this server read it within ``IIIF_IMAGE_INFO_STAMP_MAX_AGE``
-seconds. An image that cannot be read is skipped and listed. A zone already
-carrying a valid stamp is never touched.
+provisional edits not counted), lists the images of the unstamped zones of
+``data`` and the malformed annotation values of ``data`` (first
+``MALFORMED_LISTED``, then the total); it reads the database only. ``stamp``
+gives each unstamped zone the frame it was drawn in (``frames.STAMP_KEYS``). A
+feature of the Biblissima import's location node (``COMP_LOCATION_DOC_NODE``)
+that is the whole-page rectangle the import wrote before stamping existed, at
+any power-of-two unit (32 before 1.0.3, the read or assumed unit since), gets
+``import-legacy``; any other zone gets ``frame_writes.frame_for_service`` of its
+image, one call per distinct image service and manifest, the registered
+manifests loaded once per run. Each image description is read at most once
+per pass, again over the network unless this server read it within
+``IIIF_IMAGE_INFO_STAMP_MAX_AGE`` seconds. An image that cannot be read is
+skipped and listed. A zone already carrying a valid stamp is never touched.
 
 One failed read marks its whole host down for ``IIIF_IMAGE_INFO_DOWN_TTL``
 seconds, and every later image of that host is then skipped. With ``--apply``
@@ -117,6 +118,7 @@ import errno
 import json
 import logging
 import os
+import re
 import shlex
 import time
 import uuid
@@ -138,6 +140,7 @@ from manuspectrum.constants.biblissima import COMP_LOCATION_DOC_NODE
 from manuspectrum.iiif import frame_scope, frame_writes, frames, units
 from manuspectrum.iiif.units import Frame
 from manuspectrum.observability import activity
+from manuspectrum.utils import manifest_registry
 from manuspectrum.views.explorer.values import rewrite_legacy_url
 
 logger = logging.getLogger(__name__)
@@ -151,6 +154,7 @@ REVERTED_REASON = "geometry reverted by a later save"
 PUT_BACK_REASON = "stamp put back on reverted geometry"
 REFUSED_STATE = "refused"
 UNREADABLE_STATE = "unreadable"
+MALFORMED_LISTED = 50
 CHECK_SCRIPT = Path(frames.__file__).with_name("frame_check.js")
 BUCKETS = (
     ("same", "same"),
@@ -163,20 +167,16 @@ BUCKETS = (
 
 def annotation_nodes():
     """``{node id: nodegroup id}`` of the annotation nodes, ids as strings."""
-    return {
-        str(node_id): group
-        for node_id, group in Node.objects.filter(datatype="annotation").values_list(
-            "nodeid", "nodegroup_id"
-        )
-    }
+    return manifest_registry.annotation_node_groups()
 
 
-def tiles_of(nodes, only=None):
-    """``(tile id, data, provisionaledits)`` of every tile of the annotation nodegroups (those in *only* when given)."""
+def tiles_of(nodes, only=None, groups=False):
+    """``(tile id, data, provisionaledits)`` of every tile of the annotation nodegroups (those in *only* when given); with *groups*, ``(tile id, nodegroup id, data, provisionaledits)``."""
     rows = TileModel.objects.filter(nodegroup_id__in=set(nodes.values()))
     if only is not None:
         rows = rows.filter(pk__in=only)
-    return rows.values_list("tileid", "data", "provisionaledits").iterator(
+    fields = ("tileid", "nodegroup_id") if groups else ("tileid",)
+    return rows.values_list(*fields, "data", "provisionaledits").iterator(
         chunk_size=500
     )
 
@@ -189,6 +189,53 @@ def collections_of(data, edits, nodes):
         for node_id, collection in values.items():
             if str(node_id) in nodes:
                 found.append((user_id, str(node_id), collection))
+    return found
+
+
+PG_UUID = re.compile(r"[0-9A-Fa-f]{4}(?:-?[0-9A-Fa-f]{4}){7}")
+
+
+def pg_uuid(text):
+    """True when PostgreSQL's ``uuid`` input accepts *text* (``uuid.c`` ``string_to_uuid``): 32 hex digits, an optional hyphen after each group of four but the last, optionally inside one pair of braces."""
+    core = text[1:-1] if text.startswith("{") and text.endswith("}") else text
+    return PG_UUID.fullmatch(core) is not None
+
+
+def malformed_values(data, nodes, nodegroup_id):
+    """``[(node id or None, feature index or None, id or None, reason)]`` of the values of tile *data* that make Arches' annotation view fail.
+
+    Mirrors the view of Arches 8.2.0a27 (``arches/app/models/migrations/10710_fix_whatisthis.py``):
+    tile data that is not an object; for an annotation node of the tile's
+    own nodegroup, ``features`` present and not a list (JSON null included);
+    a feature whose ``id`` is present, not null and not text PostgreSQL's
+    ``uuid`` accepts (``pg_uuid``; a JSON integer is tested as its text). An
+    absent ``features``, a node value or a feature that is not an object and a
+    null or absent ``id`` do not fail it. ``tiles.tiledata`` is NOT NULL, so a
+    *data* of None is a stored JSON ``null``, which the view refuses too.
+    """
+    found = []
+    if not isinstance(data, dict):
+        return [(None, None, None, "tile data is not an object")]
+    for node_id, value in data.items():
+        group = nodes.get(str(node_id))
+        if group is None or group != nodegroup_id or not isinstance(value, dict):
+            continue
+        if "features" not in value:
+            continue
+        features = value["features"]
+        if not isinstance(features, list):
+            found.append((str(node_id), None, None, "features is not a list"))
+            continue
+        for index, feature in enumerate(features):
+            fid = feature.get("id") if isinstance(feature, dict) else None
+            if fid is None:
+                continue
+            if isinstance(fid, int) and not isinstance(fid, bool):
+                text = str(fid)
+            else:
+                text = fid if isinstance(fid, str) else None
+            if text is None or not pg_uuid(text):
+                found.append((str(node_id), index, fid, "feature id is not a UUID"))
     return found
 
 
@@ -1138,7 +1185,11 @@ class Command(BaseCommand):
         for state, count in counts.items():
             self._out(f"  {state}: {count}")
         unresolved = Counter()
-        for _tile, data, edits in tiles_of(nodes):
+        malformed = []
+        for tile_id, group, data, edits in tiles_of(nodes, groups=True):
+            malformed.extend(
+                (tile_id, *found) for found in malformed_values(data, nodes, group)
+            )
             for user, _node, collection in collections_of(data, edits, nodes):
                 if user is not None:
                     continue
@@ -1154,6 +1205,26 @@ class Command(BaseCommand):
                 self._out(f"  {canvas}: {count}")
         else:
             self._out("No unstamped zone.")
+        self._out("")
+        self._report_malformed(malformed)
+
+    def _report_malformed(self, malformed):
+        if not malformed:
+            self._out("No malformed annotation value.")
+            return
+        self._out(
+            "Malformed annotation values (Arches' annotation view fails on them):"
+        )
+        for tile_id, node_id, index, fid, reason in malformed[:MALFORMED_LISTED]:
+            where = f"tile {tile_id}"
+            if node_id is not None:
+                where += f" node {node_id}"
+            if index is not None:
+                where += f" feature {index} (id {fid!r:.80})"
+            self._out(f"  {where}: {reason}")
+        if len(malformed) > MALFORMED_LISTED:
+            self._out(f"  ... and {len(malformed) - MALFORMED_LISTED} more")
+        self._out(f"{len(malformed)} malformed annotation value(s).")
 
     def _stamp(self, options):
         apply_changes = options["apply"]
