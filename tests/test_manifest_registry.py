@@ -23,10 +23,14 @@ from arches.app.models.models import (
     NodeGroup,
     ResourceInstance,
     TileModel,
+    VwAnnotation,
 )
 from arches.app.models.tile import Tile
 
 from manuspectrum.iiif import sources
+from manuspectrum.management.commands.register_manifests import (
+    referenced_manifests,
+)
 from manuspectrum.utils import manifest_registry as registry
 from manuspectrum.utils.budget import BudgetSpent
 from manuspectrum.utils.http import UnsafeURLError
@@ -658,11 +662,34 @@ class RegisterManifestsMalformedValueTests(AnnotationFixtures):
         self.assertIn("dry run: 1 would register", report)
 
     def test_referenced_manifests_keep_count_and_first_canvas(self):
-        from manuspectrum.management.commands.register_manifests import (
-            referenced_manifests,
-        )
-
         self.stored(self.good(None))
         self.stored({"type": "FeatureCollection", "features": {"id": "x"}})
         self.stored(self.good("not-a-uuid"))
         self.assertEqual(referenced_manifests(), {URL: [2, [SERVICE]]})
+
+    def test_well_formed_tiles_read_as_arches_annotation_view_does(self):
+        other_url = "https://example.org/iiif/book2/manifest"
+        self.stored(self.good(None))
+        self.stored(feature_collection(other_url, "https://example.org/c2"))
+        self.stored(feature_collection(manifest="ftp://example.org/m"))
+        self.stored(None)
+        TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            resourceinstance=self.resource,
+            nodegroup=self.nodegroup,
+            data={str(self.other.pk): feature_collection()},
+            provisionaledits={
+                "7": {"value": {str(self.annotation.pk): feature_collection()}}
+            },
+        )
+        expected = {}
+        for feature in VwAnnotation.objects.values_list("feature", flat=True):
+            named = registry.feature_manifest(feature)
+            if named is None:
+                continue
+            entry = expected.setdefault(named[0], [0, []])
+            entry[0] += 1
+            if named[1] and not entry[1]:
+                entry[1].append(named[1])
+        self.assertEqual(expected.keys(), {URL, other_url})
+        self.assertEqual(referenced_manifests(), expected)
