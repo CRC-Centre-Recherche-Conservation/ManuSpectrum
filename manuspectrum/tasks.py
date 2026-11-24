@@ -222,3 +222,24 @@ def measurement_prepare_task(run_id):
         return
     if prepare.prepare_run(run):
         intake.send(intake.PREPARE_TASK, run.id, countdown=1)
+
+
+@shared_task(
+    name="manuspectrum.measurement_write",
+    acks_late=True,
+    soft_time_limit=45,
+    time_limit=55,
+)
+def measurement_write_task(run_id):
+    """Write one chunk of a measurement-files run, then send itself again while items remain."""
+    from django.core.exceptions import ValidationError
+
+    from manuspectrum.measurement_files import intake, writer
+    from manuspectrum.models import MeasurementRun
+
+    try:
+        run = MeasurementRun.objects.get(pk=str(run_id))
+    except (MeasurementRun.DoesNotExist, ValidationError):
+        return
+    if writer.write_run(run):
+        intake.send(intake.WRITE_TASK, run.id, countdown=1)

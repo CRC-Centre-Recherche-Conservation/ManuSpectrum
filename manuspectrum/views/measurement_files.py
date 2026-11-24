@@ -13,6 +13,7 @@ import uuid
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseNotFound, JsonResponse
+from django.db import transaction
 from django.utils import translation
 from django.utils.cache import patch_cache_control
 from django.utils.decorators import method_decorator
@@ -24,7 +25,7 @@ from arches.app.utils.decorators import group_required
 from manuspectrum.constants.measurement_files import CAUSES, ITEM_STATES
 from manuspectrum.constants.xy_presets import XY_PRESETS
 from manuspectrum.measurement_files import catalogue, decisions, intake, matching
-from manuspectrum.measurement_files import prepare, staging
+from manuspectrum.measurement_files import prepare, staging, writer
 from manuspectrum.measurement_files.converters.base import UNREADABLE_LABELS
 from manuspectrum.models import (
     MeasurementItem,
@@ -297,6 +298,72 @@ class RunPrepareView(RunBase):
         if outcome == "refused":
             return _error("run_not_collecting", 409)
         return _json({"state": "preparing"}, 202 if outcome == "started" else 200)
+
+
+def _enqueue_write(run_id):
+    transaction.on_commit(lambda: intake.send(intake.WRITE_TASK, run_id))
+
+
+class RunWriteView(RunBase):
+    """``POST``: start writing a reviewed run; 409 unless it is in ``review`` with nothing pending."""
+
+    def post(self, request, run_id):
+        run = self.own_run(request, run_id)
+        if run is None:
+            return HttpResponseNotFound()
+        with transaction.atomic():
+            locked = MeasurementRun.objects.select_for_update().get(pk=run.pk)
+            if locked.state == "writing":
+                return _json({"state": "writing"})
+            if locked.state != "review":
+                return _error("run_not_in_review", 409)
+            if not decisions.ready_to_write(locked):
+                return _error("items_pending", 409)
+            if not locked.items.filter(state="prepared", decision="ready").exists():
+                return _error("nothing_to_write", 409)
+            MeasurementRun.objects.filter(pk=run.pk).update(
+                state="writing", stop_requested=False
+            )
+            _enqueue_write(run.id)
+        return _json({"state": "writing"}, 202)
+
+
+class RunRetryView(RunBase):
+    """``POST``: put the items the writer failed back to ``ready`` and write again."""
+
+    def post(self, request, run_id):
+        run = self.own_run(request, run_id)
+        if run is None:
+            return HttpResponseNotFound()
+        with transaction.atomic():
+            locked = MeasurementRun.objects.select_for_update().get(pk=run.pk)
+            if locked.state not in ("review", "written"):
+                return _error("run_not_retryable", 409)
+            changed = locked.items.filter(
+                state="failed", error__in=writer.WRITE_ERRORS
+            ).update(state="prepared", decision="ready", error="", claimed_at=None)
+            if not changed:
+                return _error("nothing_to_retry", 409)
+            MeasurementRun.objects.filter(pk=run.pk).update(
+                state="writing", stop_requested=False, finished_at=None
+            )
+            _enqueue_write(run.id)
+        return _json({"state": "writing", "retried": changed}, 202)
+
+
+class RunStopView(RunBase):
+    """``POST``: ask a writing run to stop after the Analysis it is on."""
+
+    def post(self, request, run_id):
+        run = self.own_run(request, run_id)
+        if run is None:
+            return HttpResponseNotFound()
+        stopped = MeasurementRun.objects.filter(pk=run.pk, state="writing").update(
+            stop_requested=True
+        )
+        if not stopped:
+            return _error("run_not_writing", 409)
+        return _json({"state": "writing", "stop_requested": True}, 202)
 
 
 def _fold(text):

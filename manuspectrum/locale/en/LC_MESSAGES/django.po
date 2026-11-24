@@ -8081,3 +8081,8 @@ msgstr "The CSV does not follow the format the viewer reads."
 #: constants/measurement_files.py
 msgid "The converted CSV is too large to be stored."
 msgstr "The converted CSV is too large to be stored."
+
+#: measurement_files/writer.py
+#, python-format
+msgid "Measurement files - added: %(files)d, analyses: %(analyses)d, failed: %(failed)d."
+msgstr "Measurement files - added: %(files)d, analyses: %(analyses)d, failed: %(failed)d."

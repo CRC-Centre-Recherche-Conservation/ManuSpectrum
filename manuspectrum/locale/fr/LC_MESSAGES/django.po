@@ -8245,3 +8245,8 @@ msgstr "Le CSV ne respecte pas le format que lit le visualiseur."
 #: constants/measurement_files.py
 msgid "The converted CSV is too large to be stored."
 msgstr "Le CSV converti est trop volumineux pour être enregistré."
+
+#: measurement_files/writer.py
+#, python-format
+msgid "Measurement files - added: %(files)d, analyses: %(analyses)d, failed: %(failed)d."
+msgstr "Fichiers de mesure - ajoutés : %(files)d, analyses : %(analyses)d, échecs : %(failed)d."

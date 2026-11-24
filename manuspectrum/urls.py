@@ -96,9 +96,12 @@ from manuspectrum.views.measurement_files import (
     RunItemsView,
     RunPrepareView,
     RunPreviewView,
+    RunRetryView,
+    RunStopView,
     RunStoredView,
     RunUndoView,
     RunView,
+    RunWriteView,
 )
 from manuspectrum.views.model_graph import ModelGraphView
 from manuspectrum.views.mvt import EmptyTileMVTView
@@ -802,6 +805,9 @@ for _route, _view, _name in [
     ("runs/<uuid:run_id>/files", RunFilesView, "api-measurement-files"),
     ("runs/<uuid:run_id>/stored", RunStoredView, "api-measurement-stored"),
     ("runs/<uuid:run_id>/prepare", RunPrepareView, "api-measurement-prepare"),
+    ("runs/<uuid:run_id>/write", RunWriteView, "api-measurement-write"),
+    ("runs/<uuid:run_id>/retry", RunRetryView, "api-measurement-retry"),
+    ("runs/<uuid:run_id>/stop", RunStopView, "api-measurement-stop"),
     ("runs/<uuid:run_id>/items", RunItemsView, "api-measurement-items"),
     ("runs/<uuid:run_id>/causes", RunCausesView, "api-measurement-causes"),
     ("runs/<uuid:run_id>/analyses", RunAnalysesView, "api-measurement-analyses"),
