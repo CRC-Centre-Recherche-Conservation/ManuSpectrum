@@ -68,7 +68,9 @@ FACT_LABELS = {
 }
 
 WARNINGS = {
-    "no_calibration": gettext_noop("The file carries no calibration."),
+    "no_calibration": gettext_noop(
+        "The file holds no energy calibration: the axis stays in channels."
+    ),
     "date_order_unknown": gettext_noop(
         "The date is given as written; its day/month order is unknown."
     ),
@@ -76,10 +78,11 @@ WARNINGS = {
         "Detector jumps are not corrected in this spectrum."
     ),
     "h2o_compensation_not_applied": gettext_noop(
-        "Water vapour compensation was not applied."
+        "The file names a water-vapour compensation; it was not applied to this CSV."
     ),
     "grids_differ": gettext_noop(
-        "The spectra of this file do not share the same x grid."
+        "The spectra of this file are on different x grids: they are not summed "
+        "and only the raw file is kept."
     ),
     "no_reader": gettext_noop(
         "No reader exists for this format; the raw file is kept."

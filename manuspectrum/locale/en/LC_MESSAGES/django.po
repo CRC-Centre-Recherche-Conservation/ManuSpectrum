@@ -7787,3 +7787,205 @@ msgstr ""
 #: templates/views/components/widgets/ms-lang-fallback/shown.htm:1
 msgid "Not entered in this language, shown in"
 msgstr "Not entered in this language, shown in"
+
+#: measurement_files/converters/base.py:29
+msgid "Serial number"
+msgstr "Serial number"
+
+#: measurement_files/converters/base.py:30
+msgid "Acquisition date and time"
+msgstr "Acquisition date and time"
+
+#: measurement_files/converters/base.py:31
+msgid "Reference acquisition date and time"
+msgstr "Reference acquisition date and time"
+
+#: measurement_files/converters/base.py:32
+msgid "Tube anode"
+msgstr "Tube anode"
+
+#: measurement_files/converters/base.py:33
+msgid "Tube voltage"
+msgstr "Tube voltage"
+
+#: measurement_files/converters/base.py:34
+msgid "Tube current"
+msgstr "Tube current"
+
+#: measurement_files/converters/base.py:35
+msgid "Real time"
+msgstr "Real time"
+
+#: measurement_files/converters/base.py:36
+msgid "Live time"
+msgstr "Live time"
+
+#: measurement_files/converters/base.py:37
+msgid "Dead time"
+msgstr "Dead time"
+
+#: measurement_files/converters/base.py:38
+msgid "Measurement time"
+msgstr "Measurement time"
+
+#: measurement_files/converters/base.py:39
+msgid "Integration time"
+msgstr "Integration time"
+
+#: measurement_files/converters/base.py:40
+msgid "Averages"
+msgstr "Averages"
+
+#: measurement_files/converters/base.py:41
+msgid "Sample scans"
+msgstr "Sample scans"
+
+#: measurement_files/converters/base.py:42
+msgid "Background scans"
+msgstr "Background scans"
+
+#: measurement_files/converters/base.py:43
+msgid "Dark scans"
+msgstr "Dark scans"
+
+#: measurement_files/converters/base.py:44
+msgid "Reference scans"
+msgstr "Reference scans"
+
+#: measurement_files/converters/base.py:45
+msgid "Detector gains"
+msgstr "Detector gains"
+
+#: measurement_files/converters/base.py:46
+msgid "Resolution"
+msgstr "Resolution"
+
+#: measurement_files/converters/base.py:47
+msgid "Spectral range"
+msgstr "Spectral range"
+
+#: measurement_files/converters/base.py:48
+msgid "Channels"
+msgstr "Channels"
+
+#: measurement_files/converters/base.py:49
+msgid "Calibration"
+msgstr "Calibration"
+
+#: measurement_files/converters/base.py:50
+msgid "Calibration source"
+msgstr "Calibration source"
+
+#: measurement_files/converters/base.py:51
+msgid "Laser wavelength"
+msgstr "Laser wavelength"
+
+#: measurement_files/converters/base.py:52
+msgid "Filter"
+msgstr "Filter"
+
+#: measurement_files/converters/base.py:45
+msgid "Detector"
+msgstr "Detector"
+
+#: measurement_files/converters/base.py:54
+msgid "Accessory"
+msgstr "Accessory"
+
+#: measurement_files/converters/base.py:55
+msgid "Beam splitter"
+msgstr "Beam splitter"
+
+#: measurement_files/converters/base.py:56
+msgid "Source"
+msgstr "Source"
+
+#: measurement_files/converters/base.py:57
+msgid "Apodization"
+msgstr "Apodization"
+
+#: measurement_files/converters/base.py:58
+msgid "Zero filling"
+msgstr "Zero filling"
+
+#: measurement_files/converters/base.py:59
+msgid "Result spectrum"
+msgstr "Result spectrum"
+
+#: measurement_files/converters/base.py:60
+msgid "Excitation angle"
+msgstr "Excitation angle"
+
+#: measurement_files/converters/base.py:61
+msgid "Detection angle"
+msgstr "Detection angle"
+
+#: measurement_files/converters/base.py:62
+msgid "Working distance"
+msgstr "Working distance"
+
+#: measurement_files/converters/base.py:63
+msgid "Beam size"
+msgstr "Beam size"
+
+#: measurement_files/converters/base.py:64
+msgid "Atmosphere"
+msgstr "Atmosphere"
+
+#: measurement_files/converters/base.py:65
+msgid "Ionisation"
+msgstr "Ionisation"
+
+#: measurement_files/converters/base.py:66
+msgid "Mass analyzer"
+msgstr "Mass analyzer"
+
+#: measurement_files/converters/base.py:67
+msgid "Acquisition software"
+msgstr "Acquisition software"
+
+#: measurement_files/converters/base.py:72
+msgid "The file holds no energy calibration: the axis stays in channels."
+msgstr "The file holds no energy calibration: the axis stays in channels."
+
+#: measurement_files/converters/base.py:75
+msgid "The date is given as written; its day/month order is unknown."
+msgstr "The date is given as written; its day/month order is unknown."
+
+#: measurement_files/converters/base.py:78
+msgid "Detector jumps are not corrected in this spectrum."
+msgstr "Detector jumps are not corrected in this spectrum."
+
+#: measurement_files/converters/base.py:81
+msgid "The file names a water-vapour compensation; it was not applied to this CSV."
+msgstr "The file names a water-vapour compensation; it was not applied to this CSV."
+
+#: measurement_files/converters/base.py:84
+msgid "The spectra of this file are on different x grids: they are not summed and only the raw file is kept."
+msgstr "The spectra of this file are on different x grids: they are not summed and only the raw file is kept."
+
+#: measurement_files/converters/base.py:88
+msgid "No reader exists for this format; the raw file is kept."
+msgstr "No reader exists for this format; the raw file is kept."
+
+#: measurement_files/converters/metadata.py:17
+msgid "Note"
+msgstr "Note"
+
+#: measurement_files/converters/metadata.py:18
+msgid "unit not stated in the file"
+msgstr "unit not stated in the file"
+
+#: measurement_files/converters/metadata.py:19
+msgid "Source file"
+msgstr "Source file"
+
+#: measurement_files/converters/metadata.py:20
+msgid "Converted by"
+msgstr "Converted by"
+
+#. Translators: one line of a file description, "<label>: <value>"
+#: measurement_files/converters/metadata.py:22
+#, python-format
+msgid "%(label)s: %(value)s"
+msgstr "%(label)s: %(value)s"
