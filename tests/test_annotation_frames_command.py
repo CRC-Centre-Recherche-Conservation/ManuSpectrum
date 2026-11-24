@@ -1208,3 +1208,113 @@ class OptionGuardTests(AnnotationFramesCase):
         with mock.patch.object(annotation_frames.time, "sleep") as sleep:
             REAL_SLEEP(annotation_frames.Command(), 7)
         sleep.assert_called_once_with(7)
+
+
+class JournalGeometryTests(AnnotationFramesCase):
+    OLD = units.Frame(32, 4913, 6609, "estimated").stamp()
+    NEW = units.Frame(16, 4913, 6609, "browser").stamp()
+
+    def setUp(self):
+        super().setUp()
+        self.original = zone("z1", canvas=READ_SERVICE, stamp=self.OLD)
+        self.tile_ = self.tile(copy.deepcopy(self.original))
+        moved = copy.deepcopy(self.original)
+        moved["properties"].update(self.NEW)
+        moved["geometry"]["coordinates"][0][0][0] = 99.0
+        self.moved = moved
+
+    def line(self, **extra):
+        return {
+            "tile": str(self.tile_.pk),
+            "node": str(self.annotation.pk),
+            "provisional": None,
+            "feature": "z1",
+            "canvas": READ_SERVICE,
+            "digest": frames.geometry_digest(self.moved["geometry"]),
+            "before": self.original["properties"],
+            "after": self.moved["properties"],
+            **extra,
+        }
+
+    def write_journal(self, line):
+        with open(self.journal, "w") as handle:
+            handle.write(json.dumps(line) + "\n")
+
+    def store(self, feature):
+        data = self.row(self.tile_).data
+        data[str(self.annotation.pk)] = collection(feature)
+        TileModel.objects.filter(pk=self.tile_.pk).update(data=data)
+
+    def test_a_geometry_before_object_is_read(self):
+        self.write_journal(self.line(geometry_before=self.original["geometry"]))
+        lines = annotation_frames.read_journal(self.journal)[self.tile_.pk]
+        self.assertEqual(lines[0]["geometry_before"], self.original["geometry"])
+
+    def test_a_geometry_before_that_is_not_an_object_names_its_line(self):
+        with open(self.journal, "w") as handle:
+            handle.write(json.dumps(self.line()) + "\n")
+            handle.write(json.dumps(self.line(geometry_before="x")) + "\n")
+        with self.assertRaisesMessage(CommandError, "line 2"):
+            self.run_command("unstamp", "--journal", self.journal)
+
+    def test_unstamp_puts_back_the_geometry_value_for_value(self):
+        before = self.snapshot()
+        self.store(self.moved)
+        self.write_journal(self.line(geometry_before=self.original["geometry"]))
+        self.run_command("unstamp", "--journal", self.journal, "--apply")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_a_line_without_geometry_before_leaves_the_geometry(self):
+        self.store(self.moved)
+        self.write_journal(self.line())
+        self.run_command("unstamp", "--journal", self.journal, "--apply")
+        data = self.row(self.tile_).data[str(self.annotation.pk)]["features"][0]
+        self.assertEqual(data["geometry"], self.moved["geometry"])
+        self.assertEqual(data["properties"], self.original["properties"])
+
+    def test_a_geometry_back_to_its_old_value_is_reported_as_reverted(self):
+        reverted = copy.deepcopy(self.moved)
+        reverted["geometry"] = copy.deepcopy(self.original["geometry"])
+        self.store(reverted)
+        stored = self.snapshot()
+        self.write_journal(self.line(geometry_before=self.original["geometry"]))
+        out = self.run_command("unstamp", "--journal", self.journal)
+        self.assertIn("geometry reverted by a later save", out)
+        self.assertNotIn("changed since", out)
+        self.assertEqual(self.snapshot(), stored)
+
+    def test_apply_puts_the_old_stamp_back_on_the_reverted_geometry(self):
+        reverted = copy.deepcopy(self.moved)
+        reverted["geometry"] = copy.deepcopy(self.original["geometry"])
+        self.store(reverted)
+        self.write_journal(self.line(geometry_before=self.original["geometry"]))
+        out = self.run_command("unstamp", "--journal", self.journal, "--apply")
+        self.assertIn("stamp put back on reverted geometry", out)
+        feature = self.row(self.tile_).data[str(self.annotation.pk)]["features"][0]
+        self.assertEqual(feature["geometry"], self.original["geometry"])
+        self.assertEqual(feature["properties"], self.original["properties"])
+
+    def test_a_reverted_geometry_is_named_whatever_properties_it_now_carries(self):
+        reverted = copy.deepcopy(self.original)
+        reverted["properties"]["msUnit"] = 16
+        reverted["properties"]["note"] = "restamped by a later save"
+        self.store(reverted)
+        stored = self.snapshot()
+        self.write_journal(self.line(geometry_before=self.original["geometry"]))
+        out = self.run_command("unstamp", "--journal", self.journal)
+        self.assertIn("geometry reverted by a later save", out)
+        self.assertNotIn("changed since", out)
+        self.assertEqual(self.snapshot(), stored)
+        self.run_command("unstamp", "--journal", self.journal, "--apply")
+        feature = self.row(self.tile_).data[str(self.annotation.pk)]["features"][0]
+        self.assertEqual(feature["properties"]["msUnit"], 32)
+        self.assertEqual(feature["properties"]["note"], "restamped by a later save")
+
+    def test_another_canvas_is_changed_since_even_with_the_old_geometry(self):
+        elsewhere = copy.deepcopy(self.original)
+        elsewhere["properties"]["canvas"] = "https://other.example/iiif/x"
+        self.store(elsewhere)
+        self.write_journal(self.line(geometry_before=self.original["geometry"]))
+        out = self.run_command("unstamp", "--journal", self.journal, "--apply")
+        self.assertIn("changed since", out)
+        self.assertNotIn("reverted", out)

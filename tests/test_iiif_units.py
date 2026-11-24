@@ -724,3 +724,30 @@ class NotAFeatureTests(SimpleTestCase):
         for value in (None, "text", [], 5):
             with self.subTest(value=value):
                 self.assertEqual(canvas_and_convert(value, dims), ("", None))
+
+
+class InfoFromJsonTests(SimpleTestCase):
+    def test_a_size_alone_gets_the_default_tile(self):
+        self.assertEqual(
+            units.info_from_json({"width": 3435, "height": 4905}),
+            units.ImageInfo(3435, 4905, 256),
+        )
+
+    def test_the_tile_width_is_read_like_leaflet_iiif(self):
+        self.assertEqual(
+            units.info_from_json(
+                {"width": 3435, "height": 4905, "tiles": [{"width": 512}]}
+            ).tile,
+            512,
+        )
+        self.assertEqual(
+            units.info_from_json(
+                {"width": 3435, "height": 4905, "tile_width": 1024}
+            ).tile,
+            1024,
+        )
+
+    def test_anything_that_is_not_an_image_description_is_none(self):
+        for value in ({"width": "x", "height": 5}, [], None, {"width": 0, "height": 5}):
+            with self.subTest(value=value):
+                self.assertIsNone(units.info_from_json(value))
