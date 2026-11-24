@@ -6,7 +6,7 @@ names and x-ascending order, into `expected.json` next to it, keyed by the
 fixture path relative to this directory.
 
     pip install brukeropus==1.4.3 pyASDReader==1.2.3 spc-spectra==0.4.0 pyteomics numpy
-    python oracle.py <format> <fixture path>      # format: spc
+    python oracle.py <format> <fixture path>      # format: spc, opus
 
 An entry holds `columns`, `rows`, `head` and `tail` (5 rows each), `sums` (per
 column), `content_preset` and `oracle` (library and version). An entry may also
@@ -56,7 +56,40 @@ def spc(path):
     )
 
 
-FORMATS = {"spc": spc}
+_OPUS_KEYS = {"AB": "a", "TR": "t", "RFL": "r", "RF": "r", "R": "r"}
+_OPUS_COLUMNS = {
+    "a": ("absorbance", "ftir"),
+    "t": ("transmittance", None),
+    "r": ("reflectance", "ftir_reflection"),
+}
+
+
+def opus(path):
+    """Bruker OPUS through brukeropus: the result block named by `PLF`, x sorted.
+
+    Prints the history text and the sample, form and path parameters, to be
+    pinned by hand as `forbidden`.
+    """
+    from brukeropus import read_opus
+    from importlib.metadata import version
+
+    o = read_opus(str(path))
+    plf = o.params.plf if "plf" in o.params.keys() else ""
+    key = _OPUS_KEYS[plf]
+    block = getattr(o, key)
+    rows = sorted(zip((float(v) for v in block.x), (float(v) for v in block.y)))
+    print("blocks:", o.data_keys, "PLF:", repr(plf))
+    for code in ("snm", "sfm", "exp", "xpp"):
+        if code in o.params.keys():
+            print(code, repr(getattr(o.params, code)))
+    print("history:", repr(getattr(o, "history", None)))
+    name, preset = _OPUS_COLUMNS[key]
+    return _entry(
+        ["wavenumber_cm-1", name], rows, preset, f"brukeropus {version('brukeropus')}"
+    )
+
+
+FORMATS = {"spc": spc, "opus": opus}
 
 
 def main(argv):

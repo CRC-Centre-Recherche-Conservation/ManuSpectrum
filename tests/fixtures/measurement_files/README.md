@@ -10,7 +10,7 @@ Synthetic. Built in memory by `tests/measurement_fixtures.elio_mca`, with
 invented header values; nothing is stored here. The copy at
 `tests/fixtures/xy/elio_xrf.mca` is written by the same function.
 
-## InDoRES — Mappa mundi d'Albi (`delimited`, `bruker_spx`, `galactic_spc`)
+## InDoRES — Mappa mundi d'Albi (`delimited`, `bruker_spx`, `galactic_spc`, `opus`)
 
 Dataset « Parchment, ink and colouring materials analyses of the Mappa mundi of
 Albi », doi:10.48579/PRO/T2VBXF
@@ -24,6 +24,12 @@ Schanne-Klein, Anne Michelin, Jocelyne Deschaux.
   otherwise unchanged.
 - `indores_albi/X16_parchment.spx`: an XRF spectrum in Bruker's XML format
   (`bruker_spx`). Line endings normalised to LF; content otherwise unchanged.
+- `indores_albi/IR1_parchment.0`: an FTIR reflectance spectrum in Bruker OPUS
+  binary format (`opus`). Byte for byte unchanged.
+- `indores_albi/SERS_Ms29f57v_s1_785_01.spc.0`: a SERS spectrum in Bruker OPUS
+  binary format whose result block is an unclassified « Spectrum » on a point
+  axis: detected as `opus`, refused as `unsupported_variant`. Byte for byte
+  unchanged.
 - `indores_albi/Raman_Ms29f57v_s1_532_vert2.spc`: a Raman spectrum (532 nm) in
   Galactic SPC format (`galactic_spc`). Byte for byte unchanged.
 

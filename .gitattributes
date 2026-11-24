@@ -12,4 +12,5 @@
 *.mca binary
 *.asd binary
 *.spc binary
+*.[0-9] binary
 *.woff2 binary
