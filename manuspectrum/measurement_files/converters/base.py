@@ -29,8 +29,10 @@ UNREADABLE_CODES = frozenset(
 FACT_LABELS = {
     "instrument": gettext_noop("Instrument"),
     "serial_number": gettext_noop("Serial number"),
-    "acquired_at": gettext_noop("Acquisition date and time"),
-    "reference_acquired_at": gettext_noop("Reference acquisition date and time"),
+    "acquired_at": gettext_noop("Acquisition date and time (instrument clock)"),
+    "reference_acquired_at": gettext_noop(
+        "Reference acquisition date and time (instrument clock)"
+    ),
     "tube_anode": gettext_noop("Tube anode"),
     "tube_voltage": gettext_noop("Tube voltage"),
     "tube_current": gettext_noop("Tube current"),
@@ -67,6 +69,27 @@ FACT_LABELS = {
     "mass_analyzer": gettext_noop("Mass analyzer"),
     "acquisition_software": gettext_noop("Acquisition software"),
 }
+
+QUANTITY_KEYS = frozenset(
+    {
+        "tube_voltage",
+        "tube_current",
+        "real_time",
+        "live_time",
+        "dead_time",
+        "measurement_time",
+        "integration_time",
+        "resolution",
+        "spectral_range",
+        "laser_wavelength",
+        "excitation_angle",
+        "detection_angle",
+        "working_distance",
+        "beam_size",
+        "calibration",
+    }
+)
+"""Facts that carry a physical unit; every other key is unitless."""
 
 WARNINGS = {
     "no_calibration": gettext_noop(

@@ -7956,13 +7956,13 @@ msgstr "Non saisi dans cette langue, affiché en"
 msgid "Serial number"
 msgstr "Numéro de série"
 
-#: measurement_files/converters/base.py:30
-msgid "Acquisition date and time"
-msgstr "Date et heure d'acquisition"
+#: measurement_files/converters/base.py:32
+msgid "Acquisition date and time (instrument clock)"
+msgstr "Date et heure d'acquisition (horloge de l'instrument)"
 
-#: measurement_files/converters/base.py:31
-msgid "Reference acquisition date and time"
-msgstr "Date et heure d'acquisition de la référence"
+#: measurement_files/converters/base.py:33
+msgid "Reference acquisition date and time (instrument clock)"
+msgstr "Date et heure d'acquisition de la référence (horloge de l'instrument)"
 
 #: measurement_files/converters/base.py:32
 msgid "Tube anode"

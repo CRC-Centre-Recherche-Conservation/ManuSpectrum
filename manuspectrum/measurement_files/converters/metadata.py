@@ -3,7 +3,7 @@
 Only the facts of `FACT_LABELS` and the warnings of `WARNINGS` reach the
 text, in every configured language, one per line. Values and the source name
 go through `views.explorer.series.neutralise` (one line, no `"`, formulas
-defused). A fact without a unit says so; dates stay as written.
+defused). A quantity without a unit says so, any other fact prints its value alone; dates stay as written.
 """
 
 from django.conf import settings
@@ -12,7 +12,7 @@ from django.utils.translation import gettext_noop
 from manuspectrum.iiif.language import gettext_map
 from manuspectrum.views.explorer.series import neutralise
 
-from .base import FACT_LABELS, WARNINGS, Reading
+from .base import FACT_LABELS, QUANTITY_KEYS, WARNINGS, Reading
 
 NOTE = gettext_noop("Note")
 UNIT_ABSENT = gettext_noop("unit not stated in the file")
@@ -35,7 +35,9 @@ def describe(reading: Reading, *, source_name: str, sha256: str) -> dict[str, st
 
     for fact in reading.facts:
         value = neutralise(fact.value)
-        if fact.unit is None:
+        if fact.unit is None and fact.key not in QUANTITY_KEYS:
+            shown = value
+        elif fact.unit is None:
             shown = {lang: [f"{value} ({t[0]})"] for lang, t in absent.items()}
         else:
             shown = f"{value} {neutralise(fact.unit)}"

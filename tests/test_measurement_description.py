@@ -45,6 +45,21 @@ class DescribeTests(SimpleTestCase):
         self.assertEqual(fr[0], "Tension du tube : 20 (unité absente du fichier)")
         self.assertEqual(fr[1], "Résolution : 4 cm-1")
 
+    def test_a_unitless_fact_says_nothing_about_units(self):
+        reading = _reading(
+            [
+                Fact("serial_number", "16401"),
+                Fact("acquired_at", "2015-08-11 16:01:08"),
+            ]
+        )
+        text = describe(reading, source_name="a.mca", sha256=SHA)
+        for lang in ("en", "fr"):
+            first, second = text[lang].split("\n")[:2]
+            self.assertTrue(first.endswith("16401"))
+            self.assertTrue(second.endswith("2015-08-11 16:01:08"))
+            self.assertNotIn("stated", first + second)
+            self.assertNotIn("absente", first + second)
+
     def test_adds_a_line_per_warning(self):
         text = describe(
             _reading(warnings=["no_calibration"]), source_name="a.mca", sha256=SHA
