@@ -86,6 +86,13 @@ from manuspectrum.views.graph_nodes import RelatableNodesView
 from manuspectrum.views.health import HealthzView, ReadyzView
 from manuspectrum.views.knockout_templates import knockout_template
 from manuspectrum.views.manifest_manager import ManifestManagerView
+from manuspectrum.views.measurement_files import (
+    RunCreateView,
+    RunFilesView,
+    RunPrepareView,
+    RunStoredView,
+    RunView,
+)
 from manuspectrum.views.model_graph import ModelGraphView
 from manuspectrum.views.mvt import EmptyTileMVTView
 from manuspectrum.views.plugin import PluginView
@@ -779,3 +786,16 @@ urlpatterns.append(path("healthz", HealthzView.as_view(), name="healthz"))
 urlpatterns.append(path("readyz", ReadyzView.as_view(), name="readyz"))
 urlpatterns.append(path("metrics", MetricsView.as_view(), name="metrics"))
 urlpatterns.append(path("api/csp-report", CspReportView.as_view(), name="csp-report"))
+
+### Measurement files (batch workflow)
+
+for _route, _view, _name in [
+    ("runs", RunCreateView, "api-measurement-run-create"),
+    ("runs/<uuid:run_id>", RunView, "api-measurement-run"),
+    ("runs/<uuid:run_id>/files", RunFilesView, "api-measurement-files"),
+    ("runs/<uuid:run_id>/stored", RunStoredView, "api-measurement-stored"),
+    ("runs/<uuid:run_id>/prepare", RunPrepareView, "api-measurement-prepare"),
+]:
+    urlpatterns.append(
+        path(f"api/measurement-files/{_route}", _view.as_view(), name=_name)
+    )
