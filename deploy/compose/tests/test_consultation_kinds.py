@@ -116,6 +116,13 @@ for _name in (
     "files",
     "stored",
     "prepare",
+    "items",
+    "causes",
+    "analyses",
+    "decisions",
+    "decisions-undo",
+    "preview",
+    "codes",
 ):
     IGNORED[f"api-measurement-{_name}"] = "back-office workflow API, not a consultation"
 

@@ -87,10 +87,17 @@ from manuspectrum.views.health import HealthzView, ReadyzView
 from manuspectrum.views.knockout_templates import knockout_template
 from manuspectrum.views.manifest_manager import ManifestManagerView
 from manuspectrum.views.measurement_files import (
+    CodesView,
+    RunAnalysesView,
+    RunCausesView,
     RunCreateView,
+    RunDecisionsView,
     RunFilesView,
+    RunItemsView,
     RunPrepareView,
+    RunPreviewView,
     RunStoredView,
+    RunUndoView,
     RunView,
 )
 from manuspectrum.views.model_graph import ModelGraphView
@@ -795,6 +802,21 @@ for _route, _view, _name in [
     ("runs/<uuid:run_id>/files", RunFilesView, "api-measurement-files"),
     ("runs/<uuid:run_id>/stored", RunStoredView, "api-measurement-stored"),
     ("runs/<uuid:run_id>/prepare", RunPrepareView, "api-measurement-prepare"),
+    ("runs/<uuid:run_id>/items", RunItemsView, "api-measurement-items"),
+    ("runs/<uuid:run_id>/causes", RunCausesView, "api-measurement-causes"),
+    ("runs/<uuid:run_id>/analyses", RunAnalysesView, "api-measurement-analyses"),
+    ("runs/<uuid:run_id>/decisions", RunDecisionsView, "api-measurement-decisions"),
+    (
+        "runs/<uuid:run_id>/decisions/undo",
+        RunUndoView,
+        "api-measurement-decisions-undo",
+    ),
+    (
+        "runs/<uuid:run_id>/items/<uuid:item_id>/preview",
+        RunPreviewView,
+        "api-measurement-preview",
+    ),
+    ("codes", CodesView, "api-measurement-codes"),
 ]:
     urlpatterns.append(
         path(f"api/measurement-files/{_route}", _view.as_view(), name=_name)

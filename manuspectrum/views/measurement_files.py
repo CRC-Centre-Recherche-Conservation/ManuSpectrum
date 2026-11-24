@@ -1,4 +1,4 @@
-"""Measurement-files batch API, part 1: runs, uploads, stored files, prepare.
+"""Measurement-files batch API, parts 1 and 2: runs, uploads, stored files, prepare, review.
 
 Back-office endpoints for Resource Editors, below the language boundary. A run
 is visible only to its creator (a bodyless 404 otherwise). Errors carry a
@@ -7,26 +7,38 @@ reason code, never a translated sentence. Request bounds are checked from
 """
 
 import json
+import unicodedata
 import uuid
 
 from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseNotFound, JsonResponse
+from django.utils import translation
 from django.utils.cache import patch_cache_control
 from django.utils.decorators import method_decorator
+from django.utils.translation import gettext
 from django.views import View
 
 from arches.app.utils.decorators import group_required
 
-from manuspectrum.constants.measurement_files import ITEM_STATES
-from manuspectrum.measurement_files import catalogue, intake
-from manuspectrum.models import MeasurementItem, MeasurementRun
+from manuspectrum.constants.measurement_files import CAUSES, ITEM_STATES
+from manuspectrum.constants.xy_presets import XY_PRESETS
+from manuspectrum.measurement_files import catalogue, decisions, intake, matching
+from manuspectrum.measurement_files import prepare, staging
+from manuspectrum.measurement_files.converters.base import UNREADABLE_LABELS
+from manuspectrum.models import (
+    MeasurementItem,
+    MeasurementNameCode,
+    MeasurementRun,
+    RendererConfig,
+)
 
 RECENT_ITEMS = 20
+ITEMS_PER_PAGE = 200
 
 
 def _json(payload, status=200):
-    response = JsonResponse(payload, status=status)
+    response = JsonResponse(payload, status=status, safe=False)
     patch_cache_control(response, private=True, no_store=True)
     return response
 
@@ -285,3 +297,418 @@ class RunPrepareView(RunBase):
         if outcome == "refused":
             return _error("run_not_collecting", 409)
         return _json({"state": "preparing"}, 202 if outcome == "started" else 200)
+
+
+def _fold(text):
+    """Case- and accent-insensitive form used by the search boxes."""
+    text = unicodedata.normalize("NFKD", str(text or "")).casefold()
+    return "".join(c for c in text if not unicodedata.combining(c))
+
+
+def _last_action(run):
+    last = run.decisions.first()
+    if last is None:
+        return None
+    return {
+        "action": last.action,
+        "items": len(last.before.get("items", {})),
+        "codes": len(last.before.get("codes", {})),
+        "created_at": last.created_at.isoformat(),
+    }
+
+
+def _display_names(items):
+    ids = {i.display_config_id for i in items if i.display_config_id}
+    names = dict(
+        RendererConfig.objects.filter(pk__in=ids).values_list("configid", "name")
+    )
+    for preset in XY_PRESETS.values():
+        names.setdefault(uuid.UUID(preset["config_id"]), preset["name"])
+    return names
+
+
+def _folio(item):
+    return next((t["piece"] for t in item.tokens if t["meaning"] == "folio"), "")
+
+
+def _review_item(item, cards, names):
+    """One row of the review table; call under ``translation.override(run.language)``."""
+    target = item.chosen_analysis_id or item.proposed_analysis_id
+    card = cards.get(str(target)) if target else None
+    return {
+        "id": str(item.id),
+        "origin": item.origin,
+        "name": item.source_name,
+        "relative_dir": item.relative_dir,
+        "format": item.detected_format,
+        "outcome": item.outcome,
+        "state": item.state,
+        "decision": item.decision,
+        "cause": item.cause,
+        "cause_label": gettext(CAUSES[item.cause]) if item.cause in CAUSES else "",
+        "reason": item.reason,
+        "reason_label": (
+            gettext(UNREADABLE_LABELS[item.reason])
+            if item.outcome == "unreadable" and item.reason in UNREADABLE_LABELS
+            else ""
+        ),
+        "analysis": (
+            {"id": str(target), "label": card.name if card else None}
+            if target
+            else None
+        ),
+        "proposed_analysis_id": (
+            str(item.proposed_analysis_id) if item.proposed_analysis_id else None
+        ),
+        "technique": (
+            {
+                "preset": card.technique_preset,
+                "label": card.technique_label.get(translation.get_language())
+                or next(iter(card.technique_label.values()), ""),
+            }
+            if card
+            else None
+        ),
+        "display": {
+            "config_id": (
+                str(item.display_config_id) if item.display_config_id else None
+            ),
+            "name": names.get(item.display_config_id),
+            "source": item.display_source,
+            "auto": item.display_source == "technique",
+        },
+        "tokens": item.tokens,
+        "paired_item_id": str(item.paired_item_id) if item.paired_item_id else None,
+        "group_folio": _folio(item),
+    }
+
+
+class RunItemsView(RunBase):
+    """The review table: one row per file, filtered, grouped and paged (200 per page).
+
+    ``state`` is the decision (``pending``, ``ready``, ``aside``), ``cause`` a
+    key of ``CAUSES``, ``q`` a case- and accent-insensitive search over the
+    file, folder, analysis, folio sources, technique and name pieces, ``group``
+    one of ``folio``, ``technique``, ``state`` (sets ``group`` on each row and
+    sorts by it). ``ready_to_write`` is true when no prepared item is pending.
+    """
+
+    def get(self, request, run_id):
+        run = self.own_run(request, run_id)
+        if run is None:
+            return HttpResponseNotFound()
+        state, cause = request.GET.get("state"), request.GET.get("cause")
+        group = request.GET.get("group", "")
+        if group not in ("", "folio", "technique", "state"):
+            return _error("bad_request", 400)
+        try:
+            page = max(int(request.GET.get("page", 1)), 1)
+        except ValueError:
+            return _error("bad_request", 400)
+        cards = {c.id: c for c in prepare.load_snapshot(run)[0]}
+        rows = run.items.exclude(state__in=("queued", "claimed", "removed"))
+        if state:
+            rows = rows.filter(decision=state)
+        if cause:
+            rows = rows.filter(cause=cause)
+        rows = list(rows.order_by("relative_dir", "source_name", "id"))
+        needle = _fold(request.GET.get("q", "")).strip()
+        if needle:
+            rows = [i for i in rows if needle in self._haystack(i, cards)]
+        with translation.override(run.language):
+            names = _display_names(rows)
+            data = [_review_item(i, cards, names) for i in rows]
+        for row in data:
+            row["group"] = {
+                "folio": row["group_folio"],
+                "technique": (row["technique"] or {}).get("label", ""),
+                "state": row["decision"],
+            }.get(group, "")
+        if group:
+            data.sort(key=lambda r: (_fold(r["group"]), r["relative_dir"], r["name"]))
+        total = len(data)
+        start = (page - 1) * ITEMS_PER_PAGE
+        return _json(
+            {
+                "items": data[start : start + ITEMS_PER_PAGE],
+                "total": total,
+                "page": page,
+                "pages": max(-(-total // ITEMS_PER_PAGE), 1),
+                "ready_to_write": decisions.ready_to_write(run),
+                "last_action": _last_action(run),
+            }
+        )
+
+    @staticmethod
+    def _haystack(item, cards):
+        target = item.chosen_analysis_id or item.proposed_analysis_id
+        card = cards.get(str(target)) if target else None
+        parts = [item.source_name, item.relative_dir]
+        parts += [t["piece"] for t in item.tokens]
+        if card:
+            parts += [card.name, *card.folio_sources, *card.technique_label.values()]
+        return _fold(" ".join(parts))
+
+
+class RunCausesView(RunBase):
+    """Every cause a prepared item carries, with the actions each offers.
+
+    ``pending`` counts the items of the cause still to decide, ``settled`` the
+    others (decided or set aside). Most pending first, then most items. The
+    cause stays on an item once decided, so ``items?cause=`` lists both.
+    """
+
+    def get(self, request, run_id):
+        run = self.own_run(request, run_id)
+        if run is None:
+            return HttpResponseNotFound()
+        counts = {}
+        for cause, decision in (
+            run.items.filter(state="prepared")
+            .exclude(cause="")
+            .values_list("cause", "decision")
+        ):
+            entry = counts.setdefault(cause, [0, 0])
+            entry[decision == "pending"] += 1
+        with translation.override(run.language):
+            rows = [
+                {
+                    "cause": cause,
+                    "label": gettext(CAUSES[cause]) if cause in CAUSES else cause,
+                    "actions": list(decisions.CAUSE_ACTIONS.get(cause, ())),
+                    "pending": pending,
+                    "settled": settled,
+                }
+                for cause, (settled, pending) in counts.items()
+            ]
+        rows.sort(
+            key=lambda r: (-r["pending"], -(r["pending"] + r["settled"]), r["cause"])
+        )
+        return _json(rows)
+
+
+class RunAnalysesView(RunBase):
+    """The analysis picker, read from the run's catalogue snapshot (never the database).
+
+    Editable analyses only. ``q`` searches name, folio sources and technique;
+    ``technique`` is a preset key or a technique id; ``folio`` a folio such as
+    ``1r`` or ``f1r``; ``item`` marks the analysis proposed for that item and
+    warns when it already holds a file of the item's format. ``hidden`` counts
+    analyses matching ``q`` that the technique and folio filters leave out.
+    ``receives`` counts the files of this batch (not set aside) going to the
+    analysis.
+    """
+
+    def get(self, request, run_id):
+        run = self.own_run(request, run_id)
+        if run is None:
+            return HttpResponseNotFound()
+        cards, shelfmark = prepare.load_snapshot(run)
+        codes = {c.code: c.family for c in run.user.measurement_name_codes.all()}
+        item = None
+        if request.GET.get("item"):
+            item = run.items.filter(pk=_uuid(request.GET["item"])).first()
+            if item is None:
+                return HttpResponseNotFound()
+        receives = {}
+        for target, chosen in (
+            run.items.filter(state="prepared")
+            .exclude(decision="aside")
+            .values_list("proposed_analysis_id", "chosen_analysis_id")
+        ):
+            key = str(chosen or target or "")
+            receives[key] = receives.get(key, 0) + 1
+        needle = _fold(request.GET.get("q", "")).strip()
+        technique = request.GET.get("technique", "")
+        folio = request.GET.get("folio", "").strip().lower()
+        if folio and not folio.startswith("f"):
+            folio = f"f{folio}"
+        out, hidden = [], 0
+        with translation.override(run.language):
+            for card in cards:
+                if not card.editable:
+                    continue
+                if needle and needle not in _fold(
+                    " ".join(
+                        [card.name, *card.folio_sources, *card.technique_label.values()]
+                    )
+                ):
+                    continue
+                keys = matching.analysis_keys(card, codes, shelfmark)
+                if (
+                    technique
+                    and technique != card.technique_preset
+                    and technique not in card.technique_ids
+                ) or (folio and folio not in keys.folios):
+                    hidden += 1
+                    continue
+                out.append(
+                    {
+                        "id": card.id,
+                        "name": card.name,
+                        "technique": {
+                            "preset": card.technique_preset,
+                            "label": card.technique_label.get(
+                                translation.get_language()
+                            )
+                            or next(iter(card.technique_label.values()), ""),
+                        },
+                        "folios": sorted(keys.folios),
+                        "already": len(card.files),
+                        "receives": receives.get(card.id, 0),
+                        "proposed": bool(
+                            item and str(item.proposed_analysis_id) == card.id
+                        ),
+                        "same_format": bool(
+                            item and prepare._already_provided(item, card)
+                        ),
+                    }
+                )
+        return _json({"analyses": out, "hidden": hidden})
+
+
+class RunDecisionsView(RunBase):
+    """``POST {action, item_ids, params}``: one action, one journal row; see ``decisions``."""
+
+    def post(self, request, run_id):
+        run = self.own_run(request, run_id)
+        if run is None:
+            return HttpResponseNotFound()
+        data = _body(request)
+        if data is None:
+            return _error("bad_request", 400)
+        try:
+            result = decisions.apply_action(
+                run.pk, data.get("action"), data.get("item_ids"), data.get("params", {})
+            )
+        except decisions.ActionError as refused:
+            return _error(refused.reason, refused.status)
+        return _json(_decision_answer(run, result["changed"], result["skipped"]))
+
+
+class RunUndoView(RunBase):
+    def post(self, request, run_id):
+        run = self.own_run(request, run_id)
+        if run is None:
+            return HttpResponseNotFound()
+        try:
+            action = decisions.undo_last(run.pk)
+        except decisions.ActionError as refused:
+            return _error(refused.reason, refused.status)
+        return _json({**_decision_answer(run, 0, []), "undone": action})
+
+
+def _decision_answer(run, changed, skipped):
+    return {
+        "changed": changed,
+        "skipped": skipped,
+        "ready_to_write": decisions.ready_to_write(run),
+        "last_action": _last_action(run),
+    }
+
+
+class RunPreviewView(RunBase):
+    """One item's preview as JSON: ``csv`` (the staged CSV text, or null), ``description`` (``{en, fr}``), ``display``, ``facts``, ``warnings``.
+
+    The CSV rides inside a JSON body so one request carries everything the
+    preview shows. It is the converted CSV, or the lab's own for a lone CSV.
+    ``private, no-store``.
+    """
+
+    def get(self, request, run_id, item_id):
+        run = self.own_run(request, run_id)
+        if run is None:
+            return HttpResponseNotFound()
+        item = run.items.filter(pk=item_id).first()
+        if item is None:
+            return HttpResponseNotFound()
+        csv_text = description = None
+        for name in (f"{item.id}-{prepare.CONVERTED_SUFFIX}",) + (
+            (item.staged_name,)
+            if item.origin == "upload" and item.outcome == "csv"
+            else ()
+        ):
+            try:
+                csv_text = staging.read(run.id, name).decode("utf-8")
+                break
+            except (OSError, ValueError):
+                continue
+        try:
+            description = json.loads(
+                staging.read(run.id, f"{item.id}-{prepare.DESCRIPTION_SUFFIX}")
+            )
+        except (OSError, ValueError):
+            pass
+        config = RendererConfig.objects.filter(pk=item.display_config_id).first()
+        return _json(
+            {
+                "csv": csv_text,
+                "description": description,
+                "display": {
+                    "config_id": (
+                        str(item.display_config_id) if item.display_config_id else None
+                    ),
+                    "name": config.name if config else None,
+                    "config": config.config if config else None,
+                    "source": item.display_source,
+                },
+                "facts": item.facts,
+                "warnings": item.warnings,
+            }
+        )
+
+
+class CodesView(RunBase):
+    """The signed-in editor's dictionary of file-name codes (spec 7.3).
+
+    ``GET`` lists it; ``POST {code, family}`` adds or changes an entry (201 or
+    200); ``DELETE ?code=`` (or ``{code}`` in the body) removes one. Codes are
+    unique per user whatever their case.
+    """
+
+    def get(self, request):
+        rows = MeasurementNameCode.objects.filter(user=request.user).order_by(
+            "code", "id"
+        )
+        return _json(
+            {
+                "codes": [
+                    {
+                        "code": r.code,
+                        "family": r.family,
+                        "created_at": r.created_at.isoformat(),
+                        "last_used_at": (
+                            r.last_used_at.isoformat() if r.last_used_at else None
+                        ),
+                    }
+                    for r in rows
+                ],
+                "families": sorted(decisions.FAMILIES | {matching.IGNORE}),
+            }
+        )
+
+    def post(self, request):
+        data = _body(request)
+        code, family = (data or {}).get("code"), (data or {}).get("family")
+        if not decisions.clean_code(code):
+            return _error("bad_code", 400)
+        if not decisions.clean_family(family):
+            return _error("bad_family", 400)
+        code = code.strip()
+        existed = MeasurementNameCode.objects.filter(
+            user=request.user, code__iexact=code
+        ).exists()
+        try:
+            decisions.write_codes(request.user, {code: family})
+        except decisions.ActionError as refused:
+            return _error(refused.reason, refused.status)
+        return _json({"code": code, "family": family}, 200 if existed else 201)
+
+    def delete(self, request):
+        code = request.GET.get("code") or (_body(request) or {}).get("code")
+        if not isinstance(code, str) or not code.strip():
+            return _error("bad_request", 400)
+        deleted, _ = MeasurementNameCode.objects.filter(
+            user=request.user, code__iexact=code.strip()
+        ).delete()
+        return _json({}, 200) if deleted else HttpResponseNotFound()

@@ -8017,3 +8017,67 @@ msgstr "Converted by"
 #, python-format
 msgid "%(label)s: %(value)s"
 msgstr "%(label)s: %(value)s"
+
+#: constants/measurement_files.py
+msgid "This file is already provided on the analysis."
+msgstr "This file is already provided on the analysis."
+
+#: constants/measurement_files.py
+msgid "Several files target the same analysis and role."
+msgstr "Several files target the same analysis and role."
+
+#: constants/measurement_files.py
+msgid "Some codes in the file name are not known."
+msgstr "Some codes in the file name are not known."
+
+#: constants/measurement_files.py
+msgid "The file name contains a word that suggests a test or a reference."
+msgstr "The file name contains a word that suggests a test or a reference."
+
+#: constants/measurement_files.py
+msgid "Several analyses have a similar name."
+msgstr "Several analyses have a similar name."
+
+#: constants/measurement_files.py
+msgid "The file format does not match the technique of the analysis."
+msgstr "The file format does not match the technique of the analysis."
+
+#: constants/measurement_files.py
+msgid "No display is configured for this file."
+msgstr "No display is configured for this file."
+
+#: constants/measurement_files.py
+msgid "The content of the file does not match the chosen display."
+msgstr "The content of the file does not match the chosen display."
+
+#: constants/measurement_files.py
+msgid "The file name points to another manuscript than the document."
+msgstr "The file name points to another manuscript than the document."
+
+#: constants/measurement_files.py
+msgid "No analysis matches this file."
+msgstr "No analysis matches this file."
+
+#: constants/measurement_files.py
+msgid "This file is already in the database."
+msgstr "This file is already in the database."
+
+#: constants/measurement_files.py
+msgid "This file is not a measurement."
+msgstr "This file is not a measurement."
+
+#: constants/measurement_files.py
+msgid "This CSV comes from the laboratory and is set aside."
+msgstr "This CSV comes from the laboratory and is set aside."
+
+#: constants/measurement_files.py
+msgid "The file could not be converted: keep the raw file only, or set it aside."
+msgstr "The file could not be converted: keep the raw file only, or set it aside."
+
+#: constants/measurement_files.py
+msgid "The CSV does not follow the format the viewer reads."
+msgstr "The CSV does not follow the format the viewer reads."
+
+#: constants/measurement_files.py
+msgid "The converted CSV is too large to be stored."
+msgstr "The converted CSV is too large to be stored."

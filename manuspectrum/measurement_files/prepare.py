@@ -278,26 +278,64 @@ def apply_target(item, card):
         item.cause = cause
 
 
-def settle(item):
-    """Set ``decision`` of an item not set aside: ``ready`` with a target, no cause and something to write.
-
-    Something to write is a CSV, a raw file kept alone (upload) or an
-    unreadable raw file paired with its CSV.
-    """
-    if item.decision == "aside":
-        return
-    writes = (
+def has_something_to_write(item):
+    """A CSV, a raw file kept alone (upload) or an unreadable raw file paired with its CSV."""
+    return bool(
         item.outcome == "csv"
         or (item.outcome == "raw_only" and item.origin == "upload")
         or (item.outcome in UNCONVERTED and item.paired_item_id)
     )
-    ok = item.proposed_analysis_id and not item.cause and writes
+
+
+def settle(item):
+    """Set ``decision`` of an item not set aside: ``ready`` with a target (the chosen Analysis, else the proposed one), no cause and something to write."""
+    if item.decision == "aside":
+        return
+    target = item.chosen_analysis_id or item.proposed_analysis_id
+    ok = target and not item.cause and has_something_to_write(item)
     item.decision = "ready" if ok else "pending"
 
 
 def _set_aside(item, cause):
     item.decision, item.cause = "aside", cause
     item.proposed_analysis_id = None
+
+
+def propose_item(item, cards, codes, shelfmark, content_family, hashes):
+    """Read the name of *item* and propose its Analysis, cause and display.
+
+    Works on the facts already on the item (no conversion): ``prepare_item``
+    calls it after converting, and ``decisions.validate_codes`` calls it again
+    once the dictionary changed. A stored item keeps its Analysis
+    (``source_analysis_id``); an uploaded one is matched by
+    ``matching.propose``.
+    """
+    by_id = {c.id: c for c in cards}
+    reading = matching.read_name(item.source_name, item.relative_dir, shelfmark, codes)
+    item.tokens = [
+        {"piece": t.piece, "meaning": t.meaning, "source": t.source}
+        for t in reading.tokens
+    ]
+    if item.origin == "stored":
+        item.proposed_analysis_id = item.source_analysis_id
+        card = by_id.get(str(item.source_analysis_id))
+        card_family = matching.family_of(card.technique_preset) if card else None
+        family = matching.family_of(content_family)
+        if card_family and family and card_family != family:
+            item.cause = "format_vs_technique"
+    else:
+        proposal = matching.propose(reading, content_family, cards, codes, shelfmark)
+        item.proposed_analysis_id = proposal.analysis_id
+        item.cause = proposal.cause or ""
+    card = by_id.get(str(item.proposed_analysis_id))
+    if item.outcome == "raw_only" and item.reason == "too_large":
+        item.cause = item.cause or "too_large"
+    if _in_database(item, cards, card, hashes):
+        _set_aside(item, "in_database")
+    else:
+        apply_target(item, card)
+        if item.outcome == "raw_only" and item.origin == "stored":
+            item.decision = "aside"
 
 
 def prepare_item(item, cards, codes, shelfmark="", hashes=None):
@@ -317,7 +355,6 @@ def prepare_item(item, cards, codes, shelfmark="", hashes=None):
         item.state, item.error = "failed", "missing"
         item.save()
         return
-    by_id = {c.id: c for c in cards}
     content_family = None
     if _is_csv_name(item.source_name):
         _check_lone_csv(item, data)
@@ -326,35 +363,7 @@ def prepare_item(item, cards, codes, shelfmark="", hashes=None):
     if item.outcome == "not_measure":
         _set_aside(item, "not_measure")
     elif item.decision != "aside":
-        reading = matching.read_name(
-            item.source_name, item.relative_dir, shelfmark, codes
-        )
-        item.tokens = [
-            {"piece": t.piece, "meaning": t.meaning, "source": t.source}
-            for t in reading.tokens
-        ]
-        if item.origin == "stored":
-            item.proposed_analysis_id = item.source_analysis_id
-            card = by_id.get(str(item.source_analysis_id))
-            card_family = matching.family_of(card.technique_preset) if card else None
-            family = matching.family_of(content_family)
-            if card_family and family and card_family != family:
-                item.cause = "format_vs_technique"
-        else:
-            proposal = matching.propose(
-                reading, content_family, cards, codes, shelfmark
-            )
-            item.proposed_analysis_id = proposal.analysis_id
-            item.cause = proposal.cause or ""
-        card = by_id.get(str(item.proposed_analysis_id))
-        if item.outcome == "raw_only" and item.reason == "too_large":
-            item.cause = item.cause or "too_large"
-        if _in_database(item, cards, card, hashes):
-            _set_aside(item, "in_database")
-        else:
-            apply_target(item, card)
-            if item.outcome == "raw_only" and item.origin == "stored":
-                item.decision = "aside"
+        propose_item(item, cards, codes, shelfmark, content_family, hashes)
     settle(item)
     item.state = "prepared"
     item.save()
