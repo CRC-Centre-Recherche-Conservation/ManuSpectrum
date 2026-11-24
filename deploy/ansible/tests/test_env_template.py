@@ -84,7 +84,7 @@ class RenderedTests(unittest.TestCase):
         self.assertIn("\nRELEASE_CHANNEL=prod\n", env)
         self.assertIn("\nRELEASE_READY_WAIT_SECONDS=600\n", env)
 
-    def test_the_unit_set_is_the_seventeen_files_of_the_release_flow(self):
+    def test_the_unit_set_is_the_nineteen_files_of_the_release_flow(self):
         names = sorted(p.name for p in (self.out / "units").iterdir())
         for unit in (
             "manuspectrum-watch.service",
@@ -110,7 +110,7 @@ class RenderedTests(unittest.TestCase):
         files = list((self.out / "units").iterdir()) + list(
             (self.out / "logrotate").iterdir()
         )
-        self.assertEqual(len(list((self.out / "units").iterdir())), 17)
+        self.assertEqual(len(list((self.out / "units").iterdir())), 19)
         for path in files:
             self.assertIsNone(
                 PLACEHOLDER.search(path.read_text(encoding="utf-8")), path.name
