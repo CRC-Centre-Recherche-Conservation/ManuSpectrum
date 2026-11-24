@@ -119,6 +119,7 @@ for _name in (
     "write",
     "retry",
     "stop",
+    "undo",
     "items",
     "causes",
     "analyses",

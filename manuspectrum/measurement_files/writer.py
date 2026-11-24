@@ -444,13 +444,24 @@ def _write_group(run, scope, item):
 def write_analysis(run, analysis_id, items):
     """Add the files of *items* to the Analysis *analysis_id* in one transaction; returns their ``ItemResult``.
 
-    An item refused or failed is ``failed`` with its ``error``; the others are
-    ``written``. The Analysis is indexed once on commit when it received a tile.
+    The run row is locked first (the undo takes the same locks in the same
+    order: run, then Analysis); when the run is no longer ``writing`` nothing is
+    written and the claimed items go back to ``prepared``. An item refused or
+    failed is ``failed`` with its ``error``; the others are ``written``. The Analysis is indexed once on commit when it received a tile.
     """
     analysis_id = str(analysis_id)
     ids = [i.pk for i in items]
     results, touched = [], False
     with transaction.atomic():
+        state = (
+            MeasurementRun.objects.select_for_update()
+            .filter(pk=run.pk)
+            .values_list("state", flat=True)
+            .first()
+        )
+        if state != "writing":
+            _release(items)
+            return []
         row = (
             ResourceInstance.objects.select_for_update(of=("self",))
             .select_related("resource_instance_lifecycle_state")
@@ -474,8 +485,8 @@ def write_analysis(run, analysis_id, items):
             .filter(pk__in=ids)
         }
         for item_id in ids:
-            item = fresh[item_id]
-            if item.state in OPEN:
+            item = fresh.get(item_id)
+            if item is not None and item.state in OPEN:
                 found, added = _write_group(run, scope, item)
                 results += found
                 touched = touched or added

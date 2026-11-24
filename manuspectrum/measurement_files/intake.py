@@ -32,6 +32,7 @@ CHUNK = 1 << 20
 RELATIVE_DIR_MAX = 400
 PREPARE_TASK = "manuspectrum.measurement_prepare"
 WRITE_TASK = "manuspectrum.measurement_write"
+UNDO_TASK = "manuspectrum.measurement_undo"
 CLAIM_STALE = timedelta(minutes=10)
 RESUME_THROTTLE = 120
 IGNORED_NAMES = {".ds_store", "thumbs.db", "desktop.ini"}
@@ -328,6 +329,7 @@ def start_preparation(run):
 PHASES = {
     "preparing": (PREPARE_TASK, Q(state="queued")),
     "writing": (WRITE_TASK, Q(state="prepared", decision="ready")),
+    "undoing": (UNDO_TASK, Q(state="written")),
 }
 
 
@@ -338,7 +340,7 @@ def send(task, run_id, countdown=None):
 
 
 def resume_if_stalled(run):
-    """Re-send the task of a ``preparing`` or ``writing`` run that nobody is working on.
+    """Re-send the task of a ``preparing``, ``writing`` or ``undoing`` run that nobody is working on.
 
     The run is stalled when items wait for a worker (free for its phase, or
     ``claimed`` for more than ``CLAIM_STALE``) and no claim is younger than

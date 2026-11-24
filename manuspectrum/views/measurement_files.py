@@ -14,7 +14,7 @@ from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseNotFound, JsonResponse
 from django.db import transaction
-from django.utils import translation
+from django.utils import timezone, translation
 from django.utils.cache import patch_cache_control
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext
@@ -25,7 +25,7 @@ from arches.app.utils.decorators import group_required
 from manuspectrum.constants.measurement_files import CAUSES, ITEM_STATES
 from manuspectrum.constants.xy_presets import XY_PRESETS
 from manuspectrum.measurement_files import catalogue, decisions, intake, matching
-from manuspectrum.measurement_files import prepare, staging, writer
+from manuspectrum.measurement_files import prepare, staging, undo, writer
 from manuspectrum.measurement_files.converters.base import UNREADABLE_LABELS
 from manuspectrum.models import (
     MeasurementItem,
@@ -177,6 +177,7 @@ class RunView(RunBase):
                 "state": run.state,
                 "counts": _counts(run),
                 "recent": [_item(i) for i in recent],
+                **({"report": undo.report(run)} if run.state == "undone" else {}),
                 **(
                     {"document_status": status}
                     if request.GET.get("with") == "status"
@@ -364,6 +365,40 @@ class RunStopView(RunBase):
         if not stopped:
             return _error("run_not_writing", 409)
         return _json({"state": "writing", "stop_requested": True}, 202)
+
+
+class RunBatchUndoView(RunBase):
+    """``POST``: undo what the run added (« Supprimer »), in any state.
+
+    A ``writing`` run is refused (409 ``writing``): stop it first. A run with nothing written only loses its staging, items and decisions and
+    is ``undone`` at once; otherwise it goes to ``undoing`` and the task does
+    the rest. A repeated call while ``undoing`` or once ``undone`` is a no-op.
+    """
+
+    def post(self, request, run_id):
+        run = self.own_run(request, run_id)
+        if run is None:
+            return HttpResponseNotFound()
+        with transaction.atomic():
+            locked = MeasurementRun.objects.select_for_update().get(pk=run.pk)
+            if locked.state in ("undoing", "undone"):
+                return _json({"state": locked.state})
+            if locked.state == "writing":
+                return _error("writing", 409)
+            undo.reset_failed(locked)
+            if not locked.items.filter(state="written").exists():
+                staging.remove_run(locked.id)
+                locked.decisions.all().delete()
+                locked.items.all().delete()
+                MeasurementRun.objects.filter(pk=locked.pk).update(
+                    state="undone", stop_requested=False, finished_at=timezone.now()
+                )
+                return _json({"state": "undone", "report": undo.report(locked)})
+            MeasurementRun.objects.filter(pk=locked.pk).update(
+                state="undoing", stop_requested=False
+            )
+            transaction.on_commit(lambda: intake.send(intake.UNDO_TASK, run.id))
+        return _json({"state": "undoing"}, 202)
 
 
 def _fold(text):
