@@ -6,7 +6,7 @@ names and x-ascending order, into `expected.json` next to it, keyed by the
 fixture path relative to this directory.
 
     pip install brukeropus==1.4.3 pyASDReader==1.2.3 spc-spectra==0.4.0 pyteomics numpy
-    python oracle.py <format> <fixture path>      # format: spc, opus
+    python oracle.py <format> <fixture path>      # format: spc, opus, asd
 
 An entry holds `columns`, `rows`, `head` and `tail` (5 rows each), `sums` (per
 column), `content_preset` and `oracle` (library and version). An entry may also
@@ -89,7 +89,39 @@ def opus(path):
     )
 
 
-FORMATS = {"spc": spc, "opus": opus}
+def asd(path):
+    """ASD FieldSpec through pyASDReader: target `digitalNumber`, white
+    reference `referenceData.spectra`.
+
+    Prints the comment and the reference description, to be pinned by hand as
+    `forbidden`.
+    """
+    import logging
+    import os
+    import tempfile
+    from importlib.metadata import version
+
+    logging.disable(logging.CRITICAL)
+    # pyASDReader writes an `asd_reader_*.log` file in the working directory
+    os.chdir(tempfile.mkdtemp())
+    from pyASDReader import ASDFile
+
+    f = ASDFile(str(path))
+    rows = [
+        (float(w), float(t), float(r))
+        for w, t, r in zip(f.wavelengths, f.digitalNumber, f.referenceData.spectra)
+    ]
+    print("comment:", repr(f.metadata.comments))
+    print("reference description:", repr(f.referenceFileHeader.referenceDescription))
+    return _entry(
+        ["wavelength_nm", "target_dn", "white_reference_dn"],
+        rows,
+        "fors",
+        f"pyASDReader {version('pyASDReader')}",
+    )
+
+
+FORMATS = {"spc": spc, "opus": opus, "asd": asd}
 
 
 def main(argv):

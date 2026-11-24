@@ -33,6 +33,13 @@ Schanne-Klein, Anne Michelin, Jocelyne Deschaux.
 - `indores_albi/Raman_Ms29f57v_s1_532_vert2.spc`: a Raman spectrum (532 nm) in
   Galactic SPC format (`galactic_spc`). Byte for byte unchanged.
 
+## asdreader — soil.asd (`asd`)
+
+Source: https://github.com/pierreroudier/asdreader (`inst/extdata/soil.asd`).
+Licence GPL-3, as declared in the package `DESCRIPTION`. Author: Pierre Roudier.
+A soil spectrum collected in New Zealand with an ASD FieldSpec 3, file version 8
+(raw counts and white reference). Byte for byte unchanged.
+
 ## Expected values
 
 `expected.json` holds values read with independent open libraries by
