@@ -1021,8 +1021,8 @@ SPECTRUM_PREVIEW_MAX_BYTES = 20 * 1024 * 1024
 # serves every point of a file up to SPECTRUM_PREVIEW_MAX_BYTES (the workshop).
 SPECTRUM_PREVIEW_TIERS = (200, 4096)
 
-# Explorer (spec v3). Raw instrument formats are downloads only, never parsed.
-RAW_INSTRUMENT_EXTENSIONS = (".mca", ".asd", ".spc", ".spa")
+# Explorer (spec v3). Raw instrument formats are downloads only, never drawn.
+RAW_INSTRUMENT_EXTENSIONS = (".mca", ".asd", ".spc", ".spa", ".spx", ".mzxml")
 # A stored URL whose host is one of these is rewritten to PUBLIC_SERVER_ADDRESS.
 EXPLORER_LEGACY_HOSTS = ()
 EXPLORER_ITEMS_MAX = 30

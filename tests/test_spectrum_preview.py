@@ -30,6 +30,7 @@ from manuspectrum.utils.public_visibility import VisibleSet
 from manuspectrum.utils.spectrum_preview import (
     build_preview,
     decimate,
+    is_raw_instrument,
     is_supported,
     parse_rows,
     read_series,
@@ -280,6 +281,20 @@ class SupportedExtensionTests(SimpleTestCase):
         self.assertTrue(is_supported("a.txt"))
         self.assertTrue(is_supported("b.csv"))
         self.assertFalse(is_supported("c.mca"))
+
+
+class RawInstrumentTests(SimpleTestCase):
+    def test_is_raw_instrument(self):
+        for name in ("x.0", "x.12", "X.SPX", "a.mzXML", "x.spc.0", "b.mca"):
+            self.assertTrue(is_raw_instrument(name), name)
+        for name in ("x.csv", "x.0.csv", "x", "x.txt", "x.0a", "x."):
+            self.assertFalse(is_raw_instrument(name), name)
+
+    @override_settings(RAW_INSTRUMENT_EXTENSIONS=(".foo",))
+    def test_the_setting_lists_the_named_extensions_and_opus_stays_numeric(self):
+        self.assertTrue(is_raw_instrument("a.FOO"))
+        self.assertTrue(is_raw_instrument("a.3"))
+        self.assertFalse(is_raw_instrument("a.mca"))
 
 
 class DecimateTests(SimpleTestCase):

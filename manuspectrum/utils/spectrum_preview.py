@@ -56,6 +56,21 @@ def is_readable(path, name=None):
     return is_supported(str(format_source(path, name)))
 
 
+_OPUS_EXTENSION = re.compile(r"\.\d+")
+
+
+def is_raw_instrument(name):
+    """Whether *name* is a raw instrument file, which is listed and served but never read for display.
+
+    The last extension, lower-cased, is one of ``RAW_INSTRUMENT_EXTENSIONS`` or
+    a bare number (OPUS numbers its files ``.0``, ``.1``, ...).
+    """
+    extension = os.path.splitext(str(name or ""))[1].lower()
+    return bool(_OPUS_EXTENSION.fullmatch(extension)) or extension in {
+        entry.lower() for entry in settings.RAW_INSTRUMENT_EXTENSIONS
+    }
+
+
 def parse_rows(lines):
     """Yield each data row of an XY export as a list of floats.
 

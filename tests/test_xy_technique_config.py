@@ -2,7 +2,7 @@ import uuid
 from unittest import mock
 
 from django.conf import settings
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 
 from manuspectrum.constants.licenses import default_license
 from manuspectrum.utils.file_entries import (
@@ -26,6 +26,7 @@ from manuspectrum.constants.xy_presets import (
     TRANSFORM_REFERENCE_NORMALIZE,
     AUTO_SAFE_TRANSFORMS,
     SEED_OWNED_CONFIG_KEYS,
+    TECHNIQUE_CONFIG_IDS,
     TECHNIQUE_PRESETS,
     XY_PRESETS,
     XY_RENDERER_ID,
@@ -284,6 +285,36 @@ class PresetTableTests(SimpleTestCase):
             self.assertIn(TECHNIQUE_PRESETS[item_id], XY_PRESETS)
 
 
+class ChannelPresetTests(TestCase):
+    def test_the_channel_preset_is_seeded(self):
+        from manuspectrum.models import RendererConfig
+
+        row = RendererConfig.objects.get(
+            configid=XY_PRESETS["xrf_channel"]["config_id"]
+        )
+        self.assertEqual(row.config["presetKey"], "xrf_channel")
+        self.assertEqual(row.config["display"]["xAxisLabel"], "Channel")
+
+    def test_the_migration_restores_a_missing_channel_row(self):
+        from importlib import import_module
+
+        from django.apps import apps
+        from manuspectrum.models import RendererConfig
+
+        config_id = XY_PRESETS["xrf_channel"]["config_id"]
+        RendererConfig.objects.filter(configid=config_id).delete()
+        import_module(
+            "manuspectrum.migrations.0019_xrf_channel_preset"
+        ).seed_channel_preset(apps, None)
+        self.assertTrue(RendererConfig.objects.filter(configid=config_id).exists())
+
+    def test_no_technique_resolves_to_the_channel_preset(self):
+        self.assertNotIn("xrf_channel", TECHNIQUE_PRESETS.values())
+        self.assertNotIn(
+            XY_PRESETS["xrf_channel"]["config_id"], TECHNIQUE_CONFIG_IDS.values()
+        )
+
+
 class RendererRegistrationTests(SimpleTestCase):
     """The renderer is declared in settings but consumed from the constants.
 
@@ -325,8 +356,8 @@ class FileEntryBuilderTests(SimpleTestCase):
     def test_builds_an_entry_the_indexer_can_walk(self):
         entry = build_file_entry(
             file_id="8f14e45f-ceea-467a-9e4a-1b0c8e1a0001",
-            name="MS59_f1_F07.csv",
-            path="uploadedfiles/MS59_f1_F07.csv",
+            name="XY12_g3_A04.csv",
+            path="uploadedfiles/XY12_g3_A04.csv",
             size=93649,
             content_type="text/csv",
         )

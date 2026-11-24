@@ -54,3 +54,30 @@ OpenFreeMap Bright licence text
 
 Fonts and sprites are fetched at run time from tiles.openfreemap.org, not
 copied here: Noto Sans (SIL Open Font License 1.1) and the Maki icon set (CC0 1.0).
+
+Test data (measurement file fixtures)
+  File:    tests/fixtures/measurement_files/indores_albi/
+           (parchment FORS text export, XRF .spx, Raman and SERS .spc, FTIR OPUS files)
+  Source:  InDoRES, « Parchment, ink and colouring materials analyses of the Mappa
+           mundi of Albi », doi:10.48579/PRO/T2VBXF
+           (https://data.indores.fr/dataset.xhtml?persistentId=doi:10.48579/PRO/T2VBXF).
+           Authors: Laurianne Robinet, Sylvie Heu-Thao, Giulia Galante, Gaël Latour,
+           Aurélie Tournié, Céline Daher, Anca Dan, Marie-Claire Schanne-Klein,
+           Anne Michelin, Jocelyne Deschaux.
+  Licence: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Line endings of
+           the text files normalised to LF; content otherwise unchanged.
+
+  File:    tests/fixtures/measurement_files/indores_msm/
+           (a MALDI mzXML spectrum)
+  Source:  InDoRES, « Parchment data proteomic - Mont Saint-Michel scriptorium
+           manuscripts XIe century », doi:10.48579/PRO/ZEEJTH
+           (https://data.indores.fr/dataset.xhtml?persistentId=doi:10.48579/PRO/ZEEJTH).
+           Authors: Laurianne Robinet, Sylvie Heu-Thao, Lucie Arberet, Anne Michelin,
+           Oulfa Belhadj, Marie Radepont, Stéphane Lecouteux.
+  Licence: CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Line endings
+           normalised to LF; content otherwise unchanged.
+
+  File:    tests/fixtures/measurement_files/asdreader/soil.asd
+  Source:  https://github.com/pierreroudier/asdreader (inst/extdata/soil.asd),
+           author Pierre Roudier.
+  Licence: GPL-3, as declared in the DESCRIPTION of the asdreader package.
