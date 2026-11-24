@@ -1451,7 +1451,7 @@ sizes of the data directories.
 - [ ] The timers are installed by PP-8 and listed by `systemctl list-timers 'manuspectrum-*'`; the disk-usage
   schedule decided in 7.4 is recorded.
 - [ ] `systemctl list-timers manuspectrum-tsm-check.timer` lists the daily 07:30 timer; `sudo systemctl start manuspectrum-tsm-check`
-  then `journalctl -u manuspectrum-tsm-check -e`. On a host without `dsmc` the unit succeeds and writes
+  then `journalctl -u manuspectrum-tsm-check -e`. On a host without the provider's TSM options file (`/var/spool/tsm/etc/dsm.sys`) the unit succeeds and writes
   `manuspectrum_tsm_check_enabled 0` (in `manuspectrum_tsm_check.prom` of the node exporter's textfile directory); `TsmBackupStale` and `TsmLogIncludeMissing` stay silent. On the production host the unit
   succeeds only after a good backup: `manuspectrum_tsm_backup_last_success_timestamp_seconds` is today's and
   `manuspectrum_tsm_log_include_ok 1`. `systemctl status manuspectrum-log-archive.timer` → unit not found, and no

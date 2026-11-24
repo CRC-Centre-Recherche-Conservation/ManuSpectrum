@@ -136,7 +136,7 @@ The TSM include file no longer holds one `include <dir>/.../* LOG_ROTATED_FILES_
 
 ### Diagnosis
 
-`sudo cat /var/spool/tsm/etc/inclexcl.def` shows the lines present (a line starting with `*` is a comment and does not count). `journalctl -u manuspectrum-tsm-check -e` shows what the daily check read.
+`sudo cat /var/spool/tsm/etc/inclexcl.def` shows the lines present (a line starting with `*` is a comment and does not count). `sudo dsmc query inclexcl` shows the statements TSM applies: a statement added below ours takes precedence over them. `journalctl -u manuspectrum-tsm-check -e` shows what the daily check read.
 
 ### Remediation
 

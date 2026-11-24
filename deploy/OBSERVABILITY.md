@@ -377,7 +377,7 @@ Two timers write Prometheus textfiles that `node-exporter` reads from
 | Unit | Schedule | Metrics |
 | --- | --- | --- |
 | `manuspectrum-container-metrics` | Every 30 s | Per Compose service: running, health, restarts, OOM kills, memory against its limit |
-| `manuspectrum-tsm-check` | Every day at 07:30 | Reads the hosting provider's daily TSM report and the include file (as root, never calls `dsmc`); writes `manuspectrum_tsm_check_enabled`, `manuspectrum_tsm_log_include_ok` and `manuspectrum_tsm_backup_last_success_timestamp_seconds`, read by `TsmBackupStale` and `TsmLogIncludeMissing`. Writes both gauges at 0 where `dsmc` is not installed |
+| `manuspectrum-tsm-check` | Every day at 07:30 | Reads the hosting provider's daily TSM report and the include file (as root, never calls `dsmc`); writes `manuspectrum_tsm_check_enabled`, `manuspectrum_tsm_log_include_ok` and `manuspectrum_tsm_backup_last_success_timestamp_seconds`, read by `TsmBackupStale` and `TsmLogIncludeMissing`. Writes both gauges at 0 where the provider's TSM client is not configured |
 | `manuspectrum-disk-usage` | Every hour at :17 | Size of the uploads, the backup repository, the dumps and the nginx logs, plus the Docker sizes below. The unit file carries the four-times-a-day calendar to use if a measure proves slow on the network filesystem |
 
 Docker sizes (one `docker system df -v` call under `nice` and `ionice`, each kind

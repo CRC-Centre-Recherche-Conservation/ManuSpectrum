@@ -348,26 +348,37 @@ locale: without a UTF-8 locale `dsmc` refuses every file name holding a non-ASCI
 character (`ANS4042E`). The job's report is
 `/var/spool/tsm/log/dsmc.incremental.local.log`.
 
-**Order on a TSM host.** The shorter retention is applied only once a nightly
-backup newer than the include lines has succeeded. The first Ansible run writes
-the include lines and leaves the retention unchanged (it says so). Run Ansible
-again after the next 06:25 backup: it checks the report, then applies the
-retention. A host without the provider's files gets the retention at once. A
-new host with the provider's files gets its journald settings and its nginx
-rotation rule at that second run.
+**Order on a TSM host.** The shorter retention is applied only when the
+include lines are in the include file and the provider's last report shows a
+successful backup of `/var/log` and the data mount, written at least an hour
+after those lines. The first Ansible run writes the include lines and leaves the
+retention unchanged (it says so). Run Ansible again after the next 06:25 backup:
+it then applies the retention. A run limited to the `app` role obeys the same
+rule for the nginx rotation rule. Run the playbook outside 06:00–08:00, while
+the provider's job and the daily check are not running. A host without the
+provider's files gets the retention at once. A new host with the provider's
+files gets its journald settings and its nginx rotation rule at that second run.
 
 **Limits.**
 
 - After a month the TSM copy is the only copy.
-- The class keeps one version per file: a log overwritten in place by root is
-  copied as overwritten by the next backup.
+- The class keeps one version per file: a log overwritten in place on the host,
+  by root or, for the nginx logs, by the service account, is copied as
+  overwritten by the next backup.
+- The daily check sees that the include lines are there, not that TSM applies
+  them: `sudo dsmc query inclexcl` shows the statements in force, and a
+  statement added below ours takes precedence over them.
 - TSM is in the same computing centre as the VM.
 
-**Reading an old log.** On the host, from a directory root can write:
+**Reading an old log.** On the host, from a directory root can write, into a
+directory outside the backup domain (a restored log under `/root` or `/home`
+would be backed up again, with a new retention), deleted once read:
 
 ```bash
+sudo mkdir -m 0700 /var/tmp/restored-logs
 sudo dsmc query backup -inactive "/var/log/auth.log*"
-sudo dsmc restore -inactive -pick "<file>" /root/restored/
+sudo dsmc restore -inactive -pick "<file>" /var/tmp/restored-logs/
+sudo rm -r /var/tmp/restored-logs
 ```
 
 **Daily check.** `manuspectrum-tsm-check.timer` (07:30, root,
@@ -378,7 +389,7 @@ provider's report and checks that it is from today and holds
 include lines are still in the include file. It writes
 `manuspectrum_tsm_backup_last_success_timestamp_seconds`,
 `manuspectrum_tsm_log_include_ok` and `manuspectrum_tsm_check_enabled` to the
-node exporter's textfile directory. A host without `dsmc` writes
+node exporter's textfile directory. A host without the provider's TSM options file writes
 `manuspectrum_tsm_check_enabled 0` and exits successfully. Two warnings read
 these metrics: `TsmBackupStale` (no successful backup for two days) and
 `TsmLogIncludeMissing` (the include lines are gone); their runbook is
