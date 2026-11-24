@@ -3,8 +3,9 @@
 # Tests of restic-repo-guard.sh against a repository fixture the test builds:
 # files named after the SHA-256 of their content, a config, a locks/ entry.
 # `settle` moves pass.stamp to the present (the guard stores it an hour back) and
-# a one-second sleep separates it from the next change, so that "changed after
-# the last pass" is a real ctime difference. Prints `ok N` /
+# a tenth of a second separates it from the files before and the change after, so
+# that "changed after the last pass" is a real ctime difference (the stamp carries
+# the sub-second time; the kernel's file time granularity is a few milliseconds). Prints `ok N` /
 # `not ok N`; exits non-zero on failure.
 # $? after a compound test is the point of every assertion below.
 # shellcheck disable=SC2319
@@ -48,13 +49,12 @@ reset() { # fresh repository (5 named files), metrics and state directories
   SNAP="$(put snapshots snapshot-one)"
   put keys key-one >/dev/null
   printf 'any' >"$REPO/locks/$(printf 'lock' | sha256sum | cut -d' ' -f1)"
-  sleep 1
 }
 
 settle() { # settle: pass.stamp = now, after everything written so far
-  sleep 1
-  touch -d "@$(date +%s)" "$STATE/pass.stamp"
-  sleep 1
+  sleep 0.1
+  touch -d "@$(date +%s.%N)" "$STATE/pass.stamp"
+  sleep 0.1
 }
 
 run() { # run [VAR=value ...]; stderr in $TMP/stderr
@@ -432,5 +432,81 @@ run
 rc=$?
 [ "$rc" -eq 2 ] && grep -q 'FAIL: unexpected error' "$TMP/stderr" && [ ! -e "$STATE/config.sha256" ] && [ ! -e "$success_file" ]
 assert "a command failing inside a function (the reference write): exit 2, unexpected error logged, no partial reference" $?
+
+reset
+run
+settle
+printf 'X' >>"$PACK"
+printf 'garbled\n' >"$STATE/config.sha256"
+run
+rc=$?
+[ "$rc" -eq 1 ] && [ -e "$STATE/altered" ] && grep -qF "ALTERED: $PACK" "$TMP/stderr"
+assert "an altered pack and a garbled reference: exit 1, marker written" $?
+
+reset
+run
+settle
+printf 'X' >>"$PACK"
+late="$REPO/data/ab/$(hex late2)"
+printf 'late2' >"$late"
+chmod 000 "$late"
+run
+rc=$?
+if [ "$(id -u)" -eq 0 ]; then
+  n=$((n + 1)); echo "ok $n - an altered pack and another pack that cannot be read: exit 1, marker written # SKIP running as root"
+else
+  [ "$rc" -eq 1 ] && [ -e "$STATE/altered" ] && grep -qF "ALTERED: $PACK" "$TMP/stderr"
+  assert "an altered pack and another pack that cannot be read: exit 1, marker written" $?
+fi
+
+reset
+run
+settle
+rm -f "$REPO/config"
+late="$REPO/data/ab/$(hex late3)"
+printf 'late3' >"$late"
+chmod 000 "$late"
+run
+rc=$?
+if [ "$(id -u)" -eq 0 ]; then
+  n=$((n + 1)); echo "ok $n - config missing and a pack that cannot be read: exit 1 # SKIP running as root"
+else
+  [ "$rc" -eq 1 ] && [ -e "$STATE/altered" ] && grep -qF "ALTERED: $REPO/config (missing)" "$TMP/stderr"
+  assert "config missing and a pack that cannot be read: exit 1, marker written" $?
+fi
+
+reset
+timeout 60 env PATH="$LOGSTUB:$PATH" METRICS_TEXTFILE_DIR="$OUT" RESTIC_REPOSITORY_DIR="$REPO" RESTIC_GUARD_STATE_DIR="$STATE" \
+  bash "$GUARD" 2>&-
+rc=$?
+[ "$rc" -eq 0 ] && [ -f "$success_file" ]
+assert "an intact repository run with stderr closed: exit 0" $?
+
+reset
+mkdir -p "$STATE/altered/sub"
+run
+rc=$?
+[ "$rc" -eq 1 ] && [ -z "$(guard_sample mismatches)" ]
+assert "the marker cannot be removed: exit 1 and no gauge saying 0 was published first" $?
+rm -rf "$STATE/altered"
+
+reset
+run
+settle
+cp -r "$REPO/data" "$REPO/data.copy"
+printf 'X' >>"$REPO/data.copy/ab/$(hex pack-one)"
+rm -rf "$REPO/data"
+ln -s data.copy "$REPO/data"
+run
+rc=$?
+[ "$rc" -eq 1 ] && grep -qF "ALTERED: $REPO/data (not a directory)" "$TMP/stderr"
+assert "data replaced by a symlink to a copy holding an overwritten pack: exit 1" $?
+
+reset
+put 'data/a\b' backslash-pack >/dev/null
+run
+rc=$?
+[ "$rc" -eq 0 ] && [ "$(guard_sample files_checked)" = 6 ] && ! grep -q ALTERED "$TMP/stderr"
+assert "an unaltered, correctly named file under a directory whose name holds a backslash: exit 0" $?
 
 exit "$failed"

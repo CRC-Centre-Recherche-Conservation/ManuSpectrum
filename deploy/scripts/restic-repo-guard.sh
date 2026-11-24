@@ -11,7 +11,8 @@
 # content (data/, index/, snapshots/, keys/), and restic only creates or deletes
 # files. A file whose content no longer matches its name has been altered, and so
 # is a name of that shape that is not a regular file (symlink, FIFO, directory,
-# device; such an entry is never opened). Only base names of exactly 64
+# device; such an entry is never opened), and so is one of data, index, snapshots
+# and keys replaced by a symlink. Only base names of exactly 64
 # lowercase hex characters are checked; temporary names and locks/ are ignored.
 # `config` has a fixed name: its SHA-256 is recorded at the first run in
 # STATE_DIR/config.sha256 (written atomically) and compared at every run. A
@@ -35,6 +36,9 @@
 #      the marker exists every pass is a full pass
 #   2  wrong configuration, or the guard cannot judge the repository and the
 #      last verdict was not "altered"
+# An alteration already counted by the run, or a missing `config` already known,
+# stands when the run then cannot judge the rest: it still exits 1 and writes the
+# marker. The gauges are published after the state (marker, stamps) is updated.
 # Every unexpected failure is caught by an ERR trap, logged as `FAIL: unexpected
 # error (status N, line L)` and leaves through the same two statuses.
 #
@@ -78,16 +82,43 @@
 set -Eeuo pipefail
 
 log() {
-  printf 'restic-repo-guard: %s\n' "$*" >&2
+  printf 'restic-repo-guard: %s\n' "$*" >&2 || true
   if command -v logger >/dev/null 2>&1; then logger -t restic-repo-guard -- "$*" || true; fi
 }
 usage_die() { log "FAIL: $*"; exit 2; }
 
 state=""
-# The one exit of every "cannot judge" case: the verdict "altered" is sticky.
+mismatches=0
+checked=0
+config_missing=0
+
+# The exit of an alteration: the marker first, then the metrics, then exit 1;
+# nothing in between may turn the verdict into another status.
+alteration_exit() {
+  trap - ERR
+  set +e
+  : >"$state/altered" || log "WARNING: $state/altered could not be written"
+  if [ "$mismatches" -gt "$ALTERED_LOG_MAX" ]; then
+    log "$mismatches altered files in total, the first $ALTERED_LOG_MAX are listed above"
+  fi
+  if [ -d "${stage:-}" ]; then
+    write_guard_metrics "$mismatches" "$checked" || log "WARNING: the metrics could not be published"
+  fi
+  log "FAIL: $mismatches altered file(s)"
+  exit 1
+}
+
+# The one exit of every "cannot judge" case. What this run already found stands,
+# and the verdict "altered" of an earlier pass is sticky.
 cannot_judge() { # cannot_judge MESSAGE
   trap - ERR
+  set +e
   log "FAIL: $*"
+  if [ "$config_missing" -eq 1 ]; then
+    config_missing=0
+    report_altered "$repo/config (missing)"
+  fi
+  if [ "$mismatches" -gt 0 ]; then alteration_exit; fi
   if [ -n "$state" ] && [ -e "$state/altered" ]; then
     log "the last verdict was altered and no pass found the repository intact since"
     exit 1
@@ -152,8 +183,6 @@ write_success_metrics() {
     && metrics_commit && publish manuspectrum_restic_repo_guard_success.prom
 }
 
-mismatches=0
-checked=0
 report_altered() { # report_altered TEXT: counts it, logs the first ALTERED_LOG_MAX
   mismatches=$((mismatches + 1))
   if [ "$mismatches" -le "$ALTERED_LOG_MAX" ]; then log "ALTERED: $1"; fi
@@ -170,7 +199,11 @@ chmod 0700 "$state"
 cd "$repo"
 dirs=()
 for d in data index snapshots keys; do
-  if [ -d "$d" ]; then dirs+=("$d"); fi
+  if [ -L "$d" ]; then
+    report_altered "$repo/$d (not a directory)"
+  elif [ -d "$d" ]; then
+    dirs+=("$d")
+  fi
 done
 find_names() { # find_names TEST...: hash-named entries of the four directories
   find "${dirs[@]}" -ignore_readdir_race -regextype posix-extended -regex ".*/$HEX64" "$@"
@@ -225,20 +258,15 @@ if [ "${#dirs[@]}" -gt 0 ]; then
   done <"$stage/odd"
   # A file removed by a prune between the listing and the hashing is not an
   # alteration; one that still exists but could not be hashed is: the pass
-  # cannot judge the repository.
+  # cannot judge the repository, after judging the sums it did compute.
+  # sha256sum starts a line with a backslash when the path holds a backslash or a
+  # newline; the hash then begins one character later.
   hash_rc=0
   xargs -0 -r sha256sum <"$stage/list" >"$stage/sums" 2>/dev/null || hash_rc=$?
-  if [ "$hash_rc" -ne 0 ]; then
-    tr '\0' '\n' <"$stage/list" | LC_ALL=C sort >"$stage/listed"
-    awk '{ print substr($0, 67) }' "$stage/sums" | LC_ALL=C sort >"$stage/hashed"
-    LC_ALL=C comm -23 "$stage/listed" "$stage/hashed" >"$stage/missing"
-    while IFS= read -r path; do
-      if [ -e "$path" ]; then cannot_judge "$repo/$path could not be read"; fi
-    done <"$stage/missing"
-  fi
   awk '{
-      path = substr($0, 67); n = split(path, parts, "/")
-      print ((parts[n] == substr($0, 1, 64)) ? "OK" : "BAD:" path)
+      off = (substr($0, 1, 1) == "\\") ? 1 : 0
+      path = substr($0, 67 + off); n = split(path, parts, "/")
+      print ((parts[n] == substr($0, 1 + off, 64)) ? "OK" : "BAD:" path)
     }' "$stage/sums" >"$stage/verdicts"
   while IFS= read -r line; do
     case "$line" in
@@ -246,6 +274,19 @@ if [ "${#dirs[@]}" -gt 0 ]; then
     esac
     checked=$((checked + 1))
   done <"$stage/verdicts"
+  if [ "$hash_rc" -ne 0 ]; then
+    tr '\0' '\n' <"$stage/list" | LC_ALL=C sort >"$stage/listed"
+    awk '{
+        off = (substr($0, 1, 1) == "\\") ? 1 : 0
+        path = substr($0, 67 + off)
+        if (off) gsub(/\\\\/, "\\", path)
+        print path
+      }' "$stage/sums" | LC_ALL=C sort >"$stage/hashed"
+    LC_ALL=C comm -23 "$stage/listed" "$stage/hashed" >"$stage/missing"
+    while IFS= read -r path; do
+      if [ -e "$path" ]; then cannot_judge "$repo/$path could not be read"; fi
+    done <"$stage/missing"
+  fi
 fi
 
 if [ "$config_missing" -eq 1 ]; then
@@ -261,23 +302,12 @@ else
   fi
 fi
 
-if [ "$mismatches" -gt 0 ]; then
-  # From here nothing may turn the verdict into another status.
-  trap - ERR
-  set +e
-  : >"$state/altered" || log "WARNING: $state/altered could not be written"
-  if [ "$mismatches" -gt "$ALTERED_LOG_MAX" ]; then
-    log "$mismatches altered files in total, the first $ALTERED_LOG_MAX are listed above"
-  fi
-  write_guard_metrics "$mismatches" "$checked" || log "WARNING: the metrics could not be published"
-  log "FAIL: $mismatches altered file(s)"
-  exit 1
-fi
+if [ "$mismatches" -gt 0 ]; then alteration_exit; fi
 
-write_guard_metrics "$mismatches" "$checked" || log "WARNING: the metrics could not be published"
 rm -f "$state/altered"
 touch -d "@$((start - PASS_MARGIN_SECONDS))" "$state/pass.stamp"
 if [ "$full" -eq 1 ]; then touch -d "@$start" "$state/full.stamp"; fi
+write_guard_metrics "$mismatches" "$checked" || log "WARNING: the metrics could not be published"
 write_success_metrics || log "WARNING: the success metric could not be published"
 log "$checked file(s) checked, repository intact ($([ "$full" -eq 1 ] && echo full || echo daily) pass)"
 exit 0

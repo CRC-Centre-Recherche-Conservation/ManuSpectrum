@@ -421,7 +421,8 @@ the provider's job has neither.
 **What it checks.** A restic file never changes once written, and its name is the
 SHA-256 of its content. The guard checks that every repository file named by a
 SHA-256 still has it, and that `config` equals the SHA-256 recorded at the first
-run. A hash-named entry that is not a regular file is an alteration, and so is a
+run. A hash-named entry that is not a regular file is an alteration, so is one of
+`data`, `index`, `snapshots` and `keys` replaced by a symlink, and so is a
 missing `config` while repository files remain (whether or not a reference was
 recorded); a truly absent or empty
 repository is not. It needs no restic password and no Docker (`sha256sum`, `find`,
