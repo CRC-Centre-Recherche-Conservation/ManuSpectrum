@@ -124,6 +124,7 @@ from manuspectrum.utils.budget import (
     capped_timeout,
     upstream_budget,
 )
+from manuspectrum.utils import edit_log
 from manuspectrum.utils.cache import get_or_build, stable_cache_key
 from manuspectrum.utils.dates import (
     CENTURY_MAPPING,
@@ -4365,17 +4366,8 @@ class BiblissimaCreateResourceView(View):
 
     @staticmethod
     def _editlog_user_fields(user):
-        """``EditLog`` user columns for *user*: a null id and empty names when
-        *user* is ``None``."""
-        return {
-            "userid": (
-                str(user.id) if user is not None and getattr(user, "id", None) else None
-            ),
-            "user_username": getattr(user, "username", "") or "",
-            "user_firstname": getattr(user, "first_name", "") or "",
-            "user_lastname": getattr(user, "last_name", "") or "",
-            "user_email": getattr(user, "email", "") or "",
-        }
+        """``EditLog`` user columns for *user* (``utils.edit_log.user_fields``)."""
+        return edit_log.user_fields(user)
 
     def _attribute_tile_save(self, tileid, transaction_id, user):
         """Name *user* on the edit-log rows a user-less ``Tile.save()`` wrote.
@@ -4383,14 +4375,10 @@ class BiblissimaCreateResourceView(View):
         Biblissima calls ``Tile.save()`` without a user: for a user who is not
         a resource reviewer, Arches would store the write as a provisional
         edit. Arches then records an empty user id; this replaces it on the
-        rows of *tileid* under *transaction_id*. Call it inside the
-        transaction of the save.
+        rows of *tileid* under *transaction_id* (``utils.edit_log.attribute``).
+        Call it inside the transaction of the save.
         """
-        from arches.app.models.models import EditLog
-
-        EditLog.objects.filter(
-            transactionid=transaction_id, tileinstanceid=str(tileid), userid=""
-        ).update(**self._editlog_user_fields(user))
+        edit_log.attribute(transaction_id, tileid, user)
 
     def _write_editlog(self, tiles, resource, user, tx_id):
         """Build one ``EditLog`` row per tile and bulk-insert them.
