@@ -210,7 +210,9 @@ def malformed_values(data, nodes, nodegroup_id):
     a feature whose ``id`` is present, not null and not text PostgreSQL's
     ``uuid`` accepts (``pg_uuid``; a JSON integer is tested as its text). An
     absent ``features``, a node value or a feature that is not an object and a
-    null or absent ``id`` do not fail it.
+    null or absent ``id`` do not fail it. Tile data stored as JSON ``null``
+    (raw SQL only; Arches never writes it) fails the view but reads as SQL NULL
+    here and is not listed.
     """
     found = []
     if data is None:
@@ -218,7 +220,8 @@ def malformed_values(data, nodes, nodegroup_id):
     if not isinstance(data, dict):
         return [(None, None, None, "tile data is not an object")]
     for node_id, value in data.items():
-        if nodes.get(str(node_id)) != nodegroup_id or not isinstance(value, dict):
+        group = nodes.get(str(node_id))
+        if group is None or group != nodegroup_id or not isinstance(value, dict):
             continue
         if "features" not in value:
             continue

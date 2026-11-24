@@ -691,5 +691,25 @@ class RegisterManifestsMalformedValueTests(AnnotationFixtures):
             entry[0] += 1
             if named[1] and not entry[1]:
                 entry[1].append(named[1])
+        other_group = NodeGroup.objects.create(nodegroupid=uuid.uuid4())
+        Node.objects.create(
+            nodeid=uuid.uuid4(),
+            graph=self.graph,
+            nodegroup=other_group,
+            name="second",
+            alias="second",
+            datatype="annotation",
+            istopnode=False,
+        )
+        TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            resourceinstance=self.resource,
+            nodegroup=other_group,
+            data={
+                str(self.annotation.pk): feature_collection(
+                    "https://example.org/iiif/book3/manifest"
+                )
+            },
+        )
         self.assertEqual(expected.keys(), {URL, other_url})
         self.assertEqual(referenced_manifests(), expected)

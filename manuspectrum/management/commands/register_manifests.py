@@ -19,8 +19,9 @@ def referenced_manifests():
     Reads the approved ``data`` of the annotation nodegroups' tiles through
     ``manifest_registry.annotation_features``, not Arches' annotation view
     (8.2.0a27, ``arches/app/models/migrations/10710_fix_whatisthis.py``), which
-    fails on the whole query for one malformed value. A malformed value is
-    skipped. One canvas per URL: the first seen.
+    fails on the whole query for one malformed value. A collection whose
+    ``features`` is not a list is skipped; a feature naming a manifest counts
+    whatever its id. One canvas per URL: the first seen.
     """
     nodes = manifest_registry.annotation_node_groups()
     found = defaultdict(lambda: [0, []])

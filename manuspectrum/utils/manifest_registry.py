@@ -352,8 +352,10 @@ def annotation_features(data, nodes=None, nodegroup_id=None):
     if not isinstance(data, dict):
         return
     for node_id, value in data.items():
-        if nodes is not None and nodes.get(str(node_id)) != nodegroup_id:
-            continue
+        if nodes is not None:
+            group = nodes.get(str(node_id))
+            if group is None or group != nodegroup_id:
+                continue
         if not isinstance(value, dict) or not isinstance(value.get("features"), list):
             continue
         for feature in value["features"]:
