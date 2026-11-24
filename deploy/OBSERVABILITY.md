@@ -114,7 +114,7 @@ dc logs --no-log-prefix -f web | jq -cR 'fromjson? | select(.logger=="manuspectr
 
 ## Alerts
 
-72 alerts in `compose/observability/prometheus/rules/*.yml`, one file per area
+80 alerts in `compose/observability/prometheus/rules/*.yml`, one file per area
 (site, application, containers, host, storage, backup, release, tls, celery, datastores,
 explorer, biblissima, monitoring; `activity.yml` holds recording rules only). Every rule has a `severity`, a `service`, a
 `summary`, a `description` and a `runbook_url` that points to a section of
@@ -172,7 +172,7 @@ route since the web container started is not counted by `increase`. The two buck
 
 **Inhibitions.**
 
-- A critical alert hides the warnings of the same `service`.
+- A critical alert hides the warnings of the same `service`, except `ResticRepoAltered` and `ResticRepoGuardStale`: an attack on the backups also fails the nightly backup, and the guard's alert must still be mailed.
 - `RecentlyRebooted` (the host booted less than 15 minutes ago) hides every
   critical and warning alert except the `AlertTest` of `make alert-test`. The nightly 04:50 reboot is therefore silent; a
   stack that is not back after 15 minutes fires normally.
@@ -182,7 +182,7 @@ silences one alert; silences live on a volume and survive a restart.
 `make -C deploy observability-off` stops the stack (volumes kept).
 
 **Node exporter down.** `NfsUnavailable`, `BackupMissing`, `RestoreTestMissing`, `ReleaseWatchStale`,
-`HostMetricsStale`, `DiskUsageStale`, `TsmBackupStale`, `TsmLogIncludeMissing` and `ContainerMissing` read series that only
+`HostMetricsStale`, `DiskUsageStale`, `TsmBackupStale`, `TsmLogIncludeMissing`, `ResticRepoAltered`, `ResticRepoGuardStale` and `ContainerMissing` read series that only
 node_exporter carries. They count a missing series only while node_exporter is up,
 so its outage raises `NodeExporterDown` alone (critical, after 15 minutes, since it
 blinds the backup and NFS alerts; `TargetDown` covers the other targets).
@@ -378,6 +378,7 @@ Two timers write Prometheus textfiles that `node-exporter` reads from
 | --- | --- | --- |
 | `manuspectrum-container-metrics` | Every 30 s | Per Compose service: running, health, restarts, OOM kills, memory against its limit |
 | `manuspectrum-tsm-check` | Every day at 07:30 | Reads the hosting provider's daily TSM report and the include file (as root, never calls `dsmc`); writes `manuspectrum_tsm_check_enabled`, `manuspectrum_tsm_log_include_ok` and `manuspectrum_tsm_backup_last_success_timestamp_seconds`, read by `TsmBackupStale` and `TsmLogIncludeMissing`. Writes both gauges at 0 where the provider's TSM client is not configured |
+| `restic-repo-guard` | Every night (daily pass on recent files, full pass every 3 days), just before the provider's TSM copy (hosts backed up by TSM only; called from the provider's job, as root) | Checks that every restic repository file still has the SHA-256 its name states; writes `manuspectrum_restic_repo_guard_mismatches`, `manuspectrum_restic_repo_guard_files_checked` and `manuspectrum_restic_repo_guard_last_success_timestamp_seconds`, read by `ResticRepoAltered` and `ResticRepoGuardStale`. Absent on other hosts |
 | `manuspectrum-disk-usage` | Every hour at :17 | Size of the uploads, the backup repository, the dumps and the nginx logs, plus the Docker sizes below. The unit file carries the four-times-a-day calendar to use if a measure proves slow on the network filesystem |
 
 Docker sizes (one `docker system df -v` call under `nice` and `ionice`, each kind

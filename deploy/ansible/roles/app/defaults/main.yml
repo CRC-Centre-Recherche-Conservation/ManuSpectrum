@@ -61,4 +61,5 @@ app_release_managed_paths:
   - deploy/logrotate/*.in
   - deploy/sbin
   - deploy/scripts/tsm-check.sh
+  - deploy/scripts/restic-repo-guard.sh
   - "{{ app_release_program_files | map(attribute='name') | map('regex_replace', '^', 'deploy/scripts/') | list }}"

@@ -176,3 +176,84 @@ tests:
     exp_samples:
     - labels: ALERTS{alertname="TsmLogIncludeMissing", alertstate="firing", service="backup", severity="warning"}
       value: 1
+- name: no mismatch keeps ResticRepoAltered silent, one mismatch fires
+  interval: 1m
+  input_series:
+  - series: manuspectrum_restic_repo_guard_mismatches
+    values: 0x30 1x30
+  - series: up{job="node"}
+    values: 1x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="ResticRepoAltered", alertstate="firing"}
+    eval_time: 25m
+    exp_samples: []
+  - expr: ALERTS{alertname="ResticRepoAltered", alertstate="firing"}
+    eval_time: 55m
+    exp_samples:
+    - labels: ALERTS{alertname="ResticRepoAltered", alertstate="firing", service="backup", severity="warning"}
+      value: 1
+- name: a repository check 30 hours old is fine, 56 hours old fires
+  interval: 1m
+  input_series:
+  - series: manuspectrum_restic_repo_guard_last_success_timestamp_seconds
+    values: 0+0x4000
+  - series: up{job="node"}
+    values: 1x4000
+  promql_expr_test:
+  - expr: ALERTS{alertname="ResticRepoGuardStale", alertstate="firing"}
+    eval_time: 30h
+    exp_samples: []
+  - expr: ALERTS{alertname="ResticRepoGuardStale", alertstate="firing"}
+    eval_time: 56h
+    exp_samples:
+    - labels: ALERTS{alertname="ResticRepoGuardStale", alertstate="firing", service="backup", severity="warning"}
+      value: 1
+- name: a host without the repository guard keeps both guard alerts silent
+  interval: 1m
+  input_series:
+  - series: up{job="node"}
+    values: 1x4000
+  promql_expr_test:
+  - expr: ALERTS{alertname=~"ResticRepoAltered|ResticRepoGuardStale", alertstate="firing"}
+    eval_time: 60h
+    exp_samples: []
+- name: a node exporter that is down keeps the guard alerts silent
+  interval: 1m
+  input_series:
+  - series: manuspectrum_restic_repo_guard_mismatches
+    values: 3x4000
+  - series: manuspectrum_restic_repo_guard_last_success_timestamp_seconds
+    values: 0+0x4000
+  - series: up{job="node"}
+    values: 0x4000
+  promql_expr_test:
+  - expr: ALERTS{alertname=~"ResticRepoAltered|ResticRepoGuardStale", alertstate="firing"}
+    eval_time: 60h
+    exp_samples: []
+- name: a TSM host where the repository guard never succeeded fires after the grace period
+  interval: 1m
+  input_series:
+  - series: manuspectrum_tsm_check_enabled
+    values: 1x40
+  - series: up{job="node"}
+    values: 1x40
+  promql_expr_test:
+  - expr: ALERTS{alertname="ResticRepoGuardStale", alertstate="firing"}
+    eval_time: 5m
+    exp_samples: []
+  - expr: ALERTS{alertname="ResticRepoGuardStale", alertstate="firing"}
+    eval_time: 30m
+    exp_samples:
+    - labels: ALERTS{alertname="ResticRepoGuardStale", alertstate="firing", service="backup", severity="warning"}
+      value: 1
+- name: a host without TSM and without guard series keeps ResticRepoGuardStale silent
+  interval: 1m
+  input_series:
+  - series: manuspectrum_tsm_check_enabled
+    values: 0x4000
+  - series: up{job="node"}
+    values: 1x4000
+  promql_expr_test:
+  - expr: ALERTS{alertname="ResticRepoGuardStale", alertstate="firing"}
+    eval_time: 60h
+    exp_samples: []

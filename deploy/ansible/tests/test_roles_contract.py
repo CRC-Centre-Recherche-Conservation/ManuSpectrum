@@ -256,7 +256,7 @@ class HostRoleTests(unittest.TestCase):
         )
 
 
-class TsmBranchRunTests(unittest.TestCase):
+class TsmPlayCase(unittest.TestCase):
     """Runs the real TSM tasks of the host role, and the app role's render tasks,
     through ansible-playbook on scratch files."""
 
@@ -412,6 +412,8 @@ class TsmBranchRunTests(unittest.TestCase):
         self.assertEqual(code, 0, output)
         return self.include.read_text(encoding="utf-8")
 
+
+class TsmBranchRunTests(TsmPlayCase):
     def test_the_first_run_writes_the_include_lines_and_holds_the_retention(self):
         self.tsm_host()
         code, output, fact = self.run_play()
@@ -511,6 +513,196 @@ class TsmBranchRunTests(unittest.TestCase):
 
     def test_the_nginx_rule_is_written_on_a_host_without_tsm_files(self):
         self.assertTrue(self.render_rule())
+
+
+class RepoGuardRunTests(TsmPlayCase):
+    """Runs the guard tasks of the host role on a scratch copy of a provider job."""
+
+    LAST = "Run the restic repository guard before the nightly TSM backup"
+    GUARD = "restic-repo-guard.sh"
+    JOB = (
+        "#!/bin/sh\n"
+        "PATH=/bin:/usr/bin:/sbin:/usr/sbin\n"
+        "export PATH\n"
+        "export LANG=C.UTF-8 LC_ALL=C.UTF-8\n"
+        "{dsmc} Incremental -TAPEPrompt=No > {report} 2>&1\n"
+        "exit 0\n"
+    )
+
+    def setUp(self):
+        super().setUp()
+        self.guard_dir = self.tmp / "lib" / "repo-guard"
+        self.state_dir = self.tmp / "state" / "repo-guard"
+        self.marker = self.tmp / "dsmc-ran"
+        self.repo = self.tmp / "restic"
+        self.metrics = self.tmp / "metrics"
+
+    def extra_vars(self):
+        return {
+            **super().extra_vars(),
+            "host_repo_guard_dir": str(self.guard_dir),
+            "host_repo_guard_state_dir": str(self.state_dir),
+            "host_repo_guard_owner": str(os.getuid()),
+            "host_repo_guard_group": str(os.getgid()),
+            "host_repo_guard_src_dir": str(ANSIBLE_DIR.parent / "scripts"),
+            "env_restic_repository_dir": str(self.repo),
+            "env_metrics_textfile_dir": str(self.metrics),
+        }
+
+    def provider_job(self):
+        dsmc = self.tmp / "dsmc"
+        dsmc.write_text(f"#!/bin/sh\ntouch {self.marker}\n", encoding="utf-8")
+        dsmc.chmod(0o755)
+        self.tsm_host()
+        (self.tmp / "cron-tsm").write_text(
+            self.JOB.format(dsmc=dsmc, report=self.tmp / "dsmc.log"), encoding="utf-8"
+        )
+
+    def job_lines(self):
+        return (self.tmp / "cron-tsm").read_text(encoding="utf-8").splitlines()
+
+    def run_job(self, guard_exit, shell=("sh",)):
+        """Runs the job with a chatty stub guard exiting `guard_exit` (None: no guard
+        script); returns (dsmc ran, what the job printed)."""
+        self.marker.unlink(missing_ok=True)
+        stub = self.guard_dir / self.GUARD
+        stub.unlink(missing_ok=True)
+        if guard_exit is not None:
+            stub.write_text(
+                "#!/bin/sh\n"
+                'printf "%s\\n%s\\n" "$METRICS_TEXTFILE_DIR" "$RESTIC_REPOSITORY_DIR"'
+                f" > {self.tmp}/guard-env\n"
+                "echo chatter; echo ALTERED >&2\n"
+                f"exit {guard_exit}\n",
+                encoding="utf-8",
+            )
+            stub.chmod(0o755)
+        result = subprocess.run(
+            [*shell, str(self.tmp / "cron-tsm")], capture_output=True, text=True
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return self.marker.exists(), result.stdout + result.stderr
+
+    def test_the_guard_line_stops_the_job_only_on_an_alteration(self):
+        self.provider_job()
+        code, output, _ = self.run_play()
+        self.assertEqual(code, 0, output)
+        for shell in (("sh",), ("sh", "-e")):
+            for guard_exit, dsmc_runs in (
+                (0, True),
+                (1, False),
+                (2, True),
+                (None, True),
+            ):
+                with self.subTest(shell=shell, guard_exit=guard_exit):
+                    ran, printed = self.run_job(guard_exit, shell)
+                    self.assertIs(ran, dsmc_runs)
+                    self.assertEqual(printed, "")
+
+    def test_the_line_sits_before_dsmc_and_a_second_run_changes_nothing(self):
+        self.provider_job()
+        self.assertEqual(self.run_play()[0], 0)
+        first = self.job_lines()
+        guard = [i for i, line in enumerate(first) if self.GUARD in line]
+        dsmc = [i for i, line in enumerate(first) if "dsmc " in line]
+        locale = first.index("export LANG=C.UTF-8 LC_ALL=C.UTF-8")
+        self.assertEqual(len(guard), 1)
+        self.assertEqual(guard[0], dsmc[0] - 1)
+        self.assertEqual(locale, guard[0] - 1)
+        code, output, _ = self.run_play()
+        self.assertEqual(code, 0, output)
+        self.assertEqual(self.job_lines(), first)
+
+    def test_the_line_names_both_directories_and_is_one_exact_line(self):
+        self.provider_job()
+        self.run_play()
+        line = next(l for l in self.job_lines() if self.GUARD in l)
+        self.assertEqual(
+            line,
+            f"METRICS_TEXTFILE_DIR={self.metrics} RESTIC_REPOSITORY_DIR={self.repo} "
+            f'{self.guard_dir}/{self.GUARD} >/dev/null 2>&1 || [ "$?" -ne 1 ] || exit 0',
+        )
+
+    def test_a_changed_inventory_path_rewrites_the_line_in_place(self):
+        self.provider_job()
+        self.run_play()
+        before = self.job_lines()
+        self.repo = self.tmp / "other restic"
+        code, output, _ = self.run_play()
+        self.assertEqual(code, 0, output)
+        after = self.job_lines()
+        self.assertEqual(len(after), len(before))
+        self.assertEqual(sum(self.GUARD in l for l in after), 1)
+        self.assertIn(f"RESTIC_REPOSITORY_DIR='{self.repo}'", "\n".join(after))
+        self.metrics = self.tmp / "other metrics"
+        self.run_play()
+        self.assertEqual(sum(self.GUARD in l for l in self.job_lines()), 1)
+
+    def test_a_path_with_a_blank_does_not_break_the_line(self):
+        self.provider_job()
+        self.repo = self.tmp / "a b; touch injected"
+        self.metrics = self.tmp / "m 1"
+        code, output, _ = self.run_play()
+        self.assertEqual(code, 0, output)
+        ran, _ = self.run_job(0)
+        self.assertTrue(ran)
+        self.assertFalse((self.tmp / "injected").exists())
+        self.assertEqual(
+            (self.tmp / "guard-env").read_text(encoding="utf-8").splitlines(),
+            [str(self.metrics), str(self.repo)],
+        )
+
+    def test_the_default_owner_of_the_guard_is_root(self):
+        """Ownership cannot be exercised unprivileged: the scratch runs override it."""
+        defaults = host_defaults()
+        self.assertEqual(defaults["host_repo_guard_owner"], "root")
+        self.assertEqual(defaults["host_repo_guard_group"], "root")
+
+    def test_a_job_without_a_dsmc_line_to_anchor_on_stops_the_play(self):
+        self.provider_job()
+        job = self.tmp / "cron-tsm"
+        text = job.read_text(encoding="utf-8").replace(
+            f"{self.tmp}/dsmc Incremental", f"exec {self.tmp}/dsmc Incremental"
+        )
+        job.write_text(text, encoding="utf-8")
+        code, output, _ = self.run_play()
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("guard was not installed", output)
+        self.assertNotIn(self.GUARD, job.read_text(encoding="utf-8"))
+        self.assertFalse(self.guard_dir.exists())
+
+    def test_a_job_made_non_executable_by_the_operator_stays_so(self):
+        self.provider_job()
+        job = self.tmp / "cron-tsm"
+        job.chmod(0o644)
+        before = self.run_play()
+        self.assertEqual(before[0], 0, before[1])
+        line = [l for l in self.job_lines() if self.GUARD in l]
+        self.assertEqual(len(line), 1)
+        self.assertEqual(oct(job.stat().st_mode & 0o777), "0o644")
+        job.chmod(0o755)
+        job.chmod(0o644)
+        code, output, _ = self.run_play()
+        self.assertEqual(code, 0, output)
+        self.assertEqual([l for l in self.job_lines() if self.GUARD in l], line)
+        self.assertEqual(oct(job.stat().st_mode & 0o777), "0o644")
+
+    def test_a_host_without_the_provider_job_installs_nothing(self):
+        code, output, _ = self.run_play()
+        self.assertEqual(code, 0, output)
+        self.assertFalse(self.guard_dir.exists())
+        self.assertFalse(self.state_dir.exists())
+
+    def test_the_installed_guard_dir_is_private_to_root_and_executable(self):
+        self.provider_job()
+        self.run_play()
+        self.assertEqual(oct(self.state_dir.stat().st_mode & 0o777), "0o700")
+        self.assertEqual(
+            oct((self.guard_dir / self.GUARD).stat().st_mode & 0o777), "0o755"
+        )
+        self.assertEqual(
+            oct((self.guard_dir / "lib-metrics.sh").stat().st_mode & 0o777), "0o644"
+        )
 
 
 class RehearsalMarkerTests(unittest.TestCase):
@@ -735,7 +927,9 @@ class ReleaseInstallTests(unittest.TestCase):
     def test_the_release_file_list_is_the_managed_list_of_release_managed(self):
         files = app_defaults()["app_release_program_files"]
         names = {f["name"] for f in files}
-        self.assertEqual(names, managed_script_names() - {"tsm-check.sh"})
+        self.assertEqual(
+            names, managed_script_names() - {"tsm-check.sh", "restic-repo-guard.sh"}
+        )
         modes = {f["name"]: f["mode"] for f in files}
         for name in ("lib-release.sh", "lib-metrics.sh"):
             self.assertEqual(modes[name], "0644")

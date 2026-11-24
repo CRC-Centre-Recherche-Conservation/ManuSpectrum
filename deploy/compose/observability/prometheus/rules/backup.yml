@@ -92,3 +92,34 @@ groups:
           summary: "The server logs are no longer bound to the provider's log class"
           description: "The TSM include file no longer binds every log directory to the log class that keeps deleted files for 365 days."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/backup.md#tsmlogincludemissing
+      - alert: ResticRepoAltered
+        expr: |
+          (manuspectrum_restic_repo_guard_mismatches > 0)
+          and on() (up{job="node"} == 1)
+        for: 5m
+        labels:
+          severity: warning
+          service: backup
+        annotations:
+          summary: "The restic repository holds a file that does not match its name"
+          description: "The check run before the provider's TSM copy found a restic repository file whose content no longer matches its name; the TSM copy did not run that day."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/backup.md#resticrepoaltered
+      - alert: ResticRepoGuardStale
+        expr: |
+          (
+            (
+              manuspectrum_tsm_check_enabled == 1
+              unless on() manuspectrum_restic_repo_guard_last_success_timestamp_seconds
+            )
+            or
+            (time() - manuspectrum_restic_repo_guard_last_success_timestamp_seconds > 54 * 3600)
+          )
+          and on() (up{job="node"} == 1)
+        for: 15m
+        labels:
+          severity: warning
+          service: backup
+        annotations:
+          summary: "The restic repository check has not succeeded for more than two days"
+          description: "The check run before the provider's TSM copy has not passed for more than 54 hours, or has never passed on a host backed up by the provider's TSM: it cannot run, or it keeps finding an altered file."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/backup.md#resticrepoguardstale

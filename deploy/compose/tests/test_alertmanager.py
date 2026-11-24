@@ -8,6 +8,7 @@ template rendering with the pinned image run in observability/check.sh.
 """
 
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -485,8 +486,66 @@ class RoutingTests(RenderBase):
         self.assertNotIn("equal", reboot[0])
         severity = [r for r in rules if r["source_matchers"] == ['severity="critical"']]
         self.assertEqual(len(severity), 1)
-        self.assertEqual(severity[0]["target_matchers"], ['severity="warning"'])
+        self.assertEqual(
+            severity[0]["target_matchers"],
+            [
+                'severity="warning"',
+                'alertname!~"ResticRepoAltered|ResticRepoGuardStale"',
+            ],
+        )
         self.assertEqual(severity[0]["equal"], ["service"])
+
+    @staticmethod
+    def matches(matcher, labels):
+        """Whether one Alertmanager matcher string holds for the labels."""
+        name, op, value = re.fullmatch(r'(\w+)(=~|!~|!=|=)"(.*)"', matcher).groups()
+        actual = labels.get(name, "")
+        if op == "=":
+            return actual == value
+        if op == "!=":
+            return actual != value
+        found = re.fullmatch(value, actual) is not None
+        return found if op == "=~" else not found
+
+    def inhibited_by_severity(self, source, target):
+        """Whether the critical-covers-warnings rule mutes `target`."""
+        rule = next(
+            r
+            for r in self.config_["inhibit_rules"]
+            if r["source_matchers"] == ['severity="critical"']
+        )
+        return (
+            all(self.matches(m, source) for m in rule["source_matchers"])
+            and all(self.matches(m, target) for m in rule["target_matchers"])
+            and all(source.get(k) == target.get(k) for k in rule["equal"])
+        )
+
+    def test_a_critical_backup_alert_never_mutes_the_repository_guard(self):
+        critical = {
+            "alertname": "BackupFailed",
+            "severity": "critical",
+            "service": "backup",
+        }
+        for name in ("ResticRepoAltered", "ResticRepoGuardStale"):
+            warning = {"alertname": name, "severity": "warning", "service": "backup"}
+            self.assertFalse(self.inhibited_by_severity(critical, warning), name)
+        other = {
+            "alertname": "TsmBackupStale",
+            "severity": "warning",
+            "service": "backup",
+        }
+        self.assertTrue(self.inhibited_by_severity(critical, other))
+
+    def test_the_reboot_rule_still_holds_back_the_repository_guard(self):
+        reboot = next(
+            r
+            for r in self.config_["inhibit_rules"]
+            if r["source_matchers"] == ['alertname="RecentlyRebooted"']
+        )
+        warning = {"alertname": "ResticRepoAltered", "severity": "warning"}
+        self.assertTrue(
+            all(self.matches(m, warning) for m in reboot["target_matchers"])
+        )
 
     def test_every_mail_is_sortable_by_subject_prefix_and_category_header(self):
         receivers = {
