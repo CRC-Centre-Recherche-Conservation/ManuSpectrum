@@ -20,4 +20,7 @@ Gaël Latour, Aurélie Tournié, Céline Daher, Anca Dan, Marie-Claire
 Schanne-Klein, Anne Michelin, Jocelyne Deschaux.
 
 - `indores_albi/F1_parchment.asd.txt`: a FORS reflectance spectrum exported as
-  text (tab separator, decimal comma). Copied unmodified.
+  text (tab separator, decimal comma). Line endings normalised to LF; content
+  otherwise unchanged.
+- `indores_albi/X16_parchment.spx`: an XRF spectrum in Bruker's XML format
+  (`bruker_spx`). Line endings normalised to LF; content otherwise unchanged.

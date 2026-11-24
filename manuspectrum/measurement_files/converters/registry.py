@@ -10,7 +10,7 @@ names and extensions are never read.
 
 import logging
 
-from . import delimited, elio_mca
+from . import bruker_spx, delimited, elio_mca
 from .base import MAX_CHANNELS, Reading, UnreadableFile, UnsupportedFormat
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 HEAD_SIZE = 4096
 
 
-READERS = (elio_mca,)
+READERS = (bruker_spx, elio_mca)
 FALLBACK = delimited
 
 KNOWN_UNREAD = {
