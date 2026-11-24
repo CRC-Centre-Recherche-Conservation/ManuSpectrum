@@ -368,7 +368,7 @@ successful backup of `/var/log` and the data mount, written at least an hour
 after those lines. The first Ansible run writes the include lines and leaves the
 retention unchanged (it says so). Run Ansible again after the next 06:25 backup:
 it then applies the retention. A run limited to the `app` role obeys the same
-rule for the nginx rotation rule. Run the playbook outside 06:00–08:00, while
+rule for the nginx rotation rule. Run the playbook outside 05:00–08:00, while
 the provider's job and the daily check are not running. A host without the
 provider's files gets the retention at once. A new host with the provider's
 files gets its journald settings and its nginx rotation rule at that second run.
@@ -422,7 +422,8 @@ the provider's job has neither.
 SHA-256 of its content. The guard checks that every repository file named by a
 SHA-256 still has it, and that `config` equals the SHA-256 recorded at the first
 run. A hash-named entry that is not a regular file is an alteration, and so is a
-missing `config` while repository files are left; a truly absent or empty
+missing `config` while repository files remain (whether or not a reference was
+recorded); a truly absent or empty
 repository is not. It needs no restic password and no Docker (`sha256sum`, `find`,
 `stat`).
 
@@ -447,9 +448,20 @@ routing exempts them).
 `ALTERED: <path>` for the first 100 altered files, then a total. After an
 alteration, follow [INCIDENT.md](INCIDENT.md#suspected-compromise).
 
-**Limits.** It stops ransomware that overwrites the repository. It does not stop a
-root attacker who knows the setup and removes the check or the line that calls
-it. Deleted files are not an alteration (the nightly backup raises `BackupFailed`).
+**The verdict file.** A pass that finds an alteration writes
+`/var/lib/manuspectrum/repo-guard/altered`; the first pass that finds the repository
+intact removes it. While it exists every pass is a full pass, and a run that cannot
+judge also stops the copy. Never delete it by hand to make the copy run.
+
+**Metrics.** The verdict does not depend on them: when the metrics directory is
+unusable the guard logs a WARNING and still gives its verdict. The journal
+(`journalctl -t restic-repo-guard`) is the reference.
+
+**Limits.** The guard stops ransomware that overwrites the repository without
+knowing the guard. An attacker who knows the setup and controls the service account
+(which owns the repository and is in the `docker` group, so root-equivalent), or
+root, can defeat it. Deleted files are not an alteration (the nightly backup raises
+`BackupFailed`).
 
 **A `config` changed on purpose** (a repository restored or created again). Delete
 `/var/lib/manuspectrum/repo-guard/config.sha256`: the next run records the new one.

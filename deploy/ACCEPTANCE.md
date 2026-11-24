@@ -1450,7 +1450,9 @@ sizes of the data directories.
 - [ ] `AllowTcpForwarding yes` is set for the administrators' accounts and the tunnel of 7.2 works there.
 - [ ] The timers are installed by PP-8 and listed by `systemctl list-timers 'manuspectrum-*'`; the disk-usage
   schedule decided in 7.4 is recorded.
-- [ ] `systemctl list-timers manuspectrum-tsm-check.timer` lists the daily 07:30 timer; `sudo systemctl start manuspectrum-tsm-check`
+- [ ] `systemctl list-timers manuspectrum-tsm-check.timer` lists the daily 07:30 timer. The guard runs at 06:25, before the check: on a
+  host with the provider's job, run it by hand first (the manual run of the guard item below), or starting the check raises
+  `ResticRepoGuardStale` 15 minutes later. `sudo systemctl start manuspectrum-tsm-check`
   then `journalctl -u manuspectrum-tsm-check -e`. On a host without the provider's TSM options file (`/var/spool/tsm/etc/dsm.sys`) the unit succeeds and writes
   `manuspectrum_tsm_check_enabled 0` (in `manuspectrum_tsm_check.prom` of the node exporter's textfile directory); `TsmBackupStale` and `TsmLogIncludeMissing` stay silent. On the production host the unit
   succeeds only after a good backup: `manuspectrum_tsm_backup_last_success_timestamp_seconds` is today's and
@@ -1467,15 +1469,18 @@ sizes of the data directories.
   `VirtualMountpoint /var/log`, and `/etc/cron.daily/tsm` sets `LANG=C.UTF-8` before `dsmc` and passes no `-se`; the next
   morning `/var/spool/tsm/log/dsmc.incremental.local.log` holds no `ANS…E` and `sudo dsmc query filespace` lists `/var/log`.
 - [ ] Where the provider's job (`/etc/cron.daily/tsm`) exists, after the playbook: `sudo grep -n -E "restic-repo-guard|dsmc" /etc/cron.daily/tsm`
-  shows the `restic-repo-guard.sh` line (it ends with `>/dev/null 2>&1 || [ "$?" -ne 1 ] || exit 0`) before the `dsmc` line; `ls -ld /usr/local/lib/manuspectrum/repo-guard` and
+  shows the `restic-repo-guard.sh` line (it passes `RESTIC_GUARD_STATE_DIR` and ends with `>/dev/null 2>&1 || [ "$?" -ne 1 ] || exit 0`) before the `dsmc` line; `ls -ld /usr/local/lib/manuspectrum/repo-guard` and
   `/var/lib/manuspectrum/repo-guard` are owned by root (the state directory `0700`).
 - [ ] The guard catches an alteration: copy a repository to a scratch directory, append one byte to a file of its `data/`,
   and run by hand `sudo METRICS_TEXTFILE_DIR=<scratch> RESTIC_REPOSITORY_DIR=<copy> RESTIC_GUARD_STATE_DIR=<scratch state> RESTIC_GUARD_FULL=1 /usr/local/lib/manuspectrum/repo-guard/restic-repo-guard.sh`:
-  it exits 1 and names the file; with the copy's `config` deleted it still exits 1. On the untouched copy it exits 0. The next morning
+  it exits 1 and names the file; with `config` deleted from a copy that still holds its packs it exits 1 (use the same scratch state directory for the successive runs). On the untouched copy it exits 0. The next morning
   `sudo journalctl -t restic-repo-guard --since today` shows the real run, and
   `manuspectrum_restic_repo_guard_last_success_timestamp_seconds` is today's.
 - [ ] On a host without the provider's job: no `/usr/local/lib/manuspectrum/repo-guard` and no `/var/lib/manuspectrum/repo-guard`,
   and `ResticRepoAltered` and `ResticRepoGuardStale` stay silent.
+- [ ] The freeze marker: with `/etc/manuspectrum/backups-frozen` present and `manuspectrum-backup.timer` and
+  `manuspectrum-restore-test.timer` disabled, a playbook run leaves them disabled and says so; after `sudo rm` of the marker, a run
+  enables them (disable them again afterwards on a rehearsal VM that should not back up).
 
 ## Step 8 — Accounts (`deploy/ADMIN.md`)
 

@@ -131,6 +131,10 @@ evidence first.
    - As an administrator, disable (not just stop) our writes to the backups, so
      that neither a reboot nor the missed nightly run restarts them:
      `sudo systemctl disable --now manuspectrum-backup.timer manuspectrum-restore-test.timer`
+   - As an administrator, leave a marker: `sudo touch /etc/manuspectrum/backups-frozen`.
+     While that file exists, a playbook run leaves the backup and restore-test
+     timers alone (it says so); without it the run enables them again and the
+     missed nightly backup runs at once.
    - As an administrator, cancel a planned update, which makes a backup first
      (`sudo manuspectrum-update --status` shows one): `sudo manuspectrum-update --cancel`
    - As an administrator, suspend the provider's nightly job:
@@ -138,11 +142,10 @@ evidence first.
    - Check, as an administrator: `systemctl is-enabled manuspectrum-backup.timer manuspectrum-restore-test.timer`
      prints `disabled` twice, `systemctl is-active manuspectrum-backup.service`
      prints `inactive` (a backup still running: wait for it, do not kill it), and
-     `ls -l /etc/cron.daily/tsm` shows no `x`.
+     `ls -l /etc/cron.daily/tsm` shows no `x`, and `ls /etc/manuspectrum/backups-frozen`
+     lists the marker.
      `manuspectrum-tsm-check.timer` only reads: leave it on.
-   - A playbook run enables the two timers again. After any playbook run (the
-     step that removes an operator needs one), repeat the `disable --now` command.
-     A reboot does not undo it. `chmod -x` on the provider's job survives both a
+   - A reboot does not undo the freeze. `chmod -x` on the provider's job survives a
      reboot and a playbook run.
    - Ask the hosting provider, by the fastest channel, for a snapshot of the VM and
      of the network volume, and whether they can lock the backup node and suspend
@@ -186,29 +189,35 @@ evidence first.
 6. **Rebuild or restore** only when the cause is understood: [DEPLOY.md](DEPLOY.md)
    and [BACKUP.md](BACKUP.md#restore-the-stack).
 
-When the incident is closed, put the backups back:
+When the incident is closed, put the backups back. After a compromise with root
+access, the guard's program, its reference and its stamps were within the
+attacker's reach: rebuild the host first (step « Rebuild or restore » above), which
+reinstalls the guard, then:
 
-1. As an administrator, check the restic repository before any copy leaves again.
-   - After a compromise with root access, first remove the guard's stamps, which
-     were within the attacker's reach:
+1. As the service account, in the checkout, read the whole repository:
+   `make -C deploy restic ARGS="check --read-data"`. Do not trust the guard's
+   verdict before it is clean.
+2. As an administrator, run the guard in full before any copy leaves again.
+   - After a compromise with root access, first remove the guard's stamps:
      `sudo rm -f /var/lib/manuspectrum/repo-guard/pass.stamp /var/lib/manuspectrum/repo-guard/full.stamp`
    - If the repository was restored or created again, also remove its reference:
      `sudo rm -f /var/lib/manuspectrum/repo-guard/config.sha256`
-   - Then run the guard in full. The two values are in
+   - Then run it. The three values are in
      `sudo grep restic-repo-guard /etc/cron.daily/tsm`:
-     `sudo env METRICS_TEXTFILE_DIR=<metrics dir> RESTIC_REPOSITORY_DIR=<repository> RESTIC_GUARD_FULL=1 /usr/local/lib/manuspectrum/repo-guard/restic-repo-guard.sh; echo $?`
+     `sudo env METRICS_TEXTFILE_DIR=<metrics dir> RESTIC_REPOSITORY_DIR=<repository> RESTIC_GUARD_STATE_DIR=<state dir> RESTIC_GUARD_FULL=1 /usr/local/lib/manuspectrum/repo-guard/restic-repo-guard.sh; echo $?`
      Anything but `0` stops here: the repository is altered or cannot be judged
      ([BACKUP.md](BACKUP.md#the-repository-guard)).
-2. As an administrator: `sudo chmod +x /etc/cron.daily/tsm`
-3. As an administrator:
+3. As an administrator: `sudo chmod +x /etc/cron.daily/tsm`
+4. As an administrator, remove the marker, then enable the timers:
+   `sudo rm /etc/manuspectrum/backups-frozen`
    `sudo systemctl enable --now manuspectrum-backup.timer manuspectrum-restore-test.timer`
    Enabling runs the missed nightly backup at once (and the restore test if a
    Sunday was missed): no manual backup is needed. Watch it with
    `journalctl -u manuspectrum-backup -f`.
-4. Next morning: `journalctl -u manuspectrum-backup -e` shows the 02:00 run succeeded,
+5. Next morning: `journalctl -u manuspectrum-backup -e` shows the 02:00 run succeeded,
    `sudo journalctl -t restic-repo-guard --since today` shows the guard ran before the
    provider's copy, and `manuspectrum-tsm-check` (07:30) reports that copy.
-5. The silences end by themselves after 72 hours. To get the alerts back sooner,
+6. The silences end by themselves after 72 hours. To get the alerts back sooner,
    expire them in Alertmanager (no `make` target does it; `make -C deploy alerts`
    lists the alerts it holds). An alert still firing after the 72 hours is a real
    fault: [Backup failure](#backup-failure).
