@@ -72,5 +72,11 @@ CAUSES = {
     "lab_csv_set_aside": gettext_noop(
         "This CSV comes from the laboratory and is set aside."
     ),
+    "unreadable_raw": gettext_noop(
+        "The file could not be converted: keep the raw file only, or set it aside."
+    ),
+    "csv_contract": gettext_noop(
+        "The CSV does not follow the format the viewer reads."
+    ),
     "too_large": gettext_noop("The converted CSV is too large to be stored."),
 }

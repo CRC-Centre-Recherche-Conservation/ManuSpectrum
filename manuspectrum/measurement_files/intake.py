@@ -13,11 +13,14 @@ import hashlib
 import unicodedata
 import zipfile
 from dataclasses import dataclass
+from datetime import timedelta
 
 from celery import current_app
 from django.conf import settings
+from django.core.cache import cache
 from django.db import IntegrityError, transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
+from django.utils import timezone
 
 from arches.app.models.models import CardXNodeXWidget, File
 
@@ -28,6 +31,9 @@ from manuspectrum.models import MeasurementItem, MeasurementRun
 CHUNK = 1 << 20
 RELATIVE_DIR_MAX = 400
 PREPARE_TASK = "manuspectrum.measurement_prepare"
+WRITE_TASK = "manuspectrum.measurement_write"
+CLAIM_STALE = timedelta(minutes=10)
+RESUME_THROTTLE = 120
 IGNORED_NAMES = {".ds_store", "thumbs.db", "desktop.ini"}
 
 
@@ -319,10 +325,37 @@ def start_preparation(run):
     return "already" if run.state == "preparing" else "refused"
 
 
-def resume_if_stalled(run):
-    """Re-enqueue the current task of a run whose claims have all gone stale.
+PHASES = {
+    "preparing": (PREPARE_TASK, Q(state="queued")),
+    "writing": (WRITE_TASK, Q(state="prepared", decision="ready")),
+}
 
-    Does nothing yet: the preparation and writing tasks that need it arrive
-    with the tasks themselves.
+
+def send(task, run_id, countdown=None):
+    """Send the task *task* for a run through the Celery app."""
+    options = {} if countdown is None else {"countdown": countdown}
+    current_app.send_task(task, args=[str(run_id)], **options)
+
+
+def resume_if_stalled(run):
+    """Re-send the task of a ``preparing`` or ``writing`` run that nobody is working on.
+
+    The run is stalled when items wait for a worker (free for its phase, or
+    ``claimed`` for more than ``CLAIM_STALE``) and no claim is younger than
+    that. At most one re-send per ``RESUME_THROTTLE`` seconds, whoever polls.
+    Returns whether the task was sent.
     """
-    return None
+    phase = PHASES.get(run.state)
+    if phase is None:
+        return False
+    task, free = phase
+    if run.items.filter(
+        state="claimed", claimed_at__gte=timezone.now() - CLAIM_STALE
+    ).exists():
+        return False
+    if not run.items.filter(free | Q(state="claimed")).exists():
+        return False
+    if not cache.add(f"ms-measurement-resume-{run.id}", 1, RESUME_THROTTLE):
+        return False
+    send(task, run.id)
+    return True

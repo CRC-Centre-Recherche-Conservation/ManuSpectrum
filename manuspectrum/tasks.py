@@ -201,3 +201,24 @@ def record_activity_task():
     from manuspectrum.observability import activity
 
     activity.publish_gauges()
+
+
+@shared_task(
+    name="manuspectrum.measurement_prepare",
+    acks_late=True,
+    soft_time_limit=45,
+    time_limit=55,
+)
+def measurement_prepare_task(run_id):
+    """Prepare one chunk of a measurement-files run, then send itself again while items remain."""
+    from django.core.exceptions import ValidationError
+
+    from manuspectrum.measurement_files import intake, prepare
+    from manuspectrum.models import MeasurementRun
+
+    try:
+        run = MeasurementRun.objects.get(pk=str(run_id))
+    except (MeasurementRun.DoesNotExist, ValidationError):
+        return
+    if prepare.prepare_run(run):
+        intake.send(intake.PREPARE_TASK, run.id, countdown=1)
