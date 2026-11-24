@@ -1466,6 +1466,16 @@ sizes of the data directories.
 - [ ] Where TSM is installed, after the playbook: `/var/log` in the `DOMAIN` of `/var/spool/tsm/etc/dsm.sys` with an active
   `VirtualMountpoint /var/log`, and `/etc/cron.daily/tsm` sets `LANG=C.UTF-8` before `dsmc` and passes no `-se`; the next
   morning `/var/spool/tsm/log/dsmc.incremental.local.log` holds no `ANS…E` and `sudo dsmc query filespace` lists `/var/log`.
+- [ ] Where the provider's job (`/etc/cron.daily/tsm`) exists, after the playbook: `sudo grep -n -E "restic-repo-guard|dsmc" /etc/cron.daily/tsm`
+  shows the `restic-repo-guard.sh` line (it ends with `>/dev/null 2>&1 || [ "$?" -ne 1 ] || exit 0`) before the `dsmc` line; `ls -ld /usr/local/lib/manuspectrum/repo-guard` and
+  `/var/lib/manuspectrum/repo-guard` are owned by root (the state directory `0700`).
+- [ ] The guard catches an alteration: copy a repository to a scratch directory, append one byte to a file of its `data/`,
+  and run by hand `sudo METRICS_TEXTFILE_DIR=<scratch> RESTIC_REPOSITORY_DIR=<copy> RESTIC_GUARD_STATE_DIR=<scratch state> RESTIC_GUARD_FULL=1 /usr/local/lib/manuspectrum/repo-guard/restic-repo-guard.sh`:
+  it exits 1 and names the file; with the copy's `config` deleted it still exits 1. On the untouched copy it exits 0. The next morning
+  `sudo journalctl -t restic-repo-guard --since today` shows the real run, and
+  `manuspectrum_restic_repo_guard_last_success_timestamp_seconds` is today's.
+- [ ] On a host without the provider's job: no `/usr/local/lib/manuspectrum/repo-guard` and no `/var/lib/manuspectrum/repo-guard`,
+  and `ResticRepoAltered` and `ResticRepoGuardStale` stay silent.
 
 ## Step 8 — Accounts (`deploy/ADMIN.md`)
 
