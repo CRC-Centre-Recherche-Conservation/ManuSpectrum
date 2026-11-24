@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # deploy/scripts/tests/test_tsm_check.sh
-# Tests of tsm-check.sh. dsmc is an empty executable on PATH (the script only
-# tests its presence); the provider's report and include file are fixtures in
-# a scratch directory. Prints `ok N` / `not ok N`; exits non-zero on failure.
+# Tests of tsm-check.sh. The provider's options file, report and include file
+# are fixtures in a scratch directory. Prints `ok N` / `not ok N`; exits non-zero on failure.
 # $? after a compound test is the point of every assertion below.
 # shellcheck disable=SC2319
 set -uo pipefail
@@ -16,14 +15,8 @@ trap 'rm -rf "$TMP"' EXIT
 OUT="$TMP/metrics"
 REPORT="$TMP/report.log"
 INCLEXCL="$TMP/inclexcl.def"
-mkdir -p "$TMP/bin" "$TMP/nodsmc" "$OUT"
-printf '#!/bin/sh\nexit 99\n' >"$TMP/bin/dsmc"
-chmod +x "$TMP/bin/dsmc"
-# A PATH holding the tools the script needs but no dsmc.
-for tool in bash sh date stat cat grep id mktemp rm mv chmod dirname sort runuser; do
-  src="$(command -v "$tool" 2>/dev/null)" && ln -sf "$src" "$TMP/nodsmc/$tool"
-done
-
+OPTIONS="$TMP/dsm.sys"
+mkdir -p "$OUT"
 n=0 failed=0
 assert() { # assert DESCRIPTION CONDITION-EXIT-CODE
   n=$((n + 1))
@@ -38,10 +31,11 @@ reset() { # fresh metrics directory, fixture report dated now, both include line
   cp "$FIXTURE" "$REPORT"
   touch "$REPORT"
   printf '%s\n' "$GOOD_INCLUDES" >"$INCLEXCL"
+  : >"$OPTIONS"
 }
 
 run() { # run [VAR=value ...]; stderr in $TMP/stderr
-  env PATH="$TMP/bin:$PATH" METRICS_TEXTFILE_DIR="$OUT" \
+  env METRICS_TEXTFILE_DIR="$OUT" TSM_OPTIONS="$OPTIONS" \
     TSM_LOG_DIRS="/var/log /data/app/nginx-logs" TSM_REPORT="$REPORT" TSM_INCLEXCL="$INCLEXCL" \
     "$@" bash "$CHECK" 2>"$TMP/stderr"
 }
@@ -51,13 +45,14 @@ sample() { # sample FILE METRIC: the value, empty when absent
 }
 
 reset
-env PATH="$TMP/nodsmc" METRICS_TEXTFILE_DIR="$OUT" TSM_REPORT="$REPORT" TSM_INCLEXCL="$INCLEXCL" \
-  "$TMP/nodsmc/bash" "$CHECK" 2>"$TMP/stderr"
+rm -f "$OPTIONS"
+run
 rc=$?
 [ "$rc" -eq 0 ] && [ "$(sample manuspectrum_tsm_check.prom manuspectrum_tsm_check_enabled)" = 0 ] \
   && [ "$(sample manuspectrum_tsm_check.prom manuspectrum_tsm_log_include_ok)" = 0 ] \
-  && [ ! -e "$OUT/manuspectrum_tsm_backup_success.prom" ]
-assert "dsmc absent: enabled 0, no success file, exit 0" $?
+  && [ ! -e "$OUT/manuspectrum_tsm_backup_success.prom" ] \
+  && grep -q 'not configured' "$TMP/stderr"
+assert "options file absent: enabled 0, no success file, exit 0" $?
 
 reset
 run
@@ -147,6 +142,14 @@ run TSM_REQUIRED_FILESPACES="/data /var/log /srv"
 rc=$?
 [ "$rc" -eq 1 ] && [ ! -e "$OUT/manuspectrum_tsm_backup_success.prom" ]
 assert "TSM_REQUIRED_FILESPACES adds a filespace that must have finished" $?
+
+reset
+mkdir -p "$TMP/logs/[ab]" "$TMP/logs/a"
+printf 'include %s/logs/[ab]/.../* LOG_ROTATED_FILES_MG\n' "$TMP" >"$INCLEXCL"
+run TSM_LOG_DIRS="$TMP/logs/[ab]"
+rc=$?
+[ "$rc" -eq 0 ] && [ "$(sample manuspectrum_tsm_check.prom manuspectrum_tsm_log_include_ok)" = 1 ]
+assert "a log directory name holding glob characters is taken literally" $?
 
 reset
 run METRICS_TEXTFILE_DIR=""

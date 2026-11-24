@@ -15,12 +15,13 @@
 #
 # Metrics, in METRICS_TEXTFILE_DIR, written as the directory's owner:
 #   manuspectrum_tsm_check.prom
-#     manuspectrum_tsm_check_enabled     1 when dsmc is installed, 0 otherwise
+#     manuspectrum_tsm_check_enabled     1 when the provider's TSM client is configured, 0 otherwise
 #     manuspectrum_tsm_log_include_ok    1 when every include line is present
 #   manuspectrum_tsm_backup_success.prom, written only when the backup is good
 #     manuspectrum_tsm_backup_last_success_timestamp_seconds
 #       modification time of the report
-# Without dsmc (rehearsal VMs, CI) the run writes both gauges at 0 and exits 0.
+# Where the provider's TSM client is not configured (its options file is absent:
+# rehearsal VMs, CI) the run writes both gauges at 0 and exits 0.
 #
 # Environment (the unit reads /etc/manuspectrum/tsm-check.env):
 #   METRICS_TEXTFILE_DIR     absolute, existing (required)
@@ -30,9 +31,12 @@
 #   TSM_REPORT               provider's report (default
 #                            /var/spool/tsm/log/dsmc.incremental.local.log)
 #   TSM_INCLEXCL             include file (default /var/spool/tsm/etc/inclexcl.def)
-#   TSM_CHECK_DSMC           program whose presence enables the check (default dsmc)
+#   TSM_OPTIONS              provider's client options file; the check is enabled
+#                            only where it exists (default /var/spool/tsm/etc/dsm.sys)
 # Exit: 0 backup and includes good, 1 one of them is not, 2 wrong configuration.
 set -euo pipefail
+# The directory and filespace lists are split on blanks only, never globbed.
+set -f
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib-metrics.sh
@@ -47,7 +51,7 @@ FILESPACES="${TSM_REQUIRED_FILESPACES:-/data /var/log}"
 CLASS="${TSM_LOG_CLASS:-LOG_ROTATED_FILES_MG}"
 REPORT="${TSM_REPORT:-/var/spool/tsm/log/dsmc.incremental.local.log}"
 INCLEXCL="${TSM_INCLEXCL:-/var/spool/tsm/etc/inclexcl.def}"
-DSMC="${TSM_CHECK_DSMC:-dsmc}"
+OPTIONS="${TSM_OPTIONS:-/var/spool/tsm/etc/dsm.sys}"
 
 out_dir="${METRICS_TEXTFILE_DIR:-}"
 [[ "$out_dir" == /* && -d "$out_dir" ]] || usage_die "METRICS_TEXTFILE_DIR must be an existing absolute directory (got '$out_dir')"
@@ -70,15 +74,15 @@ publish() { # publish NAME
 
 write_check_metrics() { # write_check_metrics ENABLED INCLUDE_OK
   metrics_open "$stage/manuspectrum_tsm_check.prom"
-  metric_family manuspectrum_tsm_check_enabled gauge "1 when the TSM client is installed and the provider backup is checked"
+  metric_family manuspectrum_tsm_check_enabled gauge "1 when the provider TSM client is configured and its backup is checked"
   metric_sample manuspectrum_tsm_check_enabled "$1"
   metric_family manuspectrum_tsm_log_include_ok gauge "1 when every log directory is bound to the TSM log class"
   metric_sample manuspectrum_tsm_log_include_ok "$2"
   metrics_commit && publish manuspectrum_tsm_check.prom
 }
 
-if ! command -v "$DSMC" >/dev/null 2>&1; then
-  log "dsmc not installed, nothing checked"
+if [ ! -f "$OPTIONS" ]; then
+  log "the provider's TSM client is not configured, nothing checked"
   write_check_metrics 0 0
   exit 0
 fi
