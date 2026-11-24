@@ -343,4 +343,94 @@ rc=$?
 [ "$rc" -eq 1 ] && [ "$(grep -c -- 'ALTERED: ' "$LOGCALLS")" = 100 ] && [ "$(grep -c -- '151 altered files in total' "$LOGCALLS")" = 1 ]
 assert "151 altered packs: the system log gets 100 ALTERED lines and one total line" $?
 
+reset
+run
+settle
+printf 'X' >>"$PACK"
+rm -rf "$OUT"
+run
+rc=$?
+[ "$rc" -eq 1 ] && [ -e "$STATE/altered" ] && grep -q 'WARNING' "$TMP/stderr"
+assert "an altered pack with the metrics directory absent: exit 1, marker written, a WARNING" $?
+
+reset
+run
+settle
+printf 'X' >>"$PACK"
+printf '#!/bin/sh\nmv "%s" "%s.gone" 2>/dev/null\nexec "%s" "$@"\n' "$OUT" "$OUT" "$real_sha" >"$TMP/stub/sha256sum"
+chmod +x "$TMP/stub/sha256sum"
+run PATH="$TMP/stub:$LOGSTUB:$PATH"
+rc=$?
+rm -rf "$OUT.gone" "$TMP/stub/sha256sum"
+[ "$rc" -eq 1 ] && [ -e "$STATE/altered" ]
+assert "an altered pack with the metrics directory removed after the listing started: exit 1, marker written" $?
+
+reset
+rm -rf "$OUT"
+run
+rc=$?
+[ "$rc" -eq 0 ] && grep -q 'WARNING' "$TMP/stderr" && [ -f "$STATE/pass.stamp" ] && [ -f "$STATE/full.stamp" ]
+assert "an intact repository with the metrics directory absent: exit 0, a WARNING, stamps moved" $?
+
+reset
+run
+settle
+printf 'X' >>"$PACK"
+mkdir -p "$TMP/awkstub"
+printf '#!/bin/sh\nexit 1\n' >"$TMP/awkstub/awk"
+chmod +x "$TMP/awkstub/awk"
+rm -f "$success_file"
+run PATH="$TMP/awkstub:$LOGSTUB:$PATH"
+rc=$?
+[ "$rc" -eq 2 ] && [ ! -e "$success_file" ] && ! grep -q 'repository intact' "$TMP/stderr"
+assert "a failing awk with an altered pack: not intact, exit 2, no success file" $?
+
+reset
+run
+settle
+printf 'X' >>"$PACK"
+run
+settle
+run
+rc=$?
+[ "$rc" -eq 1 ] && [ -e "$STATE/altered" ] && grep -qF "ALTERED: $PACK" "$TMP/stderr"
+assert "marker present and the alteration older than pass.stamp: the next run is a full pass and still exits 1" $?
+
+reset
+rm -f "$REPO/config"
+run
+rc=$?
+[ "$rc" -eq 1 ] && grep -qF "ALTERED: $REPO/config (missing)" "$TMP/stderr" && [ "$(guard_sample mismatches)" = 1 ]
+assert "config missing with packs there and no reference recorded yet: exit 1" $?
+
+reset
+rm -rf "${REPO:?}"/{config,data,index,snapshots,keys}
+mkdir -p "$REPO/data/aa"
+chmod 000 "$REPO/data/aa"
+run
+rc=$?
+chmod 755 "$REPO/data/aa"
+if [ "$(id -u)" -eq 0 ]; then
+  n=$((n + 1)); echo "ok $n - no config and a directory that cannot be listed: exit 2, not no repository # SKIP running as root"
+else
+  [ "$rc" -eq 2 ] && ! grep -q 'no restic repository' "$TMP/stderr"
+  assert "no config and a directory that cannot be listed: exit 2, not no repository" $?
+fi
+
+reset
+run
+settle
+touch -d "@$(($(date +%s) - 3 * 86400 + 10))" "$STATE/full.stamp"
+run
+rc=$?
+[ "$rc" -eq 0 ] && [ "$(guard_sample files_checked)" = 5 ]
+assert "full.stamp three days minus ten seconds old: a full pass" $?
+
+reset
+mkdir -p "$STATE/config.sha256.tmp"
+run
+rc=$?
+[ "$rc" -eq 2 ] && grep -q 'FAIL: unexpected error' "$TMP/stderr" && [ ! -e "$STATE/config.sha256" ] && [ ! -e "$success_file" ]
+assert "a command failing inside a function (the reference write): exit 2, unexpected error logged, no partial reference" $?
+
 exit "$failed"

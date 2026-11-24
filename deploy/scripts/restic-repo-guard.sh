@@ -14,20 +14,25 @@
 # device; such an entry is never opened). Only base names of exactly 64
 # lowercase hex characters are checked; temporary names and locks/ are ignored.
 # `config` has a fixed name: its SHA-256 is recorded at the first run in
-# STATE_DIR/config.sha256 (written atomically) and compared at every run. Once
-# that reference is recorded, a missing `config` while hash-named files remain
-# is an alteration; a directory with no `config` and no hash-named file is not a
-# repository: the run logs it, exits 0 and leaves the metric files as the last
-# real pass wrote them.
+# STATE_DIR/config.sha256 (written atomically) and compared at every run. A
+# missing `config` while at least one hash-named entry remains is an alteration,
+# whether or not a reference was recorded; a directory with no `config` and no
+# hash-named entry is not a repository: the run logs it, exits 0 and leaves the
+# metric files as the last real pass wrote them.
 #
 # Exit status. Exit 1 means an alteration was found, and nothing else: the
-# provider's job stops before its copy on exit 1 only.
+# provider's job stops before its copy on exit 1 only. The verdict never depends
+# on the metrics directory, which belongs to the unprivileged service account: a
+# missing directory or a failed write is logged as a WARNING and publication is
+# skipped. Once an alteration is counted, the marker is written first, the metrics
+# are published, and the run exits 1 whatever happens after.
 #   0  intact, or nothing to check
 #   1  an alteration was found; or the guard cannot judge the repository (an
 #      unexpected error, a file that exists but cannot be read, a directory that
 #      cannot be listed, a garbled config reference) while the last verdict was
 #      "altered": STATE_DIR/altered, written by a pass that exits 1 and removed
-#      only by a pass that finds the repository intact, keeps the verdict
+#      only by a pass that finds the repository intact, keeps the verdict; while
+#      the marker exists every pass is a full pass
 #   2  wrong configuration, or the guard cannot judge the repository and the
 #      last verdict was not "altered"
 # Every unexpected failure is caught by an ERR trap, logged as `FAIL: unexpected
@@ -40,7 +45,9 @@
 # shortly before or during a pass is hashed again by the next one. Writing a file
 # in place always moves its ctime, which user tools cannot set back. A full pass
 # hashes every file: it runs when STATE_DIR/full.stamp is missing or 3 days old
-# or more, or when RESTIC_GUARD_FULL=1; the provider keeps the previous versions
+# or more (less PASS_MARGIN_SECONDS, so that a run starting a few seconds
+# earlier than the day before still hashes everything), or when
+# RESTIC_GUARD_FULL=1; the provider keeps the previous versions
 # of an overwritten file about 7 days, so a weekly backstop would come too late.
 # A stamp dated in the future (a clock that stepped back, or a tampered stamp)
 # counts as missing and is logged. `config` is checked at every pass. Files are
@@ -64,7 +71,7 @@
 # stderr, leaves it readable; a missing or failing logger changes nothing.
 #
 # Environment:
-#   METRICS_TEXTFILE_DIR   absolute, existing (required)
+#   METRICS_TEXTFILE_DIR   absolute (required; it need not exist)
 #   RESTIC_REPOSITORY_DIR  absolute, the repository directory (required)
 #   RESTIC_GUARD_STATE_DIR state directory (default /var/lib/manuspectrum/repo-guard)
 #   RESTIC_GUARD_FULL      1 forces a full pass
@@ -97,7 +104,7 @@ HEX64='[0-9a-f]{64}'
 out_dir="${METRICS_TEXTFILE_DIR:-}"
 repo="${RESTIC_REPOSITORY_DIR:-}"
 state_dir="${RESTIC_GUARD_STATE_DIR:-/var/lib/manuspectrum/repo-guard}"
-[[ "$out_dir" == /* && -d "$out_dir" ]] || usage_die "METRICS_TEXTFILE_DIR must be an existing absolute directory (got '$out_dir')"
+[[ "$out_dir" == /* ]] || usage_die "METRICS_TEXTFILE_DIR must be an absolute directory (got '$out_dir')"
 [[ "$repo" == /* ]] || usage_die "RESTIC_REPOSITORY_DIR must be an absolute directory (got '$repo')"
 [[ "$state_dir" == /* ]] || usage_die "RESTIC_GUARD_STATE_DIR must be absolute (got '$state_dir')"
 state="$state_dir"
@@ -117,7 +124,11 @@ trap 'rm -rf "${stage:-}"' EXIT
 publish() { # publish NAME
   # shellcheck disable=SC2016 # $1 expands in the inner shell.
   local owner write='cat >"$1.tmp" && chmod 0644 "$1.tmp" && mv -f "$1.tmp" "$1"'
-  owner="$(stat -c %U "$out_dir")"
+  if [ ! -d "$out_dir" ]; then
+    log "WARNING: $out_dir is not a directory, $1 not written"
+    return 0
+  fi
+  owner="$(stat -c %U "$out_dir")" || return 1
   if [ "$owner" = "$(id -un)" ]; then
     sh -c "$write" _ "$out_dir/$1" <"$stage/$1"
   else
@@ -126,12 +137,19 @@ publish() { # publish NAME
 }
 
 write_guard_metrics() { # write_guard_metrics MISMATCHES FILES_CHECKED
-  metrics_open "$stage/manuspectrum_restic_repo_guard.prom"
-  metric_family manuspectrum_restic_repo_guard_mismatches gauge "Restic repository files whose content no longer matches their name"
-  metric_sample manuspectrum_restic_repo_guard_mismatches "$1"
-  metric_family manuspectrum_restic_repo_guard_files_checked gauge "Restic repository files hashed by the last guard pass"
-  metric_sample manuspectrum_restic_repo_guard_files_checked "$2"
-  metrics_commit && publish manuspectrum_restic_repo_guard.prom
+  metrics_open "$stage/manuspectrum_restic_repo_guard.prom" \
+    && metric_family manuspectrum_restic_repo_guard_mismatches gauge "Restic repository files whose content no longer matches their name" \
+    && metric_sample manuspectrum_restic_repo_guard_mismatches "$1" \
+    && metric_family manuspectrum_restic_repo_guard_files_checked gauge "Restic repository files hashed by the last guard pass" \
+    && metric_sample manuspectrum_restic_repo_guard_files_checked "$2" \
+    && metrics_commit && publish manuspectrum_restic_repo_guard.prom
+}
+
+write_success_metrics() {
+  metrics_open "$stage/manuspectrum_restic_repo_guard_success.prom" \
+    && metric_family manuspectrum_restic_repo_guard_last_success_timestamp_seconds gauge "Unix time of the last guard pass without alteration" \
+    && metric_sample manuspectrum_restic_repo_guard_last_success_timestamp_seconds "$start" \
+    && metrics_commit && publish manuspectrum_restic_repo_guard_success.prom
 }
 
 mismatches=0
@@ -160,13 +178,23 @@ find_names() { # find_names TEST...: hash-named entries of the four directories
 
 config_missing=0
 if [ ! -f config ]; then
-  if [ -f "$state/config.sha256" ] && [ "${#dirs[@]}" -gt 0 ] && [ -n "$(find_names -print -quit)" ]; then
+  first_named=""
+  if [ "${#dirs[@]}" -gt 0 ]; then
+    first_named="$(find_names -print -quit)" || cannot_judge "the repository could not be listed completely"
+  fi
+  if [ -n "$first_named" ]; then
     config_missing=1
   else
     log "no restic repository at $repo, nothing checked"
     exit 0
   fi
 fi
+
+record_reference() { # record_reference SUM: atomic, so a reference is never half written
+  printf '%s\n' "$1" >"$state/config.sha256.tmp"
+  mv -f "$state/config.sha256.tmp" "$state/config.sha256"
+  log "recorded the reference of config"
+}
 
 stamp_ok() { # stamp_ok FILE: present and not dated in the future
   [ -f "$1" ] || return 1
@@ -176,8 +204,11 @@ stamp_ok() { # stamp_ok FILE: present and not dated in the future
   fi
 }
 full=0
-if [ "${RESTIC_GUARD_FULL:-}" = 1 ] || ! stamp_ok "$state/pass.stamp" || ! stamp_ok "$state/full.stamp" \
-  || [ $((start - $(stat -c %Y "$state/full.stamp"))) -ge "$FULL_INTERVAL_SECONDS" ]; then
+if [ -e "$state/altered" ]; then
+  log "the last verdict was altered: full pass"
+  full=1
+elif [ "${RESTIC_GUARD_FULL:-}" = 1 ] || ! stamp_ok "$state/pass.stamp" || ! stamp_ok "$state/full.stamp" \
+  || [ $((start - $(stat -c %Y "$state/full.stamp"))) -ge $((FULL_INTERVAL_SECONDS - PASS_MARGIN_SECONDS)) ]; then
   full=1
 fi
 
@@ -200,19 +231,21 @@ if [ "${#dirs[@]}" -gt 0 ]; then
   if [ "$hash_rc" -ne 0 ]; then
     tr '\0' '\n' <"$stage/list" | LC_ALL=C sort >"$stage/listed"
     awk '{ print substr($0, 67) }' "$stage/sums" | LC_ALL=C sort >"$stage/hashed"
+    LC_ALL=C comm -23 "$stage/listed" "$stage/hashed" >"$stage/missing"
     while IFS= read -r path; do
       if [ -e "$path" ]; then cannot_judge "$repo/$path could not be read"; fi
-    done < <(LC_ALL=C comm -23 "$stage/listed" "$stage/hashed")
+    done <"$stage/missing"
   fi
+  awk '{
+      path = substr($0, 67); n = split(path, parts, "/")
+      print ((parts[n] == substr($0, 1, 64)) ? "OK" : "BAD:" path)
+    }' "$stage/sums" >"$stage/verdicts"
   while IFS= read -r line; do
     case "$line" in
       BAD:*) report_altered "$repo/${line#BAD:}" ;;
     esac
     checked=$((checked + 1))
-  done < <(awk '{
-      path = substr($0, 67); n = split(path, parts, "/")
-      print ((parts[n] == substr($0, 1, 64)) ? "OK" : "BAD:" path)
-    }' "$stage/sums")
+  done <"$stage/verdicts"
 fi
 
 if [ "$config_missing" -eq 1 ]; then
@@ -220,9 +253,7 @@ if [ "$config_missing" -eq 1 ]; then
 else
   config_sum="$(sha256sum config | cut -d' ' -f1)"
   if [ ! -f "$state/config.sha256" ]; then
-    printf '%s\n' "$config_sum" >"$state/config.sha256.tmp"
-    mv -f "$state/config.sha256.tmp" "$state/config.sha256"
-    log "recorded the reference of config"
+    record_reference "$config_sum"
   else
     reference="$(cat "$state/config.sha256")"
     [[ "$reference" =~ ^[0-9a-f]{64}$ ]] || cannot_judge "$state/config.sha256 is not a SHA-256"
@@ -230,23 +261,23 @@ else
   fi
 fi
 
-write_guard_metrics "$mismatches" "$checked"
-
 if [ "$mismatches" -gt 0 ]; then
+  # From here nothing may turn the verdict into another status.
+  trap - ERR
+  set +e
+  : >"$state/altered" || log "WARNING: $state/altered could not be written"
   if [ "$mismatches" -gt "$ALTERED_LOG_MAX" ]; then
     log "$mismatches altered files in total, the first $ALTERED_LOG_MAX are listed above"
   fi
-  : >"$state/altered"
+  write_guard_metrics "$mismatches" "$checked" || log "WARNING: the metrics could not be published"
   log "FAIL: $mismatches altered file(s)"
   exit 1
 fi
 
+write_guard_metrics "$mismatches" "$checked" || log "WARNING: the metrics could not be published"
 rm -f "$state/altered"
 touch -d "@$((start - PASS_MARGIN_SECONDS))" "$state/pass.stamp"
 if [ "$full" -eq 1 ]; then touch -d "@$start" "$state/full.stamp"; fi
-metrics_open "$stage/manuspectrum_restic_repo_guard_success.prom"
-metric_family manuspectrum_restic_repo_guard_last_success_timestamp_seconds gauge "Unix time of the last guard pass without alteration"
-metric_sample manuspectrum_restic_repo_guard_last_success_timestamp_seconds "$start"
-metrics_commit && publish manuspectrum_restic_repo_guard_success.prom
+write_success_metrics || log "WARNING: the success metric could not be published"
 log "$checked file(s) checked, repository intact ($([ "$full" -eq 1 ] && echo full || echo daily) pass)"
 exit 0
