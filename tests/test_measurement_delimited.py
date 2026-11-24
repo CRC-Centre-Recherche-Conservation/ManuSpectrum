@@ -138,8 +138,22 @@ class DelimitedTests(SimpleTestCase):
         data = "\n".join(f"{i} {i}" for i in range(1, 3001)).encode()
         with mock.patch.object(delimited, "MAX_CHANNELS", 10):
             with mock.patch.object(delimited, "float", create=True, wraps=float) as spy:
-                self.assertEqual(refused(self, data), "malformed")
+                self.assertEqual(refused(self, data), "too_large")
         self.assertLess(spy.call_count, 100)
+
+
+class DelimitedHeaderTests(SimpleTestCase):
+    def test_an_export_with_a_long_header_is_detected_and_read(self):
+        header = "".join(f"Header line {n:02d} " + "x" * 64 + "\n" for n in range(60))
+        data = (header + "".join(f"{i}\t{i * 2}\n" for i in range(1, 30))).encode()
+        self.assertGreater(len(header), registry.HEAD_SIZE)
+        self.assertEqual(registry.detect(data), "delimited")
+        self.assertEqual(len(registry.convert(data).series.rows), 29)
+
+    def test_a_row_cut_by_the_window_is_not_counted(self):
+        window = registry.FALLBACK_HEAD_SIZE
+        text = "1 2\n" + "a" * (window - 8) + "\n3 4\n5 6"
+        self.assertIsNone(registry.detect(text.encode()))
 
 
 class DelimitedProbeWindowTests(SimpleTestCase):

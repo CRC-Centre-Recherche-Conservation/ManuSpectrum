@@ -25,6 +25,7 @@ UNREADABLE_CODES = frozenset(
         "duplicate_x",
         "non_finite",
         "ambiguous_result",
+        "too_large",
     }
 )
 
@@ -39,6 +40,7 @@ UNREADABLE_LABELS = {
     "ambiguous_result": gettext_noop(
         "The file holds several result spectra and does not say which to use."
     ),
+    "too_large": gettext_noop("The file is too large to be converted."),
 }
 """English wording of each `UnreadableFile` code (msgids; French in the catalogue)."""
 
@@ -190,7 +192,10 @@ class Reading:
 
 class UnreadableFile(Exception):
     """A file of a known format that cannot be read. `format` is the detected
-    format, filled by `registry.convert` when the reader does not know it."""
+    format, filled by `registry.convert` when the reader left it empty.
+
+    `too_large` is every refusal over `MAX_CHANNELS`, and a CSV over
+    `SPECTRUM_PREVIEW_MAX_BYTES` (`csv_writer.fits_viewer`)."""
 
     def __init__(self, code: str, format: str | None = None):
         if code not in UNREADABLE_CODES:

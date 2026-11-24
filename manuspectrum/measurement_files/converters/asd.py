@@ -67,7 +67,9 @@ def read(data: bytes) -> Reading:
         raise UnreadableFile("unsupported_variant")
     first, step = struct.unpack_from("<ff", data, 191)
     (channels,) = struct.unpack_from("<H", data, 204)
-    if channels > MAX_CHANNELS or not (math.isfinite(first) and math.isfinite(step)):
+    if channels > MAX_CHANNELS:
+        raise UnreadableFile("too_large")
+    if not (math.isfinite(first) and math.isfinite(step)):
         raise UnreadableFile("malformed")
     if channels < 2:
         raise UnreadableFile("too_few_points")

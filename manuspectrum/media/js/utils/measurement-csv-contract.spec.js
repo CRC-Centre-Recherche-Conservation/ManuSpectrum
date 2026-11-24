@@ -10,9 +10,11 @@
  * `contract/refused/` holds one CSV per violation `check_csv` names. The
  * checker is the gate for a lone CSV and is stricter than the card: the card
  * refuses only what `validateContent` refuses (no header, markup, one column)
- * and draws everything else as it reads it, with gaps (NaN), a spurious point
- * or a line that goes back. The `REFUSED` table pins what the card does with
- * each file, for the options every preset passes.
+ * and draws everything else as it reads it. Five of the refused files (bom,
+ * comment_line, header_invalid__formula, quoted, separator) are drawn exactly
+ * like a clean file; the others are drawn with gaps (NaN), a spurious point or
+ * a line that goes back. The `REFUSED` table pins what the card does with each
+ * file, for the options every preset passes.
  */
 
 import fs from "fs";

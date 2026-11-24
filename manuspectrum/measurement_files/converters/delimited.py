@@ -26,14 +26,17 @@ FORMAT = "delimited"
 READER_VERSION = 1
 
 MIN_RUN = 5
-HEAD_LIMIT = 4096
 PROBE_LINES = 2000
 _NUMBER = re.compile(r"[+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:[eE][+-]?\d+)?")
 _UTF16_BOMS = (codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)
 _SEPARATORS = ("\t", ";", ",", None)
 
 
-def sniff(head: bytes) -> bool:
+def sniff(head: bytes, truncated: bool = False) -> bool:
+    """Whether the head of a file holds two numeric rows.
+
+    `truncated` says the head stops before the end of the file: its last line
+    may be cut and is not read."""
     if not head.startswith(_UTF16_BOMS) and b"\x00" in head:
         return False
     if head.startswith(_UTF16_BOMS):
@@ -41,7 +44,7 @@ def sniff(head: bytes) -> bool:
     else:
         text = head.decode("utf-8-sig", errors="replace")
     lines = [ln for ln in text.splitlines() if ln.strip()]
-    if not head.startswith(_UTF16_BOMS) and len(head) >= HEAD_LIMIT:
+    if truncated and not head.startswith(_UTF16_BOMS):
         lines = lines[:-1]
     return any(
         sum(_is_row(_fields(ln, sep), sep) for ln in lines) >= 2 for sep in _SEPARATORS
@@ -120,7 +123,7 @@ def read(data: bytes) -> Reading:
         rows.append(_values(parts))
         end += 1
         if len(rows) > MAX_CHANNELS:
-            raise UnreadableFile("malformed")
+            raise UnreadableFile("too_large")
     if any(numeric[end:]):
         raise UnreadableFile("malformed")
     if len(rows) < 2:

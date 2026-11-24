@@ -352,6 +352,25 @@ class FileEntryTests(SimpleTestCase):
         self.assertEqual(found[MCA_ID]["pairedWith"], CSV_ID)
         self.assertEqual(found[CSV_ID]["pairedWith"], MCA_ID)
 
+    def test_each_csv_claims_one_raw_file_when_two_csvs_name_the_same_one(self):
+        base_id, own_id = CSV_ID, "33333333-3333-4333-8333-333333333333"
+        entries = [
+            {"file_id": base_id, "name": "x.csv", "url": "/files/f-base"},
+            {"file_id": own_id, "name": "x.0.csv", "url": "/files/f-own"},
+            {"file_id": MCA_ID, "name": "x.0", "url": "/files/f-opus"},
+        ]
+
+        found = {
+            e["id"]: e
+            for e in file_entries(
+                entries, language="en", configs={}, kind="measurement"
+            )
+        }
+
+        self.assertEqual(found[MCA_ID]["pairedWith"], own_id)
+        self.assertEqual(found[own_id]["pairedWith"], MCA_ID)
+        self.assertIsNone(found[base_id]["pairedWith"])
+
     def test_an_unrelated_csv_does_not_pair_with_an_opus_file(self):
         entries = [
             {"file_id": CSV_ID, "name": "scan02.0.csv", "url": "/files/f-csv"},

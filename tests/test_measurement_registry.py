@@ -38,7 +38,7 @@ class RegistryTests(SimpleTestCase):
         )
         with self.assertRaises(UnreadableFile) as caught:
             registry.convert(data)
-        self.assertEqual(caught.exception.code, "malformed")
+        self.assertEqual(caught.exception.code, "too_large")
 
     def test_unexpected_exception_becomes_malformed(self):
         class Boom:
@@ -171,6 +171,28 @@ class RegistryTests(SimpleTestCase):
         self.assertEqual(
             (caught.exception.code, caught.exception.format), ("malformed", "elio_mca")
         )
+
+    def test_a_format_the_reader_set_is_kept(self):
+        class Named:
+            FORMAT = "named"
+            READER_VERSION = 1
+
+            @staticmethod
+            def sniff(head):
+                return True
+
+            @staticmethod
+            def read(data):
+                raise UnreadableFile("malformed", format="inner")
+
+        original = registry.READERS
+        registry.READERS = (Named,)
+        try:
+            with self.assertRaises(UnreadableFile) as caught:
+                registry.convert(b"x")
+        finally:
+            registry.READERS = original
+        self.assertEqual(caught.exception.format, "inner")
 
     def test_a_reader_failure_carries_the_format_too(self):
         class Boom:

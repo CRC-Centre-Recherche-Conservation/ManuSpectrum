@@ -7992,6 +7992,10 @@ msgstr "The spectrum holds a value that is not finite."
 msgid "The file holds several result spectra and does not say which to use."
 msgstr "The file holds several result spectra and does not say which to use."
 
+#: measurement_files/converters/base.py:48
+msgid "The file is too large to be converted."
+msgstr "The file is too large to be converted."
+
 #: measurement_files/converters/metadata.py:17
 msgid "Note"
 msgstr "Note"

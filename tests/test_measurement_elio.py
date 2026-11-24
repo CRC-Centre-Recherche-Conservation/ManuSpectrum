@@ -154,6 +154,10 @@ class ElioHardeningTests(SimpleTestCase):
         data = build([1, 2, 3]).replace(b"# Tube Anode:  Ag", b"# Tube Anode Ag")
         self.assertEqual(self.refused(data), "malformed")
 
-    def test_more_values_than_the_channel_limit_are_malformed(self):
+    def test_more_values_than_the_channel_limit_are_too_large(self):
         with mock.patch.object(elio_mca, "MAX_CHANNELS", 5):
-            self.assertEqual(self.refused(build(list(range(20)))), "malformed")
+            self.assertEqual(self.refused(build(list(range(20)))), "too_large")
+
+    def test_a_declared_count_above_the_channel_limit_is_too_large(self):
+        data = build([1, 2, 3]).replace(b"MCA Channels: 3", b"MCA Channels: 9999999")
+        self.assertEqual(self.refused(data), "too_large")

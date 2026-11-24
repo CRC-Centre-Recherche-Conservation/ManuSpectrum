@@ -102,10 +102,22 @@ class BrukerSpxTests(SimpleTestCase):
         self.assertEqual(reading.series.rows[2], (-0.5, 3.0))
         self.assertNotIn("no_calibration", reading.warnings)
 
-    def test_count_mismatch_and_oversize_are_malformed(self):
+    def test_a_declared_count_above_the_limit_is_too_large(self):
+        with self.assertRaises(UnreadableFile) as caught:
+            bruker_spx.read(synthetic(count=2_000_000, channels="1,2"))
+        self.assertEqual(caught.exception.code, "too_large")
+
+    def test_a_zero_gain_writes_no_calibration_fact(self):
+        reading = bruker_spx.read(synthetic(calib_lin="0"))
+        self.assertIn("no_calibration", reading.warnings)
+        self.assertNotIn("calibration", [f.key for f in reading.facts])
+        self.assertIn(
+            "calibration", [f.key for f in bruker_spx.read(synthetic()).facts]
+        )
+
+    def test_count_mismatch_and_bad_values_are_malformed(self):
         for data in (
             synthetic(count=5),
-            synthetic(count=2_000_000, channels="1,2"),
             synthetic(channels="1,x,3,4"),
             b"<?xml version='1.0'?><TRTSpectrum>",
         ):

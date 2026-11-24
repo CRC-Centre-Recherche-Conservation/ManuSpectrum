@@ -196,7 +196,7 @@ def read(data: bytes) -> Reading:
     if header.get("DXU") != "WN" or point_format not in (1, 2):
         raise UnreadableFile("unsupported_variant")
     if points > MAX_CHANNELS:
-        raise UnreadableFile("malformed")
+        raise UnreadableFile("too_large")
     if points < 2:
         raise UnreadableFile("too_few_points")
     if size < 4 * points:

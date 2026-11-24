@@ -4,7 +4,8 @@
 module has `FORMAT`, `READER_VERSION`, `sniff(head)` and `read(data)`. A new
 reader goes into `READERS`, never after the fallback. A known format without a
 reader is named in `KNOWN_UNREAD`. `FALLBACK` (plain text columns) is tried
-last, after `KNOWN_UNREAD`, so a known unread format never falls into it. File
+last, after `KNOWN_UNREAD`, so a known unread format never falls into it; it
+sniffs a wider window (`FALLBACK_HEAD_SIZE`) because its header is free text. File
 names and extensions are never read.
 """
 
@@ -16,6 +17,7 @@ from .base import Reading, UnreadableFile, UnsupportedFormat, check_series
 logger = logging.getLogger(__name__)
 
 HEAD_SIZE = 4096
+FALLBACK_HEAD_SIZE = 65536
 
 
 READERS = (opus, asd, galactic_spc, bruker_spx, mzxml, elio_mca)
@@ -35,7 +37,8 @@ def detect(data: bytes) -> str | None:
     for name, matches in KNOWN_UNREAD.items():
         if matches(head):
             return name
-    if FALLBACK.sniff(head):
+    window = data[:FALLBACK_HEAD_SIZE]
+    if FALLBACK.sniff(window, truncated=len(data) > len(window)):
         return FALLBACK.FORMAT
     return None
 
@@ -56,7 +59,7 @@ def convert(data: bytes) -> Reading:
             check_series(reading.series)
         return reading
     except UnreadableFile as error:
-        error.format = name
+        error.format = error.format or name
         raise
     except UnsupportedFormat:
         raise
