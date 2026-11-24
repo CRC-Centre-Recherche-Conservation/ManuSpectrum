@@ -287,6 +287,18 @@ XY_PRESETS = {
         "Energy (keV)",
         "Counts",
     ),
+    # Not in TECHNIQUE_PRESETS: a technique already resolves to "xrf", and a
+    # second preset would stamp nothing. Readers of raw files select this one
+    # (``content_preset="xrf_channel"``) when the file has no energy calibration.
+    "xrf_channel": _preset(
+        "4e0f68f4-cecb-4449-8c6e-0f717d37324c",
+        "XRF — channel / counts",
+        "Columns: 1 = detector channel, 2 = counts. For a spectrum whose file "
+        "holds no energy calibration: the axis stays in channels, never "
+        "converted to keV.",
+        "Channel",
+        "Counts",
+    ),
     # The reversed wavenumber axis (4000 -> 400 cm-1) is the one near-universal
     # convention in vibrational spectroscopy; plotting FTIR ascending reads as
     # an error to any spectroscopist.

@@ -2,7 +2,7 @@ import uuid
 from unittest import mock
 
 from django.conf import settings
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase
 
 from manuspectrum.constants.licenses import default_license
 from manuspectrum.utils.file_entries import (
@@ -26,6 +26,7 @@ from manuspectrum.constants.xy_presets import (
     TRANSFORM_REFERENCE_NORMALIZE,
     AUTO_SAFE_TRANSFORMS,
     SEED_OWNED_CONFIG_KEYS,
+    TECHNIQUE_CONFIG_IDS,
     TECHNIQUE_PRESETS,
     XY_PRESETS,
     XY_RENDERER_ID,
@@ -282,6 +283,36 @@ class PresetTableTests(SimpleTestCase):
     def test_the_four_techniques_in_use_all_resolve(self):
         for item_id in (PXRF, MICRO_XRF, FTIR, FORS, MALDI):
             self.assertIn(TECHNIQUE_PRESETS[item_id], XY_PRESETS)
+
+
+class ChannelPresetTests(TestCase):
+    def test_the_channel_preset_is_seeded(self):
+        from manuspectrum.models import RendererConfig
+
+        row = RendererConfig.objects.get(
+            configid=XY_PRESETS["xrf_channel"]["config_id"]
+        )
+        self.assertEqual(row.config["presetKey"], "xrf_channel")
+        self.assertEqual(row.config["display"]["xAxisLabel"], "Channel")
+
+    def test_the_migration_restores_a_missing_channel_row(self):
+        from importlib import import_module
+
+        from django.apps import apps
+        from manuspectrum.models import RendererConfig
+
+        config_id = XY_PRESETS["xrf_channel"]["config_id"]
+        RendererConfig.objects.filter(configid=config_id).delete()
+        import_module(
+            "manuspectrum.migrations.0019_xrf_channel_preset"
+        ).seed_channel_preset(apps, None)
+        self.assertTrue(RendererConfig.objects.filter(configid=config_id).exists())
+
+    def test_no_technique_resolves_to_the_channel_preset(self):
+        self.assertNotIn("xrf_channel", TECHNIQUE_PRESETS.values())
+        self.assertNotIn(
+            XY_PRESETS["xrf_channel"]["config_id"], TECHNIQUE_CONFIG_IDS.values()
+        )
 
 
 class RendererRegistrationTests(SimpleTestCase):
