@@ -243,6 +243,7 @@
     line: >-
       METRICS_TEXTFILE_DIR={{ env_metrics_textfile_dir | quote }}
       RESTIC_REPOSITORY_DIR={{ env_restic_repository_dir | quote }}
+      RESTIC_GUARD_STATE_DIR={{ host_repo_guard_state_dir | quote }}
       {{ (host_repo_guard_dir ~ '/restic-repo-guard.sh') | quote }}
       >/dev/null 2>&1 || [ "$?" -ne 1 ] || exit 0
     insertbefore: '^\s*\S*dsmc\s'

@@ -101,10 +101,25 @@
   delay: 5
   until: app_readyz.stdout == '200'
 
+- name: Look for the backup freeze marker
+  ansible.builtin.stat:
+    path: "{{ app_backups_frozen_marker }}"
+  register: app_backups_frozen
+  check_mode: false
+
+- name: Say the backup timers were left alone
+  ansible.builtin.debug:
+    msg: >-
+      {{ app_backups_frozen_marker }} exists: the timers {{ app_frozen_timer_names | join(', ') }}
+      were left as they are. Remove the marker and re-enable them as the reverse procedure of
+      deploy/INCIDENT.md says to end the freeze.
+  when: app_backups_frozen.stat.exists
+
 - name: Enable the timers
   ansible.builtin.systemd_service:
     name: "{{ item }}.timer"
     enabled: true
     state: started
   loop: "{{ app_timer_names + (app_acme_timer_names if env_cert_mode == 'acme' else []) }}"
+  when: not (app_backups_frozen.stat.exists and item in app_frozen_timer_names)
   notify: remind to silence a fresh installation

@@ -195,6 +195,8 @@ tests:
 - name: a repository check 30 hours old is fine, 56 hours old fires
   interval: 1m
   input_series:
+  - series: manuspectrum_tsm_check_enabled
+    values: 1x4000
   - series: manuspectrum_restic_repo_guard_last_success_timestamp_seconds
     values: 0+0x4000
   - series: up{job="node"}
@@ -251,6 +253,19 @@ tests:
   input_series:
   - series: manuspectrum_tsm_check_enabled
     values: 0x4000
+  - series: up{job="node"}
+    values: 1x4000
+  promql_expr_test:
+  - expr: ALERTS{alertname="ResticRepoGuardStale", alertstate="firing"}
+    eval_time: 60h
+    exp_samples: []
+- name: a host without TSM keeps ResticRepoGuardStale silent whatever the age of the guard success
+  interval: 1m
+  input_series:
+  - series: manuspectrum_tsm_check_enabled
+    values: 0x4000
+  - series: manuspectrum_restic_repo_guard_last_success_timestamp_seconds
+    values: 0+0x4000
   - series: up{job="node"}
     values: 1x4000
   promql_expr_test:
