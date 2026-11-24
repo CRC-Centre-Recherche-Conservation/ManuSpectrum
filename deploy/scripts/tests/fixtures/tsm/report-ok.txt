@@ -1,0 +1,33 @@
+IBM Storage Protect
+Command Line Backup-Archive Client Interface
+  Client Version 8, Release 1, Level 27.0
+  Client date/time: 11/24/26   06:25:01
+(c) Copyright by IBM Corporation and other(s) 1990, 2024. All Rights Reserved.
+
+Node Name: EXAMPLE-NODE
+Session established with server EXAMPLE-SERVER: Linux/x86_64
+  Server Version 8, Release 1, Level 27.000
+  Server date/time: 11/24/26   06:25:02  Last access: 11/23/26   06:25:01
+
+Incremental backup of volume '/data'
+Normal File-->           296,739 /data/app/nginx-logs/access.log [Sent]
+Expiring-->            3,310,629 /data/app/nginx-logs/access.log-20261123 [Sent]
+Normal File-->            12,001 /data/app/nginx-logs/error.log [Sent]
+Successful incremental backup of '/data'
+
+Incremental backup of volume '/var/log'
+Normal File-->            41,223 /var/log/auth.log [Sent]
+Normal File-->         1,204,881 /var/log/syslog [Sent]
+Successful incremental backup of '/var/log'
+
+
+Total number of objects inspected:        7,804
+Total number of objects backed up:          526
+Total number of objects updated:              0
+Total number of objects rebound:              0
+Total number of objects deleted:              0
+Total number of objects expired:              3
+Total number of objects failed:               0
+Total number of bytes inspected:        1.52 GB
+Total number of bytes transferred:    148.61 MB
+Elapsed processing time:               00:00:03

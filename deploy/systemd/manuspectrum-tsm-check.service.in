@@ -1,0 +1,18 @@
+# Checks the provider's daily TSM backup report and the include lines that bind
+# the server logs to the log class (scripts/tsm-check.sh). Runs as root: the
+# include file and the report are under the provider's root-owned directory; it
+# never calls dsmc and does nothing where the provider's TSM client is not
+# configured. It runs the root-owned copy of the script, never the checkout;
+# /etc/manuspectrum/tsm-check.env holds its paths. PP-8 installs this file with
+# the timer next to it.
+[Unit]
+Description=ManuSpectrum check of the provider's TSM backup
+After=remote-fs.target
+
+[Service]
+Type=oneshot
+User=root
+EnvironmentFile=/etc/manuspectrum/tsm-check.env
+ExecStart=/usr/local/lib/manuspectrum/tsm-check/tsm-check.sh
+TimeoutStartSec=5min
+Nice=19

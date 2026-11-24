@@ -1,7 +1,7 @@
-# Every day at 07:30, after the nightly backup (02:00) and the reboot window
+# Every day at 07:30, after the provider's TSM job (06:25) and the reboot window
 # (04:50); Persistent=true runs a missed day at the next boot. Enabled by PP-8.
 [Unit]
-Description=Archive the ManuSpectrum closed logs every day
+Description=Check the provider's TSM backup every day
 
 [Timer]
 OnCalendar=*-*-* 07:30

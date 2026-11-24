@@ -1,17 +1,36 @@
 ---
-# Rotation count set in the system's own logrotate rules, so each log keeps
-# about one year: weekly rules keep 52 files, monthly rules 12. A rule absent
-# from the host is skipped.
+# Retention set in the system's own logrotate rules: four weekly files, so each
+# log stays about a month on the host (the provider's TSM keeps the year). The
+# frequency line is replaced too, because the distribution's rules differ. A rule
+# absent from the host is skipped. Applied only once the logs are bound to the
+# provider's log class and a nightly backup has seen that binding.
 host_log_rotations:
-  - { rule: rsyslog, rotate: 52 }
-  - { rule: ufw, rotate: 52 }
-  - { rule: fail2ban, rotate: 52 }
-  - { rule: wtmp, rotate: 12 }
-  - { rule: btmp, rotate: 12 }
+  - { rule: rsyslog, rotate: 4, frequency: weekly }
+  - { rule: ufw, rotate: 4, frequency: weekly }
+  - { rule: fail2ban, rotate: 4, frequency: weekly }
+  - { rule: wtmp, rotate: 4, frequency: weekly }
+  - { rule: btmp, rotate: 4, frequency: weekly }
 
 # The hosting provider's TSM client (Huma-Num): its options file and the nightly
 # job that runs `dsmc incremental`. When they exist, the role adds /var/log to the
 # backup domain, drops the job's `-se` (dsm.opt names the server) and runs the job
 # in a UTF-8 locale, without which dsmc refuses every non-ASCII file name.
+#
+# Its include file binds every file under the log directories to the log class
+# that keeps a deleted file 365 days (one version per file name, so rotated logs
+# must carry dated names). The provider's job writes its report to
+# host_tsm_report at each run; the log retention shrinks only when that report
+# is newer than the include lines and shows /var/log and the data mount done.
 host_tsm_options: /var/spool/tsm/etc/dsm.sys
 host_tsm_cron: /etc/cron.daily/tsm
+host_tsm_inclexcl: /var/spool/tsm/etc/inclexcl.def
+host_tsm_report: /var/spool/tsm/log/dsmc.incremental.local.log
+# The report must be at least this many seconds newer than the include file.
+host_tsm_report_margin_seconds: 3600
+host_logrotate_conf: /etc/logrotate.conf
+host_tsm_log_class: LOG_ROTATED_FILES_MG
+host_tsm_log_dirs:
+  - /var/log
+  - "{{ env_nginx_log_host_dir }}"
+# Filespace of the application data, the second one the report must show done.
+host_tsm_data_path: "{{ (data_mount | default({})).path | default('/data') }}"

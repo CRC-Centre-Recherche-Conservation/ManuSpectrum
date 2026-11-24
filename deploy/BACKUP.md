@@ -54,7 +54,7 @@ The excludes are the `RESTIC_EXCLUDES` list in `scripts/lib-backup.sh`.
 | Cantaloupe cache | Derived from the uploads (a restore clears it) |
 | `static` | Republished from the image at each `web` start |
 | TLS certificates | `make cert-init` issues them again, and a new host has a new address |
-| nginx logs | One year on the host; not in restic (the hosting provider's TSM backup copies `/data`, which holds them, daily) |
+| nginx logs | About one month on the host; not in restic (the hosting provider's TSM backup copies them daily and keeps them one year, « Logs ») |
 
 ### Database and files are not taken atomically
 
@@ -318,27 +318,82 @@ reindex; the rehearsal figures are in `ACCEPTANCE.md`.
 
 ## Logs
 
-The server logs stay one year on the host: the nginx access and error logs
-(logrotate, 365 days), the container logs and the system journal (journald, one
-year), the rsyslog, ufw and fail2ban files of `/var/log` (52 weeks), `wtmp` and
-`btmp` (12 months); other packages' own log files keep their own rotation. The
-logs are not in restic. The hosting provider's TSM backup (`/etc/cron.daily/tsm`, 06:25) copies `/data`, `/etc`,
-`/home`, `/root` and `/var/log` daily; the VM cannot delete those backups. Where the
-provider's client is installed, the Ansible `host` role adds `/var/log` to the `DOMAIN`
-of `/var/spool/tsm/etc/dsm.sys` (with its `VirtualMountpoint`), drops the job's `-se`
-option (`dsm.opt` names the server) and runs the job in the `C.UTF-8` locale: without a
-UTF-8 locale `dsmc` refuses every file name holding a non-ASCII character (`ANS4042E`).
-The job's report is `/var/spool/tsm/log/dsmc.incremental.local.log`.
+The server logs stay about one month on the host: the nginx access and error logs
+(logrotate, 30 days), the container logs and the system journal (journald, 30 days,
+one file per day, at most 2 GB), the rsyslog, ufw and fail2ban files of `/var/log`,
+`wtmp` and `btmp` (weekly, 4 rotations); other packages' own log files keep their
+own rotation. The logs are not in restic.
 
-Once a day (`manuspectrum-log-archive.timer`, 07:30, `scripts/log-archive.sh`,
-run as root) the closed logs are also archived into TSM with `dsmc archive`: the
-rotated nginx logs, every rotated `*.gz` under `/var/log` and the archived
-journal files (`/var/log/journal/*/*@*.journal`), each file once, identified by
-its sha256 (state in `/var/lib/manuspectrum/log-archive/archived.sha256`).
-TSM keeps an archive 365 days. The node can delete archives, so root on the VM
-can delete them. A host without `dsmc` installs the timer and archives nothing
-(`manuspectrum_log_archive_enabled 0`). The `LogArchiveStale` alert fires after
-two days without a successful run; its runbook is `runbooks/backup.md`.
+The hosting provider's TSM backup (`/etc/cron.daily/tsm`, 06:25) copies `/data`,
+`/etc`, `/home`, `/root` and `/var/log` daily. The Ansible `host` role writes two
+include lines in the provider's include file (`/var/spool/tsm/etc/inclexcl.def`):
+
+```
+include /var/log/.../* LOG_ROTATED_FILES_MG
+include <nginx log directory>/.../* LOG_ROTATED_FILES_MG
+```
+
+They bind every file under `/var/log` and the nginx log directory
+(`NGINX_LOG_HOST_DIR`) to the provider's class for rotated logs: one version per
+file name, a file deleted from the host kept 365 days, and the VM cannot delete
+backups. A log therefore exists at least one year and at most about thirteen
+months, from the day it was written. The class keeps one version per name, so
+rotated logs must carry dated names: the role refuses to run when
+`/etc/logrotate.conf` has no `dateext`.
+
+Where the provider's client is installed, the role also adds `/var/log` to the
+`DOMAIN` of `/var/spool/tsm/etc/dsm.sys` (with its `VirtualMountpoint`), drops the
+job's `-se` option (`dsm.opt` names the server) and runs the job in the `C.UTF-8`
+locale: without a UTF-8 locale `dsmc` refuses every file name holding a non-ASCII
+character (`ANS4042E`). The job's report is
+`/var/spool/tsm/log/dsmc.incremental.local.log`.
+
+**Order on a TSM host.** The shorter retention is applied only when the
+include lines are in the include file and the provider's last report shows a
+successful backup of `/var/log` and the data mount, written at least an hour
+after those lines. The first Ansible run writes the include lines and leaves the
+retention unchanged (it says so). Run Ansible again after the next 06:25 backup:
+it then applies the retention. A run limited to the `app` role obeys the same
+rule for the nginx rotation rule. Run the playbook outside 06:00–08:00, while
+the provider's job and the daily check are not running. A host without the
+provider's files gets the retention at once. A new host with the provider's
+files gets its journald settings and its nginx rotation rule at that second run.
+
+**Limits.**
+
+- After a month the TSM copy is the only copy.
+- The class keeps one version per file: a log overwritten in place on the host,
+  by root or, for the nginx logs, by the service account, is copied as
+  overwritten by the next backup.
+- The daily check sees that the include lines are there, not that TSM applies
+  them: `sudo dsmc query inclexcl` shows the statements in force, and a
+  statement added below ours takes precedence over them.
+- TSM is in the same computing centre as the VM.
+
+**Reading an old log.** On the host, from a directory root can write, into a
+directory outside the backup domain (a restored log under `/root` or `/home`
+would be backed up again, with a new retention), deleted once read:
+
+```bash
+sudo mkdir -m 0700 /var/tmp/restored-logs
+sudo dsmc query backup -inactive "/var/log/auth.log*"
+sudo dsmc restore -inactive -pick "<file>" /var/tmp/restored-logs/
+sudo rm -r /var/tmp/restored-logs
+```
+
+**Daily check.** `manuspectrum-tsm-check.timer` (07:30, root,
+`scripts/tsm-check.sh`, installed root-owned under
+`/usr/local/lib/manuspectrum/tsm-check/`) never calls `dsmc`. It reads the
+provider's report and checks that it is from today and holds
+`Successful incremental backup of` for `/data` and `/var/log`, and that the
+include lines are still in the include file. It writes
+`manuspectrum_tsm_backup_last_success_timestamp_seconds`,
+`manuspectrum_tsm_log_include_ok` and `manuspectrum_tsm_check_enabled` to the
+node exporter's textfile directory. A host without the provider's TSM options file writes
+`manuspectrum_tsm_check_enabled 0` and exits successfully. Two warnings read
+these metrics: `TsmBackupStale` (no successful backup for two days) and
+`TsmLogIncludeMissing` (the include lines are gone); their runbook is
+`runbooks/backup.md`.
 
 ## Personal data
 
@@ -349,7 +404,7 @@ This section is the reference the scripts point to: `restore.sh` refuses without
 accounts (names, e-mail addresses, password hashes, group memberships), the
 records of who signed in and when (the `axes_*` tables), and any personal data in the scientific
 records. The uploaded files and the secrets are in the repository too. nginx logs
-are not: they stay one year on the host, and the hosting provider's TSM backup copies `/data`, which holds them, daily.
+are not: they stay about one month on the host, and the hosting provider's TSM backup keeps them one year (« Logs »).
 
 **Retention, and why.** Snapshots follow the retention above: 7 daily, 4 weekly,
 6 monthly, so the oldest backup is about six months old. The login records are

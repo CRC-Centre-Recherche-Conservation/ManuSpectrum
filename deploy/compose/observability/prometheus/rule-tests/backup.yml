@@ -96,3 +96,83 @@ tests:
     exp_samples:
     - labels: ALERTS{alertname="RestoreTestMissing", alertstate="firing", service="backup", severity="warning"}
       value: 1
+- name: a disabled TSM check keeps both TSM alerts silent
+  interval: 1m
+  input_series:
+  - series: manuspectrum_tsm_check_enabled
+    values: 0x4000
+  - series: manuspectrum_tsm_log_include_ok
+    values: 0x4000
+  - series: up{job="node"}
+    values: 1x4000
+  promql_expr_test:
+  - expr: ALERTS{alertname=~"TsmBackupStale|TsmLogIncludeMissing", alertstate="firing"}
+    eval_time: 60h
+    exp_samples: []
+- name: a TSM backup 30 hours old is fine, 56 hours old fires
+  interval: 1m
+  input_series:
+  - series: manuspectrum_tsm_check_enabled
+    values: 1x4000
+  - series: manuspectrum_tsm_backup_last_success_timestamp_seconds
+    values: 0+0x4000
+  - series: up{job="node"}
+    values: 1x4000
+  promql_expr_test:
+  - expr: ALERTS{alertname="TsmBackupStale", alertstate="firing"}
+    eval_time: 30h
+    exp_samples: []
+  - expr: ALERTS{alertname="TsmBackupStale", alertstate="firing"}
+    eval_time: 56h
+    exp_samples:
+    - labels: ALERTS{alertname="TsmBackupStale", alertstate="firing", service="backup", severity="warning"}
+      value: 1
+- name: an enabled TSM check with no success series fires after the grace period
+  interval: 1m
+  input_series:
+  - series: manuspectrum_tsm_check_enabled
+    values: 1x40
+  - series: up{job="node"}
+    values: 1x40
+  promql_expr_test:
+  - expr: ALERTS{alertname="TsmBackupStale", alertstate="firing"}
+    eval_time: 5m
+    exp_samples: []
+  - expr: ALERTS{alertname="TsmBackupStale", alertstate="firing"}
+    eval_time: 30m
+    exp_samples:
+    - labels: ALERTS{alertname="TsmBackupStale", alertstate="firing", service="backup", severity="warning"}
+      value: 1
+- name: a node exporter that is down keeps the TSM alerts silent
+  interval: 1m
+  input_series:
+  - series: manuspectrum_tsm_check_enabled
+    values: 1x4000
+  - series: manuspectrum_tsm_log_include_ok
+    values: 0x4000
+  - series: manuspectrum_tsm_backup_last_success_timestamp_seconds
+    values: 0+0x4000
+  - series: up{job="node"}
+    values: 0x4000
+  promql_expr_test:
+  - expr: ALERTS{alertname=~"TsmBackupStale|TsmLogIncludeMissing", alertstate="firing"}
+    eval_time: 60h
+    exp_samples: []
+- name: lost include lines fire, present include lines do not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_tsm_check_enabled
+    values: 1x60
+  - series: manuspectrum_tsm_log_include_ok
+    values: 1x30 0x30
+  - series: up{job="node"}
+    values: 1x60
+  promql_expr_test:
+  - expr: ALERTS{alertname="TsmLogIncludeMissing", alertstate="firing"}
+    eval_time: 25m
+    exp_samples: []
+  - expr: ALERTS{alertname="TsmLogIncludeMissing", alertstate="firing"}
+    eval_time: 55m
+    exp_samples:
+    - labels: ALERTS{alertname="TsmLogIncludeMissing", alertstate="firing", service="backup", severity="warning"}
+      value: 1

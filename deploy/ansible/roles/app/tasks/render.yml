@@ -5,7 +5,9 @@
 # app_render_logrotate_dir, app_render_owner (omit for no ownership change),
 # app_render_env_owner, app_render_env_group, app_group, app_render_notify. The unit and
 # logrotate sources are the `.in` files of deploy/systemd and deploy/logrotate,
-# whose @...@ placeholders are replaced here.
+# whose @...@ placeholders are replaced here. The logrotate rule waits for the
+# host role's log retention gate (log_retention_gate.yml, run here too so that a
+# run without the host role obeys it).
 
 - name: Look for an existing environment file
   ansible.builtin.stat:
@@ -51,6 +53,11 @@
     + app_oneshot_unit_names | product(['.service']) | map('join') | list }}
   notify: "{{ app_render_notify | default([]) }}"
 
+- name: Decide whether the log retention may shrink
+  ansible.builtin.include_role:
+    name: host
+    tasks_from: log_retention_gate
+
 - name: Render the nginx logrotate rule
   ansible.builtin.copy:
     content: >-
@@ -62,3 +69,4 @@
     owner: "{{ app_render_owner | default(omit) }}"
     group: "{{ app_render_owner | default(omit) }}"
     mode: "0644"
+  when: host_log_retention_ready

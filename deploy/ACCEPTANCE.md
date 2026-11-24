@@ -131,8 +131,9 @@ Detailed build procedure: `deploy/rehearsal/README.md`. Here, the checks.
   When containers already run and the file would change, the play stops and asks for
   `-e docker_restart_ok=true`: the Docker restart stops the stack (plan a window on a live host).
 - [ ] After the `host` role: `systemctl cat systemd-journald | grep -c manuspectrum.conf` → `1` and
-  `grep -E 'SystemMax|MaxRetentionSec|MaxFileSec' /etc/systemd/journald.conf.d/manuspectrum.conf` → `SystemMaxUse=12G`,
-  `MaxRetentionSec=1year`, `MaxFileSec=1day`, `SystemMaxFiles=2000`; `grep -H rotate /etc/logrotate.d/{rsyslog,ufw,fail2ban,wtmp,btmp}` → `rotate 52` for the weekly rules, `rotate 12` for `wtmp` and `btmp`.
+  `grep -E 'SystemMax|MaxRetentionSec|MaxFileSec' /etc/systemd/journald.conf.d/manuspectrum.conf` → `SystemMaxUse=2G`,
+  `MaxRetentionSec=30day`, `MaxFileSec=1day`, `SystemMaxFiles=2000`; `grep -H -E 'rotate|weekly' /etc/logrotate.d/{rsyslog,ufw,fail2ban,wtmp,btmp}` → `weekly` and `rotate 4` for each rule present.
+  On a host backed up by TSM the first run leaves these values unchanged and says so (`BACKUP.md` « Logs »): see the two-run switch in 7.10.
   A `daemon.json` with keys the role does not manage stops the play: merge them by hand first.
 - [ ] `ls -l /etc/manuspectrum/rehearsal-host` → `-rw-r--r-- 1 root root`: the marker without which
   `make load-snapshot` is refused (the rehearsal VM only; never create it on a production host).
@@ -408,7 +409,7 @@ Only the service account is in the `docker` group (root-equivalent): the admin a
   → nine lines ending `{journald map[tag:{{.Name}}]}`.
   - On failure: `logging` is missing for that service in `compose.yaml`.
 - [ ] *(admin)* `sudo journalctl CONTAINER_TAG=manuspectrum-web-1 -n 3 -o cat` → the last lines of the web container (the
-  journal keeps them one year, not the container).
+  journal keeps them 30 days, not the container).
 - [ ] *(service account)* `docker logs --tail=5 manuspectrum-web-1` still answers (the journald driver is readable by Docker).
 
 ### 2.7 Data survives (rehearsal VM only)
@@ -897,7 +898,7 @@ change shows within a minute (reload after waiting). Browser in a private window
   (for instance after `dc stop web`, 4.4) still carry the raw request line, query string and reset
   token included. The protection is the directory mode, not the
   file's (nginx creates its logs `0644`; only rotated files are `0640`): `stat -c %a <NGINX_LOG_HOST_DIR>`
-  → `750`. Rotated one year with the access log (4.9).
+  → `750`. Rotated 30 days with the access log (4.9).
 
 ### 4.9 Rotation
 
@@ -906,7 +907,7 @@ change shows within a minute (reload after waiting). Browser in a private window
   a rotation: `sudo logrotate -f -s /tmp/state /etc/logrotate.d/manuspectrum-nginx`.
   - Expected: dated, then compressed (next run) files appear in `$LOG`, a new `access.log` is
     created `0640` for the service account, and nginx keeps writing to it with no restart
-    (`dc ps nginx` uptime unchanged, a new request lands in the new file). `rotate 365`: one year.
+    (`dc ps nginx` uptime unchanged, a new request lands in the new file). `rotate 30`: 30 days on the host (the provider's TSM keeps them one year).
   - On failure: `su` line missing (logrotate refuses a directory not owned by root), or the
     `nginx -s reopen` did not reach the container (`docker ps --filter label=com.docker.compose.service=nginx`).
     The rule never uses `docker kill --signal`: Docker would record a manual stop and `unless-stopped` would no
@@ -1449,10 +1450,19 @@ sizes of the data directories.
 - [ ] `AllowTcpForwarding yes` is set for the administrators' accounts and the tunnel of 7.2 works there.
 - [ ] The timers are installed by PP-8 and listed by `systemctl list-timers 'manuspectrum-*'`; the disk-usage
   schedule decided in 7.4 is recorded.
-- [ ] `systemctl list-timers manuspectrum-log-archive.timer` lists the daily 07:30 timer; `sudo systemctl start manuspectrum-log-archive`
-  then `journalctl -u manuspectrum-log-archive -e` → on a host without `dsmc` the unit succeeds and logs `dsmc not installed`;
-  with `dsmc`, `archived N file(s)` and `sudo dsmc query archive "/var/log/*"` lists them. On the production host,
-  `dsmc not installed` is a failure: the archive is off and `LogArchiveStale` stays silent.
+- [ ] `systemctl list-timers manuspectrum-tsm-check.timer` lists the daily 07:30 timer; `sudo systemctl start manuspectrum-tsm-check`
+  then `journalctl -u manuspectrum-tsm-check -e`. On a host without the provider's TSM options file (`/var/spool/tsm/etc/dsm.sys`) the unit succeeds and writes
+  `manuspectrum_tsm_check_enabled 0` (in `manuspectrum_tsm_check.prom` of the node exporter's textfile directory); `TsmBackupStale` and `TsmLogIncludeMissing` stay silent. On the production host the unit
+  succeeds only after a good backup: `manuspectrum_tsm_backup_last_success_timestamp_seconds` is today's and
+  `manuspectrum_tsm_log_include_ok 1`. `systemctl status manuspectrum-log-archive.timer` → unit not found, and no
+  `manuspectrum_log_archive*.prom` file is left.
+- [ ] Where TSM is installed, the two-run switch of the log retention: before the first run,
+  `sudo grep -n dateext /etc/logrotate.conf` shows an uncommented line. First Ansible run: `sudo cat /var/spool/tsm/etc/inclexcl.def`
+  holds `include /var/log/.../* LOG_ROTATED_FILES_MG` and the same line for the nginx log directory, the play says the log
+  retention was left unchanged, and `/etc/systemd/journald.conf.d/manuspectrum.conf` still holds the old values. The day after 06:25,
+  `sudo grep -a -E "objects rebound|objects failed" /var/spool/tsm/log/dsmc.incremental.local.log` shows a rebound count above 0 and
+  `objects failed: 0`, and `sudo dsmc query backup "/var/log/auth.log*"` shows `LOG_ROTATED_FILES_MG`. Second Ansible run: journald
+  holds `MaxRetentionSec=30day`, the rotation rules `rotate 4`, nginx `rotate 30`; Docker and the containers were not restarted.
 - [ ] Where TSM is installed, after the playbook: `/var/log` in the `DOMAIN` of `/var/spool/tsm/etc/dsm.sys` with an active
   `VirtualMountpoint /var/log`, and `/etc/cron.daily/tsm` sets `LANG=C.UTF-8` before `dsmc` and passes no `-se`; the next
   morning `/var/spool/tsm/log/dsmc.incremental.local.log` holds no `ANS…E` and `sudo dsmc query filespace` lists `/var/log`.

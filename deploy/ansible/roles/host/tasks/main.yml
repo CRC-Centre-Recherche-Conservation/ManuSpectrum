@@ -57,39 +57,6 @@
     validate: dockerd --validate --config-file %s
   notify: restart docker
 
-- name: Create the journald drop-in directory
-  ansible.builtin.file:
-    path: /etc/systemd/journald.conf.d
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
-- name: Keep a persistent journal for one year, one file per day
-  ansible.builtin.template:
-    src: journald.conf.j2
-    dest: /etc/systemd/journald.conf.d/manuspectrum.conf
-    owner: root
-    group: root
-    mode: "0644"
-  notify: restart journald
-
-- name: Find the logrotate rules of the system logs
-  ansible.builtin.stat:
-    path: "/etc/logrotate.d/{{ item.rule }}"
-  loop: "{{ host_log_rotations }}"
-  register: host_log_rotation_rules
-
-- name: Keep the system logs for one year
-  ansible.builtin.replace:
-    path: "/etc/logrotate.d/{{ item.item.rule }}"
-    regexp: '^(\s*)rotate\s+\d+\s*$'
-    replace: '\1rotate {{ item.item.rotate }}'
-  loop: "{{ host_log_rotation_rules.results }}"
-  loop_control:
-    label: "{{ item.item.rule }}"
-  when: item.stat.exists
-
 - name: Find the hosting provider's TSM client options and nightly job
   ansible.builtin.stat:
     path: "{{ item }}"
@@ -126,6 +93,137 @@
     insertbefore: '^\s*\S*dsmc\s'
     firstmatch: true
   when: host_tsm_files.results[1].stat.exists
+
+- name: Read the include option of dsm.sys
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -a
+      - -c
+      - -i
+      - -E
+      - '^[[:space:]]*inclexcl[[:space:]]+"?{{ host_tsm_inclexcl | regex_escape }}"?[[:space:]]*$'
+      - "{{ host_tsm_options }}"
+  register: host_tsm_inclexcl_option
+  changed_when: false
+  failed_when: host_tsm_inclexcl_option.rc > 1
+  check_mode: false
+  when: host_tsm_files.results[0].stat.exists
+
+- name: Assert dsm.sys names the include file
+  ansible.builtin.assert:
+    that:
+      - host_tsm_inclexcl_option.stdout | int > 0
+    quiet: true
+    fail_msg: >-
+      {{ host_tsm_options }} has no Inclexcl option naming {{ host_tsm_inclexcl }}, so the include
+      lines written there would have no effect. Add the line
+      Inclexcl "{{ host_tsm_inclexcl }}" to it and run the playbook again.
+  when: host_tsm_files.results[0].stat.exists
+
+- name: Read the dateext setting of logrotate
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -a
+      - -c
+      - -E
+      - '^[[:space:]]*dateext[[:space:]]*$'
+      - "{{ host_logrotate_conf }}"
+  register: host_logrotate_dateext
+  changed_when: false
+  failed_when: host_logrotate_dateext.rc > 1
+  check_mode: false
+  when: host_tsm_files.results[0].stat.exists
+
+- name: Assert logrotate writes dated names
+  ansible.builtin.assert:
+    that:
+      - host_logrotate_dateext.stdout | int > 0
+    quiet: true
+    fail_msg: >-
+      {{ host_logrotate_conf }} does not set dateext. The TSM log class keeps one version per file name,
+      so rotated logs must carry dated names: add a line "dateext" to it and run the playbook again.
+  when: host_tsm_files.results[0].stat.exists
+
+- name: Assert every log directory is one the nightly report is checked for
+  ansible.builtin.assert:
+    that:
+      - item == '/var/log' or item is match('/var/log/') or item is match((host_tsm_data_path | regex_escape) ~ '(/|$)')
+    quiet: true
+    fail_msg: >-
+      {{ item }} is outside the filespaces the nightly report is checked for ({{ host_tsm_data_path }}
+      and /var/log), so its logs would not be known to be backed up. Keep the log directories under one of them.
+  loop: "{{ host_tsm_log_dirs }}"
+  when: host_tsm_files.results[0].stat.exists
+
+- name: Bind the log directories to the TSM log class
+  ansible.builtin.blockinfile:
+    path: "{{ host_tsm_inclexcl }}"
+    create: false
+    marker: "* {mark} ManuSpectrum logs"
+    block: |
+      {% for dir in host_tsm_log_dirs %}
+      include {{ dir }}/.../* {{ host_tsm_log_class }}
+      {% endfor %}
+  when: host_tsm_files.results[0].stat.exists
+
+- name: Decide whether the log retention may shrink
+  ansible.builtin.import_tasks: log_retention_gate.yml
+
+- name: Say the log retention was left unchanged
+  ansible.builtin.debug:
+    msg: >-
+      The log retention tasks were skipped: the provider's last report is not a successful backup
+      at least {{ host_tsm_report_margin_seconds // 60 }} minutes newer than the include lines, or
+      the include lines are missing. Run the playbook again after the next successful nightly backup.
+  when: not host_log_retention_ready
+
+- name: Create the journald drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: host_log_retention_ready
+
+- name: Keep a persistent journal for thirty days, one file per day
+  ansible.builtin.template:
+    src: journald.conf.j2
+    dest: /etc/systemd/journald.conf.d/manuspectrum.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart journald
+  when: host_log_retention_ready
+
+- name: Find the logrotate rules of the system logs
+  ansible.builtin.stat:
+    path: "/etc/logrotate.d/{{ item.rule }}"
+  loop: "{{ host_log_rotations }}"
+  register: host_log_rotation_rules
+  check_mode: false
+
+- name: Keep four weekly files of the system logs
+  ansible.builtin.replace:
+    path: "/etc/logrotate.d/{{ item.item.rule }}"
+    regexp: '^(\s*)rotate\s+\d+\s*$'
+    replace: '\1rotate {{ item.item.rotate }}'
+  loop: "{{ host_log_rotation_rules.results }}"
+  loop_control:
+    label: "{{ item.item.rule }}"
+  when: host_log_retention_ready and item.stat.exists
+
+- name: Set the rotation frequency of the system logs
+  ansible.builtin.replace:
+    path: "/etc/logrotate.d/{{ item.item.rule }}"
+    regexp: '^(\s*)(daily|weekly|monthly|yearly)\s*$'
+    replace: '\1{{ item.item.frequency }}'
+  loop: "{{ host_log_rotation_rules.results }}"
+  loop_control:
+    label: "{{ item.item.rule }}"
+  when: host_log_retention_ready and item.stat.exists
 
 - name: Create the drop-in directory of the Docker scopes
   ansible.builtin.file:
