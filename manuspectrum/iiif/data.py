@@ -32,7 +32,7 @@ from manuspectrum.observability import metrics
 from manuspectrum.utils.public_visibility import visible_set
 from manuspectrum.utils.role_links import role_node
 from manuspectrum.utils.roles import ROLES
-from manuspectrum.utils.spectrum_preview import is_readable
+from manuspectrum.utils.spectrum_preview import is_raw_instrument, is_readable
 from manuspectrum.views.summary_service import readable_nodegroups
 
 _MEDIA_TYPE = re.compile(r"^[a-z]+/[a-z0-9.+-]+$")
@@ -90,14 +90,14 @@ class FileRecord:
 def media_type(name, stored):
     """True media type of a file: by extension, else its stored type when it is a plain ``type/subtype``, else octet-stream.
 
-    Raw instrument formats (``RAW_INSTRUMENT_EXTENSIONS``) are octet-stream;
+    Raw instrument formats (``is_raw_instrument``) are octet-stream;
     a ``text/x-*`` type is never trusted. An image the stored type does not
     name gets the type of its extension.
     """
     extension = os.path.splitext(name or "")[1].lower()
     if extension in MEDIA_TYPE_BY_EXTENSION:
         return MEDIA_TYPE_BY_EXTENSION[extension]
-    if extension in {e.lower() for e in settings.RAW_INSTRUMENT_EXTENSIONS}:
+    if is_raw_instrument(name or ""):
         return OCTET_STREAM
     stored = str(stored or "").strip().lower()
     if _MEDIA_TYPE.match(stored) and not stored.startswith("text/x-"):

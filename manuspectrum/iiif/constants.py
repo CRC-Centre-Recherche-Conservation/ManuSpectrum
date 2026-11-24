@@ -9,7 +9,7 @@ IIIF_MEDIA_TYPE = f'application/ld+json;profile="{PRESENTATION_3}"'
 IIIF_V2_MEDIA_TYPE = f'application/ld+json;profile="{PRESENTATION_2}"'
 
 # The media type a raw file is served with, by its lower-case extension; the
-# raw instrument formats (settings.RAW_INSTRUMENT_EXTENSIONS) are octet-stream.
+# raw instrument formats (``is_raw_instrument``) are octet-stream.
 MEDIA_TYPE_BY_EXTENSION = {
     ".csv": "text/csv",
     ".txt": "text/plain",

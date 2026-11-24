@@ -301,6 +301,24 @@ class FileEntryTests(SimpleTestCase):
             entries[CSV_ID]["previewUrl"].endswith(f"/api/spectrum-preview/{CSV_ID}")
         )
 
+    def test_an_opus_file_pairs_with_its_csv_twin(self):
+        entries = [
+            {"file_id": CSV_ID, "name": "Scan01.CSV", "url": "/files/f-csv"},
+            {"file_id": MCA_ID, "name": "scan01.0", "url": "/files/f-opus"},
+        ]
+
+        found = {
+            e["id"]: e
+            for e in file_entries(
+                entries, language="en", configs={}, kind="measurement"
+            )
+        }
+
+        self.assertEqual(found[MCA_ID]["role"], "raw")
+        self.assertEqual(found[CSV_ID]["role"], "readable")
+        self.assertEqual(found[MCA_ID]["pairedWith"], CSV_ID)
+        self.assertEqual(found[CSV_ID]["pairedWith"], MCA_ID)
+
     @override_settings(EXPLORER_LEGACY_HOSTS=("192.168.122.250",))
     def test_a_local_file_url_is_a_path_an_external_web_one_is_kept_and_else_empty(
         self,

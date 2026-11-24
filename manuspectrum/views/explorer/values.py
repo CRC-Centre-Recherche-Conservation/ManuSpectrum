@@ -24,7 +24,7 @@ from django.urls import reverse
 from manuspectrum.constants.licenses import effective_license
 from manuspectrum.constants.xy_presets import XY_PRESETS
 from manuspectrum.iiif.xy_reading import axes
-from manuspectrum.utils.spectrum_preview import is_readable
+from manuspectrum.utils.spectrum_preview import is_raw_instrument, is_readable
 
 FALLBACK_LANGUAGE = "en"
 
@@ -299,17 +299,13 @@ def _text_or_none(value):
     return value.strip() or None if isinstance(value, str) else None
 
 
-def _raw_extensions():
-    return {e.lower() for e in settings.RAW_INSTRUMENT_EXTENSIONS}
-
-
 def file_entries(entries, *, language, configs, kind):
     """``FileEntry`` list of one file-list value (D39).
 
     A file the server draws (``plots``) is ``readable`` (a spectrum when
     *kind* is ``"measurement"``); another extension of
-    ``RAW_INSTRUMENT_EXTENSIONS`` is ``raw`` and is never parsed; anything
-    else is ``other``. A file of ``RAW_INSTRUMENT_EXTENSIONS`` sharing a base
+    ``RAW_INSTRUMENT_EXTENSIONS`` or an OPUS number is ``raw`` and is never parsed; anything
+    else is ``other``. A raw file (``is_raw_instrument``) sharing a base
     name (case ignored) with a readable file of another extension is the raw
     file of that one: both point at each other, and it is never drawn, even
     when a setting lists its extension among the text formats. Micro-imaging
@@ -319,7 +315,6 @@ def file_entries(entries, *, language, configs, kind):
     (``renderer_configs``); the viewer carries the configuration's axis
     titles, ``presetKey`` and ``name``, None where it states none.
     """
-    raw_extensions = _raw_extensions()
     items = []
     for entry in entries if isinstance(entries, list) else []:
         if not isinstance(entry, dict) or not entry.get("file_id"):
@@ -330,7 +325,7 @@ def file_entries(entries, *, language, configs, kind):
         role = (
             "readable"
             if plots(entry)
-            else "raw" if extension.lower() in raw_extensions else "other"
+            else "raw" if is_raw_instrument(name) else "other"
         )
         stored = configs.get(config_id) if config_id else None
         config = stored.config if stored else None
@@ -371,7 +366,7 @@ def file_entries(entries, *, language, configs, kind):
                 ),
                 "zone": None,
                 "_base": base.casefold(),
-                "_raw": extension.lower() in raw_extensions,
+                "_raw": is_raw_instrument(name),
             }
         )
     readable = {
