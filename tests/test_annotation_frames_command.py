@@ -1060,6 +1060,60 @@ class UnusableZoneTests(AnnotationFramesCase):
         self.assertNotIn(DOWN_SERVICE, out)
 
 
+class CheckMalformedValuesTests(AnnotationFramesCase):
+    HEADER = "Malformed annotation values (Arches' annotation view fails on them):"
+
+    def raw_tile(self, value, node=None):
+        return TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            resourceinstance=self.resource,
+            nodegroup=self.nodegroup,
+            data={str(node or self.annotation.pk): value},
+        )
+
+    def test_a_features_value_that_is_not_a_list_is_listed_with_tile_and_node(self):
+        tile = self.raw_tile({"type": "FeatureCollection", "features": {"id": "x"}})
+        out = self.run_command("check")
+        self.assertIn(self.HEADER, out)
+        self.assertIn(
+            f"  tile {tile.pk} node {self.annotation.pk}: features is not a list", out
+        )
+        self.assertIn("1 malformed annotation value(s).", out)
+
+    def test_a_feature_id_that_is_not_a_uuid_is_listed_for_a_string_and_a_number(self):
+        tile = self.tile(zone(str(uuid.uuid4())), zone("not-a-uuid"), zone(5))
+        out = self.run_command("check")
+        base = f"  tile {tile.pk} node {self.annotation.pk} feature"
+        self.assertIn(f"{base} 1 (id 'not-a-uuid'): feature id is not a UUID", out)
+        self.assertIn(f"{base} 2 (id 5): feature id is not a UUID", out)
+        self.assertNotIn(f"{base} 0", out)
+        self.assertIn("2 malformed annotation value(s).", out)
+
+    def test_values_the_view_tolerates_are_not_listed(self):
+        good = zone(str(uuid.uuid4()))
+        self.tile(good, "not a feature", None, {**zone("x"), "id": None})
+        self.raw_tile({"type": "FeatureCollection", "features": None})
+        self.raw_tile({"type": "FeatureCollection"})
+        out = self.run_command("check")
+        self.assertIn("No malformed annotation value.", out)
+        self.assertNotIn(self.HEADER, out)
+
+    def test_other_nodes_and_provisional_edits_are_not_read(self):
+        bad = collection(zone("not-a-uuid"))
+        self.tile(
+            node=self.other.pk,
+            edits={"7": {"value": {str(self.annotation.pk): bad}}},
+        )
+        self.assertIn("No malformed annotation value.", self.run_command("check"))
+
+    def test_the_listing_is_bounded_and_the_total_counted(self):
+        self.tile(*[zone(f"bad-{n}") for n in range(60)])
+        out = self.run_command("check")
+        self.assertEqual(out.count("feature id is not a UUID"), 50)
+        self.assertIn("  ... and 10 more", out)
+        self.assertIn("60 malformed annotation value(s).", out)
+
+
 class RetryScopeTests(AnnotationFramesCase):
     def test_a_retry_pass_leaves_the_other_images_of_the_tile_to_the_first_pass(self):
         flaky = "https://flaky.example/iiif/b5/page1"

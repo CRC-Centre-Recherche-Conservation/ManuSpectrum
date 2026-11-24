@@ -1,9 +1,10 @@
 """Check, stamp, verify and unstamp the image frame of the annotation zones already stored.
 
 ``check`` counts the zones per stamp state (the gauge's counts: ``data`` only,
-provisional edits not counted) and lists the images of the unstamped zones of
-``data``; it reads the database only. ``stamp`` gives each unstamped zone the
-frame it was drawn in (``frames.STAMP_KEYS``). A feature of the Biblissima
+provisional edits not counted), lists the images of the unstamped zones of
+``data`` and the malformed annotation values of ``data`` (first
+``MALFORMED_LISTED``, then the total); it reads the database only. ``stamp``
+gives each unstamped zone the frame it was drawn in (``frames.STAMP_KEYS``). A feature of the Biblissima
 import's location node (``COMP_LOCATION_DOC_NODE``) that is the whole-page
 rectangle the import wrote before stamping existed, at any power-of-two unit
 (32 before 1.0.3, the read or assumed unit since), gets ``import-legacy``; any
@@ -151,6 +152,7 @@ REVERTED_REASON = "geometry reverted by a later save"
 PUT_BACK_REASON = "stamp put back on reverted geometry"
 REFUSED_STATE = "refused"
 UNREADABLE_STATE = "unreadable"
+MALFORMED_LISTED = 50
 CHECK_SCRIPT = Path(frames.__file__).with_name("frame_check.js")
 BUCKETS = (
     ("same", "same"),
@@ -189,6 +191,38 @@ def collections_of(data, edits, nodes):
         for node_id, collection in values.items():
             if str(node_id) in nodes:
                 found.append((user_id, str(node_id), collection))
+    return found
+
+
+def malformed_values(data, nodes):
+    """``[(node id, feature index or None, id or None, reason)]`` of the values of tile *data* that make Arches' annotation view fail.
+
+    ``features`` present, not null and not a list; a feature whose ``id`` is
+    present, not null and not a string ``uuid.UUID`` accepts. A feature that
+    is not an object, a null or absent ``features`` or ``id`` do not fail it.
+    """
+    found = []
+    if not isinstance(data, dict):
+        return found
+    for node_id, value in data.items():
+        if str(node_id) not in nodes or not isinstance(value, dict):
+            continue
+        features = value.get("features")
+        if features is None:
+            continue
+        if not isinstance(features, list):
+            found.append((str(node_id), None, None, "features is not a list"))
+            continue
+        for index, feature in enumerate(features):
+            fid = feature.get("id") if isinstance(feature, dict) else None
+            if fid is None:
+                continue
+            try:
+                if not isinstance(fid, str):
+                    raise ValueError(fid)
+                uuid.UUID(fid)
+            except ValueError:
+                found.append((str(node_id), index, fid, "feature id is not a UUID"))
     return found
 
 
@@ -1138,7 +1172,11 @@ class Command(BaseCommand):
         for state, count in counts.items():
             self._out(f"  {state}: {count}")
         unresolved = Counter()
-        for _tile, data, edits in tiles_of(nodes):
+        malformed = []
+        for tile_id, data, edits in tiles_of(nodes):
+            malformed.extend(
+                (tile_id, *found) for found in malformed_values(data, nodes)
+            )
             for user, _node, collection in collections_of(data, edits, nodes):
                 if user is not None:
                     continue
@@ -1154,6 +1192,24 @@ class Command(BaseCommand):
                 self._out(f"  {canvas}: {count}")
         else:
             self._out("No unstamped zone.")
+        self._out("")
+        self._report_malformed(malformed)
+
+    def _report_malformed(self, malformed):
+        if not malformed:
+            self._out("No malformed annotation value.")
+            return
+        self._out(
+            "Malformed annotation values (Arches' annotation view fails on them):"
+        )
+        for tile_id, node_id, index, fid, reason in malformed[:MALFORMED_LISTED]:
+            where = f"tile {tile_id} node {node_id}"
+            if index is not None:
+                where += f" feature {index} (id {fid!r})"
+            self._out(f"  {where}: {reason}")
+        if len(malformed) > MALFORMED_LISTED:
+            self._out(f"  ... and {len(malformed) - MALFORMED_LISTED} more")
+        self._out(f"{len(malformed)} malformed annotation value(s).")
 
     def _stamp(self, options):
         apply_changes = options["apply"]

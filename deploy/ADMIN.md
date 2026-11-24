@@ -482,8 +482,11 @@ the Biblissima import writes, from the canvas size Biblissima gives when the hos
 be reached).
 
 - **Count.** `make -C deploy manage ARGS="annotation_frames check"` prints the zones per state
-  (also the gauge `manuspectrum_annotation_zones`) and the images of the unstamped ones. It reads
-  the database only.
+  (also the gauge `manuspectrum_annotation_zones`), the images of the unstamped ones and the
+  malformed annotation values (tile, node, reason: `features` is not a list, or a feature `id` is not
+  a UUID; the first 50, then the total). Arches' IIIF viewer annotations and manifest manager fail
+  while one exists. Repair: open the resource, delete and redraw the zone (or fix the value), then
+  run `check` again. It reads the database only.
 - **Dry run.** `make -C deploy manage ARGS="annotation_frames stamp"` reads a fresh info.json of
   each image service, at most once per service per run (throttled per host): a description this
   server read within the last hour (`IIIF_IMAGE_INFO_STAMP_MAX_AGE`) is reused, an older one is read
