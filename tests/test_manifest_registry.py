@@ -661,6 +661,12 @@ class RegisterManifestsMalformedValueTests(AnnotationFixtures):
         self.assertIn("would register\t3\t" + URL, report)
         self.assertIn("dry run: 1 would register", report)
 
+    def test_tile_data_that_is_not_an_object_is_skipped(self):
+        self.stored(self.good(None))
+        tile = self.stored(self.good(None))
+        TileModel.objects.filter(pk=tile.pk).update(data=["x"])
+        self.assertEqual(referenced_manifests(), {URL: [1, [SERVICE]]})
+
     def test_referenced_manifests_keep_count_and_first_canvas(self):
         self.stored(self.good(None))
         self.stored({"type": "FeatureCollection", "features": {"id": "x"}})

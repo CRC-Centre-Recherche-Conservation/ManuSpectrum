@@ -19,6 +19,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 import requests
 from django.core.cache import cache
+from django.db import connection
 from django.test import override_settings
 
 from arches.app.models.models import (
@@ -1132,6 +1133,20 @@ class CheckMalformedValuesTests(AnnotationFramesCase):
             data={},
         )
         TileModel.objects.filter(pk=tile.pk).update(data=["x"])
+        out = self.run_command("check")
+        self.assertIn(f"  tile {tile.pk}: tile data is not an object", out)
+
+    def test_tile_data_that_is_json_null_is_listed(self):
+        tile = TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            resourceinstance=self.resource,
+            nodegroup=self.nodegroup,
+            data={},
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE tiles SET tiledata = 'null'::jsonb WHERE tileid = %s", [tile.pk]
+            )
         out = self.run_command("check")
         self.assertIn(f"  tile {tile.pk}: tile data is not an object", out)
 
