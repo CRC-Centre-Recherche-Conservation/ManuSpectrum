@@ -62,8 +62,12 @@ class RegistryTests(SimpleTestCase):
         self.assertNotIn("secret", logs.output[0])
 
     def test_only_typed_errors_escape(self):
-        samples = [FIXTURES / n for n in sorted(p.name for p in FIXTURES.iterdir())]
-        corpus = [p.read_bytes() for p in samples if p.is_file() and p.suffix != ".md"]
+        samples = sorted(FIXTURES.rglob("*"))
+        corpus = [
+            p.read_bytes()
+            for p in samples
+            if p.is_file() and p.suffix not in (".md", ".json", ".py")
+        ]
         corpus.append(elio_mca([(i * 7) % 50 for i in range(300)]))
         rng = random.Random(20261124)
         for data in corpus:

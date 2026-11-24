@@ -91,6 +91,11 @@ WARNINGS = {
 }
 
 
+def span(low: float, high: float) -> str:
+    """A spectral range as a fact value: two numbers and an en dash, no words."""
+    return f"{low:.10g}\u2013{high:.10g}"
+
+
 @dataclass(frozen=True)
 class Series:
     columns: tuple[str, ...]

@@ -10,6 +10,7 @@ from manuspectrum.measurement_files.converters import (
     csv_name,
     write_csv,
 )
+from manuspectrum.measurement_files.converters.base import span
 from manuspectrum.measurement_files.converters.csv_writer import format_number
 
 
@@ -92,6 +93,11 @@ class CsvWriterTests(SimpleTestCase):
 
 
 class BaseTypesTests(SimpleTestCase):
+    def test_span_is_two_numbers_and_an_en_dash(self):
+        self.assertEqual(
+            span(92.5744094848, 1869.49609375), "92.57440948\u20131869.496094"
+        )
+
     def test_fact_and_reading_reject_unknown_keys(self):
         with self.assertRaises(ValueError):
             Fact("operator", "x")
