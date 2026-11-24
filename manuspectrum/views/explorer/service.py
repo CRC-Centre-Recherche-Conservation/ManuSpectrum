@@ -2189,7 +2189,7 @@ def plain_text(markup, length=DESCRIPTION_LENGTH):
     return textwrap.shorten(text, width=length, placeholder="…")
 
 
-def _shelfmark(tiles, value_node, type_node, language):
+def shelfmark(tiles, value_node, type_node, language):
     """The identifier typed as a shelfmark (``SHELFMARK_LABELS``), else the first identifier; None without one.
 
     An identifier that is a link (``LINK_IDENTIFIER``: http, https, ark) is
@@ -2279,7 +2279,7 @@ def document_hits(document_ids, per_document, visible, user, language, label_of)
                 ),
                 "unpublished": d in visible.unpublished,
                 "shelfmark": (
-                    _shelfmark(
+                    shelfmark(
                         values.tiles(d, "doc_identifier"),
                         identifier_node,
                         type_node,
