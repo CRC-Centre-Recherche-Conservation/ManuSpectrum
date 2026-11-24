@@ -6154,8 +6154,12 @@ msgstr "Access log"
 
 #: templates/views/pages/privacy.htm:57 templates/views/pages/privacy.htm:61
 #: templates/views/pages/privacy.htm:65
-msgid "One year, then deleted."
-msgstr "One year, then deleted."
+msgid ""
+"About one month on the server, then one year in the backup of the host of "
+"the platform; at most about thirteen months in all."
+msgstr ""
+"About one month on the server, then one year in the backup of the host of "
+"the platform; at most about thirteen months in all."
 
 #: templates/views/pages/privacy.htm:59
 msgid "Error log"
@@ -6187,13 +6191,13 @@ msgstr ""
 
 #: templates/views/pages/privacy.htm:88
 msgid ""
-"The server logs, system logs included, are kept one year; the copies of "
-"them in the backups of the host of the platform are deleted at most two "
-"months later."
+"The server logs, system logs included, follow the same rule: about one "
+"month on the server, then one year in the backup of the host of the "
+"platform, which the server cannot delete."
 msgstr ""
-"The server logs, system logs included, are kept one year; the copies of "
-"them in the backups of the host of the platform are deleted at most two "
-"months later."
+"The server logs, system logs included, follow the same rule: about one "
+"month on the server, then one year in the backup of the host of the "
+"platform, which the server cannot delete."
 
 #: templates/views/pages/privacy.htm:63
 msgid "Accounts"

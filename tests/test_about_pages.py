@@ -6,6 +6,15 @@ from django.template import Context, Template
 from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
+EN_LOG_RETENTION = (
+    r"About one month on the server, then one year in the backup of the host "
+    r"of the platform; at most about thirteen months in all\."
+)
+FR_LOG_RETENTION = (
+    r"Environ un mois sur le serveur, puis un an dans la sauvegarde de "
+    r"l(?:'|&#x27;)hébergeur de la plateforme ; treize mois environ au plus\."
+)
+
 
 class ContactEmailTagTests(SimpleTestCase):
     def render(self):
@@ -570,14 +579,14 @@ class LegalPagesTests(TestCase):
             / "logrotate"
             / "manuspectrum-nginx.in"
         ).read_text()
-        self.assertRegex(rule, r"(?m)^\s*maxage 365$")
+        self.assertRegex(rule, r"(?m)^\s*maxage 30$")
         for lang, label, text in (
-            ("en", "Access log", "One year, then deleted."),
-            ("fr", "Journal d", "Un an, puis supprimé."),
+            ("en", "Access log", EN_LOG_RETENTION),
+            ("fr", "Journal d", FR_LOG_RETENTION),
         ):
             html = self.get("about-privacy", lang)
             self.assertIn(label, html)
-            self.assertIn(text, html)
+            self.assertRegex(html, text)
 
     def test_privacy_error_log_is_listed_with_the_same_retention_as_the_access_log(
         self,
@@ -589,15 +598,15 @@ class LegalPagesTests(TestCase):
             / "manuspectrum-nginx.in"
         ).read_text()
         self.assertRegex(rule, r"error\.log \{")
-        self.assertRegex(rule, r"(?m)^\s*maxage 365$")
+        self.assertRegex(rule, r"(?m)^\s*maxage 30$")
         for lang, kept, label, text in (
             (
                 "en",
                 "web server's error log",
                 "Error log",
-                "One year, then deleted.",
+                EN_LOG_RETENTION,
             ),
-            ("fr", "journal d", "Journal d.erreurs", "Un an, puis supprimé."),
+            ("fr", "journal d", "Journal d.erreurs", FR_LOG_RETENTION),
         ):
             html = self.get("about-privacy", lang)
             self.assertIn(kept, html, lang)

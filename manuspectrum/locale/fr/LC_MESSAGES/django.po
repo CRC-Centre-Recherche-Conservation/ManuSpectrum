@@ -6280,8 +6280,12 @@ msgstr "Journal d'accès"
 
 #: templates/views/pages/privacy.htm:57 templates/views/pages/privacy.htm:61
 #: templates/views/pages/privacy.htm:65
-msgid "One year, then deleted."
-msgstr "Un an, puis supprimé."
+msgid ""
+"About one month on the server, then one year in the backup of the host of "
+"the platform; at most about thirteen months in all."
+msgstr ""
+"Environ un mois sur le serveur, puis un an dans la sauvegarde de "
+"l'hébergeur de la plateforme ; treize mois environ au plus."
 
 #: templates/views/pages/privacy.htm:59
 msgid "Error log"
@@ -6314,13 +6318,13 @@ msgstr ""
 
 #: templates/views/pages/privacy.htm:88
 msgid ""
-"The server logs, system logs included, are kept one year; the copies of "
-"them in the backups of the host of the platform are deleted at most two "
-"months later."
+"The server logs, system logs included, follow the same rule: about one "
+"month on the server, then one year in the backup of the host of the "
+"platform, which the server cannot delete."
 msgstr ""
-"Les journaux du serveur, journaux système compris, sont conservés un an ; "
-"leurs copies dans les sauvegardes de l'hébergeur de la plateforme sont "
-"effacées au plus deux mois plus tard."
+"Les journaux du serveur, journaux système compris, suivent la même règle : "
+"environ un mois sur le serveur, puis un an dans la sauvegarde de "
+"l'hébergeur de la plateforme, que le serveur ne peut pas supprimer."
 
 #: templates/views/pages/privacy.htm:63
 msgid "Accounts"
