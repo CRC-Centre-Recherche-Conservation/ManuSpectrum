@@ -52,6 +52,13 @@ Licence GPL-3, as declared in the package `DESCRIPTION`. Author: Pierre Roudier.
 A soil spectrum collected in New Zealand with an ASD FieldSpec 3, file version 8
 (raw counts and white reference). Byte for byte unchanged.
 
+## contract — synthetic CSVs
+
+`contract/*.csv` and `cases.json` are written by `tests/test_measurement_csv_contract.py`
+(`MS_WRITE_CONTRACT=1`); `contract/refused/*.csv` are hand-made synthetic files, one per
+violation `check_csv` names (`<code>[__variant].csv`; the CRLF case is built in the tests).
+No third-party content.
+
 ## Expected values
 
 `expected.json` holds values read with independent open libraries by

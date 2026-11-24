@@ -8124,9 +8124,37 @@ msgstr "Le fichier mentionne une compensation de la vapeur d'eau ; elle n'a pas 
 msgid "The spectra of this file are on different x grids: they are not summed and only the raw file is kept."
 msgstr "Les spectres de ce fichier n'ont pas la même grille en x : ils ne sont pas additionnés et seul le fichier brut est conservé."
 
-#: measurement_files/converters/base.py:88
-msgid "No reader exists for this format; the raw file is kept."
-msgstr "Il n'existe pas de lecteur pour ce format ; le fichier brut est conservé."
+#: measurement_files/converters/base.py:40
+msgid "The file is cut short."
+msgstr "Le fichier est tronqué."
+
+#: measurement_files/converters/base.py:41
+msgid "The file does not follow its format."
+msgstr "Le fichier ne respecte pas son format."
+
+#: measurement_files/converters/base.py:42
+msgid "This variant of the format is not supported."
+msgstr "Cette variante du format n'est pas prise en charge."
+
+#: measurement_files/converters/base.py:43
+msgid "The file holds no columns of numbers."
+msgstr "Le fichier ne contient aucune colonne de nombres."
+
+#: measurement_files/converters/base.py:44
+msgid "The spectrum has fewer than two points."
+msgstr "Le spectre compte moins de deux points."
+
+#: measurement_files/converters/base.py:45
+msgid "Two points share the same x value."
+msgstr "Deux points ont la même valeur en x."
+
+#: measurement_files/converters/base.py:46
+msgid "The spectrum holds a value that is not finite."
+msgstr "Le spectre contient une valeur non finie."
+
+#: measurement_files/converters/base.py:47
+msgid "The file holds several result spectra and does not say which to use."
+msgstr "Le fichier contient plusieurs spectres de résultat et n'indique pas lequel utiliser."
 
 #: measurement_files/converters/metadata.py:17
 msgid "Note"

@@ -10,7 +10,11 @@ byte offset. The type word packs six fields from its low bits: 2, 2, 6, 7, 2
 and 3 bits. Field 2 > 0 marks a parameter block (1 = data status of a data
 block); field 1 is 1 for the sample, 2 for the reference, 3 for a result;
 field 3, modulo 32, is the kind (4 absorbance, 5 transmittance, 12
-reflectance); field 5 is 0 for a plain data block.
+reflectance); field 5 is 0 for a plain data block. Kind 13 and field 5 = 5 are blocks that
+are not the spectrum itself (never read as a result). A field 3 of 32 or more
+means several channels; `% 32` leaves its kind, and `_KINDS` then refuses it
+as `unsupported_variant`. Blocks that overlap are `malformed`, so the
+parameter walks never read more than the file holds.
 
 A parameter block is a run of `KKK\\0`, int16 value type, int16 size in words
 and the value (type 0 int32, 1 float64, otherwise a NUL-terminated Latin-1
@@ -95,6 +99,9 @@ def _directory(data: bytes) -> list[tuple[tuple[int, ...], int, int]]:
         if words < 0 or offset + size > len(data):
             raise UnreadableFile("truncated")
         blocks.append((_fields(word), offset, size))
+    spans = sorted((offset, offset + size) for _, offset, size in blocks if size)
+    if any(b[0] < a[1] for a, b in zip(spans, spans[1:])):
+        raise UnreadableFile("malformed")
     return blocks
 
 

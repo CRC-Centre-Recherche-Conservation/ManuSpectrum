@@ -3,8 +3,11 @@
 Only the facts of `FACT_LABELS` and the warnings of `WARNINGS` reach the
 text, in every configured language, one per line. Values and the source name
 go through `views.explorer.series.neutralise` (one line, no `"`, formulas
-defused). A quantity without a unit says so, any other fact prints its value alone; dates stay as written.
+defused), except a fact value made only of numbers (`_PLAIN_NUMBERS`, a
+negative range or calibration), which cannot carry a formula. A quantity without a unit says so, any other fact prints its value alone; dates stay as written.
 """
+
+import re
 
 from django.conf import settings
 from django.utils.translation import gettext_noop
@@ -13,6 +16,10 @@ from manuspectrum.iiif.language import gettext_map
 from manuspectrum.views.explorer.series import neutralise
 
 from .base import FACT_LABELS, QUANTITY_KEYS, WARNINGS, Reading
+
+_NUM = r"[-+]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:[eE][-+]?\d+)?"
+_PLAIN_NUMBERS = re.compile(rf"{_NUM}(?:\s*[;\u2013]\s*{_NUM})*", re.ASCII)
+"""Numbers joined by `;` or an en dash: no operator, so no spreadsheet formula."""
 
 NOTE = gettext_noop("Note")
 UNIT_ABSENT = gettext_noop("unit not stated in the file")
@@ -34,7 +41,8 @@ def describe(reading: Reading, *, source_name: str, sha256: str) -> dict[str, st
         lines.append(gettext_map(LINE, label=label, value=value))
 
     for fact in reading.facts:
-        value = neutralise(fact.value)
+        plain = _PLAIN_NUMBERS.fullmatch(fact.value)
+        value = fact.value if plain else neutralise(fact.value)
         if fact.unit is None and fact.key not in QUANTITY_KEYS:
             shown = value
         elif fact.unit is None:

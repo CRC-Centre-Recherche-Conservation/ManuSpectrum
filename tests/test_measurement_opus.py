@@ -182,3 +182,25 @@ class OpusTests(SimpleTestCase):
         with self.assertRaises(UnreadableFile) as caught:
             opus.read(synthetic(result(4, [1.0, 2.0], NPT=2000000)))
         self.assertEqual(caught.exception.code, "malformed")
+
+
+class OpusOverlapTests(SimpleTestCase):
+    def test_overlapping_blocks_are_refused_without_walking_them(self):
+        from unittest import mock
+
+        count = 4096
+        start, region = 24, 24 + 12 * count
+        entries = b"".join(
+            struct.pack("<3i", type_word(0, 0, 3), 1024, region) for _ in range(count)
+        )
+        head = b"\x0a\x0a\xfe\xfe" + struct.pack("<diii", 920622.0, start, count, count)
+        data = head + entries + bytes(4096)
+        with mock.patch.object(opus, "_params", wraps=opus._params) as spy:
+            with self.assertRaises(UnreadableFile) as caught:
+                opus.read(data)
+        self.assertEqual(caught.exception.code, "malformed")
+        spy.assert_not_called()
+
+    def test_two_adjacent_blocks_are_not_overlapping(self):
+        reading = opus.read(synthetic(result(4, [1.0, 2.0, 3.0])))
+        self.assertEqual(len(reading.series.rows), 3)

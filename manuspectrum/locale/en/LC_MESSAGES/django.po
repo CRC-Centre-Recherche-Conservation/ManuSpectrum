@@ -7960,9 +7960,37 @@ msgstr "The file names a water-vapour compensation; it was not applied to this C
 msgid "The spectra of this file are on different x grids: they are not summed and only the raw file is kept."
 msgstr "The spectra of this file are on different x grids: they are not summed and only the raw file is kept."
 
-#: measurement_files/converters/base.py:88
-msgid "No reader exists for this format; the raw file is kept."
-msgstr "No reader exists for this format; the raw file is kept."
+#: measurement_files/converters/base.py:40
+msgid "The file is cut short."
+msgstr "The file is cut short."
+
+#: measurement_files/converters/base.py:41
+msgid "The file does not follow its format."
+msgstr "The file does not follow its format."
+
+#: measurement_files/converters/base.py:42
+msgid "This variant of the format is not supported."
+msgstr "This variant of the format is not supported."
+
+#: measurement_files/converters/base.py:43
+msgid "The file holds no columns of numbers."
+msgstr "The file holds no columns of numbers."
+
+#: measurement_files/converters/base.py:44
+msgid "The spectrum has fewer than two points."
+msgstr "The spectrum has fewer than two points."
+
+#: measurement_files/converters/base.py:45
+msgid "Two points share the same x value."
+msgstr "Two points share the same x value."
+
+#: measurement_files/converters/base.py:46
+msgid "The spectrum holds a value that is not finite."
+msgstr "The spectrum holds a value that is not finite."
+
+#: measurement_files/converters/base.py:47
+msgid "The file holds several result spectra and does not say which to use."
+msgstr "The file holds several result spectra and does not say which to use."
 
 #: measurement_files/converters/metadata.py:17
 msgid "Note"

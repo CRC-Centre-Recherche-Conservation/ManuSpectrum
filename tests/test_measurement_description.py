@@ -85,6 +85,25 @@ class DescribeTests(SimpleTestCase):
         self.assertIn("Fichier source : a.mca", text["fr"])
         self.assertIn("Converted by: ManuSpectrum", text["en"])
 
+    def test_a_number_list_is_not_prefixed_but_text_still_is(self):
+        reading = _reading(
+            [
+                Fact("calibration", "-1,2215; 0,012623", "keV"),
+                Fact("spectral_range", "-1.5\u20136", "m/z"),
+                Fact("tube_voltage", "+5e-3"),
+                Fact("instrument", "-1 and more"),
+                Fact("filter", "-1+2"),
+            ]
+        )
+        for lang, body in describe(reading, source_name="a", sha256=SHA).items():
+            lines = body.split("\n")
+            self.assertTrue(lines[0].endswith(": -1,2215; 0,012623 keV"), lang)
+            self.assertTrue(lines[1].endswith(": -1.5\u20136 m/z"), lang)
+            self.assertIn("+5e-3 (", lines[2])
+            self.assertNotIn("'+5e-3", lines[2])
+            self.assertIn(": '-1 and more", lines[3])
+            self.assertIn(": '-1+2", lines[4])
+
     def test_neutralises_header_text(self):
         reading = _reading([Fact("instrument", '=cmd|"/c calc"!A1\r\n<script>')])
         text = describe(reading, source_name="+x.mca", sha256=SHA)
@@ -105,3 +124,21 @@ class CatalogueTests(SimpleTestCase):
         with translation.override("fr"):
             missing = [m for m in msgids if m not in SAME_IN_FRENCH and gettext(m) == m]
         self.assertEqual(missing, [])
+
+    def test_every_unreadable_code_has_an_english_label_and_a_french_one(self):
+        from django.utils.translation import gettext
+
+        from manuspectrum.measurement_files.converters.base import (
+            UNREADABLE_CODES,
+            UNREADABLE_LABELS,
+        )
+
+        self.assertEqual(set(UNREADABLE_LABELS), set(UNREADABLE_CODES))
+        with translation.override("fr"):
+            for code, msgid in UNREADABLE_LABELS.items():
+                with self.subTest(code):
+                    self.assertTrue(msgid.endswith("."))
+                    self.assertNotEqual(gettext(msgid), msgid)
+
+    def test_no_reader_warning_is_gone(self):
+        self.assertNotIn("no_reader", WARNINGS)

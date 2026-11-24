@@ -79,3 +79,54 @@ class ElioMcaTests(SimpleTestCase):
         self.assertTrue(elio_mca.sniff(build([1, 2])[:4096]))
         self.assertFalse(elio_mca.sniff(b"# just a comment\n1\n2\n"))
         self.assertFalse(elio_mca.sniff(b"MCA Channels: 3\n"))
+
+
+class ElioHardeningTests(SimpleTestCase):
+    def refused(self, data):
+        with self.assertRaises(UnreadableFile) as caught:
+            elio_mca.read(data)
+        return caught.exception.code
+
+    def test_three_usable_calibration_points_are_an_unsupported_variant(self):
+        data = build([1, 2, 3]).replace(
+            b"Calibration3: 0 0", b"Calibration3: 3000 35,5"
+        )
+        self.assertEqual(self.refused(data), "unsupported_variant")
+
+    def test_a_corrupted_value_is_malformed_never_a_value_error(self):
+        base = build([1, 2, 3])
+        for name, data in {
+            "count line": base.replace(b"1.00000000E+00", b"1.0000x000E+00"),
+            "count inf": base.replace(b"1.00000000E+00", b"inf"),
+            "count nan": base.replace(b"1.00000000E+00", b"nan"),
+            "channels nan": base.replace(b"MCA Channels: 3", b"MCA Channels: nan"),
+            "channels inf": base.replace(b"MCA Channels: 3", b"MCA Channels: inf"),
+            "channels word": base.replace(b"MCA Channels: 3", b"MCA Channels: many"),
+            "calibration word": base.replace(b"722 8,046", b"722 eight"),
+        }.items():
+            with self.subTest(name):
+                self.assertEqual(self.refused(data), "malformed")
+
+    def facts(self, data):
+        return {f.key: f.value for f in elio_mca.read(data).facts}
+
+    def test_a_free_text_second_or_third_line_is_not_kept(self):
+        data = build([1, 2, 3]).replace(
+            b"# 11/05/2031 09:41:07", b"# Operator: Jane Doe"
+        )
+        data = data.replace(b"# SN000", b"# Notes: sample of the south door, P/N 4")
+        facts = self.facts(data)
+        self.assertNotIn("acquired_at", facts)
+        self.assertNotIn("serial_number", facts)
+        self.assertNotIn("Jane", repr(facts))
+        self.assertNotIn("door", repr(facts))
+
+    def test_a_date_and_a_serial_with_the_expected_shape_are_kept(self):
+        data = build([1, 2, 3]).replace(b"# SN000", b"# AB-12 x_3")
+        facts = self.facts(data)
+        self.assertEqual(facts["acquired_at"], "11/05/2031 09:41:07")
+        self.assertEqual(facts["serial_number"], "AB-12 x_3")
+
+    def test_the_title_line_is_never_a_fact(self):
+        data = build([1, 2, 3], title="Operator Jane Doe 11/05/2031 09:41:07")
+        self.assertNotIn("Jane", repr(self.facts(data)))

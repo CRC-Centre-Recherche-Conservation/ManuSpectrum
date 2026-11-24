@@ -11,7 +11,7 @@ names and extensions are never read.
 import logging
 
 from . import asd, bruker_spx, delimited, elio_mca, galactic_spc, mzxml, opus
-from .base import MAX_CHANNELS, Reading, UnreadableFile, UnsupportedFormat
+from .base import Reading, UnreadableFile, UnsupportedFormat, check_series
 
 logger = logging.getLogger(__name__)
 
@@ -41,15 +41,25 @@ def detect(data: bytes) -> str | None:
 
 
 def convert(data: bytes) -> Reading:
-    """Read `data`; raises `UnsupportedFormat` or `UnreadableFile` only."""
+    """Read `data`; raises `UnsupportedFormat` or `UnreadableFile` only.
+
+    Every series returned passes `check_series`, so `write_csv` accepts it; an
+    `UnreadableFile` carries the detected `format`.
+    """
     name = detect(data)
     if name is None or name in KNOWN_UNREAD:
         raise UnsupportedFormat(name)
     reader = next(r for r in (*READERS, FALLBACK) if r.FORMAT == name)
     try:
-        return reader.read(data)
-    except (UnreadableFile, UnsupportedFormat):
+        reading = reader.read(data)
+        if reading.series is not None:
+            check_series(reading.series)
+        return reading
+    except UnreadableFile as error:
+        error.format = name
+        raise
+    except UnsupportedFormat:
         raise
     except Exception as error:
         logger.warning("%s reader failed: %s", name, type(error).__name__)
-        raise UnreadableFile("malformed") from None
+        raise UnreadableFile("malformed", format=name) from None

@@ -35,7 +35,7 @@ def _peak(x, centre, width, height):
 
 def _series(key):
     if key == "xrf":
-        x = _grid(0.5, 0.15)
+        x = _grid(-1.2, 0.15)
         rows = [(v, round(40 + _peak(v, 6.4, 0.8, 900) + 5 * v, 6)) for v in x]
         columns = ("energy_keV", "counts")
     elif key == "xrf_channel":
@@ -71,6 +71,7 @@ def _series(key):
             (v, round(_peak(v, 150, 6, 1e5) + 50 * (1 + i % 3), 6))
             for i, v in enumerate(x)
         ]
+        rows[0] = (rows[0][0], 1e-07)
         columns = ("mz", "intensity")
     else:
         raise KeyError(key)
@@ -139,3 +140,8 @@ class ContractFilesTests(SimpleTestCase):
                     FileValidator().test_unknown_filetypes(data, "csv"), []
                 )
                 self.assertEqual(check_csv(data), ())
+
+    def test_the_series_carry_a_negative_x_and_an_exponent(self):
+        files, _ = _build()
+        self.assertTrue(files["xrf.csv"].split(b"\n")[1].startswith(b"-1.2,"))
+        self.assertIn(b",1e-07\n", files["mass_spec.csv"])

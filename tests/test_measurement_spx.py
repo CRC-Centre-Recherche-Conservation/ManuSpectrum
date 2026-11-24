@@ -137,3 +137,25 @@ class BrukerSpxTests(SimpleTestCase):
         facts = {f.key: f.value for f in reading.facts}
         self.assertEqual(facts["filter"], "Al 12,5 µm")
         self.assertEqual(facts["calibration"], "-1,5; 0,5")
+
+
+class BrukerSpxHardeningTests(SimpleTestCase):
+    def test_calibration_needs_both_values(self):
+        no_abs = synthetic().replace(b"<CalibAbs>-1,5</CalibAbs>", b"")
+        no_lin = synthetic(calib_lin=None)
+        for name, data in {"no CalibAbs": no_abs, "no CalibLin": no_lin}.items():
+            with self.subTest(name):
+                reading = bruker_spx.read(data)
+                self.assertEqual(reading.series.columns, ("channel", "counts"))
+                self.assertEqual(reading.content_preset, "xrf_channel")
+                self.assertIn("no_calibration", reading.warnings)
+                self.assertNotIn("calibration", {f.key for f in reading.facts})
+
+    def test_the_declared_count_is_checked_before_the_values_are_converted(self):
+        from unittest import mock
+
+        data = synthetic(channels=",".join(["1"] * 5000), count=2)
+        with mock.patch.object(bruker_spx, "int", create=True, wraps=int) as spy:
+            with self.assertRaises(UnreadableFile):
+                bruker_spx.read(data)
+        self.assertLess(spy.call_count, 10)

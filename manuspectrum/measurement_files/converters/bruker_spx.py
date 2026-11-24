@@ -8,8 +8,8 @@ the header classes (`TRTGeneratorHeader`, `TRTRFAHeader`, `TRTXrfHeader`,
 integer counts. Header values are found by element name inside that instance,
 whichever class carries them. Decimals are commas, the prolog declares the
 encoding (Windows-1252 in the files seen). Energy = `CalibAbs` + `CalibLin` x
-channel, channels numbered from 0; without a non-zero `CalibLin` the axis stays
-in channels. Dates are kept as written. `User`, `Name` and every other element
+channel, channels numbered from 0; without both `CalibAbs` and a non-zero
+`CalibLin` the axis stays in channels. Dates are kept as written. `User`, `Name` and every other element
 outside the allow-list are never read. A nested `TRTSpectrum` instance (a
 fitted background, a result) is never entered.
 """
@@ -50,12 +50,8 @@ def read(data: bytes) -> Reading:
     try:
         root = ElementTree.fromstring(data)
     except (ElementTree.ParseError, ValueError, UnicodeError):
-        raise UnreadableFile("malformed")
-    except Exception as error:
-        # DefusedXmlException subclasses (entities, DTD, external references)
-        if type(error).__module__.startswith("defusedxml"):
-            raise UnreadableFile("malformed")
-        raise
+        # defusedxml's refusals (entities, DTD, external references) are ValueErrors
+        raise UnreadableFile("malformed") from None
     instance = next(
         (c for c in root.findall("ClassInstance") if c.get("Type") == "TRTSpectrum"),
         None,
@@ -81,13 +77,18 @@ def read(data: bytes) -> Reading:
 
     try:
         declared = int(values["ChannelCount"])
-        counts = [int(v) for v in values["Channels"].split(",")]
-        offset = _num(values["CalibAbs"]) if "CalibAbs" in values else 0.0
-        gain = _num(values["CalibLin"]) if "CalibLin" in values else 0.0
+        written = values["Channels"]
+        calibrated = "CalibAbs" in values and "CalibLin" in values
+        offset = _num(values["CalibAbs"]) if calibrated else 0.0
+        gain = _num(values["CalibLin"]) if calibrated else 0.0
     except (KeyError, ValueError):
+        raise UnreadableFile("malformed") from None
+    if not 0 < declared <= MAX_CHANNELS or written.count(",") + 1 != declared:
         raise UnreadableFile("malformed")
-    if not 0 < declared <= MAX_CHANNELS or len(counts) != declared:
-        raise UnreadableFile("malformed")
+    try:
+        counts = [int(v) for v in written.split(",")]
+    except ValueError:
+        raise UnreadableFile("malformed") from None
 
     warnings = ["date_order_unknown"]
     if gain == 0.0:

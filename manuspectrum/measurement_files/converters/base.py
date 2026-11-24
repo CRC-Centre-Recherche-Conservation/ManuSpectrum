@@ -7,11 +7,13 @@ A reader takes the bytes of a file and returns a `Reading`; it raises
 are never read into a `Fact`.
 """
 
+import math
 from dataclasses import dataclass
 
 from django.utils.translation import gettext_noop
 
 MAX_CHANNELS = 1_048_576
+MIN_ROWS = 2
 
 UNREADABLE_CODES = frozenset(
     {
@@ -25,6 +27,20 @@ UNREADABLE_CODES = frozenset(
         "ambiguous_result",
     }
 )
+
+UNREADABLE_LABELS = {
+    "truncated": gettext_noop("The file is cut short."),
+    "malformed": gettext_noop("The file does not follow its format."),
+    "unsupported_variant": gettext_noop("This variant of the format is not supported."),
+    "no_numeric_columns": gettext_noop("The file holds no columns of numbers."),
+    "too_few_points": gettext_noop("The spectrum has fewer than two points."),
+    "duplicate_x": gettext_noop("Two points share the same x value."),
+    "non_finite": gettext_noop("The spectrum holds a value that is not finite."),
+    "ambiguous_result": gettext_noop(
+        "The file holds several result spectra and does not say which to use."
+    ),
+}
+"""English wording of each `UnreadableFile` code (msgids; French in the catalogue)."""
 
 FACT_LABELS = {
     "instrument": gettext_noop("Instrument"),
@@ -108,9 +124,6 @@ WARNINGS = {
         "The spectra of this file are on different x grids: they are not summed "
         "and only the raw file is kept."
     ),
-    "no_reader": gettext_noop(
-        "No reader exists for this format; the raw file is kept."
-    ),
 }
 
 
@@ -123,6 +136,27 @@ def span(low: float, high: float) -> str:
 class Series:
     columns: tuple[str, ...]
     rows: tuple[tuple[float, ...], ...]
+
+
+def check_series(series: Series) -> None:
+    """Raise `UnreadableFile` unless `series` can be written as a contract CSV.
+
+    Fewer than `MIN_ROWS` rows is `too_few_points`, a non-finite value
+    `non_finite`, a row of the wrong length or x going down `malformed`, an x
+    repeated `duplicate_x`.
+    """
+    if len(series.rows) < MIN_ROWS:
+        raise UnreadableFile("too_few_points")
+    width = len(series.columns)
+    if any(len(row) != width for row in series.rows):
+        raise UnreadableFile("malformed")
+    if not all(math.isfinite(v) for row in series.rows for v in row):
+        raise UnreadableFile("non_finite")
+    for a, b in zip(series.rows, series.rows[1:]):
+        if b[0] == a[0]:
+            raise UnreadableFile("duplicate_x")
+        if b[0] < a[0]:
+            raise UnreadableFile("malformed")
 
 
 @dataclass(frozen=True)
@@ -155,11 +189,15 @@ class Reading:
 
 
 class UnreadableFile(Exception):
-    def __init__(self, code: str):
+    """A file of a known format that cannot be read. `format` is the detected
+    format, filled by `registry.convert` when the reader does not know it."""
+
+    def __init__(self, code: str, format: str | None = None):
         if code not in UNREADABLE_CODES:
             raise ValueError(f"Unknown unreadable code: {code!r}")
         super().__init__(code)
         self.code = code
+        self.format = format
 
 
 class UnsupportedFormat(Exception):

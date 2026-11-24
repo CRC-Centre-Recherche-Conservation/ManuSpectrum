@@ -9,11 +9,12 @@ import csv
 import io
 import math
 import re
+from pathlib import PurePosixPath
 
-from .base import Series
+from .base import MIN_ROWS, Series
 
-MIN_ROWS = 2
 _NUMBER = re.compile(r"^-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$", re.ASCII)
+_HEADER_CELL = re.compile(r"^[^\W\d_][\w .()/%+\-]*$")
 _OPUS_EXTENSION = re.compile(r"\.\d+$")
 
 
@@ -48,7 +49,16 @@ def _is_number(cell: str) -> bool:
 
 
 def check_csv(data: bytes) -> tuple[str, ...]:
-    """Return the first contract violation of `data`, empty when it complies.
+    """Return the first contract violation of `data` as a one-code tuple, or `()`.
+
+    The codes are closed: `bom`, `not_utf8`, `line_ending`, `no_header`,
+    `header_invalid`, `comment_line`, `separator`, `too_few_columns`, `quoted`,
+    `row_length`, `not_numeric`, `non_finite`, `x_not_ascending`,
+    `too_few_rows`. A header cell must match `_HEADER_CELL`: it starts with a
+    letter and holds letters, digits, `_`, space and `. ( ) / % + -` only, so a
+    number, a formula, markup or a leading space is `header_invalid`. A quote
+    anywhere is `quoted`; fewer than two columns is `too_few_columns`
+    (`separator` when the header holds a `;` or a tab).
 
     A body cell must match `_NUMBER` exactly (no sign `+`, spaces, digit
     separators or non-ASCII digits): anything else is `not_numeric`, so `nan`
@@ -68,17 +78,19 @@ def check_csv(data: bytes) -> tuple[str, ...]:
         lines.pop()
     if not lines:
         return ("no_header",)
+    if '"' in text:
+        return ("quoted",)
     rows = list(csv.reader(lines, delimiter=","))
     header = rows[0]
-    if any(_is_number(c) for c in header):
-        return ("header_numeric",)
-    if any(c[:1] in ("=", "+", "-", "@") for c in header):
-        return ("header_formula",)
+    if not all(_HEADER_CELL.match(c) for c in header):
+        if len(header) < 2 and (";" in lines[0] or "\t" in lines[0]):
+            return ("separator",)
+        return ("header_invalid",)
     body = rows[1:]
     if any(line.lstrip().startswith("#") for line in lines[1:]):
         return ("comment_line",)
-    if len(header) < 2 and (";" in lines[0] or "\t" in lines[0]):
-        return ("separator",)
+    if len(header) < 2:
+        return ("too_few_columns",)
     if any(len(r) != len(header) for r in body):
         return ("row_length",)
     values = []
@@ -99,7 +111,11 @@ def check_csv(data: bytes) -> tuple[str, ...]:
 
 
 def csv_name(raw_name: str) -> str:
-    """Replace the last extension by `.csv`, keeping an OPUS numeric one."""
+    """Replace the last extension by `.csv`, keeping an OPUS numeric one.
+
+    Takes a file name: any directory part is dropped first.
+    """
+    raw_name = PurePosixPath(raw_name).name
     if _OPUS_EXTENSION.search(raw_name):
         return raw_name + ".csv"
     stem, dot, _ = raw_name.rpartition(".")

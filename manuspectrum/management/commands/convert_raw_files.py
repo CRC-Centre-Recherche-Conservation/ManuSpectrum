@@ -82,6 +82,7 @@ class Command(BaseCommand):
         except UnsupportedFormat as exc:
             fmt = f"unsupported:{exc.format or 'unknown'}"
         except UnreadableFile as exc:
+            fmt = exc.format or "-"
             outcome = f"unreadable:{exc.code}"
         if reading is not None:
             fmt = reading.format

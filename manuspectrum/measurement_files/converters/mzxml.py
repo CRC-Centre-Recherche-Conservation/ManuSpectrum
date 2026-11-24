@@ -5,22 +5,23 @@
 The namespace (mzXML 2.x or 3.x) is ignored. Every `scan` (nested scans
 included) with a `peaks` child is read: the text is base64 of (m/z, intensity)
 pairs, big-endian (`byteOrder="network"`), `precision` 32 or 64 bits,
-`compressionType` `none` or `zlib`. A scan with `pairOrder` other than
-`m/z-int`, another byte order or another compression is an unsupported variant.
-One scan gives its peaks; several scans on the identical m/z array give the sum
-of their intensities; scans on different arrays give no series (raw only,
-warning `grids_differ`). The byte-offset `index` of the file is never read.
+`compressionType` `none` or `zlib`. Another byte order, compression, `pairOrder`
+(2.x) or `contentType` (3.x) than `m/z-int` is an unsupported variant. A scan
+with `peaksCount="0"` is skipped. One scan gives its peaks; several scans on the
+identical m/z array give the sum of their intensities, accumulated as each scan
+is decoded; scans on different arrays give no series (raw only, warning
+`grids_differ`, found at the first mismatch). The byte-offset `index` of the
+file is never read.
 
-`peaksCount` is checked against `MAX_CHANNELS` before any decoding, the base64
-length against the size `peaksCount` implies, and a zlib stream is inflated
-with a bound of that size plus one: any excess or shortfall is `malformed`.
-`parentFile` (paths), `operator`, `contact`, `dataProcessing` and every other
-element outside the allow-list are never read.
+The sum of every `peaksCount` is checked against `MAX_CHANNELS` before any
+decoding, the base64 length against the size `peaksCount` implies, and a zlib
+stream is inflated with a bound of that size plus one: any excess or shortfall
+is `malformed`. `parentFile` (paths), `operator`, `contact`, `dataProcessing`
+and every other element outside the allow-list are never read.
 """
 
 import base64
 import binascii
-import math
 import struct
 import zlib
 
@@ -58,6 +59,8 @@ def _decode(node, count: int) -> tuple[tuple[float, ...], tuple[float, ...]]:
     if node.get("byteOrder", "network") != "network":
         raise UnreadableFile("unsupported_variant")
     if node.get("pairOrder", "m/z-int") != "m/z-int":
+        raise UnreadableFile("unsupported_variant")
+    if node.get("contentType", "m/z-int") != "m/z-int":
         raise UnreadableFile("unsupported_variant")
     compression = node.get("compressionType", "none")
     if compression not in ("none", "zlib"):
@@ -128,16 +131,13 @@ def read(data: bytes) -> Reading:
     try:
         root = ElementTree.fromstring(data)
     except (ElementTree.ParseError, ValueError, UnicodeError):
-        raise UnreadableFile("malformed")
-    except Exception as error:
-        # DefusedXmlException subclasses (entities, DTD, external references)
-        if type(error).__module__.startswith("defusedxml"):
-            raise UnreadableFile("malformed")
-        raise
+        # defusedxml's refusals (entities, DTD, external references) are ValueErrors
+        raise UnreadableFile("malformed") from None
     if _local(root.tag) != "mzXML":
         raise UnreadableFile("malformed")
 
-    scans = []
+    pending = []
+    total = 0
     for scan in root.iter():
         if _local(scan.tag) != "scan":
             continue
@@ -147,35 +147,37 @@ def read(data: bytes) -> Reading:
         try:
             count = int(scan.get("peaksCount", ""))
         except ValueError:
+            raise UnreadableFile("malformed") from None
+        if count < 0:
             raise UnreadableFile("malformed")
-        if not 0 < count <= MAX_CHANNELS:
+        if count == 0:
+            continue
+        total += count
+        if total > MAX_CHANNELS:
             raise UnreadableFile("malformed")
-        scans.append(_decode(peaks[0], count))
-    if not scans:
+        pending.append((peaks[0], count))
+    if not pending:
         raise UnreadableFile("malformed")
 
     facts = _facts(root)
-    grid = scans[0][0]
-    if any(mz != grid for mz, _ in scans):
-        return Reading(
-            format=FORMAT,
-            reader_version=READER_VERSION,
-            series=None,
-            content_preset=None,
-            facts=tuple(facts),
-            warnings=("grids_differ",),
-        )
+    grid = summed = None
+    for node, count in pending:
+        mz, intensity = _decode(node, count)
+        if grid is None:
+            grid, summed = mz, list(intensity)
+        elif mz != grid:
+            return Reading(
+                format=FORMAT,
+                reader_version=READER_VERSION,
+                series=None,
+                content_preset=None,
+                facts=tuple(facts),
+                warnings=("grids_differ",),
+            )
+        else:
+            summed = [a + b for a, b in zip(summed, intensity)]
 
-    if len(scans) == 1:
-        intensity = scans[0][1]
-    else:
-        intensity = tuple(math.fsum(column) for column in zip(*(s[1] for s in scans)))
-    rows = tuple(zip(grid, intensity))
-    if not all(math.isfinite(v) for row in rows for v in row):
-        raise UnreadableFile("non_finite")
-    if any(a[0] >= b[0] for a, b in zip(rows, rows[1:])):
-        raise UnreadableFile("duplicate_x")
-
+    rows = tuple(zip(grid, summed))
     facts.append(Fact("spectral_range", span(grid[0], grid[-1]), "m/z"))
     facts.append(Fact("channels", str(len(rows))))
     return Reading(

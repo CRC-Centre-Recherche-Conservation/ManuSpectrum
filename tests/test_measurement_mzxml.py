@@ -174,5 +174,65 @@ class MzxmlTests(SimpleTestCase):
 
     def test_repeated_mz_is_refused(self):
         with self.assertRaises(UnreadableFile) as caught:
-            mzxml.read(document(peaks([1.0, 1.0], [1.0, 2.0])))
+            convert(document(peaks([1.0, 1.0], [1.0, 2.0])))
         self.assertEqual(caught.exception.code, "duplicate_x")
+
+
+class MzxmlBoundsTests(SimpleTestCase):
+    def test_the_sum_of_every_peaks_count_is_bounded_before_decoding(self):
+        from unittest import mock
+
+        from manuspectrum.measurement_files.converters.base import MAX_CHANNELS
+
+        half = MAX_CHANNELS // 2 + 1
+        scans = [
+            f'<scan peaksCount="{half}"><peaks precision="32">AAAA</peaks></scan>'
+        ] * 2
+        with mock.patch.object(mzxml, "_decode", side_effect=AssertionError):
+            with self.assertRaises(UnreadableFile) as caught:
+                mzxml.read(document(*scans))
+        self.assertEqual(caught.exception.code, "malformed")
+
+    def test_the_grids_are_compared_as_each_scan_is_decoded(self):
+        broken = '<scan peaksCount="2"><peaks precision="32">!!</peaks></scan>'
+        reading = mzxml.read(
+            document(
+                peaks([1.0, 2.0], [1.0, 1.0]),
+                peaks([1.0, 3.0], [1.0, 1.0]),
+                broken,
+            )
+        )
+        self.assertIsNone(reading.series)
+        self.assertEqual(reading.warnings, ("grids_differ",))
+
+    def test_scans_on_one_grid_are_summed(self):
+        reading = mzxml.read(
+            document(
+                peaks([1.0, 2.0], [1.0, 2.0]),
+                peaks([1.0, 2.0], [10.0, 20.0]),
+            )
+        )
+        self.assertEqual(reading.series.rows, ((1.0, 11.0), (2.0, 22.0)))
+
+    def test_an_empty_scan_is_skipped(self):
+        empty = '<scan peaksCount="0"><peaks precision="32"></peaks></scan>'
+        reading = mzxml.read(document(empty, peaks(MZ, INTENSITY)))
+        self.assertEqual(len(reading.series.rows), 4)
+
+    def test_a_file_of_empty_scans_alone_is_malformed(self):
+        empty = '<scan peaksCount="0"><peaks precision="32"></peaks></scan>'
+        with self.assertRaises(UnreadableFile) as caught:
+            mzxml.read(document(empty))
+        self.assertEqual(caught.exception.code, "malformed")
+
+    def test_another_content_type_is_an_unsupported_variant(self):
+        scan = peaks(MZ, INTENSITY).replace(
+            'pairOrder="m/z-int"', 'contentType="m/z ruler"'
+        )
+        with self.assertRaises(UnreadableFile) as caught:
+            mzxml.read(document(scan))
+        self.assertEqual(caught.exception.code, "unsupported_variant")
+        ok = peaks(MZ, INTENSITY).replace(
+            'pairOrder="m/z-int"', 'contentType="m/z-int"'
+        )
+        self.assertEqual(len(mzxml.read(document(ok)).series.rows), 4)

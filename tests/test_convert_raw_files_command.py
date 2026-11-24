@@ -102,3 +102,17 @@ class ConvertRawFilesTests(SimpleTestCase):
     def test_missing_input_is_an_error(self):
         with self.assertRaises(CommandError):
             run("/nonexistent-path-for-test")
+
+    def test_an_unreadable_file_reports_its_format_and_never_aborts_the_run(self):
+        from tests.test_measurement_spx import synthetic
+
+        with tempfile.TemporaryDirectory() as root:
+            tree = Path(root) / "in"
+            tree.mkdir()
+            (tree / "a.spx").write_bytes(synthetic(calib_lin="-0,5"))
+            (tree / "b.spx").write_bytes(synthetic())
+            with tempfile.TemporaryDirectory() as out_dir:
+                lines = run(str(tree), "--out", out_dir).rstrip("\n").split("\n")
+        first = lines[0].split("\t")
+        self.assertEqual(first[:3], ["a.spx", "bruker_spx", "unreadable:malformed"])
+        self.assertEqual(lines[1].split("\t")[:3], ["b.spx", "bruker_spx", "csv"])

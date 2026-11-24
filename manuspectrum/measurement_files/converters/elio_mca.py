@@ -6,15 +6,22 @@ Layout: `# <title>`, `# <date time>`, `# <serial>`, `# Key: value` lines with
 decimal commas, a bare `#`, then one count per line (`0.00000000E+00`). The
 title is never read into a fact. Energy = offset + gain x channel from the two
 usable `CalibrationN: <channel> <energy>` points (those that are not 0 0), with
-channels numbered from 0; the calibration is never refitted. The date is kept as
-written.
+channels numbered from 0; the calibration is never refitted, and three usable
+points are an `unsupported_variant`. Lines 2 and 3 are kept as facts only when
+they have the shape of a date-time and of a serial number; line 1 never is. The
+date is kept as written.
 """
+
+import math
+import re
 
 from .base import MAX_CHANNELS, Fact, Reading, Series, UnreadableFile
 
 FORMAT = "elio_mca"
 READER_VERSION = 1
 
+_STAMP = re.compile(r"^[0-9][0-9/.: -]{5,30}$", re.ASCII)
+_SERIAL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,31}$", re.ASCII)
 _FACT_KEYS = (
     ("tube_anode", "Tube Anode"),
     ("tube_voltage", "Tube Voltage"),
@@ -34,7 +41,11 @@ def sniff(head: bytes) -> bool:
 
 
 def _num(text: str) -> float:
-    return float(text.replace(",", "."))
+    """A decimal-comma number; anything else is `malformed`."""
+    try:
+        return float(text.replace(",", "."))
+    except ValueError:
+        raise UnreadableFile("malformed") from None
 
 
 def _calibration(header: dict[str, str]):
@@ -50,6 +61,8 @@ def _calibration(header: dict[str, str]):
         channel, energy = _num(parts[0]), _num(parts[1])
         if (channel, energy) != (0.0, 0.0):
             points.append((channel, energy, " ".join(parts)))
+    if len(points) > 2:
+        raise UnreadableFile("unsupported_variant")
     if len(points) != 2 or points[0][0] == points[1][0]:
         return None
     return points
@@ -64,9 +77,13 @@ def read(data: bytes) -> Reading:
     if len(lines) < 4:
         raise UnreadableFile("malformed")
     stamp, serial = lines[1][1:].strip(), lines[2][1:].strip()
+    stamp = stamp if _STAMP.match(stamp) else None
+    serial = serial if _SERIAL.match(serial) else None
     header: dict[str, str] = {}
     body = []
     for line in lines[3:]:
+        if len(body) > MAX_CHANNELS:
+            raise UnreadableFile("malformed")
         stripped = line.strip()
         if not stripped or stripped == "#":
             continue
@@ -79,14 +96,14 @@ def read(data: bytes) -> Reading:
             body.append(stripped)
     try:
         declared = int(_num(header["MCA Channels"]))
-    except (KeyError, ValueError):
-        raise UnreadableFile("malformed")
+    except (KeyError, ValueError, OverflowError):
+        raise UnreadableFile("malformed") from None
     if not 0 < declared <= MAX_CHANNELS or len(body) != declared:
         raise UnreadableFile("malformed")
     counts = []
     for item in body:
-        value = float(item)
-        if value != int(value):
+        value = _num(item)
+        if not math.isfinite(value) or value != int(value):
             raise UnreadableFile("malformed")
         counts.append(int(value))
     points = _calibration(header)
@@ -103,7 +120,11 @@ def read(data: bytes) -> Reading:
         columns, preset = ("energy_keV", "counts"), "xrf"
         rows = tuple((offset + gain * i, float(c)) for i, c in enumerate(counts))
 
-    facts = [Fact("acquired_at", stamp), Fact("serial_number", serial)]
+    facts = []
+    if stamp is not None:
+        facts.append(Fact("acquired_at", stamp))
+    if serial is not None:
+        facts.append(Fact("serial_number", serial))
     facts += [Fact(k, header[h]) for k, h in _FACT_KEYS if h in header]
     if points is not None:
         facts.append(Fact("calibration", f"{points[0][2]}; {points[1][2]}"))

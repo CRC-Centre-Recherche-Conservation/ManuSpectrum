@@ -3,7 +3,11 @@ from pathlib import Path
 
 from django.test import SimpleTestCase
 
-from manuspectrum.measurement_files.converters import UnreadableFile, registry
+from manuspectrum.measurement_files.converters import (
+    UnreadableFile,
+    UnsupportedFormat,
+    registry,
+)
 
 FIXTURE = (
     Path(__file__).parent
@@ -78,12 +82,15 @@ class DelimitedTests(SimpleTestCase):
         ):
             self.assertEqual(read(data).series.rows, expected)
 
-    def test_one_row_is_too_few(self):
-        self.assertEqual(refused(self, b"x\ty\n1\t2\n"), "too_few_points")
+    def test_rows_of_different_widths_are_malformed(self):
+        self.assertEqual(refused(self, b"1 2\n3 4 5\n"), "malformed")
 
-    def test_no_numbers_and_one_column(self):
-        self.assertEqual(refused(self, b"hello\nworld\n"), "no_numeric_columns")
-        self.assertEqual(refused(self, b"1\n2\n3\n4\n5\n6\n"), "no_numeric_columns")
+    def test_no_numbers_and_one_column_is_not_a_measurement(self):
+        for data in (b"x\ty\n1\t2\n", b"hello\nworld\n", b"1\n2\n3\n4\n5\n6\n"):
+            with self.subTest(data):
+                with self.assertRaises(UnsupportedFormat) as caught:
+                    registry.convert(data)
+                self.assertIsNone(caught.exception.format)
 
     def test_duplicate_x_is_refused(self):
         text = "\n".join(f"{x}\t1" for x in (1, 2, 2, 3, 4, 5))
@@ -108,3 +115,28 @@ class DelimitedTests(SimpleTestCase):
         with self.assertRaises(UnsupportedFormat) as caught:
             registry.convert(b"<<PMCA SPECTRUM>>\n1\t2\n3\t4\n5\t6\n7\t8\n9\t9\n")
         self.assertEqual(caught.exception.format, "amptek_mca")
+
+    def test_a_long_header_does_not_hide_the_separator(self):
+        header = "\n".join(f"Parameter {n}: value {n}" for n in range(30))
+        rows = {
+            "\t": [f"{i}\t{i}.5" for i in range(1, 41)],
+            ";": [f"{i};{i}.5" for i in range(1, 41)],
+            ",": [f"{i},{i}.5" for i in range(1, 41)],
+            " ": [f"{i} {i}.5" for i in range(1, 41)],
+        }
+        for separator, lines in rows.items():
+            with self.subTest(repr(separator)):
+                series = read(header + "\n" + "\n".join(lines)).series
+                self.assertEqual(len(series.rows), 40)
+                self.assertEqual(series.rows[0], (1.0, 1.5))
+
+    def test_rows_are_converted_only_up_to_the_cap(self):
+        from unittest import mock
+
+        from manuspectrum.measurement_files.converters import delimited
+
+        data = "\n".join(f"{i} {i}" for i in range(1, 3001)).encode()
+        with mock.patch.object(delimited, "MAX_CHANNELS", 10):
+            with mock.patch.object(delimited, "float", create=True, wraps=float) as spy:
+                self.assertEqual(refused(self, data), "malformed")
+        self.assertLess(spy.call_count, 100)
