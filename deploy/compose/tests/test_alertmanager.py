@@ -315,6 +315,60 @@ class AlertRecipientsTargetTests(unittest.TestCase):
         self.assertIn("ALERTMANAGER_VALIDATE_ONLY=1", recipe)
 
 
+class SilenceTargetTests(unittest.TestCase):
+    """`make silence`, with Compose replaced by a stand-in that records its arguments."""
+
+    MAKE_DIR = COMPOSE_DIR.parent
+    ARGS = (
+        'alertname=~"BackupMissing|RestoreTestMissing" --duration=72h '
+        '--comment="backups frozen during an incident"'
+    )
+
+    def run_make(self, *make_args):
+        with tempfile.TemporaryDirectory() as tmp:
+            record = Path(tmp) / "arguments"
+            fake = Path(tmp) / "fake-compose"
+            fake.write_text(
+                f'#!/bin/sh\nfor a in "$@"; do printf "%s\\n" "$a"; done >{record}\n',
+                encoding="utf-8",
+            )
+            fake.chmod(0o755)
+            result = subprocess.run(
+                ["make", "-C", str(self.MAKE_DIR), "silence", f"COMPOSE={fake}"]
+                + list(make_args),
+                capture_output=True,
+                text=True,
+                timeout=60,
+                cwd=tmp,
+            )
+            recorded = (
+                record.read_text(encoding="utf-8").splitlines()
+                if record.exists()
+                else None
+            )
+            return result, recorded
+
+    def test_a_regex_matcher_and_a_comment_with_blanks_reach_amtool_whole(self):
+        result, recorded = self.run_make(f"ARGS={self.ARGS}")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(
+            recorded[-5:],
+            [
+                "silence",
+                "add",
+                "alertname=~BackupMissing|RestoreTestMissing",
+                "--duration=72h",
+                "--comment=backups frozen during an incident",
+            ],
+        )
+
+    def test_without_arguments_it_prints_the_usage_and_calls_nothing(self):
+        result, recorded = self.run_make()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("usage: make silence", result.stderr)
+        self.assertIsNone(recorded)
+
+
 @unittest.skipIf(yaml is None, "PyYAML is required")
 class RoutingTests(RenderBase):
     def setUp(self):
