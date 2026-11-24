@@ -123,15 +123,47 @@ Examples: an unknown administrator or login, files or containers you did not
 create, a leaked secret, a mail you did not send. Do not fix first; keep the
 evidence first.
 
-1. **Preserve evidence before changing anything.**
+1. **Protect the backups first.** The hosting provider's backup cannot be deleted
+   from the host, but each nightly copy sends the current state of the files, and
+   the provider keeps the earlier version of a file overwritten in place only a few
+   days (a deleted file is kept longer). Our own nightly jobs would push the
+   attacker's state.
+   - As an administrator, disable (not just stop) our writes to the backups, so
+     that neither a reboot nor the missed nightly run restarts them:
+     `sudo systemctl disable --now manuspectrum-backup.timer manuspectrum-restore-test.timer`
+   - As an administrator, cancel a planned update, which makes a backup first
+     (`sudo manuspectrum-update --status` shows one): `sudo manuspectrum-update --cancel`
+   - As an administrator, suspend the provider's nightly job:
+     `sudo chmod -x /etc/cron.daily/tsm`
+   - Check, as an administrator: `systemctl is-enabled manuspectrum-backup.timer manuspectrum-restore-test.timer`
+     prints `disabled` twice, `systemctl is-active manuspectrum-backup.service`
+     prints `inactive` (a backup still running: wait for it, do not kill it), and
+     `ls -l /etc/cron.daily/tsm` shows no `x`.
+     `manuspectrum-tsm-check.timer` only reads: leave it on.
+   - A playbook run enables the two timers again. After any playbook run (the
+     step that removes an operator needs one), repeat the `disable --now` command.
+     A reboot does not undo it. `chmod -x` on the provider's job survives both a
+     reboot and a playbook run.
+   - Ask the hosting provider, by the fastest channel, for a snapshot of the VM and
+     of the network volume, and whether they can lock the backup node and suspend
+     the expiry of its inactive versions.
+   - The freeze raises `BackupMissing` (critical), `RestoreTestMissing`,
+     `TsmBackupStale` and `ResticRepoGuardStale`. As the service account, in the
+     checkout (`sudo -iu <service account>`), silence them for three days:
+     `make -C deploy silence ARGS='alertname=~"BackupMissing|RestoreTestMissing|TsmBackupStale|ResticRepoGuardStale" --duration=72h --comment="backups frozen during an incident"'`
+     Run it again if the incident lasts longer. Never silence `ResticRepoAltered`.
+2. **Preserve evidence before changing anything.**
    - Ask the hosting provider for a snapshot of the VM, if it offers one.
    - Copy the logs off the live paths: the nginx access and error logs
      (`NGINX_LOG_HOST_DIR`), `make -C deploy logs` redirected to a file, and as
      administrator `sudo journalctl --since "7 days ago" > <file>` and the
      authentication log.
-   - `make -C deploy backup TAG=manual` keeps the database as it is.
+   - `make -C deploy backup TAG=manual` keeps the database as it is (it adds a
+     snapshot and removes none).
+   - Copy these files to your workstation (`scp`): the frozen TSM copy no longer
+     carries the logs off the host.
    - Note the time, what you saw and each command you run.
-2. **Cut access, with what exists.**
+3. **Cut access, with what exists.**
    - Stop the site: `make -C deploy down` (volumes are kept). nginx then
      serves its own error page.
    - Block a source or a port at the host firewall with `sudo ufw`; ask the
@@ -140,19 +172,46 @@ evidence first.
      ([ADMIN.md](ADMIN.md#inactive-accounts)). Remove an operator: take the
      account out of `release_operators` and `admin_users` and run the playbook
      ([ADMIN.md](ADMIN.md#who-can-run-it)).
-3. **Rotate the secrets** that may have been exposed, or all of them if host or
+4. **Rotate the secrets** that may have been exposed, or all of them if host or
    vault access was involved ([SECRETS.md](SECRETS.md#7-when-to-rotate), procedure
    per secret in [section 6](SECRETS.md#6-rotation)). A new `django_secret_key`
    signs everyone out and clears the two-factor secrets, as that section says.
-4. **Notify.**
+5. **Notify.**
    - The CNRS data protection officer (DPD) **within 72 hours** of becoming aware
      of the breach when personal data may be involved (GDPR, article 33): accounts,
      e-mail addresses, login records
      ([ADMIN.md](ADMIN.md#privacy-policy)). Say what you know and what you do not.
    - The hosting provider.
    - The project owner and the technical lead.
-5. **Rebuild or restore** only when the cause is understood: [DEPLOY.md](DEPLOY.md)
+6. **Rebuild or restore** only when the cause is understood: [DEPLOY.md](DEPLOY.md)
    and [BACKUP.md](BACKUP.md#restore-the-stack).
+
+When the incident is closed, put the backups back:
+
+1. As an administrator, check the restic repository before any copy leaves again.
+   - After a compromise with root access, first remove the guard's stamps, which
+     were within the attacker's reach:
+     `sudo rm -f /var/lib/manuspectrum/repo-guard/pass.stamp /var/lib/manuspectrum/repo-guard/full.stamp`
+   - If the repository was restored or created again, also remove its reference:
+     `sudo rm -f /var/lib/manuspectrum/repo-guard/config.sha256`
+   - Then run the guard in full. The two values are in
+     `sudo grep restic-repo-guard /etc/cron.daily/tsm`:
+     `sudo env METRICS_TEXTFILE_DIR=<metrics dir> RESTIC_REPOSITORY_DIR=<repository> RESTIC_GUARD_FULL=1 /usr/local/lib/manuspectrum/repo-guard/restic-repo-guard.sh; echo $?`
+     Anything but `0` stops here: the repository is altered or cannot be judged
+     ([BACKUP.md](BACKUP.md#the-repository-guard)).
+2. As an administrator: `sudo chmod +x /etc/cron.daily/tsm`
+3. As an administrator:
+   `sudo systemctl enable --now manuspectrum-backup.timer manuspectrum-restore-test.timer`
+   Enabling runs the missed nightly backup at once (and the restore test if a
+   Sunday was missed): no manual backup is needed. Watch it with
+   `journalctl -u manuspectrum-backup -f`.
+4. Next morning: `journalctl -u manuspectrum-backup -e` shows the 02:00 run succeeded,
+   `sudo journalctl -t restic-repo-guard --since today` shows the guard ran before the
+   provider's copy, and `manuspectrum-tsm-check` (07:30) reports that copy.
+5. The silences end by themselves after 72 hours. To get the alerts back sooner,
+   expire them in Alertmanager (no `make` target does it; `make -C deploy alerts`
+   lists the alerts it holds). An alert still firing after the 72 hours is a real
+   fault: [Backup failure](#backup-failure).
 
 ## Planned maintenance
 
