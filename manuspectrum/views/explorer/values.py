@@ -306,9 +306,11 @@ def file_entries(entries, *, language, configs, kind):
     *kind* is ``"measurement"``); another extension of
     ``RAW_INSTRUMENT_EXTENSIONS`` or an OPUS number is ``raw`` and is never parsed; anything
     else is ``other``. A raw file (``is_raw_instrument``) sharing a base
-    name (case ignored) with a readable file of another extension is the raw
-    file of that one: both point at each other, and it is never drawn, even
-    when a setting lists its extension among the text formats. Micro-imaging
+    name (case ignored) with a readable file of another extension, or whose
+    whole name is the base name of a readable file (`x.0` and `x.0.csv`, the
+    name the converters give), is the raw file of that one: both point at each
+    other, and it is never drawn, even when a setting lists its extension among
+    the text formats. Micro-imaging
     files (*kind* ``"micro-imaging"``) carry that data kind.
 
     *configs* maps a renderer configuration id to its ``StoredConfig``
@@ -366,6 +368,7 @@ def file_entries(entries, *, language, configs, kind):
                 ),
                 "zone": None,
                 "_base": base.casefold(),
+                "_name": name.casefold(),
                 "_raw": is_raw_instrument(name),
             }
         )
@@ -373,14 +376,16 @@ def file_entries(entries, *, language, configs, kind):
         i["_base"]: i for i in items if i["role"] == "readable" and not i["_raw"]
     }
     raw = {i["_base"]: i for i in items if i["_raw"]}
-    for base in readable.keys() & raw.keys():
-        twin = raw[base]
+    raw_named = {i["_name"]: i for i in items if i["_raw"]}
+    for base, twin in ((b, raw.get(b) or raw_named.get(b)) for b in readable):
+        if twin is None:
+            continue
         if twin["dataKind"] == "xy":
             twin.update(role="raw", dataKind="file", previewUrl=None)
         readable[base]["pairedWith"] = twin["id"]
         twin["pairedWith"] = readable[base]["id"]
     for item in items:
-        del item["_base"], item["_raw"]
+        del item["_base"], item["_name"], item["_raw"]
     return items
 
 

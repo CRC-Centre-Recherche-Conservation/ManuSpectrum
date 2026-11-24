@@ -319,6 +319,55 @@ class FileEntryTests(SimpleTestCase):
         self.assertEqual(found[MCA_ID]["pairedWith"], CSV_ID)
         self.assertEqual(found[CSV_ID]["pairedWith"], MCA_ID)
 
+    def test_an_opus_file_pairs_with_the_csv_the_converter_names_after_it(self):
+        entries = [
+            {"file_id": CSV_ID, "name": "Scan01.0.CSV", "url": "/files/f-csv"},
+            {"file_id": MCA_ID, "name": "scan01.0", "url": "/files/f-opus"},
+        ]
+
+        found = {
+            e["id"]: e
+            for e in file_entries(
+                entries, language="en", configs={}, kind="measurement"
+            )
+        }
+
+        self.assertEqual(found[MCA_ID]["role"], "raw")
+        self.assertEqual(found[MCA_ID]["pairedWith"], CSV_ID)
+        self.assertEqual(found[CSV_ID]["pairedWith"], MCA_ID)
+
+    def test_a_csv_named_after_the_base_still_pairs_with_an_opus_file(self):
+        entries = [
+            {"file_id": CSV_ID, "name": "scan01.csv", "url": "/files/f-csv"},
+            {"file_id": MCA_ID, "name": "scan01.0", "url": "/files/f-opus"},
+        ]
+
+        found = {
+            e["id"]: e
+            for e in file_entries(
+                entries, language="en", configs={}, kind="measurement"
+            )
+        }
+
+        self.assertEqual(found[MCA_ID]["pairedWith"], CSV_ID)
+        self.assertEqual(found[CSV_ID]["pairedWith"], MCA_ID)
+
+    def test_an_unrelated_csv_does_not_pair_with_an_opus_file(self):
+        entries = [
+            {"file_id": CSV_ID, "name": "scan02.0.csv", "url": "/files/f-csv"},
+            {"file_id": MCA_ID, "name": "scan01.0", "url": "/files/f-opus"},
+        ]
+
+        found = {
+            e["id"]: e
+            for e in file_entries(
+                entries, language="en", configs={}, kind="measurement"
+            )
+        }
+
+        self.assertIsNone(found[MCA_ID]["pairedWith"])
+        self.assertIsNone(found[CSV_ID]["pairedWith"])
+
     @override_settings(EXPLORER_LEGACY_HOSTS=("192.168.122.250",))
     def test_a_local_file_url_is_a_path_an_external_web_one_is_kept_and_else_empty(
         self,
