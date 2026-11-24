@@ -256,7 +256,7 @@ class HostRoleTests(unittest.TestCase):
         )
 
 
-class TsmBranchRunTests(unittest.TestCase):
+class TsmPlayCase(unittest.TestCase):
     """Runs the real TSM tasks of the host role, and the app role's render tasks,
     through ansible-playbook on scratch files."""
 
@@ -339,9 +339,7 @@ class TsmBranchRunTests(unittest.TestCase):
 
     def host_play(self):
         """The host role's tasks FIRST..LAST, the gate file inlined in place of its import."""
-        tasks = []
-        for task in load_tasks(ROLES_DIR / "host" / "tasks" / "main.yml"):
-            tasks.append(task)
+        tasks = list(load_tasks(ROLES_DIR / "host" / "tasks" / "main.yml"))
         names = [t["name"] for t in tasks]
         tasks = tasks[names.index(self.FIRST) : names.index(self.LAST) + 1]
         gate = load_tasks(ROLES_DIR / "host" / "tasks" / "log_retention_gate.yml")
@@ -412,6 +410,8 @@ class TsmBranchRunTests(unittest.TestCase):
         self.assertEqual(code, 0, output)
         return self.include.read_text(encoding="utf-8")
 
+
+class TsmBranchRunTests(TsmPlayCase):
     def test_the_first_run_writes_the_include_lines_and_holds_the_retention(self):
         self.tsm_host()
         code, output, fact = self.run_play()
@@ -511,6 +511,372 @@ class TsmBranchRunTests(unittest.TestCase):
 
     def test_the_nginx_rule_is_written_on_a_host_without_tsm_files(self):
         self.assertTrue(self.render_rule())
+
+
+class RepoGuardRunTests(TsmPlayCase):
+    """Runs the guard tasks of the host role on a scratch copy of a provider job."""
+
+    LAST = "Run the restic repository guard before the nightly TSM backup"
+    GUARD = "restic-repo-guard.sh"
+    JOB = (
+        "#!/bin/sh\n"
+        "PATH=/bin:/usr/bin:/sbin:/usr/sbin\n"
+        "export PATH\n"
+        "export LANG=C.UTF-8 LC_ALL=C.UTF-8\n"
+        "{dsmc} Incremental -TAPEPrompt=No > {report} 2>&1\n"
+        "exit 0\n"
+    )
+
+    def setUp(self):
+        super().setUp()
+        self.guard_dir = self.tmp / "lib" / "repo-guard"
+        self.state_dir = self.tmp / "state" / "repo-guard"
+        self.marker = self.tmp / "dsmc-ran"
+        self.repo = self.tmp / "restic"
+        self.metrics = self.tmp / "metrics"
+
+    def extra_vars(self):
+        return {
+            **super().extra_vars(),
+            "host_repo_guard_dir": str(self.guard_dir),
+            "host_repo_guard_state_dir": str(self.state_dir),
+            "host_repo_guard_owner": str(os.getuid()),
+            "host_repo_guard_group": str(os.getgid()),
+            "host_repo_guard_src_dir": str(ANSIBLE_DIR.parent / "scripts"),
+            "env_restic_repository_dir": str(self.repo),
+            "env_metrics_textfile_dir": str(self.metrics),
+        }
+
+    def provider_job(self):
+        dsmc = self.tmp / "dsmc"
+        dsmc.write_text(f"#!/bin/sh\ntouch {self.marker}\n", encoding="utf-8")
+        dsmc.chmod(0o755)
+        self.tsm_host()
+        (self.tmp / "cron-tsm").write_text(
+            self.JOB.format(dsmc=dsmc, report=self.tmp / "dsmc.log"), encoding="utf-8"
+        )
+
+    def job_lines(self):
+        return (self.tmp / "cron-tsm").read_text(encoding="utf-8").splitlines()
+
+    def run_job(self, guard_exit, shell=("sh",)):
+        """Runs the job with a chatty stub guard exiting `guard_exit` (None: no guard
+        script); returns (dsmc ran, what the job printed)."""
+        self.marker.unlink(missing_ok=True)
+        stub = self.guard_dir / self.GUARD
+        stub.unlink(missing_ok=True)
+        if guard_exit is not None:
+            stub.write_text(
+                "#!/bin/sh\n"
+                'printf "%s\\n%s\\n%s\\n" "$METRICS_TEXTFILE_DIR"'
+                ' "$RESTIC_REPOSITORY_DIR" "$RESTIC_GUARD_STATE_DIR"'
+                f" > {self.tmp}/guard-env\n"
+                "echo chatter; echo ALTERED >&2\n"
+                f"exit {guard_exit}\n",
+                encoding="utf-8",
+            )
+            stub.chmod(0o755)
+        result = subprocess.run(
+            [*shell, str(self.tmp / "cron-tsm")], capture_output=True, text=True
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return self.marker.exists(), result.stdout + result.stderr
+
+    def test_the_guard_line_stops_the_job_only_on_an_alteration(self):
+        self.provider_job()
+        code, output, _ = self.run_play()
+        self.assertEqual(code, 0, output)
+        for shell in (("sh",), ("sh", "-e")):
+            for guard_exit, dsmc_runs in (
+                (0, True),
+                (1, False),
+                (2, True),
+                (None, True),
+            ):
+                with self.subTest(shell=shell, guard_exit=guard_exit):
+                    ran, printed = self.run_job(guard_exit, shell)
+                    self.assertIs(ran, dsmc_runs)
+                    self.assertEqual(printed, "")
+
+    def test_the_line_sits_before_dsmc_and_a_second_run_changes_nothing(self):
+        self.provider_job()
+        self.assertEqual(self.run_play()[0], 0)
+        first = self.job_lines()
+        guard = [i for i, line in enumerate(first) if self.GUARD in line]
+        dsmc = [i for i, line in enumerate(first) if "dsmc " in line]
+        locale = first.index("export LANG=C.UTF-8 LC_ALL=C.UTF-8")
+        self.assertEqual(len(guard), 1)
+        self.assertEqual(guard[0], dsmc[0] - 1)
+        self.assertEqual(locale, guard[0] - 1)
+        code, output, _ = self.run_play()
+        self.assertEqual(code, 0, output)
+        self.assertEqual(self.job_lines(), first)
+
+    def test_the_line_names_both_directories_and_is_one_exact_line(self):
+        self.provider_job()
+        self.run_play()
+        line = next(l for l in self.job_lines() if self.GUARD in l)
+        self.assertEqual(
+            line,
+            f"METRICS_TEXTFILE_DIR={self.metrics} RESTIC_REPOSITORY_DIR={self.repo} "
+            f"RESTIC_GUARD_STATE_DIR={self.state_dir} "
+            f'{self.guard_dir}/{self.GUARD} >/dev/null 2>&1 || [ "$?" -ne 1 ] || exit 0',
+        )
+
+    def test_a_changed_inventory_path_rewrites_the_line_in_place(self):
+        self.provider_job()
+        self.run_play()
+        before = self.job_lines()
+        self.repo = self.tmp / "other restic"
+        code, output, _ = self.run_play()
+        self.assertEqual(code, 0, output)
+        after = self.job_lines()
+        self.assertEqual(len(after), len(before))
+        self.assertEqual(sum(self.GUARD in l for l in after), 1)
+        self.assertIn(f"RESTIC_REPOSITORY_DIR='{self.repo}'", "\n".join(after))
+        self.metrics = self.tmp / "other metrics"
+        self.run_play()
+        self.assertEqual(sum(self.GUARD in l for l in self.job_lines()), 1)
+
+    def test_a_path_with_a_blank_does_not_break_the_line(self):
+        self.provider_job()
+        self.repo = self.tmp / "a b; touch injected"
+        self.metrics = self.tmp / "m 1"
+        self.state_dir = self.tmp / "s 1" / "repo-guard"
+        code, output, _ = self.run_play()
+        self.assertEqual(code, 0, output)
+        ran, _ = self.run_job(0)
+        self.assertTrue(ran)
+        self.assertFalse((self.tmp / "injected").exists())
+        self.assertEqual(
+            (self.tmp / "guard-env").read_text(encoding="utf-8").splitlines(),
+            [str(self.metrics), str(self.repo), str(self.state_dir)],
+        )
+
+    def test_the_default_owner_of_the_guard_is_root(self):
+        """Ownership cannot be exercised unprivileged: the scratch runs override it."""
+        defaults = host_defaults()
+        self.assertEqual(defaults["host_repo_guard_owner"], "root")
+        self.assertEqual(defaults["host_repo_guard_group"], "root")
+
+    def test_a_job_without_a_dsmc_line_to_anchor_on_stops_the_play(self):
+        self.provider_job()
+        job = self.tmp / "cron-tsm"
+        text = job.read_text(encoding="utf-8").replace(
+            f"{self.tmp}/dsmc Incremental", f"exec {self.tmp}/dsmc Incremental"
+        )
+        job.write_text(text, encoding="utf-8")
+        code, output, _ = self.run_play()
+        self.assertNotEqual(code, 0, output)
+        self.assertIn("guard was not installed", output)
+        self.assertNotIn(self.GUARD, job.read_text(encoding="utf-8"))
+        self.assertFalse(self.guard_dir.exists())
+
+    def test_a_job_made_non_executable_by_the_operator_stays_so(self):
+        self.provider_job()
+        job = self.tmp / "cron-tsm"
+        job.chmod(0o644)
+        before = self.run_play()
+        self.assertEqual(before[0], 0, before[1])
+        line = [l for l in self.job_lines() if self.GUARD in l]
+        self.assertEqual(len(line), 1)
+        self.assertEqual(oct(job.stat().st_mode & 0o777), "0o644")
+        job.chmod(0o755)
+        job.chmod(0o644)
+        code, output, _ = self.run_play()
+        self.assertEqual(code, 0, output)
+        self.assertEqual([l for l in self.job_lines() if self.GUARD in l], line)
+        self.assertEqual(oct(job.stat().st_mode & 0o777), "0o644")
+
+    def test_a_host_without_the_provider_job_installs_nothing(self):
+        code, output, _ = self.run_play()
+        self.assertEqual(code, 0, output)
+        self.assertFalse(self.guard_dir.exists())
+        self.assertFalse(self.state_dir.exists())
+
+    def test_the_installed_guard_dir_is_private_to_root_and_executable(self):
+        self.provider_job()
+        self.run_play()
+        self.assertEqual(oct(self.state_dir.stat().st_mode & 0o777), "0o700")
+        self.assertEqual(
+            oct((self.guard_dir / self.GUARD).stat().st_mode & 0o777), "0o755"
+        )
+        self.assertEqual(
+            oct((self.guard_dir / "lib-metrics.sh").stat().st_mode & 0o777), "0o644"
+        )
+
+
+class BackupFreezeTests(unittest.TestCase):
+    """Runs the stat, the debug and the loop of start.yml's « Enable the timers »
+    through ansible-playbook, the systemd module replaced by a recorder."""
+
+    def run_freeze(self, marker_present):
+        with tempfile.TemporaryDirectory() as raw:
+            tmp = Path(raw)
+            marker = tmp / "backups-frozen"
+            if marker_present:
+                marker.write_text("", encoding="utf-8")
+            enabled = tmp / "enabled"
+            real = {t["name"]: t for t in load_tasks(APP / "tasks" / "start.yml")}
+            stat = real["Look for the backup freeze marker"]
+            say = real["Say the backup timers were left alone"]
+            loop = {
+                k: v
+                for k, v in real["Enable the timers"].items()
+                if k in ("name", "loop", "when")
+            }
+            loop["ansible.builtin.lineinfile"] = {
+                "path": str(enabled),
+                "line": "{{ item }}",
+                "create": True,
+            }
+            play = [
+                {
+                    "hosts": "localhost",
+                    "gather_facts": False,
+                    "vars_files": [str(APP / "defaults" / "main.yml")],
+                    "tasks": [stat, say, loop],
+                }
+            ]
+            (tmp / "play.yml").write_text(yaml.safe_dump(play), encoding="utf-8")
+            result = subprocess.run(
+                [
+                    str(Path(sys.executable).parent / "ansible-playbook"),
+                    "-i",
+                    "localhost,",
+                    "-c",
+                    "local",
+                    "-e",
+                    json.dumps(
+                        {
+                            "app_backups_frozen_marker": str(marker),
+                            "env_cert_mode": "acme",
+                        }
+                    ),
+                    str(tmp / "play.yml"),
+                ],
+                cwd=ANSIBLE_DIR,
+                env=dict(os.environ, ANSIBLE_HOME=str(tmp), ANSIBLE_NOCOLOR="1"),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            output = result.stdout + result.stderr
+            self.assertEqual(result.returncode, 0, output)
+            names = (
+                enabled.read_text(encoding="utf-8").split() if enabled.exists() else []
+            )
+            return names, output
+
+    def test_without_the_marker_every_timer_is_enabled(self):
+        names, output = self.run_freeze(False)
+        d = app_defaults()
+        self.assertEqual(
+            sorted(names), sorted(d["app_timer_names"] + d["app_acme_timer_names"])
+        )
+        self.assertNotIn("were left as they are", output)
+
+    def test_with_the_marker_the_backup_timers_are_left_alone(self):
+        names, output = self.run_freeze(True)
+        d = app_defaults()
+        everything = d["app_timer_names"] + d["app_acme_timer_names"]
+        self.assertEqual(
+            sorted(names),
+            sorted(n for n in everything if n not in d["app_frozen_timer_names"]),
+        )
+        self.assertIn("manuspectrum-backup", d["app_frozen_timer_names"])
+        self.assertIn("manuspectrum-restore-test", d["app_frozen_timer_names"])
+        self.assertIn("were left as they are", output)
+        self.assertIn("deploy/INCIDENT.md", output)
+
+    def test_no_other_task_of_the_app_role_starts_or_enables_the_frozen_timers(self):
+        for _, task in role_tasks("app"):
+            if module_of(task) in ("systemd_service", "systemd", "service"):
+                self.assertIn(
+                    task["name"],
+                    (
+                        "Enable the timers",
+                        "Remove the 1.0.4 log archive timer from the running units",
+                    ),
+                )
+        text = "".join(
+            p.read_text(encoding="utf-8") for p in (APP / "tasks").glob("*.yml")
+        )
+        self.assertNotRegex(
+            text, r"(enable|start)[^\n]*(manuspectrum-backup|restore-test)"
+        )
+
+
+class ContractParityTests(unittest.TestCase):
+    """Facts one file states and another must agree with."""
+
+    def test_the_tsm_check_unit_runs_what_the_role_installs(self):
+        unit = (REPO / "deploy/systemd/manuspectrum-tsm-check.service.in").read_text(
+            encoding="utf-8"
+        )
+        d = app_defaults()
+        self.assertIn(
+            f"ExecStart={d['app_tsm_check_dir']}/tsm-check.sh", unit.splitlines()
+        )
+        conf = task_named("app", "release.yml", "Write the TSM check configuration")
+        self.assertIn(
+            f"EnvironmentFile={conf['ansible.builtin.template']['dest']}",
+            unit.splitlines(),
+        )
+
+    def test_every_script_run_from_the_lib_directory_is_managed(self):
+        scripts = set()
+        for unit in (REPO / "deploy/systemd").glob("*.service.in"):
+            scripts |= set(
+                re.findall(
+                    r"^ExecStart=/usr/local/lib/manuspectrum/[\w-]+/([\w.-]+\.sh)",
+                    unit.read_text(encoding="utf-8"),
+                    re.M,
+                )
+            )
+        scripts |= {
+            f["name"]
+            for f in host_defaults()["host_repo_guard_files"]
+            if f["mode"] == "0755"
+        }
+        d = app_defaults()
+        released = {f["name"] for f in d["app_release_program_files"]}
+        self.assertTrue({"tsm-check.sh", "restic-repo-guard.sh"} <= scripts)
+        for name in scripts:
+            self.assertIn(name, managed_script_names(), name)
+            self.assertTrue(
+                f"deploy/scripts/{name}" in d["app_release_managed_paths"]
+                or name in released,
+                name,
+            )
+
+    def test_lib_metrics_is_installed_beside_each_script_that_sources_it(self):
+        lists = [
+            app_defaults()["app_tsm_check_files"],
+            app_defaults()["app_release_program_files"],
+            host_defaults()["host_repo_guard_files"],
+        ]
+        for files in lists:
+            names = {f["name"] for f in files}
+            for name in names:
+                text = (REPO / "deploy/scripts" / name).read_text(encoding="utf-8")
+                for lib in re.findall(r'^source "\$HERE/(lib-[\w-]+\.sh)"', text, re.M):
+                    self.assertIn(lib, names, f"{name} sources {lib}")
+
+    def test_every_timer_unit_the_role_installs_is_enabled_by_it(self):
+        d = app_defaults()
+        stems = {
+            p.name.removesuffix(".timer.in")
+            for p in (REPO / "deploy/systemd").glob("*.timer.in")
+        }
+        installed = stems & set(d["app_unit_names"])
+        self.assertIn("manuspectrum-tsm-check", installed)
+        enabled = set(d["app_timer_names"]) | set(d["app_acme_timer_names"])
+        self.assertEqual(
+            installed - enabled,
+            {"manuspectrum-update-at"},
+            "written by the update command",
+        )
 
 
 class RehearsalMarkerTests(unittest.TestCase):
@@ -735,7 +1101,9 @@ class ReleaseInstallTests(unittest.TestCase):
     def test_the_release_file_list_is_the_managed_list_of_release_managed(self):
         files = app_defaults()["app_release_program_files"]
         names = {f["name"] for f in files}
-        self.assertEqual(names, managed_script_names() - {"tsm-check.sh"})
+        self.assertEqual(
+            names, managed_script_names() - {"tsm-check.sh", "restic-repo-guard.sh"}
+        )
         modes = {f["name"]: f["mode"] for f in files}
         for name in ("lib-release.sh", "lib-metrics.sh"):
             self.assertEqual(modes[name], "0644")

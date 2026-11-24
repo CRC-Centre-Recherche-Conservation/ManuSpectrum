@@ -221,7 +221,7 @@ alerts: ## Alerts Alertmanager holds now
 	$(AMTOOL) alert query
 
 silence: ## Silence for maintenance: make silence ARGS='alertname=DiskUsageHigh --duration=2h --comment="why"'
-	@[ -n "$(ARGS)" ] || { echo "usage: make silence ARGS='matcher... --duration=2h --comment=\"why\"'" >&2; exit 1; }
+	@$(if $(strip $(ARGS)),:,echo "usage: make silence ARGS='matcher... --duration=2h --comment=\"why\"'" >&2; exit 1)
 	$(AMTOOL) silence add $(ARGS)
 
 # A new install raises, until the first backup, the first restore test and the

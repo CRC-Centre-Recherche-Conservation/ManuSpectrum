@@ -8,6 +8,7 @@ template rendering with the pinned image run in observability/check.sh.
 """
 
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -315,6 +316,60 @@ class AlertRecipientsTargetTests(unittest.TestCase):
         self.assertIn("ALERTMANAGER_VALIDATE_ONLY=1", recipe)
 
 
+class SilenceTargetTests(unittest.TestCase):
+    """`make silence`, with Compose replaced by a stand-in that records its arguments."""
+
+    MAKE_DIR = COMPOSE_DIR.parent
+    ARGS = (
+        'alertname=~"BackupMissing|RestoreTestMissing" --duration=72h '
+        '--comment="backups frozen during an incident"'
+    )
+
+    def run_make(self, *make_args):
+        with tempfile.TemporaryDirectory() as tmp:
+            record = Path(tmp) / "arguments"
+            fake = Path(tmp) / "fake-compose"
+            fake.write_text(
+                f'#!/bin/sh\nfor a in "$@"; do printf "%s\\n" "$a"; done >{record}\n',
+                encoding="utf-8",
+            )
+            fake.chmod(0o755)
+            result = subprocess.run(
+                ["make", "-C", str(self.MAKE_DIR), "silence", f"COMPOSE={fake}"]
+                + list(make_args),
+                capture_output=True,
+                text=True,
+                timeout=60,
+                cwd=tmp,
+            )
+            recorded = (
+                record.read_text(encoding="utf-8").splitlines()
+                if record.exists()
+                else None
+            )
+            return result, recorded
+
+    def test_a_regex_matcher_and_a_comment_with_blanks_reach_amtool_whole(self):
+        result, recorded = self.run_make(f"ARGS={self.ARGS}")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(
+            recorded[-5:],
+            [
+                "silence",
+                "add",
+                "alertname=~BackupMissing|RestoreTestMissing",
+                "--duration=72h",
+                "--comment=backups frozen during an incident",
+            ],
+        )
+
+    def test_without_arguments_it_prints_the_usage_and_calls_nothing(self):
+        result, recorded = self.run_make()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("usage: make silence", result.stderr)
+        self.assertIsNone(recorded)
+
+
 @unittest.skipIf(yaml is None, "PyYAML is required")
 class RoutingTests(RenderBase):
     def setUp(self):
@@ -431,8 +486,66 @@ class RoutingTests(RenderBase):
         self.assertNotIn("equal", reboot[0])
         severity = [r for r in rules if r["source_matchers"] == ['severity="critical"']]
         self.assertEqual(len(severity), 1)
-        self.assertEqual(severity[0]["target_matchers"], ['severity="warning"'])
+        self.assertEqual(
+            severity[0]["target_matchers"],
+            [
+                'severity="warning"',
+                'alertname!~"ResticRepoAltered|ResticRepoGuardStale"',
+            ],
+        )
         self.assertEqual(severity[0]["equal"], ["service"])
+
+    @staticmethod
+    def matches(matcher, labels):
+        """Whether one Alertmanager matcher string holds for the labels."""
+        name, op, value = re.fullmatch(r'(\w+)(=~|!~|!=|=)"(.*)"', matcher).groups()
+        actual = labels.get(name, "")
+        if op == "=":
+            return actual == value
+        if op == "!=":
+            return actual != value
+        found = re.fullmatch(value, actual) is not None
+        return found if op == "=~" else not found
+
+    def inhibited_by_severity(self, source, target):
+        """Whether the critical-covers-warnings rule mutes `target`."""
+        rule = next(
+            r
+            for r in self.config_["inhibit_rules"]
+            if r["source_matchers"] == ['severity="critical"']
+        )
+        return (
+            all(self.matches(m, source) for m in rule["source_matchers"])
+            and all(self.matches(m, target) for m in rule["target_matchers"])
+            and all(source.get(k) == target.get(k) for k in rule["equal"])
+        )
+
+    def test_a_critical_backup_alert_never_mutes_the_repository_guard(self):
+        critical = {
+            "alertname": "BackupFailed",
+            "severity": "critical",
+            "service": "backup",
+        }
+        for name in ("ResticRepoAltered", "ResticRepoGuardStale"):
+            warning = {"alertname": name, "severity": "warning", "service": "backup"}
+            self.assertFalse(self.inhibited_by_severity(critical, warning), name)
+        other = {
+            "alertname": "TsmBackupStale",
+            "severity": "warning",
+            "service": "backup",
+        }
+        self.assertTrue(self.inhibited_by_severity(critical, other))
+
+    def test_the_reboot_rule_still_holds_back_the_repository_guard(self):
+        reboot = next(
+            r
+            for r in self.config_["inhibit_rules"]
+            if r["source_matchers"] == ['alertname="RecentlyRebooted"']
+        )
+        warning = {"alertname": "ResticRepoAltered", "severity": "warning"}
+        self.assertTrue(
+            all(self.matches(m, warning) for m in reboot["target_matchers"])
+        )
 
     def test_every_mail_is_sortable_by_subject_prefix_and_category_header(self):
         receivers = {

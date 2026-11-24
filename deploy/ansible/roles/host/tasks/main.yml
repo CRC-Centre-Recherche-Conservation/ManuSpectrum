@@ -179,6 +179,77 @@
       the include lines are missing. Run the playbook again after the next successful nightly backup.
   when: not host_log_retention_ready
 
+- name: Count the lines of the provider's job the guard line can be placed before
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -a
+      - -c
+      - -E
+      - '^[[:space:]]*[^[:space:]]*dsmc[[:space:]]'
+      - "{{ host_tsm_cron }}"
+  register: host_repo_guard_anchor
+  changed_when: false
+  failed_when: host_repo_guard_anchor.rc > 1
+  check_mode: false
+  when: host_tsm_files.results[1].stat.exists
+
+- name: Assert the provider's job has a dsmc line to place the guard before
+  ansible.builtin.assert:
+    that:
+      - host_repo_guard_anchor.stdout | int > 0
+    quiet: true
+    fail_msg: >-
+      {{ host_tsm_cron }} has no line that starts with the dsmc command (a path to it is
+      accepted), so the guard line could not be placed before the copy. The restic repository
+      guard was not installed. Run the guard by hand before the copy, or adapt the job, and run
+      the playbook again.
+  when: host_tsm_files.results[1].stat.exists
+
+- name: Create the directory of the restic repository guard
+  ansible.builtin.file:
+    path: "{{ host_repo_guard_dir }}"
+    state: directory
+    owner: "{{ host_repo_guard_owner }}"
+    group: "{{ host_repo_guard_group }}"
+    mode: "0755"
+  when: host_tsm_files.results[1].stat.exists
+
+- name: Create the state directory of the restic repository guard
+  ansible.builtin.file:
+    path: "{{ host_repo_guard_state_dir }}"
+    state: directory
+    owner: "{{ host_repo_guard_owner }}"
+    group: "{{ host_repo_guard_group }}"
+    mode: "0700"
+  when: host_tsm_files.results[1].stat.exists
+
+- name: Install the restic repository guard
+  ansible.builtin.copy:
+    src: "{{ host_repo_guard_src_dir }}/{{ item.name }}"
+    dest: "{{ host_repo_guard_dir }}/{{ item.name }}"
+    owner: "{{ host_repo_guard_owner }}"
+    group: "{{ host_repo_guard_group }}"
+    mode: "{{ item.mode }}"
+  loop: "{{ host_repo_guard_files }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: host_tsm_files.results[1].stat.exists
+
+- name: Run the restic repository guard before the nightly TSM backup
+  ansible.builtin.lineinfile:
+    path: "{{ host_tsm_cron }}"
+    regexp: 'restic-repo-guard\.sh'
+    line: >-
+      METRICS_TEXTFILE_DIR={{ env_metrics_textfile_dir | quote }}
+      RESTIC_REPOSITORY_DIR={{ env_restic_repository_dir | quote }}
+      RESTIC_GUARD_STATE_DIR={{ host_repo_guard_state_dir | quote }}
+      {{ (host_repo_guard_dir ~ '/restic-repo-guard.sh') | quote }}
+      >/dev/null 2>&1 || [ "$?" -ne 1 ] || exit 0
+    insertbefore: '^\s*\S*dsmc\s'
+    firstmatch: true
+  when: host_tsm_files.results[1].stat.exists
+
 - name: Create the journald drop-in directory
   ansible.builtin.file:
     path: /etc/systemd/journald.conf.d

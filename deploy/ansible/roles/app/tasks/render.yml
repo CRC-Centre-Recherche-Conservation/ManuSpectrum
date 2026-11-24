@@ -53,6 +53,8 @@
     + app_oneshot_unit_names | product(['.service']) | map('join') | list }}
   notify: "{{ app_render_notify | default([]) }}"
 
+# include_role also loads the host role's handlers: the `reload systemd` this role
+# notifies is served by the host role's handler of that name. Change either knowingly.
 - name: Decide whether the log retention may shrink
   ansible.builtin.include_role:
     name: host

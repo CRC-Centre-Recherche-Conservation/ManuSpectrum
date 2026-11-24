@@ -21,6 +21,8 @@ centre as the VM, its storage and its snapshots, so a loss of that centre takes
 every copy. A second restic repository on another site is a later decision; until
 then the honest summary is that copies A to D protect against a mistake, a
 corrupted database, a lost VM and a lost disk, not against the loss of the site.
+On a host with the provider's job, a guard checks copy B just before each nightly
+copy C ([The repository guard](#the-repository-guard)).
 
 ### What the backups hold
 
@@ -271,7 +273,10 @@ reindex; the rehearsal figures are in `ACCEPTANCE.md`.
 2. `make -C deploy backup-init`: it checks that the repository opens and creates
    `BACKUP_DUMP_DIR/latest` and `BACKUP_DUMP_DIR/tmp`, which every `restic`
    service run (`restore-files` included) binds and which only this command
-   creates. It needs nothing but the repository path and `restic_password`.
+   creates. It needs nothing but the repository path and `restic_password`. On a
+   host with the provider's job, delete
+   `/var/lib/manuspectrum/repo-guard/config.sha256` if the repository is a restored or
+   new one (it holds another `config` than the recorded reference).
 3. `make -C deploy secrets` creates the other files; set the ones you want to keep
    from the vault (`SECRETS.md`, section 5). To read an old value that is not in
    the vault, pull it from the backup:
@@ -309,12 +314,21 @@ reindex; the rehearsal figures are in `ACCEPTANCE.md`.
 - **The restic password is lost**: the backups are unreadable, all of them, and
   nothing can recover them. This is why `restic_password` goes in the vault before
   the first backup. Recover the stack from copy A or the provider's copies,
-  create a new repository and start again.
+  create a new repository and start again. Delete
+  `/var/lib/manuspectrum/repo-guard/config.sha256` too (root), or the next
+  morning's guard reports an alteration and the TSM copy does not run.
 - **`restic check` fails**: read the errors with
   `make -C deploy restic ARGS="check --read-data"`. Take a copy of the whole
   repository directory before trying `repair index`, then
   `make -C deploy restic ARGS="repair index"`; a damaged pack is repaired by the
   next `backup` re-uploading what is missing.
+- **`ResticRepoAltered`** (the TSM copy did not run today): a file of the
+  repository no longer has the SHA-256 in its name, `config` changed or is gone,
+  or a hash-named entry is not a regular file. See
+  [The repository guard](#the-repository-guard) and
+  [runbooks/backup.md](runbooks/backup.md#resticrepoaltered).
+- **A suspected compromise**: freeze the backups before anything else, as the first
+  step of [INCIDENT.md](INCIDENT.md#suspected-compromise).
 
 ## Logs
 
@@ -354,7 +368,7 @@ successful backup of `/var/log` and the data mount, written at least an hour
 after those lines. The first Ansible run writes the include lines and leaves the
 retention unchanged (it says so). Run Ansible again after the next 06:25 backup:
 it then applies the retention. A run limited to the `app` role obeys the same
-rule for the nginx rotation rule. Run the playbook outside 06:00–08:00, while
+rule for the nginx rotation rule. Run the playbook outside 05:00–08:00, while
 the provider's job and the daily check are not running. A host without the
 provider's files gets the retention at once. A new host with the provider's
 files gets its journald settings and its nginx rotation rule at that second run.
@@ -394,6 +408,64 @@ node exporter's textfile directory. A host without the provider's TSM options fi
 these metrics: `TsmBackupStale` (no successful backup for two days) and
 `TsmLogIncludeMissing` (the include lines are gone); their runbook is
 `runbooks/backup.md`.
+
+## The repository guard
+
+On a host with the provider's nightly job, `scripts/restic-repo-guard.sh` runs as
+root just before `dsmc`, from one line the Ansible `host` role adds to
+`/etc/cron.daily/tsm`. It is installed root-owned under
+`/usr/local/lib/manuspectrum/repo-guard/`; its state (reference of `config`, pass
+stamps) is in `/var/lib/manuspectrum/repo-guard/` (root, `0700`). A host without
+the provider's job has neither.
+
+**What it checks.** A restic file never changes once written, and its name is the
+SHA-256 of its content. The guard checks that every repository file named by a
+SHA-256 still has it, and that `config` equals the SHA-256 recorded at the first
+run. A hash-named entry that is not a regular file is an alteration, so is one of
+`data`, `index`, `snapshots` and `keys` replaced by a symlink, and so is a
+missing `config` while repository files remain (whether or not a reference was
+recorded); a truly absent or empty
+repository is not. It needs no restic password and no Docker (`sha256sum`, `find`,
+`stat`).
+
+**When.** The daily pass hashes the files changed since one hour before the previous
+pass (a file written in place moves its ctime, which user tools cannot set back);
+a full pass hashes everything every 3 days, or when a stamp is missing or later
+than now.
+
+**Exit codes.** Exit 1 means an alteration, and only that: the provider's job then
+stops before its copy of every filespace, logs included, so the good versions TSM
+holds are not replaced, and `ResticRepoAltered` fires. Anything that prevents the
+guard from judging (an unreadable file, a full disk, an unexpected error) is exit 2
+and never stops the copy, except after a pass that found an alteration: the verdict
+stays « altered » until a pass finds the repository intact.
+`ResticRepoGuardStale` covers the guard not running or not passing.
+`manuspectrum_restic_repo_guard_last_success_timestamp_seconds` says when it last
+passed. Neither guard alert is hidden by a critical backup alert (the Alertmanager
+routing exempts them).
+
+**Where to read it.** The guard writes its messages to the system log under the tag
+`restic-repo-guard`: `sudo journalctl -t restic-repo-guard --since today`. It holds
+`ALTERED: <path>` for the first 100 altered files, then a total. After an
+alteration, follow [INCIDENT.md](INCIDENT.md#suspected-compromise).
+
+**The verdict file.** A pass that finds an alteration writes
+`/var/lib/manuspectrum/repo-guard/altered`; the first pass that finds the repository
+intact removes it. While it exists every pass is a full pass, and a run that cannot
+judge also stops the copy. Never delete it by hand to make the copy run.
+
+**Metrics.** The verdict does not depend on them: when the metrics directory is
+unusable the guard logs a WARNING and still gives its verdict. The journal
+(`journalctl -t restic-repo-guard`) is the reference.
+
+**Limits.** The guard stops ransomware that overwrites the repository without
+knowing the guard. An attacker who knows the setup and controls the service account
+(which owns the repository and is in the `docker` group, so root-equivalent), or
+root, can defeat it. Deleted files are not an alteration (the nightly backup raises
+`BackupFailed`).
+
+**A `config` changed on purpose** (a repository restored or created again). Delete
+`/var/lib/manuspectrum/repo-guard/config.sha256`: the next run records the new one.
 
 ## Personal data
 
@@ -474,4 +546,6 @@ for risk at once and notified when there is one.
   repository is chosen.
 - Restores are logical: minutes of downtime and an Elasticsearch reindex, not a
   hot failover.
+- The guard protects copy C from an altered copy B; it does not protect copy B
+  from a root attacker on the VM.
 - The backup is as old as its last night: up to a day of edits is lost.

@@ -66,9 +66,14 @@ inhibit_rules:
   # AlertTest (make alert-test) is the proof that mail works: never held back.
   - source_matchers: ['alertname="RecentlyRebooted"']
     target_matchers: ['severity=~"critical|warning"', 'alertname!="AlertTest"']
-  # A critical alert covers the warnings of its service.
+  # A critical alert covers the warnings of its service, except the two alerts
+  # of the repository guard: an attack on the backups makes BackupFailed fire
+  # (same service), and the guard's alert is the one that says to treat it as a
+  # compromise.
   - source_matchers: ['severity="critical"']
-    target_matchers: ['severity="warning"']
+    target_matchers:
+      - 'severity="warning"'
+      - 'alertname!~"ResticRepoAltered|ResticRepoGuardStale"'
     equal: [service]
 
 receivers:

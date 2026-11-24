@@ -44,6 +44,7 @@ TEXTFILE_SCRIPTS = [
     REPO / "deploy" / "scripts" / "backup.sh",
     REPO / "deploy" / "scripts" / "restore-test.sh",
     REPO / "deploy" / "scripts" / "tsm-check.sh",
+    REPO / "deploy" / "scripts" / "restic-repo-guard.sh",
     REPO / "deploy" / "scripts" / "lib-release.sh",
     REPO / "deploy" / "scripts" / "release-watch.sh",
     REPO / "deploy" / "scripts" / "release-update.sh",

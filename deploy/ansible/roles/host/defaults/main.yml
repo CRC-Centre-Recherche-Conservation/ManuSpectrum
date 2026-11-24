@@ -19,8 +19,10 @@ host_log_rotations:
 # Its include file binds every file under the log directories to the log class
 # that keeps a deleted file 365 days (one version per file name, so rotated logs
 # must carry dated names). The provider's job writes its report to
-# host_tsm_report at each run; the log retention shrinks only when that report
-# is newer than the include lines and shows /var/log and the data mount done.
+# host_tsm_report at each run; the log retention shrinks only when every include
+# line is in the include file, the report is at least
+# host_tsm_report_margin_seconds newer than that file, and it shows /var/log and
+# the data mount done.
 host_tsm_options: /var/spool/tsm/etc/dsm.sys
 host_tsm_cron: /etc/cron.daily/tsm
 host_tsm_inclexcl: /var/spool/tsm/etc/inclexcl.def
@@ -34,3 +36,19 @@ host_tsm_log_dirs:
   - "{{ env_nginx_log_host_dir }}"
 # Filespace of the application data, the second one the report must show done.
 host_tsm_data_path: "{{ (data_mount | default({})).path | default('/data') }}"
+
+# Integrity guard of the restic repository (deploy/scripts/restic-repo-guard.sh),
+# installed root-owned only on a host with the provider's nightly job, and called
+# by one line added to that job, before its `dsmc` line: the job stops there when
+# the guard finds an altered repository file (exit 1) and goes on in every other
+# case. The state directory holds the guard's stamps and the recorded `config`
+# hash. The files come from host_repo_guard_src_dir; owner and group are root
+# (a test overrides them to run unprivileged).
+host_repo_guard_dir: /usr/local/lib/manuspectrum/repo-guard
+host_repo_guard_state_dir: /var/lib/manuspectrum/repo-guard
+host_repo_guard_src_dir: "{{ playbook_dir }}/../scripts"
+host_repo_guard_owner: root
+host_repo_guard_group: root
+host_repo_guard_files:
+  - { name: restic-repo-guard.sh, mode: "0755" }
+  - { name: lib-metrics.sh, mode: "0644" }

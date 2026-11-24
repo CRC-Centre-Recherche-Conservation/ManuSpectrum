@@ -115,6 +115,22 @@ assert "control: without TMPDIR the temporary packs overflow the 16 MiB tmpfs (t
 big && [ -z "$(find "$TMP/restic-tmp" -mindepth 1 -print -quit)" ]
 assert "TMPDIR on a disk-backed mount: a backup of 210 MiB of incompressible data succeeds and leaves no temporary pack" $?
 
+mkdir -p "$TMP/guard-metrics"
+guard() { # guard: the repository guard on the real repository, a full pass
+  mkdir -p "$TMP/guard-bin" && printf '#!/bin/sh\nexit 0\n' >"$TMP/guard-bin/logger" && chmod +x "$TMP/guard-bin/logger"
+  PATH="$TMP/guard-bin:$PATH" RESTIC_GUARD_FULL=1 METRICS_TEXTFILE_DIR="$TMP/guard-metrics" RESTIC_REPOSITORY_DIR="$TMP/repo" \
+    RESTIC_GUARD_STATE_DIR="$TMP/guard-state" bash "$HERE/../restic-repo-guard.sh" >"$TMP/guard.out" 2>&1
+}
+guard && grep -q 'file(s) checked' "$TMP/guard.out"
+assert "restic-repo-guard passes a real repository after backup, forget and prune" $?
+
+pack="$(find "$TMP/repo/data" -type f -print -quit)"
+chmod u+w "$pack" && printf 'X' >>"$pack"
+guard
+rc=$?
+[ "$rc" -eq 1 ] && grep -qF "ALTERED: $pack" "$TMP/guard.out"
+assert "restic-repo-guard exits 1 on a real pack with one byte appended" $?
+
 ! restic "$TMP/pw-wrong" snapshots >/dev/null 2>&1
 assert "a wrong password is refused" $?
 
