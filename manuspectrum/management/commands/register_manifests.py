@@ -8,7 +8,7 @@ from collections import defaultdict
 
 from django.core.management.base import BaseCommand
 
-from arches.app.models.models import VwAnnotation
+from arches.app.models.models import Node, TileModel
 
 from manuspectrum.utils import manifest_registry
 
@@ -16,19 +16,38 @@ from manuspectrum.utils import manifest_registry
 def referenced_manifests():
     """``{manifest URL: [annotation count, [canvas ids]]}`` of every http(s) manifest named by a stored annotation.
 
-    Reads Arches' annotation view: the approved features of every annotation
-    node. One canvas per URL: the first seen.
+    Reads the approved ``data`` of the annotation nodegroups' tiles (not
+    Arches' annotation view, which fails on the whole query for one malformed
+    value) and takes each feature through ``manifest_registry.feature_manifest``.
+    A value that is not a collection with a list ``features`` is skipped. One
+    canvas per URL: the first seen.
     """
+    nodes = {
+        str(node_id): group
+        for node_id, group in Node.objects.filter(datatype="annotation").values_list(
+            "nodeid", "nodegroup_id"
+        )
+    }
     found = defaultdict(lambda: [0, []])
-    for feature in VwAnnotation.objects.values_list("feature", flat=True).iterator():
-        named = manifest_registry.feature_manifest(feature)
-        if named is None:
+    rows = TileModel.objects.filter(nodegroup_id__in=set(nodes.values()))
+    for data in rows.values_list("data", flat=True).iterator(chunk_size=500):
+        if not isinstance(data, dict):
             continue
-        url, canvas = named
-        entry = found[url]
-        entry[0] += 1
-        if canvas and not entry[1]:
-            entry[1].append(canvas)
+        for node_id, value in data.items():
+            if node_id not in nodes or not isinstance(value, dict):
+                continue
+            features = value.get("features")
+            if not isinstance(features, list):
+                continue
+            for feature in features:
+                named = manifest_registry.feature_manifest(feature)
+                if named is None:
+                    continue
+                url, canvas = named
+                entry = found[url]
+                entry[0] += 1
+                if canvas and not entry[1]:
+                    entry[1].append(canvas)
     return dict(found)
 
 

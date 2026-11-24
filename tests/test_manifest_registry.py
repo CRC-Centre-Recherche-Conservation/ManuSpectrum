@@ -22,6 +22,7 @@ from arches.app.models.models import (
     Node,
     NodeGroup,
     ResourceInstance,
+    TileModel,
 )
 from arches.app.models.tile import Tile
 
@@ -622,3 +623,46 @@ class RegisterManifestsCommandTests(AnnotationFixtures):
             report = self.run_command("--apply")
         self.assertEqual(fetch.call_count, 2)
         self.assertIn("FAILED unreachable\t1\t" + URL, report)
+
+
+class RegisterManifestsMalformedValueTests(AnnotationFixtures):
+    def setUp(self):
+        super().setUp()
+        NodeGroup.objects.filter(pk=self.nodegroup.pk).update(cardinality="n")
+
+    def stored(self, value):
+        return TileModel.objects.create(
+            tileid=uuid.uuid4(),
+            resourceinstance=self.resource,
+            nodegroup=self.nodegroup,
+            data={str(self.annotation.pk): value},
+        )
+
+    def good(self, fid):
+        collection = feature_collection()
+        collection["features"][0]["id"] = str(uuid.uuid4()) if fid is None else fid
+        return collection
+
+    def run_command(self):
+        out = io.StringIO()
+        call_command("register_manifests", stdout=out)
+        return out.getvalue()
+
+    def test_malformed_values_are_skipped_and_the_good_one_is_listed(self):
+        self.stored(self.good(None))
+        self.stored({"type": "FeatureCollection", "features": {"id": "x"}})
+        self.stored(self.good("not-a-uuid"))
+        self.stored(self.good(5))
+        report = self.run_command()
+        self.assertIn("would register\t3\t" + URL, report)
+        self.assertIn("dry run: 1 would register", report)
+
+    def test_referenced_manifests_keep_count_and_first_canvas(self):
+        from manuspectrum.management.commands.register_manifests import (
+            referenced_manifests,
+        )
+
+        self.stored(self.good(None))
+        self.stored({"type": "FeatureCollection", "features": {"id": "x"}})
+        self.stored(self.good("not-a-uuid"))
+        self.assertEqual(referenced_manifests(), {URL: [2, [SERVICE]]})
