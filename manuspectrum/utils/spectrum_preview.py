@@ -60,7 +60,7 @@ _OPUS_EXTENSION = re.compile(r"\.\d+")
 
 
 def is_raw_instrument(name):
-    """Whether *name* is a raw instrument file, which is listed and served but never read.
+    """Whether *name* is a raw instrument file, which is listed and served but never read for display.
 
     The last extension, lower-cased, is one of ``RAW_INSTRUMENT_EXTENSIONS`` or
     a bare number (OPUS numbers its files ``.0``, ``.1``, ...).

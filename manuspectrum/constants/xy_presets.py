@@ -287,9 +287,8 @@ XY_PRESETS = {
         "Energy (keV)",
         "Counts",
     ),
-    # Not in TECHNIQUE_PRESETS: a technique already resolves to "xrf", and a
-    # second preset would stamp nothing. Readers of raw files select this one
-    # (``content_preset="xrf_channel"``) when the file has no energy calibration.
+    # Not in TECHNIQUE_PRESETS: no technique resolves to it; raw-file readers
+    # select it (``content_preset``) when the file has no energy calibration.
     "xrf_channel": _preset(
         "4e0f68f4-cecb-4449-8c6e-0f717d37324c",
         "XRF — channel / counts",
