@@ -19,7 +19,7 @@
 # Cantaloupe cache, static files, the data volume files, the TLS certificates
 # (`make cert-init` re-issues them), the nginx logs, and under MEDIA_HOST_DIR
 # the aside directories (previous-*), restore staging (.restore-*),
-# archestemp/ and export_deliverables/. The first part of the backup is the
+# archestemp/, export_deliverables/ and measurement-staging/. The first part of the backup is the
 # dump, the second the files: a file uploaded in between is an orphan after a
 # restore, a file deleted in between comes back.
 #

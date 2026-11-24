@@ -174,7 +174,8 @@ backup = sub[0].split()
 assert backup[backup.index("--tag") + 1] == "nightly", sub[0]
 excludes = [backup[i + 1] for i, w in enumerate(backup) if w == "--exclude"]
 assert excludes == ["/backup/media/previous-*", "/backup/media/.restore-*", "/backup/media/archestemp",
-                    "/backup/media/export_deliverables", "/backup/secrets/*.new", "/backup/secrets/aside",
+                    "/backup/media/export_deliverables", "/backup/media/measurement-staging",
+                    "/backup/secrets/*.new", "/backup/secrets/aside",
                     "/backup/secrets/restic_password"], excludes
 assert backup[-1] == "/backup", backup
 assert sub[1] == "forget --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune", sub[1]

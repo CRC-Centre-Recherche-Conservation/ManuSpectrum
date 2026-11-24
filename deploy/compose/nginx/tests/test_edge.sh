@@ -159,7 +159,7 @@ stub_answers() { [ "$(code /ping)" = 200 ]; }
 
 setup() {
   mkdir -p "$CERTS/ca" "$CERTS/live" "$LOGS" "$WEBROOT/.well-known/acme-challenge" \
-    "$MEDIA/uploadedfiles" "$MEDIA/export_deliverables" "$MEDIA/archestemp" \
+    "$MEDIA/uploadedfiles" "$MEDIA/export_deliverables" "$MEDIA/archestemp" "$MEDIA/measurement-staging" \
     "$STATIC/releases/aaaaaaaaaaaaaaaa" "$STATIC/releases/bbbbbbbbbbbbbbbb" "$SITE_NOTICE"
   chmod 0777 "$LOGS"
   CA_DIR="$CERTS/ca" bash "$REPO/deploy/certs/make-local-ca.sh" "$CERTS/live" "$HOST" >/dev/null || return 1
@@ -170,6 +170,7 @@ setup() {
   printf 'smoke,é\n' >"$MEDIA/uploadedfiles/smoke file é.csv"
   printf 'zip bytes\n' >"$MEDIA/export_deliverables/e.zip"
   printf 'staged\n' >"$MEDIA/archestemp/x.zip"
+  printf 'staged\n' >"$MEDIA/measurement-staging/x.0"
   printf 'image bytes\n' >"$MEDIA/uploadedfiles/pic.png"
   printf 'odd name\n' >"$MEDIA/uploadedfiles/odd(1).csv"
 
@@ -421,6 +422,7 @@ group_loopback() {
   check "export deliverables are served" \
     docker exec "$NGINX" wget -q -O /dev/null http://127.0.0.1:8081/files/export_deliverables/e.zip
   check "archestemp is not served" bash -c '! docker exec "$1" wget -q -O /dev/null http://127.0.0.1:8081/files/archestemp/x.zip' _ "$NGINX"
+  check "measurement-staging is not served" bash -c '! docker exec "$1" wget -q -O /dev/null http://127.0.0.1:8081/files/measurement-staging/x.0' _ "$NGINX"
   check "the loopback port is not published" bash -c '! docker port "$1" | grep -q 8081' _ "$NGINX"
 }
 

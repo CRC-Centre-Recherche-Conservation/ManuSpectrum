@@ -80,7 +80,7 @@ assert "snapshot carries the fixed host manuspectrum and the tag" $?
 listing="$(restic "$TMP/pw" ls latest --recursive 2>/dev/null)"
 grep -q '/backup/db/db.dump$' <<<"$listing" && grep -q '/backup/media/uploadedfiles/u.txt$' <<<"$listing" \
   && grep -q '/backup/secrets/pg_password$' <<<"$listing" \
-  && ! grep -qE 'previous-1-abc|\.restore-1|archestemp|export_deliverables|pg_password\.new|secrets/aside|restic_password' <<<"$listing"
+  && ! grep -qE 'previous-1-abc|\.restore-1|archestemp|export_deliverables|measurement-staging|pg_password\.new|secrets/aside|restic_password' <<<"$listing"
 assert "ls latest holds db, uploads and secrets and none of the excluded paths (the restic password included)" $?
 
 backup "2026-03-02 02:00:00"

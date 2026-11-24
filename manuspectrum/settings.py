@@ -1016,6 +1016,20 @@ SUMMARY_ES_TIMEOUT = 3
 SUMMARY_MAX_LIMIT = 10
 SUMMARY_MAX_VALUES = 10
 SPECTRUM_PREVIEW_MAX_BYTES = 20 * 1024 * 1024
+# Measurement files: one request / one ZIP / one run are bounded separately; a
+# member or file is bounded by the Analysis file widget (fallback below, in MB).
+MEASUREMENT_DEFAULT_MAX_FILE_MB = 10
+MEASUREMENT_MAX_REQUEST_FILES = 50
+MEASUREMENT_MAX_REQUEST_BYTES = 25 * 1024 * 1024
+MEASUREMENT_MAX_ZIP_BYTES = 100 * 1024 * 1024
+MEASUREMENT_MAX_RUN_FILES = 500
+MEASUREMENT_MAX_RUN_BYTES = 500 * 1024 * 1024
+MEASUREMENT_ZIP_MAX_ENTRIES = 500
+MEASUREMENT_ZIP_MAX_RATIO = 100
+MEASUREMENT_STAGING_DIR = "measurement-staging"  # under MEDIA_ROOT, never served
+MEASUREMENT_STAGING_DAYS = 30
+MEASUREMENT_PREPARE_CHUNK = 25
+MEASUREMENT_WRITE_CHUNK = 10
 # Point budgets a spectrum preview may be asked for (?n=); the first is the
 # default. 4096 keeps a FORS spectrum (~2151 points) undecimated. ?n=full
 # serves every point of a file up to SPECTRUM_PREVIEW_MAX_BYTES (the workshop).

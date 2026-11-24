@@ -13,6 +13,7 @@ manuspectrum/media/build/
 manuspectrum/uploadedfiles/*
 manuspectrum/settings_local.py
 manuspectrum/archestemp/
+manuspectrum/measurement-staging/
 supervisor/
 
 webpack-stats.json
