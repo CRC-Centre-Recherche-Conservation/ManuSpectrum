@@ -1,13 +1,16 @@
 """Format detection by content, and the one entry point `convert`.
 
-`READERS` is in detection order; each reader module has `FORMAT`,
-`READER_VERSION`, `sniff(head)` and `read(data)`. A known format without a
-reader is named in `KNOWN_UNREAD`. File names and extensions are never read.
+`READERS` holds the content-signed formats in detection order; each reader
+module has `FORMAT`, `READER_VERSION`, `sniff(head)` and `read(data)`. A new
+reader goes into `READERS`, never after the fallback. A known format without a
+reader is named in `KNOWN_UNREAD`. `FALLBACK` (plain text columns) is tried
+last, after `KNOWN_UNREAD`, so a known unread format never falls into it. File
+names and extensions are never read.
 """
 
 import logging
 
-from . import elio_mca
+from . import delimited, elio_mca
 from .base import MAX_CHANNELS, Reading, UnreadableFile, UnsupportedFormat
 
 logger = logging.getLogger(__name__)
@@ -16,6 +19,7 @@ HEAD_SIZE = 4096
 
 
 READERS = (elio_mca,)
+FALLBACK = delimited
 
 KNOWN_UNREAD = {
     "amptek_mca": lambda head: b"<<PMCA SPECTRUM>>" in head,
@@ -31,6 +35,8 @@ def detect(data: bytes) -> str | None:
     for name, matches in KNOWN_UNREAD.items():
         if matches(head):
             return name
+    if FALLBACK.sniff(head):
+        return FALLBACK.FORMAT
     return None
 
 
@@ -39,7 +45,7 @@ def convert(data: bytes) -> Reading:
     name = detect(data)
     if name is None or name in KNOWN_UNREAD:
         raise UnsupportedFormat(name)
-    reader = next(r for r in READERS if r.FORMAT == name)
+    reader = next(r for r in (*READERS, FALLBACK) if r.FORMAT == name)
     try:
         return reader.read(data)
     except (UnreadableFile, UnsupportedFormat):
