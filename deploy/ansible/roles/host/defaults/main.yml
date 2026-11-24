@@ -25,6 +25,8 @@ host_tsm_options: /var/spool/tsm/etc/dsm.sys
 host_tsm_cron: /etc/cron.daily/tsm
 host_tsm_inclexcl: /var/spool/tsm/etc/inclexcl.def
 host_tsm_report: /var/spool/tsm/log/dsmc.incremental.local.log
+# The report must be at least this many seconds newer than the include file.
+host_tsm_report_margin_seconds: 3600
 host_logrotate_conf: /etc/logrotate.conf
 host_tsm_log_class: LOG_ROTATED_FILES_MG
 host_tsm_log_dirs:

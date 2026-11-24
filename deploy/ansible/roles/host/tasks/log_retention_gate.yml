@@ -1,0 +1,79 @@
+---
+# Decides whether the log retention may shrink; sets `host_log_retention_ready`.
+# Read-only and self-contained: the host role imports it after writing the
+# include lines, the app role runs it before rendering the nginx rule, so a run
+# that skips either role obeys the same rule.
+#
+# On a host without the provider's TSM files the answer is true. Otherwise it is
+# true only when every include line is in the include file and the provider's
+# report is at least `host_tsm_report_margin_seconds` newer than that file and
+# shows `/var/log` and the data mount done: a provider job still running when
+# the lines were written ends later but never read them.
+
+- name: Look for the provider's TSM client options
+  ansible.builtin.stat:
+    path: "{{ host_tsm_options }}"
+  register: host_gate_options
+  check_mode: false
+
+- name: Count the include lines present in the include file
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -a
+      - -c
+      - -F
+      - -x
+      - --
+      - "include {{ item }}/.../* {{ host_tsm_log_class }}"
+      - "{{ host_tsm_inclexcl }}"
+  loop: "{{ host_tsm_log_dirs }}"
+  register: host_gate_include_counts
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: host_gate_options.stat.exists
+
+- name: Look at the include file
+  ansible.builtin.stat:
+    path: "{{ host_tsm_inclexcl }}"
+  register: host_gate_include_stat
+  check_mode: false
+  when: host_gate_options.stat.exists
+
+- name: Look at the provider's report
+  ansible.builtin.stat:
+    path: "{{ host_tsm_report }}"
+  register: host_gate_report_stat
+  check_mode: false
+  when: host_gate_options.stat.exists
+
+- name: Count the successful filespace lines of the provider's report
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -a
+      - -c
+      - -F
+      - -x
+      - --
+      - "Successful incremental backup of '{{ item }}'"
+      - "{{ host_tsm_report }}"
+  loop:
+    - /var/log
+    - "{{ host_tsm_data_path }}"
+  register: host_gate_success_counts
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: host_gate_options.stat.exists
+
+- name: Set the log retention gate
+  ansible.builtin.set_fact:
+    host_log_retention_ready: >-
+      {{ not host_gate_options.stat.exists
+      or ((host_gate_include_counts.results | map(attribute='stdout') | map('int') | min) > 0
+      and host_gate_include_stat.stat.exists
+      and host_gate_report_stat.stat.exists
+      and host_gate_report_stat.stat.mtime - host_gate_include_stat.stat.mtime >= host_tsm_report_margin_seconds
+      and (host_gate_success_counts.results | map(attribute='stdout') | map('int') | min) > 0) }}

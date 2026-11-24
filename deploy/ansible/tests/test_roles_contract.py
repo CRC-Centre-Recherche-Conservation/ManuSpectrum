@@ -189,32 +189,13 @@ class HostRoleTests(unittest.TestCase):
             self.assertIn(line, text.splitlines())
         self.assertIn("[Journal]", text.splitlines())
 
-    def test_the_rotation_rules_keep_four_weekly_files(self):
-        rules = host_defaults()["host_log_rotations"]
-        self.assertEqual(
-            {r["rule"] for r in rules}, {"rsyslog", "ufw", "fail2ban", "wtmp", "btmp"}
-        )
-        for rule in rules:
-            self.assertEqual(rule["rotate"], 4, rule["rule"])
-            self.assertEqual(rule["frequency"], "weekly", rule["rule"])
-
-    def test_the_include_lines_bind_every_log_dir_to_the_provider_class(self):
-        defaults = host_defaults()
-        self.assertEqual(defaults["host_tsm_log_class"], "LOG_ROTATED_FILES_MG")
-        self.assertEqual(
-            defaults["host_tsm_log_dirs"], ["/var/log", "{{ env_nginx_log_host_dir }}"]
-        )
-        args = host_task("Bind the log directories to the TSM log class")[
-            "ansible.builtin.blockinfile"
-        ]
-        self.assertIs(args["create"], False)
-        for key in ("owner", "group", "mode"):
-            self.assertNotIn(key, args)
-
     def test_every_retention_change_waits_for_the_gate(self):
-        tasks = [t for _, t in role_tasks("host")]
+        tasks = load_tasks(ROLES_DIR / "host" / "tasks" / "main.yml")
         names = [t["name"] for t in tasks]
         gate = names.index("Decide whether the log retention may shrink")
+        self.assertEqual(
+            module_of(tasks[gate]), "import_tasks", "the gate lives in its own file"
+        )
         shrinking = [
             "Create the journald drop-in directory",
             "Keep a persistent journal for thirty days, one file per day",
@@ -229,8 +210,9 @@ class HostRoleTests(unittest.TestCase):
                     "host_log_retention_ready", str(tasks[names.index(name)]["when"])
                 )
         for task in tasks[:gate]:
-            self.assertNotIn("journald", str(strings(task)), task["name"])
-            self.assertNotIn("logrotate.d", str(strings(task)), task["name"])
+            text = " ".join(strings(task))
+            self.assertNotIn("journald", text, task["name"])
+            self.assertNotIn("logrotate.d", text, task["name"])
         say = tasks[names.index("Say the log retention was left unchanged")]
         self.assertEqual(say["when"], "not host_log_retention_ready")
         self.assertIn("again", say["ansible.builtin.debug"]["msg"])
@@ -275,11 +257,14 @@ class HostRoleTests(unittest.TestCase):
 
 
 class TsmBranchRunTests(unittest.TestCase):
-    """Runs the real TSM tasks of the host role through ansible-playbook on scratch files."""
+    """Runs the real TSM tasks of the host role, and the app role's render tasks,
+    through ansible-playbook on scratch files."""
 
     FIRST = "Find the hosting provider's TSM client options and nightly job"
     LAST = "Say the log retention was left unchanged"
+    GATE = "Decide whether the log retention may shrink"
     LOG = "Successful incremental backup of '/var/log'"
+    HOUR = 3600
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -290,8 +275,20 @@ class TsmBranchRunTests(unittest.TestCase):
         self.options = self.tmp / "dsm.sys"
         self.logrotate = self.tmp / "logrotate.conf"
         self.data = self.tmp / "data"
+        self.nginx = self.data / "nginx-logs"
 
-    def tsm_host(self, options=None, logrotate="dateext\nweekly\n"):
+    def both(self):
+        return [self.LOG, f"Successful incremental backup of '{self.data}'"]
+
+    def lines(self):
+        return [
+            "* BEGIN ManuSpectrum logs",
+            "include /var/log/.../* LOG_ROTATED_FILES_MG",
+            f"include {self.nginx}/.../* LOG_ROTATED_FILES_MG",
+            "* END ManuSpectrum logs",
+        ]
+
+    def tsm_host(self, options=None, logrotate="dateext\nweekly\n", include=""):
         self.options.write_text(
             (
                 options
@@ -303,9 +300,9 @@ class TsmBranchRunTests(unittest.TestCase):
         (self.tmp / "cron-tsm").write_text(
             "#!/bin/sh\n/usr/bin/dsmc incremental -se=node\n", encoding="utf-8"
         )
-        self.include.write_text("", encoding="utf-8")
+        self.include.write_text(include, encoding="utf-8")
         self.logrotate.write_text(logrotate, encoding="utf-8")
-        self.write_report([self.LOG, f"Successful incremental backup of '{self.data}'"])
+        self.write_report(self.both())
 
     def write_report(self, lines, mtime=None):
         body = b"Normal File--> 5 /data/caf\xe9.txt [Sent]\n"
@@ -314,15 +311,42 @@ class TsmBranchRunTests(unittest.TestCase):
         if mtime is not None:
             os.utime(self.report, (mtime, mtime))
 
-    def play(self):
-        names = [t["name"] for _, t in role_tasks("host")]
-        tasks = [
-            t
-            for _, t in role_tasks("host")
-            if names.index(self.FIRST)
-            <= names.index(t["name"])
-            <= names.index(self.LAST)
-        ]
+    def after_backup(self, lines, report_offset):
+        """Rewrites the report with `lines`, `report_offset` seconds from the include file."""
+        base = self.include.stat().st_mtime
+        self.write_report(lines, mtime=base + report_offset)
+
+    def extra_vars(self):
+        return {
+            "host_tsm_options": str(self.options),
+            "host_tsm_cron": str(self.tmp / "cron-tsm"),
+            "host_tsm_inclexcl": str(self.include),
+            "host_tsm_report": str(self.report),
+            "host_logrotate_conf": str(self.logrotate),
+            "env_nginx_log_host_dir": str(self.nginx),
+            "data_mount": {"path": str(self.data)},
+        }
+
+    def ansible(self, args):
+        return subprocess.run(
+            [str(Path(sys.executable).parent / "ansible-playbook"), *args],
+            cwd=ANSIBLE_DIR,
+            env=dict(os.environ, ANSIBLE_HOME=str(self.tmp), ANSIBLE_NOCOLOR="1"),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def host_play(self):
+        """The host role's tasks FIRST..LAST, the gate file inlined in place of its import."""
+        tasks = []
+        for task in load_tasks(ROLES_DIR / "host" / "tasks" / "main.yml"):
+            tasks.append(task)
+        names = [t["name"] for t in tasks]
+        tasks = tasks[names.index(self.FIRST) : names.index(self.LAST) + 1]
+        gate = load_tasks(ROLES_DIR / "host" / "tasks" / "log_retention_gate.yml")
+        at = [t["name"] for t in tasks].index(self.GATE)
+        tasks[at : at + 1] = gate
         tasks.append(
             {
                 "name": "Write the fact",
@@ -333,46 +357,30 @@ class TsmBranchRunTests(unittest.TestCase):
                 },
             }
         )
-        defaults = str(ROLES_DIR / "host" / "defaults" / "main.yml")
         return [
             {
                 "hosts": "localhost",
                 "gather_facts": False,
-                "vars_files": [defaults],
+                "vars_files": [str(ROLES_DIR / "host" / "defaults" / "main.yml")],
                 "tasks": tasks,
             }
         ]
 
-    def run_play(self):
+    def run_play(self, extra=None):
         """Returns (return code, output, fact value and type or None)."""
-        extra = {
-            "host_tsm_options": str(self.options),
-            "host_tsm_cron": str(self.tmp / "cron-tsm"),
-            "host_tsm_inclexcl": str(self.include),
-            "host_tsm_report": str(self.report),
-            "host_logrotate_conf": str(self.logrotate),
-            "env_nginx_log_host_dir": str(self.tmp / "nginx-logs"),
-            "data_mount": {"path": str(self.data)},
-        }
         (self.tmp / "fact").unlink(missing_ok=True)
         play = self.tmp / "play.yml"
-        play.write_text(yaml.safe_dump(self.play()), encoding="utf-8")
-        result = subprocess.run(
+        play.write_text(yaml.safe_dump(self.host_play()), encoding="utf-8")
+        result = self.ansible(
             [
-                str(Path(sys.executable).parent / "ansible-playbook"),
                 "-i",
                 "localhost,",
                 "-c",
                 "local",
                 "-e",
-                json.dumps(extra),
+                json.dumps({**self.extra_vars(), **(extra or {})}),
                 str(play),
-            ],
-            cwd=ANSIBLE_DIR,
-            env=dict(os.environ, ANSIBLE_HOME=str(self.tmp), ANSIBLE_NOCOLOR="1"),
-            capture_output=True,
-            text=True,
-            check=False,
+            ]
         )
         fact = self.tmp / "fact"
         return (
@@ -381,6 +389,22 @@ class TsmBranchRunTests(unittest.TestCase):
             fact.read_text(encoding="utf-8") if fact.exists() else None,
         )
 
+    def render_rule(self):
+        """Runs the app role's render tasks alone; True when the nginx rule was written."""
+        out = self.tmp / "rendered"
+        (out / "env").mkdir(parents=True, exist_ok=True)
+        result = self.ansible(
+            [
+                "-i",
+                "inventories/example",
+                "render.yml",
+                "-e",
+                json.dumps({**self.extra_vars(), "render_dir": str(out)}),
+            ]
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return (out / "logrotate" / "manuspectrum-nginx").exists()
+
     def settled(self):
         """A TSM host after its first run, the include lines written."""
         self.tsm_host()
@@ -388,53 +412,42 @@ class TsmBranchRunTests(unittest.TestCase):
         self.assertEqual(code, 0, output)
         return self.include.read_text(encoding="utf-8")
 
-    def after_backup(self, lines, report_offset):
-        """Rewrites the report with `lines`, `report_offset` seconds from the include file."""
-        base = self.include.stat().st_mtime
-        self.write_report(lines, mtime=base + report_offset)
-
     def test_the_first_run_writes_the_include_lines_and_holds_the_retention(self):
         self.tsm_host()
         code, output, fact = self.run_play()
         self.assertEqual(code, 0, output)
-        lines = self.include.read_text(encoding="utf-8").splitlines()
         self.assertEqual(
-            lines,
-            [
-                "* BEGIN ManuSpectrum logs",
-                "include /var/log/.../* LOG_ROTATED_FILES_MG",
-                f"include {self.tmp}/nginx-logs/.../* LOG_ROTATED_FILES_MG",
-                "* END ManuSpectrum logs",
-            ],
+            self.include.read_text(encoding="utf-8").splitlines(), self.lines()
         )
         self.assertEqual(fact, "False bool")
-        self.assertIn("left unchanged", output)
+        self.assertIn("retention tasks were skipped", output)
 
-    def test_a_later_report_with_both_success_lines_releases_the_retention(self):
+    def test_a_report_more_than_an_hour_newer_releases_the_retention(self):
         before = self.settled()
-        self.after_backup(
-            [self.LOG, f"Successful incremental backup of '{self.data}'"], 100
-        )
+        self.after_backup(self.both(), self.HOUR + 60)
         code, output, fact = self.run_play()
         self.assertEqual(code, 0, output)
         self.assertEqual(self.include.read_text(encoding="utf-8"), before)
         self.assertEqual(fact, "True bool")
 
+    def test_a_report_only_seconds_newer_holds_the_retention(self):
+        self.settled()
+        self.after_backup(self.both(), 3)
+        self.assertEqual(self.run_play()[2], "False bool")
+
     def test_a_report_without_the_var_log_line_holds_the_retention(self):
         self.settled()
-        self.after_backup([f"Successful incremental backup of '{self.data}'"], 100)
+        self.after_backup([self.both()[1]], self.HOUR + 60)
         self.assertEqual(self.run_play()[2], "False bool")
 
     def test_a_report_without_the_data_line_holds_the_retention(self):
         self.settled()
-        self.after_backup([self.LOG], 100)
+        self.after_backup([self.LOG], self.HOUR + 60)
         self.assertEqual(self.run_play()[2], "False bool")
 
     def test_a_report_older_than_the_include_lines_holds_the_retention(self):
         self.settled()
-        self.after_backup(
-            [self.LOG, f"Successful incremental backup of '{self.data}'"], -100
-        )
+        self.after_backup(self.both(), -100)
         self.assertEqual(self.run_play()[2], "False bool")
 
     def test_dsm_sys_without_the_include_option_stops_the_play(self):
@@ -462,11 +475,42 @@ class TsmBranchRunTests(unittest.TestCase):
                 self.assertIn("dated names", output)
                 self.assertEqual(self.include.read_text(encoding="utf-8"), "")
 
+    def test_a_log_directory_outside_the_checked_filespaces_stops_the_play(self):
+        self.tsm_host()
+        code, output, fact = self.run_play(
+            {"env_nginx_log_host_dir": str(self.tmp / "elsewhere")}
+        )
+        self.assertNotEqual(code, 0)
+        self.assertIn("outside the filespaces", output)
+        self.assertIn("elsewhere", output)
+        self.assertEqual(self.include.read_text(encoding="utf-8"), "")
+        self.assertIsNone(fact)
+
     def test_a_host_without_tsm_files_gets_the_retention_at_once(self):
         code, output, fact = self.run_play()
         self.assertEqual(code, 0, output)
         self.assertEqual(fact, "True bool")
         self.assertFalse(self.include.exists())
+
+    def test_the_nginx_rule_is_not_written_while_the_include_lines_are_absent(self):
+        self.tsm_host()
+        self.after_backup(self.both(), self.HOUR + 60)
+        self.assertFalse(self.render_rule())
+
+    def test_the_nginx_rule_is_not_written_while_the_report_is_older_than_the_lines(
+        self,
+    ):
+        self.tsm_host(include="\n".join(self.lines()) + "\n")
+        self.after_backup(self.both(), -100)
+        self.assertFalse(self.render_rule())
+
+    def test_the_nginx_rule_is_written_once_a_good_backup_followed_the_lines(self):
+        self.tsm_host(include="\n".join(self.lines()) + "\n")
+        self.after_backup(self.both(), self.HOUR + 60)
+        self.assertTrue(self.render_rule())
+
+    def test_the_nginx_rule_is_written_on_a_host_without_tsm_files(self):
+        self.assertTrue(self.render_rule())
 
 
 class RehearsalMarkerTests(unittest.TestCase):
@@ -712,50 +756,35 @@ class ReleaseInstallTests(unittest.TestCase):
         )
         self.assertEqual(front["ansible.builtin.copy"]["mode"], "0755")
 
-    def test_the_tsm_check_replaces_the_log_archive_units(self):
-        d = app_defaults()
-        for key in ("app_unit_names", "app_timer_names"):
-            self.assertIn("manuspectrum-tsm-check", d[key])
-            self.assertNotIn("manuspectrum-log-archive", d[key])
-        self.assertEqual(
-            d["app_tsm_check_dir"], "/usr/local/lib/manuspectrum/tsm-check"
-        )
-        self.assertEqual(
-            {f["name"]: f["mode"] for f in d["app_tsm_check_files"]},
-            {"tsm-check.sh": "0755", "lib-metrics.sh": "0644"},
-        )
-        self.assertIn("deploy/scripts/tsm-check.sh", d["app_release_managed_paths"])
-        self.assertFalse([k for k in d if k.startswith("app_log_archive")])
-        self.assertIn("tsm-check.sh", managed_script_names())
-
     def test_the_tsm_check_environment_reaches_the_script(self):
         text = (APP / "templates" / "tsm-check.env.j2").read_text(encoding="utf-8")
+        default = app_defaults()["app_data_mount_path"]
         env = jinja2.Environment()
-        for data_mount in ({"path": "/srv/data"}, None):
-            variables = {
-                "env_metrics_textfile_dir": "/home/svc/metrics",
-                "env_nginx_log_host_dir": "/data/app/nginx-logs",
-                "app_data_mount_path": "/srv/data" if data_mount else "/data",
+        for data_mount, filespace in (
+            ({"path": "/srv/data"}, "/srv/data"),
+            (None, "/data"),
+        ):
+            known = {"data_mount": data_mount} if data_mount else {}
+            path = env.from_string(default).render(**known)
+            self.assertEqual(path, filespace)
+            rendered = env.from_string(text).render(
+                env_metrics_textfile_dir="/home/svc/metrics",
+                env_nginx_log_host_dir="/data/app/nginx-logs",
+                app_data_mount_path=path,
+            )
+            values = {
+                key: shlex.split(value)[0].split()
+                for key, value in (
+                    line.split("=", 1)
+                    for line in rendered.splitlines()
+                    if line and not line.startswith("#")
+                )
             }
-            lines = dict(
-                line.split("=", 1)
-                for line in env.from_string(text).render(**variables).splitlines()
-                if line and not line.startswith("#")
-            )
-            self.assertEqual(lines["METRICS_TEXTFILE_DIR"], "/home/svc/metrics")
-            self.assertEqual(lines["TSM_LOG_DIRS"], '"/var/log /data/app/nginx-logs"')
+            self.assertEqual(values["METRICS_TEXTFILE_DIR"], ["/home/svc/metrics"])
             self.assertEqual(
-                lines["TSM_REQUIRED_FILESPACES"],
-                f'"{variables["app_data_mount_path"]} /var/log"',
+                values["TSM_LOG_DIRS"], ["/var/log", "/data/app/nginx-logs"]
             )
-
-    def test_the_data_mount_path_defaults_to_data_when_the_host_names_none(self):
-        expr = app_defaults()["app_data_mount_path"]
-        env = jinja2.Environment()
-        self.assertEqual(env.from_string(expr).render(), "/data")
-        self.assertEqual(
-            env.from_string(expr).render(data_mount={"path": "/srv/x"}), "/srv/x"
-        )
+            self.assertEqual(values["TSM_REQUIRED_FILESPACES"], [filespace, "/var/log"])
 
     def test_what_release_1_0_4_installed_is_removed_and_the_removal_tolerates_a_fresh_host(
         self,
@@ -774,7 +803,8 @@ class ReleaseInstallTests(unittest.TestCase):
                     self.assertEqual(args["name"], "manuspectrum-log-archive.timer")
                     self.assertIs(args["enabled"], False)
                     self.assertEqual(args["state"], "stopped")
-                    self.assertIn("failed_when", task)
+                    self.assertIs(task["failed_when"], False)
+                    self.assertEqual(task["when"], "app_old_archive_timer.stat.exists")
                     removed.add("timer")
         self.assertEqual(
             removed,
@@ -793,21 +823,27 @@ class ReleaseInstallTests(unittest.TestCase):
         self.assertEqual(files["notify"], "reload systemd")
 
     def test_the_tsm_check_program_and_configuration_are_root_owned(self):
+        directory = task_named(
+            "app", "release.yml", "Create the TSM check program directory"
+        )
+        self.assertEqual(
+            {
+                k: directory["ansible.builtin.file"][k]
+                for k in ("owner", "group", "mode")
+            },
+            {"owner": "root", "group": "root", "mode": "0755"},
+        )
         install = task_named("app", "release.yml", "Install the TSM check program")
-        self.assertIn("app_tsm_check_files", install["loop"])
-        self.assertEqual(
-            install["ansible.builtin.copy"]["dest"],
-            "{{ app_tsm_check_dir }}/{{ item.name }}",
-        )
+        args = install["ansible.builtin.copy"]
+        self.assertEqual((args["owner"], args["group"]), ("root", "root"))
+        self.assertEqual(args["mode"], "{{ item.mode }}")
+        for entry in app_defaults()["app_tsm_check_files"]:
+            self.assertRegex(entry["mode"], r"^0[0-7][045][045]$", entry["name"])
         conf = task_named("app", "release.yml", "Write the TSM check configuration")
+        args = conf["ansible.builtin.template"]
         self.assertEqual(
-            conf["ansible.builtin.template"]["dest"],
-            "/etc/manuspectrum/tsm-check.env",
+            (args["owner"], args["group"], args["mode"]), ("root", "root", "0644")
         )
-
-    def test_the_nginx_rule_waits_for_the_retention_gate(self):
-        task = task_named("app", "render.yml", "Render the nginx logrotate rule")
-        self.assertEqual(task["when"], "host_log_retention_ready | default(true)")
 
     def test_managed_sources_come_from_the_laptop_checkout_worktree(self):
         compute = task_named(

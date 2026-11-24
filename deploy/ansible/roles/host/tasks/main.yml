@@ -146,6 +146,17 @@
       so rotated logs must carry dated names: add a line "dateext" to it and run the playbook again.
   when: host_tsm_files.results[0].stat.exists
 
+- name: Assert every log directory is one the nightly report is checked for
+  ansible.builtin.assert:
+    that:
+      - item == '/var/log' or item is match('/var/log/') or item is match((host_tsm_data_path | regex_escape) ~ '(/|$)')
+    quiet: true
+    fail_msg: >-
+      {{ item }} is outside the filespaces the nightly report is checked for ({{ host_tsm_data_path }}
+      and /var/log), so its logs would not be known to be backed up. Keep the log directories under one of them.
+  loop: "{{ host_tsm_log_dirs }}"
+  when: host_tsm_files.results[0].stat.exists
+
 - name: Bind the log directories to the TSM log class
   ansible.builtin.blockinfile:
     path: "{{ host_tsm_inclexcl }}"
@@ -155,59 +166,17 @@
       {% for dir in host_tsm_log_dirs %}
       include {{ dir }}/.../* {{ host_tsm_log_class }}
       {% endfor %}
-  register: host_tsm_include
-  when: host_tsm_files.results[0].stat.exists
-
-- name: Look at the include file
-  ansible.builtin.stat:
-    path: "{{ host_tsm_inclexcl }}"
-  register: host_tsm_include_stat
-  check_mode: false
-  when: host_tsm_files.results[0].stat.exists
-
-- name: Look at the provider's report
-  ansible.builtin.stat:
-    path: "{{ host_tsm_report }}"
-  register: host_tsm_report_stat
-  check_mode: false
-  when: host_tsm_files.results[0].stat.exists
-
-- name: Count the successful filespace lines of the provider's report
-  ansible.builtin.command:
-    argv:
-      - grep
-      - -a
-      - -c
-      - -F
-      - -x
-      - --
-      - "Successful incremental backup of '{{ item }}'"
-      - "{{ host_tsm_report }}"
-  loop:
-    - /var/log
-    - "{{ host_tsm_data_path }}"
-  register: host_tsm_success_counts
-  changed_when: false
-  failed_when: false
-  check_mode: false
   when: host_tsm_files.results[0].stat.exists
 
 - name: Decide whether the log retention may shrink
-  ansible.builtin.set_fact:
-    host_log_retention_ready: >-
-      {{ not host_tsm_files.results[0].stat.exists
-      or (not host_tsm_include.changed
-      and host_tsm_include_stat.stat.exists
-      and host_tsm_report_stat.stat.exists
-      and host_tsm_report_stat.stat.mtime > host_tsm_include_stat.stat.mtime
-      and (host_tsm_success_counts.results | map(attribute='stdout') | map('int') | min) > 0) }}
+  ansible.builtin.import_tasks: log_retention_gate.yml
 
 - name: Say the log retention was left unchanged
   ansible.builtin.debug:
     msg: >-
-      The log retention was left unchanged: the logs are bound to the TSM log class, but no
-      successful nightly backup newer than that binding is recorded yet. Run the playbook again
-      after the next nightly backup (06:25) to apply it.
+      The log retention tasks were skipped: the provider's last report is not a successful backup
+      at least {{ host_tsm_report_margin_seconds // 60 }} minutes newer than the include lines, or
+      the include lines are missing. Run the playbook again after the next successful nightly backup.
   when: not host_log_retention_ready
 
 - name: Create the journald drop-in directory
