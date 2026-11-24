@@ -7872,10 +7872,6 @@ msgstr "Channels"
 msgid "Calibration"
 msgstr "Calibration"
 
-#: measurement_files/converters/base.py:50
-msgid "Calibration source"
-msgstr "Calibration source"
-
 #: measurement_files/converters/base.py:51
 msgid "Laser wavelength"
 msgstr "Laser wavelength"

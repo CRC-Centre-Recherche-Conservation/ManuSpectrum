@@ -8036,10 +8036,6 @@ msgstr "Canaux"
 msgid "Calibration"
 msgstr "Étalonnage"
 
-#: measurement_files/converters/base.py:50
-msgid "Calibration source"
-msgstr "Source de l'étalonnage"
-
 #: measurement_files/converters/base.py:51
 msgid "Laser wavelength"
 msgstr "Longueur d'onde du laser"

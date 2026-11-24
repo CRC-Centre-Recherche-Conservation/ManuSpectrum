@@ -11,6 +11,8 @@ from dataclasses import dataclass
 
 from django.utils.translation import gettext_noop
 
+MAX_CHANNELS = 1_048_576
+
 UNREADABLE_CODES = frozenset(
     {
         "truncated",
@@ -47,7 +49,6 @@ FACT_LABELS = {
     "spectral_range": gettext_noop("Spectral range"),
     "channels": gettext_noop("Channels"),
     "calibration": gettext_noop("Calibration"),
-    "calibration_source": gettext_noop("Calibration source"),
     "laser_wavelength": gettext_noop("Laser wavelength"),
     "filter": gettext_noop("Filter"),
     "detector": gettext_noop("Detector"),
