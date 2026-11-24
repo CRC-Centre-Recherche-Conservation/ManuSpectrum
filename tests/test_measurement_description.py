@@ -104,6 +104,12 @@ class DescribeTests(SimpleTestCase):
             self.assertIn(": '-1 and more", lines[3])
             self.assertIn(": '-1+2", lines[4])
 
+    def test_a_number_list_holding_a_line_break_stays_on_one_line(self):
+        reading = _reading([Fact("serial_number", "1\r\n;2")])
+        for lang, body in describe(reading, source_name="a", sha256=SHA).items():
+            self.assertNotIn("\r", body)
+            self.assertEqual(len(body.split("\n")), 4, lang)
+
     def test_neutralises_header_text(self):
         reading = _reading([Fact("instrument", '=cmd|"/c calc"!A1\r\n<script>')])
         text = describe(reading, source_name="+x.mca", sha256=SHA)

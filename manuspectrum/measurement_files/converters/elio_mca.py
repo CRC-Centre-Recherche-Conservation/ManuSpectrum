@@ -83,7 +83,7 @@ def read(data: bytes) -> Reading:
     body = []
     for line in lines[3:]:
         if len(body) > MAX_CHANNELS:
-            raise UnreadableFile("malformed")
+            raise UnreadableFile("too_large")
         stripped = line.strip()
         if not stripped or stripped == "#":
             continue
@@ -98,7 +98,9 @@ def read(data: bytes) -> Reading:
         declared = int(_num(header["MCA Channels"]))
     except (KeyError, ValueError, OverflowError):
         raise UnreadableFile("malformed") from None
-    if not 0 < declared <= MAX_CHANNELS or len(body) != declared:
+    if declared > MAX_CHANNELS:
+        raise UnreadableFile("too_large")
+    if declared <= 0 or len(body) != declared:
         raise UnreadableFile("malformed")
     counts = []
     for item in body:

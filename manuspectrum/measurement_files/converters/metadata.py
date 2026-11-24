@@ -18,7 +18,7 @@ from manuspectrum.views.explorer.series import neutralise
 from .base import FACT_LABELS, QUANTITY_KEYS, WARNINGS, Reading
 
 _NUM = r"[-+]?(?:\d+(?:[.,]\d*)?|[.,]\d+)(?:[eE][-+]?\d+)?"
-_PLAIN_NUMBERS = re.compile(rf"{_NUM}(?:\s*[;\u2013]\s*{_NUM})*", re.ASCII)
+_PLAIN_NUMBERS = re.compile(rf"{_NUM}(?: *[;\u2013] *{_NUM})*", re.ASCII)
 """Numbers joined by `;` or an en dash: no operator, so no spreadsheet formula."""
 
 NOTE = gettext_noop("Note")

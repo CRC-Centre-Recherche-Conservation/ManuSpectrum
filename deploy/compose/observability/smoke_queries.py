@@ -75,6 +75,7 @@ OPTIONAL_METRICS = LABELLED_APP_METRICS | frozenset(
         "manuspectrum_release_schedule_failed",
         "manuspectrum_login_records_prune_timestamp_seconds",
         "manuspectrum_workflow_cleanup_timestamp_seconds",
+        "manuspectrum_measurement_purge_timestamp_seconds",
     }
 )
 

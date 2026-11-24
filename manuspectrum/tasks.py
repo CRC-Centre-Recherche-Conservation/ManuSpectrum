@@ -201,3 +201,81 @@ def record_activity_task():
     from manuspectrum.observability import activity
 
     activity.publish_gauges()
+
+
+@shared_task(
+    name="manuspectrum.measurement_prepare",
+    acks_late=True,
+    soft_time_limit=45,
+    time_limit=55,
+)
+def measurement_prepare_task(run_id):
+    """Prepare one chunk of a measurement-files run, then send itself again while items remain."""
+    from django.core.exceptions import ValidationError
+
+    from manuspectrum.measurement_files import intake, prepare
+    from manuspectrum.models import MeasurementRun
+
+    try:
+        run = MeasurementRun.objects.get(pk=str(run_id))
+    except (MeasurementRun.DoesNotExist, ValidationError):
+        return
+    if prepare.prepare_run(run):
+        intake.send(intake.PREPARE_TASK, run.id, countdown=1)
+
+
+@shared_task(
+    name="manuspectrum.measurement_write",
+    acks_late=True,
+    soft_time_limit=45,
+    time_limit=55,
+)
+def measurement_write_task(run_id):
+    """Write one chunk of a measurement-files run, then send itself again while items remain."""
+    from django.core.exceptions import ValidationError
+
+    from manuspectrum.measurement_files import intake, writer
+    from manuspectrum.models import MeasurementRun
+
+    try:
+        run = MeasurementRun.objects.get(pk=str(run_id))
+    except (MeasurementRun.DoesNotExist, ValidationError):
+        return
+    if writer.write_run(run):
+        intake.send(intake.WRITE_TASK, run.id, countdown=1)
+
+
+@shared_task(
+    name="manuspectrum.measurement_undo",
+    acks_late=True,
+    soft_time_limit=45,
+    time_limit=55,
+)
+def measurement_undo_task(run_id):
+    """Undo one chunk of a measurement-files run, then send itself again while work remains."""
+    from django.core.exceptions import ValidationError
+
+    from manuspectrum.measurement_files import intake, undo
+    from manuspectrum.models import MeasurementRun
+
+    try:
+        run = MeasurementRun.objects.get(pk=str(run_id))
+    except (MeasurementRun.DoesNotExist, ValidationError):
+        return
+    if undo.undo_run(run):
+        intake.send(intake.UNDO_TASK, run.id, countdown=1)
+
+
+@shared_task(name="manuspectrum.measurement_staging_purge")
+def measurement_staging_purge_task():
+    """Run the daily measurement staging purge (measurement_files/purge.py); returns the counts."""
+    from manuspectrum.measurement_files.purge import purge
+
+    report = purge()
+    return {
+        "locked": report.locked,
+        "staging_removed": len(report.staging_removed),
+        "runs_deleted": len(report.runs_deleted),
+        "orphans": len(report.orphans),
+        "failed": len(report.failed),
+    }

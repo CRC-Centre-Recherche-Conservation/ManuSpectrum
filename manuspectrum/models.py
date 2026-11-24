@@ -9,8 +9,18 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.db.models import JSONField
+from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+
+from manuspectrum.constants.measurement_files import (
+    ITEM_DECISIONS,
+    ITEM_DISPLAY_SOURCES,
+    ITEM_ORIGINS,
+    ITEM_OUTCOMES,
+    ITEM_STATES,
+    RUN_STATES,
+)
 
 
 class RendererConfig(models.Model):
@@ -501,3 +511,133 @@ class SiteNotice(models.Model):
                     errors[field] = _("Give the link label in both languages.")
         if errors:
             raise ValidationError(errors)
+
+
+def _choices(values):
+    return [(value, value) for value in values]
+
+
+class MeasurementRun(models.Model):
+    """One batch of measurement files added to a Document (the workflow id)."""
+
+    id = models.UUIDField(primary_key=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="measurement_runs",
+    )
+    document_id = models.UUIDField()
+    project_id = models.UUIDField(null=True, blank=True)
+    language = models.CharField(max_length=8)
+    transaction_id = models.UUIDField(default=uuid.uuid4, unique=True)
+    state = models.CharField(
+        max_length=16, choices=_choices(RUN_STATES), default="collecting"
+    )
+    stop_requested = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "ms_measurement_run"
+
+
+class MeasurementItem(models.Model):
+    """One file of a run: its facts, proposal, decision and what was written."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4)
+    run = models.ForeignKey(
+        MeasurementRun, on_delete=models.CASCADE, related_name="items"
+    )
+    origin = models.CharField(max_length=8, choices=_choices(ITEM_ORIGINS))
+    source_name = models.CharField(max_length=200)
+    relative_dir = models.CharField(max_length=400, blank=True)
+    sha256 = models.CharField(max_length=64)
+    size = models.BigIntegerField()
+    staged_name = models.CharField(max_length=255, blank=True)
+    source_file_id = models.UUIDField(null=True, blank=True)
+    source_analysis_id = models.UUIDField(null=True, blank=True)
+    detected_format = models.CharField(max_length=32, blank=True)
+    outcome = models.CharField(
+        max_length=16, choices=_choices(ITEM_OUTCOMES), default="pending"
+    )
+    reason = models.CharField(max_length=32, blank=True)
+    content_preset = models.CharField(max_length=32, blank=True)
+    facts = models.JSONField(default=list, blank=True)
+    warnings = models.JSONField(default=list, blank=True)
+    tokens = models.JSONField(default=list, blank=True)
+    proposed_analysis_id = models.UUIDField(null=True, blank=True)
+    chosen_analysis_id = models.UUIDField(null=True, blank=True)
+    cause = models.CharField(max_length=32, blank=True)
+    decision = models.CharField(
+        max_length=8, choices=_choices(ITEM_DECISIONS), default="pending"
+    )
+    display_config_id = models.UUIDField(null=True, blank=True)
+    display_source = models.CharField(
+        max_length=16, choices=_choices(ITEM_DISPLAY_SOURCES), default="none"
+    )
+    paired_item = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    state = models.CharField(
+        max_length=16, choices=_choices(ITEM_STATES), default="queued"
+    )
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    written = models.JSONField(default=dict, blank=True)
+    error = models.CharField(max_length=32, blank=True)
+
+    class Meta:
+        db_table = "ms_measurement_item"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["run", "sha256"],
+                condition=models.Q(origin="upload"),
+                name="ms_measurement_item_run_sha_uniq",
+            ),
+            models.UniqueConstraint(
+                fields=["run", "source_file_id"],
+                condition=models.Q(origin="stored"),
+                name="ms_measurement_item_run_file_uniq",
+            ),
+        ]
+
+
+class MeasurementDecision(models.Model):
+    """Undo journal of the reviewer's bulk actions: the fields each changed."""
+
+    run = models.ForeignKey(
+        MeasurementRun, on_delete=models.CASCADE, related_name="decisions"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    action = models.CharField(max_length=32)
+    before = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = "ms_measurement_decision"
+        ordering = ["-created_at", "-id"]
+
+
+class MeasurementNameCode(models.Model):
+    """A file-name code a user taught the matcher (technique family or `ignore`)."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="measurement_name_codes",
+    )
+    code = models.CharField(max_length=32)
+    family = models.CharField(max_length=32)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "ms_measurement_name_code"
+        constraints = [
+            models.UniqueConstraint(
+                Lower("code"), "user", name="ms_measurement_code_user_code_uniq"
+            )
+        ]

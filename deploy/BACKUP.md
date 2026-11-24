@@ -32,8 +32,9 @@ corrupted database, a lost VM and a lost disk, not against the loss of the site.
   live database by the daily `manuspectrum.prune_login_records` task).
 - **The media directory** (`MEDIA_HOST_DIR`): uploaded files served by
   Cantaloupe and the concept images. Excluded inside it: `previous-*` (the data
-  a restore put aside), `.restore-*` (restore staging), `archestemp/` and
-  `export_deliverables/` (rebuilt on demand).
+  a restore put aside), `.restore-*` (restore staging), `archestemp/`,
+  `export_deliverables/` (rebuilt on demand) and `measurement-staging/` (bytes of
+  a measurement-files run in progress, purged after `MEASUREMENT_STAGING_DAYS`).
 - **The secrets** (`SECRETS_DIR`, without `*.new`, `aside` and `restic_password`)
   and a copy of `.env` (it holds no secret by rule). `restic_password` is left
   out on purpose: the vault is its source of truth, and a copy beside the data

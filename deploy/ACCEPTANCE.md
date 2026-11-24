@@ -1342,7 +1342,7 @@ reboot.
   → four lines; both senders are the same address on the VM's own domain).
   - On failure: without `DEFAULT_FROM_EMAIL`, `web` refuses to start (`Set the DEFAULT_FROM_EMAIL environment variable`).
 - [ ] *(fresh install)* The alerts of a new host are expected until the first backup, restore test, release watch run and
-  timer runs (`BackupMissing`, `RestoreTestMissing`, `ReleaseWatchStale`, and `LoginRecordsPruneStale`, `EmbargoPassStale`, `WorkflowCleanupStale`, `AccountRetentionStale` until the first night): `make -C deploy silence-fresh-install` (48 h),
+  timer runs (`BackupMissing`, `RestoreTestMissing`, `ReleaseWatchStale`, and `LoginRecordsPruneStale`, `EmbargoPassStale`, `WorkflowCleanupStale`, `MeasurementPurgeStale`, `AccountRetentionStale` until the first night): `make -C deploy silence-fresh-install` (48 h),
   or install the timers and take a backup before `observability-on`.
 - [ ] `make -C deploy volumes secrets monitoring-init up observability-on` → `grafana_admin_password: created`,
   `pg_monitor_password: created`, the others `kept`; `monitoring-init` ends without error; then

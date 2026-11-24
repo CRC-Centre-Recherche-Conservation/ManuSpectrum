@@ -142,6 +142,16 @@ class CsvWriterTests(SimpleTestCase):
                 data = f"x,y\n1,{cell}\n3,4\n".encode()
                 self.assertEqual(check_csv(data), ("not_numeric",))
 
+    def test_fits_viewer_is_true_at_the_preview_ceiling_and_false_one_byte_over(self):
+        from django.test import override_settings
+
+        from manuspectrum.measurement_files.converters import fits_viewer
+
+        with override_settings(SPECTRUM_PREVIEW_MAX_BYTES=100):
+            self.assertTrue(fits_viewer(b"x" * 100))
+            self.assertFalse(fits_viewer(b"x" * 101))
+            self.assertTrue(fits_viewer(b""))
+
     def test_csv_name(self):
         self.assertEqual(csv_name("x.0"), "x.0.csv")
         self.assertEqual(csv_name("x.spc.0"), "x.spc.0.csv")

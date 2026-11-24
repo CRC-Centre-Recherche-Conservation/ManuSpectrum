@@ -83,7 +83,9 @@ def read(data: bytes) -> Reading:
         gain = _num(values["CalibLin"]) if calibrated else 0.0
     except (KeyError, ValueError):
         raise UnreadableFile("malformed") from None
-    if not 0 < declared <= MAX_CHANNELS or written.count(",") + 1 != declared:
+    if declared > MAX_CHANNELS:
+        raise UnreadableFile("too_large")
+    if declared <= 0 or written.count(",") + 1 != declared:
         raise UnreadableFile("malformed")
     try:
         counts = [int(v) for v in written.split(",")]
@@ -104,7 +106,7 @@ def read(data: bytes) -> Reading:
         facts.append(Fact("acquired_at", f"{values['Date']} {values['Time']}"))
     facts += [Fact(k, values[h]) for k, h in _FACT_KEYS if h in values]
     facts.append(Fact("channels", str(declared)))
-    if "CalibAbs" in values and "CalibLin" in values:
+    if calibrated and gain != 0.0:
         facts.append(Fact("calibration", f"{values['CalibAbs']}; {values['CalibLin']}"))
     return Reading(
         format=FORMAT,

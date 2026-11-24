@@ -31,6 +31,7 @@ ALLOWED_LABELS = frozenset(
         "component",
         "directive",
         "endpoint",
+        "format",
         "kind",
         "language",
         "level",
@@ -222,6 +223,28 @@ MIB = 1024 * 1024
 BYTES_EXPORT = tuple(n * MIB for n in (1, 5, 10, 25, 50, 100, 250, 500))
 
 
+MEASUREMENT_FORMATS = (
+    "opus",
+    "asd",
+    "galactic_spc",
+    "bruker_spx",
+    "mzxml",
+    "elio_mca",
+    "delimited",
+)
+MEASUREMENT_FILE_OUTCOMES = (
+    "csv",
+    "raw_only",
+    "unreadable",
+    "unsupported",
+    "written",
+    "failed",
+    "removed",
+    "kept",
+)
+MEASUREMENT_RUN_OUTCOMES = ("written", "undone", "purged")
+
+
 ZONE_STATES = ("measured", "estimated", "unstamped")
 
 
@@ -229,6 +252,28 @@ def bounded(value, allowed):
     """*value* as a string when it is in *allowed*, else ``"other"``."""
     value = "" if value is None else str(value)
     return value if value in allowed else OTHER
+
+
+def measurement_file(format_name, outcome):
+    """Count one measurement file; never raises (a lone ``csv`` counts as ``delimited``)."""
+    try:
+        format_name = "delimited" if format_name == "csv" else format_name
+        MEASUREMENT_FILES.labels(
+            format=bounded(format_name, MEASUREMENT_FORMATS),
+            outcome=bounded(outcome, MEASUREMENT_FILE_OUTCOMES),
+        ).inc()
+    except Exception:
+        logger.warning("metrics: measurement file not counted", exc_info=True)
+
+
+def measurement_run(outcome):
+    """Count one measurement-files run outcome; never raises."""
+    try:
+        MEASUREMENT_RUNS.labels(
+            outcome=bounded(outcome, MEASUREMENT_RUN_OUTCOMES)
+        ).inc()
+    except Exception:
+        logger.warning("metrics: measurement run not counted", exc_info=True)
 
 
 def language_label(code):
@@ -475,6 +520,22 @@ INDEX_RESOURCES = Counter(
     "Resources (or transactions) indexed by the index_resources task.",
     ["mode", "outcome"],
 )
+MEASUREMENT_FILES = Counter(
+    "manuspectrum_measurement_files",
+    "Measurement files by converter format and outcome: prepared (csv, raw_only, "
+    "unreadable, unsupported), written, failed, removed or kept by an undo.",
+    ["format", "outcome"],
+)
+MEASUREMENT_RUNS = Counter(
+    "manuspectrum_measurement_runs",
+    "Measurement-files runs written, undone or purged as abandoned.",
+    ["outcome"],
+)
+MEASUREMENT_PURGE_TIMESTAMP = gauge(
+    "manuspectrum_measurement_purge_timestamp_seconds",
+    "Unix time of the last completed measurement staging purge.",
+    mode="mostrecent",
+)
 DATA_CHANGE_ROWS = gauge(
     "manuspectrum_data_change_rows",
     "Rows of the ms_data_change ledger after the last prune.",
@@ -613,6 +674,14 @@ def _vocabularies(tasks):
         (CSP_VIOLATIONS, {"directive": CSP_DIRECTIVES}),
         (CELERY_TASKS, {"task": task_names, "outcome": TASK_OUTCOMES}),
         (INDEX_RESOURCES, {"mode": INDEX_MODES, "outcome": INDEX_OUTCOMES}),
+        (
+            MEASUREMENT_FILES,
+            {
+                "format": MEASUREMENT_FORMATS + (OTHER,),
+                "outcome": MEASUREMENT_FILE_OUTCOMES,
+            },
+        ),
+        (MEASUREMENT_RUNS, {"outcome": MEASUREMENT_RUN_OUTCOMES}),
     )
 
 

@@ -116,6 +116,22 @@ groups:
           summary: "The abandoned-workflow pass is not running"
           description: "The abandoned-workflow pass last completed more than two days ago, or the worker reports no completion time; it runs daily at 03:30 Europe/Paris, so idle runs are neither announced nor cleaned."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/celery.md#workflowcleanupstale
+      - alert: MeasurementPurgeStale
+        expr: |
+          (
+            time() - max(manuspectrum_measurement_purge_timestamp_seconds) > 2 * 24 * 3600 + 3 * 3600
+            or
+            absent_over_time(manuspectrum_measurement_purge_timestamp_seconds[26h])
+          )
+          and on() (up{job="node"} == 1)
+        for: 1h
+        labels:
+          severity: warning
+          service: celery
+        annotations:
+          summary: "The measurement staging purge is not running"
+          description: "The measurement-files staging purge last completed more than two days ago, or the worker reports no completion time; it runs daily at 05:15 Europe/Paris, so the files of abandoned batches stay on disk."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/celery.md#measurementpurgestale
       - alert: AccountRetentionStale
         expr: |
           (

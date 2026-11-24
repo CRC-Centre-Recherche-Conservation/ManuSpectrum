@@ -110,6 +110,26 @@ for _name in (
 ):
     IGNORED[f"biblissima-{_name}"] = "back-office import workflow"
 
+for _name in (
+    "run-create",
+    "run",
+    "files",
+    "stored",
+    "prepare",
+    "write",
+    "retry",
+    "stop",
+    "undo",
+    "items",
+    "causes",
+    "analyses",
+    "decisions",
+    "decisions-undo",
+    "preview",
+    "codes",
+):
+    IGNORED[f"api-measurement-{_name}"] = "back-office workflow API, not a consultation"
+
 
 def project_route_names():
     """Every `name=` of manuspectrum/urls.py; `{version}` expands to 2 and 3."""

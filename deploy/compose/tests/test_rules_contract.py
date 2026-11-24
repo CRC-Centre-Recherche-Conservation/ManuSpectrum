@@ -518,6 +518,7 @@ class RuleContractTests(unittest.TestCase):
             "LoginRecordsPruneStale",
             "EmbargoPassStale",
             "WorkflowCleanupStale",
+            "MeasurementPurgeStale",
             "AccountRetentionStale",
         ):
             with self.subTest(alert=name):

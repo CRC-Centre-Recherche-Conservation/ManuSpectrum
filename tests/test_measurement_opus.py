@@ -181,7 +181,7 @@ class OpusTests(SimpleTestCase):
         self.assertEqual(caught.exception.code, "truncated")
         with self.assertRaises(UnreadableFile) as caught:
             opus.read(synthetic(result(4, [1.0, 2.0], NPT=2000000)))
-        self.assertEqual(caught.exception.code, "malformed")
+        self.assertEqual(caught.exception.code, "too_large")
 
 
 class OpusOverlapTests(SimpleTestCase):

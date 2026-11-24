@@ -123,13 +123,13 @@ class AsdRefusalTests(SimpleTestCase):
         data[2] = ord("7")
         self.assert_refused(data, "unsupported_variant")
 
-    def test_channel_count_above_the_limit_is_malformed(self):
+    def test_channel_count_above_the_limit_is_too_large(self):
         data = soil()
         struct.pack_into("<H", data, 204, 65535)
         with mock.patch.object(asd, "MAX_CHANNELS", 1000):
             with self.assertRaises(UnreadableFile) as caught:
                 asd.read(bytes(data))
-        self.assertEqual(caught.exception.code, "malformed")
+        self.assertEqual(caught.exception.code, "too_large")
 
     def test_non_finite_first_wavelength_is_malformed(self):
         data = soil()

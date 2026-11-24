@@ -25,6 +25,7 @@ RESTIC_EXCLUDES=(
   '/backup/media/.restore-*'
   '/backup/media/archestemp'
   '/backup/media/export_deliverables'
+  '/backup/media/measurement-staging'
   '/backup/secrets/*.new'
   '/backup/secrets/aside'
   '/backup/secrets/restic_password'

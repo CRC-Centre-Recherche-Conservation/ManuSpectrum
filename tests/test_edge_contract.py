@@ -105,6 +105,11 @@ BARE = [
         "/api/biblissima/create-resource",
         "biblissima-create-resource",
     ),
+    (
+        "snippets/edge-rules.conf",
+        f"/api/measurement-files/runs/{UUID}/files",
+        "api-measurement-files",
+    ),
     ("snippets/edge-rules.conf", "/api/explorer/export", "explorer-export"),
     ("snippets/edge-rules.conf", "/api/explorer/series.csv", "explorer-series-csv"),
     ("snippets/edge-rules.conf", "/api/explorer/events.csv", "explorer-events-csv"),
@@ -345,6 +350,24 @@ class EdgeContractTests(SimpleTestCase):
         zones = (NGINX_DIR / "snippets/ratelimit.conf").read_text()
         self.assertIn("zone=annotations_batch:", zones)
         self.assertIn("zone=annotations_batch_site:", zones)
+
+    def test_measurement_uploads_have_their_own_streaming_location(self):
+        path = f"/api/measurement-files/runs/{UUID}/files"
+        body = self.location_body("snippets/edge-rules.conf", path)
+        general = self.location_body(
+            "snippets/edge-rules.conf", f"/api/measurement-files/runs/{UUID}"
+        )
+        self.assertNotEqual(body, general)
+        self.assertIn("client_max_body_size 100m;", body)
+        self.assertIn("proxy_request_buffering off;", body)
+        self.assertIn("proxy_read_timeout 120s;", body)
+        self.assertRegex(body, r"limit_req zone=api burst=\d+ nodelay;")
+        self.assertIn("limit_conn perip", body)
+        self.assertIn(
+            f"{settings.MEASUREMENT_MAX_ZIP_BYTES // (1024 * 1024)}m;",
+            body,
+            "the body limit must fit the largest ZIP",
+        )
 
     def test_module_scripts_are_served_as_javascript(self):
         text = (NGINX_DIR / "nginx.conf").read_text()

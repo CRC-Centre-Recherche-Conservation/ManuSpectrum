@@ -200,6 +200,32 @@ This alert also fires once after a first deployment, or after the monitoring dat
 
 The technical lead. If the cause is the host, the network filesystem or the mail relay, open a ticket with the hosting provider.
 
+## MeasurementPurgeStale
+
+Severity: warning. The daily measurement staging purge has not completed for more than two days: the staged files of abandoned measurement-file batches, and their rows, are not removed.
+
+### Prerequisites
+
+SSH access to the host as the service account, from the repository checkout.
+
+### Symptom
+
+The staging directory under the media root (`measurement-staging/`) keeps growing; no user-visible effect.
+
+### Diagnosis
+
+`make -C deploy status` for worker and beat; `make -C deploy logs` for the task `manuspectrum.measurement_staging_purge` (scheduled at 05:15 Europe/Paris, entry `measurement-staging-purge`). A pass that finds another one holding the lock does nothing and does not stamp its time: a lock left by a killed worker expires after 30 minutes. `CeleryTaskFailures` fires when the task itself fails. Beat does not catch up a run that fell due more than two hours ago (`CELERY_BEAT_CRON_STARTING_DEADLINE`), and a message of the pass left in the queue for more than two hours expires (worker log `Discarding revoked task`): after a stop over the scheduled hour nothing runs at start, the next night runs it at its normal hour, and the rule (two days and three hours) tolerates that one skipped night.
+
+### Remediation
+
+Restart the application containers (`make -C deploy restart`), then run the pass by hand: `make -C deploy manage ARGS="purge_measurement_staging"` lists what it would remove, and `--apply` does it. The pass is idempotent: a run is purged once and a stored name that no file row references is removed once.
+
+This alert also fires once after a first deployment, or after the monitoring data was reset, until the pass has run and published its completion time (it looks back 26 hours). Clear it by running `purge_measurement_staging --apply` by hand, or wait for the next scheduled run.
+
+### Escalation
+
+The technical lead. If the cause is the host or the network filesystem, open a ticket with the hosting provider.
+
 ## AccountRetentionStale
 
 Severity: warning. The daily inactive-account pass has not completed for more than two days: accounts without sign-in are neither warned nor anonymised.

@@ -113,12 +113,16 @@ class MzxmlTests(SimpleTestCase):
             peaks(MZ, INTENSITY, count=5),
             peaks(MZ, INTENSITY, zlib_level=9, count=3),
             peaks(MZ, INTENSITY, zlib_level=9, count=5),
-            peaks(MZ, INTENSITY, count=2_000_000),
             peaks(MZ, INTENSITY, count=0),
         ):
             with self.assertRaises(UnreadableFile) as caught:
                 mzxml.read(document(scan))
             self.assertEqual(caught.exception.code, "malformed")
+
+    def test_a_declared_count_above_the_limit_is_too_large(self):
+        with self.assertRaises(UnreadableFile) as caught:
+            mzxml.read(document(peaks(MZ, INTENSITY, count=2_000_000)))
+        self.assertEqual(caught.exception.code, "too_large")
 
     def test_other_variants_are_refused(self):
         base = peaks(MZ, INTENSITY)
@@ -191,7 +195,7 @@ class MzxmlBoundsTests(SimpleTestCase):
         with mock.patch.object(mzxml, "_decode", side_effect=AssertionError):
             with self.assertRaises(UnreadableFile) as caught:
                 mzxml.read(document(*scans))
-        self.assertEqual(caught.exception.code, "malformed")
+        self.assertEqual(caught.exception.code, "too_large")
 
     def test_the_grids_are_compared_as_each_scan_is_decoded(self):
         broken = '<scan peaksCount="2"><peaks precision="32">!!</peaks></scan>'

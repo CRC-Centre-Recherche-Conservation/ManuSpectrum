@@ -513,6 +513,7 @@ print(",".join(sorted(found)))
   done
   expect "POST /fr/temp_file denied" 404 "$(edge_code /fr/temp_file -X POST)"
   expect "/files/archestemp/x.zip" 404 "$(edge_code /files/archestemp/x.zip)"
+  expect "/files/measurement-staging/x.0" 404 "$(edge_code /files/measurement-staging/x.0)"
 
   edge_fixtures
   body="$(edge_get "/en/files/$EDGE_FILE_ID"; echo x)"

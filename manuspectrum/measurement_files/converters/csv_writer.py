@@ -11,6 +11,8 @@ import math
 import re
 from pathlib import PurePosixPath
 
+from django.conf import settings
+
 from .base import MIN_ROWS, Series
 
 _NUMBER = re.compile(r"^-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$", re.ASCII)
@@ -100,6 +102,16 @@ def check_csv(data: bytes) -> tuple[str, ...]:
     if len(values) < MIN_ROWS:
         return ("too_few_rows",)
     return ()
+
+
+def fits_viewer(csv_bytes: bytes) -> bool:
+    """Whether the viewer can draw a CSV of this size.
+
+    `SPECTRUM_PREVIEW_MAX_BYTES` is the ceiling of the spectrum preview, the
+    full series, `series.csv` and the IIIF clean CSV: a larger CSV is never
+    drawn, so the caller keeps the raw file alone and says `too_large`.
+    """
+    return len(csv_bytes) <= settings.SPECTRUM_PREVIEW_MAX_BYTES
 
 
 def csv_name(raw_name: str) -> str:

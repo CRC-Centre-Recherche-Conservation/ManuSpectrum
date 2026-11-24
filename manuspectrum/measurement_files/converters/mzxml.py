@@ -154,7 +154,7 @@ def read(data: bytes) -> Reading:
             continue
         total += count
         if total > MAX_CHANNELS:
-            raise UnreadableFile("malformed")
+            raise UnreadableFile("too_large")
         pending.append((peaks[0], count))
     if not pending:
         raise UnreadableFile("malformed")
