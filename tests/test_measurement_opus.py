@@ -204,3 +204,77 @@ class OpusOverlapTests(SimpleTestCase):
     def test_two_adjacent_blocks_are_not_overlapping(self):
         reading = opus.read(synthetic(result(4, [1.0, 2.0, 3.0])))
         self.assertEqual(len(reading.series.rows), 3)
+
+
+class OpusRefusalTests(SimpleTestCase):
+    def refused(self, data):
+        with self.assertRaises(UnreadableFile) as caught:
+            registry.convert(data)
+        self.assertEqual(caught.exception.format, "opus")
+        return caught.exception.code
+
+    def test_a_directory_that_cannot_be_right_is_malformed(self):
+        good = synthetic(result(4, [1.0, 2.0, 3.0]))
+        low_start = bytearray(good)
+        struct.pack_into("<i", low_start, 12, 10)
+        many = bytearray(good)
+        struct.pack_into("<i", many, 20, 5000)
+        negative = bytearray(good)
+        struct.pack_into("<i", negative, 20, -1)
+        for name, data in {
+            "start inside the header": low_start,
+            "too many blocks": many,
+            "negative count": negative,
+        }.items():
+            with self.subTest(name):
+                self.assertEqual(self.refused(bytes(data)), "malformed")
+
+    def test_a_directory_longer_than_the_file_is_truncated(self):
+        data = bytearray(synthetic(result(4, [1.0, 2.0, 3.0])))
+        struct.pack_into("<i", data, 20, 4000)
+        self.assertEqual(self.refused(bytes(data)), "truncated")
+
+    def test_a_directory_entry_without_an_offset_ends_the_directory(self):
+        data = bytearray(synthetic(result(4, [1.0, 2.0, 3.0])))
+        status_entry = 24 + 12 * 2
+        struct.pack_into("<i", data, status_entry + 8, 0)
+        self.assertEqual(self.refused(bytes(data)), "malformed")
+
+    def test_a_parameter_longer_than_its_block_is_malformed(self):
+        broken = b"PLF\x00" + struct.pack("<hh", 2, 1000) + b"\x00" * 8
+        data = opus_file([((0, 0, 3), broken)] + result(4, [1.0, 2.0, 3.0]))
+        self.assertEqual(self.refused(data), "malformed")
+
+    def test_a_number_parameter_too_short_for_its_type_is_malformed(self):
+        for kind in (0, 1):
+            with self.subTest(kind):
+                short = b"NSS\x00" + struct.pack("<hh", kind, 1) + b"\x00" * 4
+                data = opus_file([((0, 0, 3), short)] + result(4, [1.0, 2.0, 3.0]))
+                self.assertEqual(self.refused(data), "malformed")
+
+    def test_an_unknown_plf_is_an_unsupported_variant(self):
+        data = synthetic(result(4, [1.0, 2.0, 3.0]), plf="XX")
+        self.assertEqual(self.refused(data), "unsupported_variant")
+
+    def test_a_plf_without_its_result_block_is_malformed(self):
+        data = synthetic(result(4, [1.0, 2.0, 3.0]), plf="TR")
+        self.assertEqual(self.refused(data), "malformed")
+
+    def test_a_file_without_a_result_block_is_malformed(self):
+        self.assertEqual(self.refused(synthetic(plf="")), "malformed")
+
+    def test_a_result_without_its_status_block_is_malformed(self):
+        data = opus_file(
+            [((0, 0, 3), params(PLF="AB"))] + result(4, [1.0, 2.0, 3.0])[:1]
+        )
+        self.assertEqual(self.refused(data), "malformed")
+
+    def test_a_status_block_missing_a_required_value_is_malformed(self):
+        data = opus_file(
+            [
+                ((0, 0, 3), params(PLF="AB")),
+                ((3, 3, 0, 4), struct.pack("<3f", 1.0, 2.0, 3.0)),
+                ((3, 3, 1, 4), params(DPF=1, FXV=4000.0, LXV=400.0, DXU="WN")),
+            ]
+        )
+        self.assertEqual(self.refused(data), "malformed")

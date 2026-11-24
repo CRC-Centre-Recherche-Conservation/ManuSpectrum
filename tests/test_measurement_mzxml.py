@@ -236,3 +236,41 @@ class MzxmlBoundsTests(SimpleTestCase):
             'pairOrder="m/z-int"', 'contentType="m/z-int"'
         )
         self.assertEqual(len(mzxml.read(document(ok)).series.rows), 4)
+
+
+class MzxmlRefusalTests(SimpleTestCase):
+    def refused(self, data):
+        with self.assertRaises(UnreadableFile) as caught:
+            mzxml.read(data)
+        return caught.exception.code
+
+    def test_an_unknown_compression_is_an_unsupported_variant(self):
+        scan = peaks(MZ, INTENSITY).replace(
+            'byteOrder="network"', 'byteOrder="network" compressionType="lzma"'
+        )
+        self.assertEqual(self.refused(document(scan)), "unsupported_variant")
+
+    def test_a_corrupt_zlib_stream_is_malformed(self):
+        scan = peaks(MZ, INTENSITY, zlib_level=9)
+        garbage = base64.b64encode(b"\x78\x9c" + b"\xff" * 30).decode()
+        start = scan.index("</peaks>")
+        text_start = scan.index(">", scan.index("<peaks")) + 1
+        scan = scan[:text_start] + garbage + scan[start:]
+        self.assertEqual(self.refused(document(scan)), "malformed")
+
+    def test_another_root_element_is_malformed(self):
+        self.assertEqual(self.refused(b'<?xml version="1.0"?><other/>'), "malformed")
+
+    def test_a_scan_without_peaks_is_skipped(self):
+        bare = '<scan num="9" msLevel="1"></scan>'
+        reading = mzxml.read(document(bare, peaks(MZ, INTENSITY)))
+        self.assertEqual(len(reading.series.rows), 4)
+        self.assertEqual(self.refused(document(bare)), "malformed")
+
+    def test_a_peaks_count_that_is_not_a_non_negative_integer_is_malformed(self):
+        for count in ("many", "", "-2"):
+            with self.subTest(count):
+                scan = peaks(MZ, INTENSITY).replace(
+                    'peaksCount="4"', f'peaksCount="{count}"'
+                )
+                self.assertEqual(self.refused(document(scan)), "malformed")

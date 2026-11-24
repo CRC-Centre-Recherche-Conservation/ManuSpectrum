@@ -1,3 +1,5 @@
+from unittest import mock
+
 from django.test import SimpleTestCase
 
 from manuspectrum.measurement_files.converters import UnreadableFile
@@ -130,3 +132,28 @@ class ElioHardeningTests(SimpleTestCase):
     def test_the_title_line_is_never_a_fact(self):
         data = build([1, 2, 3], title="Operator Jane Doe 11/05/2031 09:41:07")
         self.assertNotIn("Jane", repr(self.facts(data)))
+
+    def test_a_missing_calibration_line_is_skipped(self):
+        data = build([1, 2, 3]).replace(b"# Calibration3: 0 0\n", b"")
+        reading = elio_mca.read(data)
+        self.assertEqual(reading.content_preset, "xrf")
+        self.assertEqual(
+            reading.series.rows[0][0], 8.046 - 722 * (22.163 - 8.046) / 1204
+        )
+
+    def test_a_calibration_line_without_two_fields_is_malformed(self):
+        for written in (b"722", b"722 8,046 9"):
+            with self.subTest(written):
+                data = build([1, 2, 3]).replace(b"722 8,046", written)
+                self.assertEqual(self.refused(data), "malformed")
+
+    def test_a_file_shorter_than_four_lines_is_malformed(self):
+        self.assertEqual(self.refused(b"# a\n# b\n# c"), "malformed")
+
+    def test_a_header_line_without_a_colon_is_malformed(self):
+        data = build([1, 2, 3]).replace(b"# Tube Anode:  Ag", b"# Tube Anode Ag")
+        self.assertEqual(self.refused(data), "malformed")
+
+    def test_more_values_than_the_channel_limit_are_malformed(self):
+        with mock.patch.object(elio_mca, "MAX_CHANNELS", 5):
+            self.assertEqual(self.refused(build(list(range(20)))), "malformed")

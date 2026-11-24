@@ -92,3 +92,40 @@ class GalacticSpcTests(SimpleTestCase):
         self.assertFalse(galactic_spc.sniff(b"OK 1 2\n"))
         self.assertFalse(galactic_spc.sniff(b"OK 1 2\n" * 200))
         self.assertNotEqual(registry.detect(b"OK 1 2\n"), "galactic_spc")
+
+
+class GalacticSpcRefusalTests(SimpleTestCase):
+    def refused(self, data):
+        with self.assertRaises(UnreadableFile) as caught:
+            galactic_spc.read(data)
+        return caught.exception.code
+
+    def test_old_format_header_must_be_complete_and_integral(self):
+        old = bytearray(synthetic([1.0, 2.0, 3.0]))
+        old[1] = 0x4D
+        struct.pack_into("<f", old, 4, 3.0)
+        self.assertTrue(galactic_spc.sniff(bytes(old)))
+        self.assertFalse(galactic_spc.sniff(bytes(old[:100])))
+        for points in (2.5, float("nan"), float("inf")):
+            struct.pack_into("<f", old, 4, points)
+            self.assertFalse(galactic_spc.sniff(bytes(old)), points)
+
+    def test_bytes_that_are_not_an_spc_header_are_malformed(self):
+        self.assertEqual(self.refused(b"\x00\x00" + bytes(600)), "malformed")
+        self.assertEqual(self.refused(b""), "malformed")
+
+    def test_an_unreadable_exponent_is_an_unsupported_variant(self):
+        data = synthetic([1, 2, 3], exp=200)
+        self.assertEqual(self.refused(data), "unsupported_variant")
+
+    def test_an_x_array_that_is_not_monotonic_is_malformed(self):
+        data = synthetic([1.0, 2.0, 3.0], xtype=3, x=[500.0, 520.0, 510.0])
+        self.assertEqual(self.refused(data), "malformed")
+
+    def test_an_impossible_date_is_left_out(self):
+        reading = galactic_spc.read(
+            synthetic([1.0, 2.0, 3.0], date=(2031, 13, 11, 9, 41))
+        )
+        keys = {f.key for f in reading.facts}
+        self.assertNotIn("acquired_at", keys)
+        self.assertIn("channels", keys)

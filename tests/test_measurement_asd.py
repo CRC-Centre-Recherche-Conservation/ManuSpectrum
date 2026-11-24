@@ -1,4 +1,5 @@
 import struct
+from unittest import mock
 
 from django.test import SimpleTestCase
 
@@ -108,3 +109,60 @@ class AsdTests(SimpleTestCase):
         self.assertTrue(asd.sniff(b"as8" + bytes(100)))
         self.assertFalse(asd.sniff(b"as9"))
         self.assertFalse(asd.sniff(b"as"))
+
+
+class AsdRefusalTests(SimpleTestCase):
+    def assert_refused(self, data, code):
+        with self.assertRaises(UnreadableFile) as caught:
+            registry.convert(bytes(data))
+        self.assertEqual(caught.exception.code, code)
+        self.assertEqual(caught.exception.format, "asd")
+
+    def test_other_file_versions_are_unsupported(self):
+        data = soil()
+        data[2] = ord("7")
+        self.assert_refused(data, "unsupported_variant")
+
+    def test_channel_count_above_the_limit_is_malformed(self):
+        data = soil()
+        struct.pack_into("<H", data, 204, 65535)
+        with mock.patch.object(asd, "MAX_CHANNELS", 1000):
+            with self.assertRaises(UnreadableFile) as caught:
+                asd.read(bytes(data))
+        self.assertEqual(caught.exception.code, "malformed")
+
+    def test_non_finite_first_wavelength_is_malformed(self):
+        data = soil()
+        struct.pack_into("<f", data, 191, float("nan"))
+        self.assert_refused(data, "malformed")
+
+    def test_single_channel_has_too_few_points(self):
+        data = soil()
+        struct.pack_into("<H", data, 204, 1)
+        self.assert_refused(data, "too_few_points")
+
+    def test_unknown_reference_flag_is_malformed(self):
+        data = soil()
+        data[REFERENCE_HEADER : REFERENCE_HEADER + 2] = b"\x01\x02"
+        self.assert_refused(data, "malformed")
+
+    def test_negative_description_length_is_malformed(self):
+        data = soil()
+        struct.pack_into("<h", data, REFERENCE_HEADER + 18, -1)
+        self.assert_refused(data, "malformed")
+
+    def test_non_finite_spectrum_value_is_refused(self):
+        data = soil()
+        struct.pack_into("<d", data, 484 + 8 * 5, float("inf"))
+        self.assert_refused(data, "non_finite")
+
+    def test_unrepresentable_acquisition_dates_are_left_out(self):
+        for value in (float("nan"), 1e300):
+            data = soil()
+            struct.pack_into("<d", data, REFERENCE_HEADER + 2, value)
+            struct.pack_into("<d", data, REFERENCE_HEADER + 10, value)
+            reading = registry.convert(bytes(data))
+            keys = {f.key for f in reading.facts}
+            self.assertNotIn("acquired_at", keys, value)
+            self.assertNotIn("reference_acquired_at", keys, value)
+            self.assertIn("integration_time", keys)

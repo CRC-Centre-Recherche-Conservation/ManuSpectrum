@@ -159,3 +159,22 @@ class BrukerSpxHardeningTests(SimpleTestCase):
             with self.assertRaises(UnreadableFile):
                 bruker_spx.read(data)
         self.assertLess(spy.call_count, 10)
+
+    def test_a_document_without_a_spectrum_instance_is_malformed(self):
+        data = synthetic().replace(b'Type="TRTSpectrum"', b'Type="TRTOther"')
+        with self.assertRaises(UnreadableFile) as caught:
+            bruker_spx.read(data)
+        self.assertEqual(caught.exception.code, "malformed")
+
+    def test_missing_count_or_unreadable_calibration_is_malformed(self):
+        missing = synthetic().replace(b"<ChannelCount>4</ChannelCount>", b"")
+        for name, data in {
+            "no ChannelCount": missing,
+            "no Channels": synthetic().replace(b"<Channels>1,2,3,4</Channels>", b""),
+            "text calibration": synthetic(calib_lin="steep"),
+            "text count": synthetic(count="four"),
+        }.items():
+            with self.subTest(name):
+                with self.assertRaises(UnreadableFile) as caught:
+                    bruker_spx.read(data)
+                self.assertEqual(caught.exception.code, "malformed")

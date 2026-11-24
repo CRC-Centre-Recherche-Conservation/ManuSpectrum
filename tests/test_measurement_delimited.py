@@ -140,3 +140,15 @@ class DelimitedTests(SimpleTestCase):
             with mock.patch.object(delimited, "float", create=True, wraps=float) as spy:
                 self.assertEqual(refused(self, data), "malformed")
         self.assertLess(spy.call_count, 100)
+
+
+class DelimitedProbeWindowTests(SimpleTestCase):
+    def test_rows_past_the_separator_probe_window_are_not_numeric_columns(self):
+        data = b"a\n" * 2000 + b"1 2\n3 4\n5 6\n"
+        self.assertEqual(registry.detect(data), "delimited")
+        self.assertEqual(refused(self, data), "no_numeric_columns")
+
+    def test_a_single_row_under_the_chosen_separator_has_too_few_points(self):
+        data = b"1;2\n" + b"a\n" * 2000 + b"3\t4\n5\t6\n"
+        self.assertEqual(registry.detect(data), "delimited")
+        self.assertEqual(refused(self, data), "too_few_points")

@@ -65,6 +65,34 @@ class RegistryTests(SimpleTestCase):
         self.assertIn("RuntimeError", logs.output[0])
         self.assertNotIn("secret", logs.output[0])
 
+    def test_a_typed_unsupported_format_from_a_reader_is_kept(self):
+        class Refuses:
+            FORMAT = "refuses"
+            READER_VERSION = 1
+
+            @staticmethod
+            def sniff(head):
+                return True
+
+            @staticmethod
+            def read(data):
+                raise UnsupportedFormat("refuses")
+
+        original = registry.READERS
+        registry.READERS = (Refuses,)
+        try:
+            with self.assertNoLogs(registry.logger, "WARNING"):
+                with self.assertRaises(UnsupportedFormat) as caught:
+                    registry.convert(b"x")
+        finally:
+            registry.READERS = original
+        self.assertEqual(caught.exception.format, "refuses")
+
+    def test_unreadable_file_refuses_an_unknown_code(self):
+        with self.assertRaises(ValueError):
+            UnreadableFile("not_a_code")
+        self.assertEqual(UnreadableFile("truncated", "asd").format, "asd")
+
     def test_only_typed_errors_escape(self):
         samples = sorted(FIXTURES.rglob("*"))
         corpus = [

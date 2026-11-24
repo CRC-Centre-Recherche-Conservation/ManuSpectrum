@@ -40,14 +40,6 @@ def write_csv(series: Series) -> bytes:
     return ("\n".join(lines) + "\n").encode("utf-8")
 
 
-def _is_number(cell: str) -> bool:
-    try:
-        float(cell)
-    except ValueError:
-        return False
-    return True
-
-
 def check_csv(data: bytes) -> tuple[str, ...]:
     """Return the first contract violation of `data` as a one-code tuple, or `()`.
 
