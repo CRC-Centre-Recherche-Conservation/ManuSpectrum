@@ -356,8 +356,8 @@ class FileEntryBuilderTests(SimpleTestCase):
     def test_builds_an_entry_the_indexer_can_walk(self):
         entry = build_file_entry(
             file_id="8f14e45f-ceea-467a-9e4a-1b0c8e1a0001",
-            name="MS59_f1_F07.csv",
-            path="uploadedfiles/MS59_f1_F07.csv",
+            name="XY12_g3_A04.csv",
+            path="uploadedfiles/XY12_g3_A04.csv",
             size=93649,
             content_type="text/csv",
         )
