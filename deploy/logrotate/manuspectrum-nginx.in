@@ -4,8 +4,9 @@
 #   @NGINX_LOG_HOST_DIR@  the host directory bound to /var/log/manuspectrum
 #   @APP_USER@ @APP_GROUP@  the service account that owns that directory
 #
-# Enforces the one-year retention of the access and error logs: both
-# carry client IP addresses. `su` is required because the directory is owned
+# Keeps the access and error logs about a month on the host; both carry client
+# IP addresses. The year of retention is the host provider's backup of this
+# directory, not this rule. `su` is required because the directory is owned
 # by the service account, not by root, and logrotate refuses to rotate in it
 # otherwise. After rotation nginx reopens its files (`nginx -s reopen` run inside
 # the container, without restart). Never `docker kill --signal`: Docker records
@@ -14,8 +15,8 @@
 @NGINX_LOG_HOST_DIR@/access.log @NGINX_LOG_HOST_DIR@/error.log {
     su @APP_USER@ @APP_GROUP@
     daily
-    rotate 365
-    maxage 365
+    rotate 30
+    maxage 30
     compress
     delaycompress
     dateext

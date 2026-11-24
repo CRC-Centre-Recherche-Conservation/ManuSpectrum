@@ -55,17 +55,17 @@ groups:
           summary: "No successful restore test for more than 8 days"
           description: "The weekly restore test has not succeeded for 8 days, or no metric exists."
           runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/backup.md#restoretestmissing
-      - alert: LogArchiveStale
+      - alert: TsmBackupStale
         expr: |
           (
             (
-              manuspectrum_log_archive_enabled == 1
-              unless on() manuspectrum_log_archive_last_success_timestamp_seconds
+              manuspectrum_tsm_check_enabled == 1
+              unless on() manuspectrum_tsm_backup_last_success_timestamp_seconds
             )
             or
             (
-              manuspectrum_log_archive_enabled == 1
-              and on() (time() - manuspectrum_log_archive_last_success_timestamp_seconds > 2 * 86400)
+              manuspectrum_tsm_check_enabled == 1
+              and on() (time() - manuspectrum_tsm_backup_last_success_timestamp_seconds > 54 * 3600)
             )
           )
           and on() (up{job="node"} == 1)
@@ -74,6 +74,21 @@ groups:
           severity: warning
           service: backup
         annotations:
-          summary: "The closed logs have not been archived for more than 2 days"
-          description: "The daily archive of the closed server logs into TSM has not succeeded for 2 days, or has never succeeded on a host where dsmc is installed."
-          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/backup.md#logarchivestale
+          summary: "No successful TSM backup of the host for more than two days"
+          description: "The hosting provider's daily TSM backup has not completed for more than 54 hours, or no success has been seen on a host where dsmc is installed."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/backup.md#tsmbackupstale
+      - alert: TsmLogIncludeMissing
+        expr: |
+          (
+            manuspectrum_tsm_check_enabled == 1
+            and on() manuspectrum_tsm_log_include_ok == 0
+          )
+          and on() (up{job="node"} == 1)
+        for: 15m
+        labels:
+          severity: warning
+          service: backup
+        annotations:
+          summary: "The server logs are no longer bound to the provider's log class"
+          description: "The TSM include file no longer binds every log directory to the log class that keeps deleted files for 365 days."
+          runbook_url: https://github.com/CRC-Centre-Recherche-Conservation/ManuSpectrum/blob/main/deploy/runbooks/backup.md#tsmlogincludemissing

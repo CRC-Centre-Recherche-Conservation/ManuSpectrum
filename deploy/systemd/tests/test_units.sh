@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # deploy/systemd/tests/test_units.sh
-# Renders the backup, restore-test, container-metrics, disk-usage, log-archive, monthly-report, watch,
+# Renders the backup, restore-test, container-metrics, disk-usage, tsm-check, monthly-report, watch,
 # update@ and update-at units and checks them with
 # systemd-analyze (verify, calendar). Prints `ok N` / `not ok N`; exits
 # non-zero on failure. Skips the checks when systemd-analyze is missing.
@@ -25,7 +25,7 @@ fi
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-PAIRS="backup restore-test container-metrics disk-usage log-archive monthly-report watch update-at"
+PAIRS="backup restore-test container-metrics disk-usage tsm-check monthly-report watch update-at"
 FILES=""
 for name in $PAIRS; do FILES="$FILES manuspectrum-$name.service manuspectrum-$name.timer"; done
 FILES="$FILES manuspectrum-update@.service"

@@ -57,35 +57,60 @@
   loop_control:
     label: "{{ item.name }}"
 
-- name: Create the log archive program and state directories
+- name: Create the TSM check program directory
   ansible.builtin.file:
-    path: "{{ item.path }}"
+    path: "{{ app_tsm_check_dir }}"
     state: directory
     owner: root
     group: root
-    mode: "{{ item.mode }}"
-  loop:
-    - { path: "{{ app_log_archive_dir }}", mode: "0755" }
-    - { path: "{{ app_log_archive_state_dir }}", mode: "0700" }
+    mode: "0755"
 
-- name: Install the log archive program
+- name: Install the TSM check program
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../scripts/{{ item.name }}"
-    dest: "{{ app_log_archive_dir }}/{{ item.name }}"
+    dest: "{{ app_tsm_check_dir }}/{{ item.name }}"
     owner: root
     group: root
     mode: "{{ item.mode }}"
-  loop: "{{ app_log_archive_files }}"
+  loop: "{{ app_tsm_check_files }}"
   loop_control:
     label: "{{ item.name }}"
 
-- name: Write the log archive configuration
+- name: Write the TSM check configuration
   ansible.builtin.template:
-    src: log-archive.env.j2
-    dest: "/etc/manuspectrum/log-archive.env"
+    src: tsm-check.env.j2
+    dest: "/etc/manuspectrum/tsm-check.env"
     owner: root
     group: root
     mode: "0644"
+
+- name: Look for the timer of the 1.0.4 log archive
+  ansible.builtin.stat:
+    path: /etc/systemd/system/manuspectrum-log-archive.timer
+  register: app_old_archive_timer
+  check_mode: false
+
+- name: Remove the 1.0.4 log archive timer from the running units
+  ansible.builtin.systemd_service:
+    name: manuspectrum-log-archive.timer
+    enabled: false
+    state: stopped
+  when: app_old_archive_timer.stat.exists
+  failed_when: false
+
+- name: Remove the 1.0.4 log archive files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/manuspectrum-log-archive.service
+    - /etc/systemd/system/manuspectrum-log-archive.timer
+    - /etc/manuspectrum/log-archive.env
+    - /usr/local/lib/manuspectrum/log-archive
+    - /var/lib/manuspectrum/log-archive
+    - "{{ env_metrics_textfile_dir }}/manuspectrum_log_archive.prom"
+    - "{{ env_metrics_textfile_dir }}/manuspectrum_log_archive_success.prom"
+  notify: reload systemd
 
 - name: Install the update command
   ansible.builtin.copy:

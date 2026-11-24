@@ -70,6 +70,9 @@ bash deploy/scripts/tests/test_monitoring_init.sh
 step "host-metrics tests"
 bash deploy/scripts/tests/test_host_metrics.sh
 
+step "tsm-check tests"
+bash deploy/scripts/tests/test_tsm_check.sh
+
 step "monthly-report tests"
 python3 -m unittest discover -s deploy/scripts/tests -p 'test_monthly_report.py'
 

@@ -5,7 +5,9 @@
 # app_render_logrotate_dir, app_render_owner (omit for no ownership change),
 # app_render_env_owner, app_render_env_group, app_group, app_render_notify. The unit and
 # logrotate sources are the `.in` files of deploy/systemd and deploy/logrotate,
-# whose @...@ placeholders are replaced here.
+# whose @...@ placeholders are replaced here. The logrotate rule is skipped while
+# the host role holds the log retention back (`host_log_retention_ready` false);
+# it is rendered when the fact is absent (render.yml, the app role alone).
 
 - name: Look for an existing environment file
   ansible.builtin.stat:
@@ -62,3 +64,4 @@
     owner: "{{ app_render_owner | default(omit) }}"
     group: "{{ app_render_owner | default(omit) }}"
     mode: "0644"
+  when: host_log_retention_ready | default(true)
