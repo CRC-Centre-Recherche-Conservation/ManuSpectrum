@@ -24,6 +24,7 @@ from django.urls import reverse
 from manuspectrum.constants.licenses import effective_license
 from manuspectrum.constants.xy_presets import XY_PRESETS
 from manuspectrum.iiif.xy_reading import axes
+from manuspectrum.utils.file_pairs import pair
 from manuspectrum.utils.spectrum_preview import is_raw_instrument, is_readable
 
 FALLBACK_LANGUAGE = "en"
@@ -312,7 +313,9 @@ def file_entries(entries, *, language, configs, kind):
     other, and it is never drawn, even when a setting lists its extension among
     the text formats. Pairing runs in two passes, the whole raw name first and
     the base name second, and a file already paired is skipped, so `x.csv`,
-    `x.0.csv` and `x.0` give `x.0` ↔ `x.0.csv` and leave `x.csv` alone. Micro-imaging
+    `x.0.csv` and `x.0` give `x.0` ↔ `x.0.csv` and leave `x.csv` alone. A CSV
+    naming its source in ``msSourceFileId`` is paired with it first (the rule is
+    ``utils/file_pairs.pair``). Micro-imaging
     files (*kind* ``"micro-imaging"``) carry that data kind.
 
     *configs* maps a renderer configuration id to its ``StoredConfig``
@@ -369,27 +372,15 @@ def file_entries(entries, *, language, configs, kind):
                     else None
                 ),
                 "zone": None,
-                "_base": base.casefold(),
-                "_name": name.casefold(),
-                "_raw": is_raw_instrument(name),
             }
         )
-    readable = {
-        i["_base"]: i for i in items if i["role"] == "readable" and not i["_raw"]
-    }
-    raw_by_base = {i["_base"]: i for i in items if i["_raw"]}
-    raw_by_name = {i["_name"]: i for i in items if i["_raw"]}
-    for twins in (raw_by_name, raw_by_base):
-        for base, item in readable.items():
-            twin = twins.get(base)
-            if twin is None or twin["pairedWith"] or item["pairedWith"]:
-                continue
-            if twin["dataKind"] == "xy":
-                twin.update(role="raw", dataKind="file", previewUrl=None)
-            item["pairedWith"] = twin["id"]
-            twin["pairedWith"] = item["id"]
-    for item in items:
-        del item["_base"], item["_name"], item["_raw"]
+    by_id = {item["id"]: item for item in items}
+    for raw_id, csv_id in pair(entries).items():
+        twin, item = by_id[raw_id], by_id[csv_id]
+        if twin["dataKind"] == "xy":
+            twin.update(role="raw", dataKind="file", previewUrl=None)
+        item["pairedWith"] = twin["id"]
+        twin["pairedWith"] = item["id"]
     return items
 
 
