@@ -218,6 +218,53 @@ tests:
   - expr: ALERTS{alertname="WorkflowCleanupStale", alertstate="firing"}
     eval_time: 29h
     exp_samples: []
+- name: measurement staging purge not completed for more than two days warns after an hour, a fresh one does not
+  interval: 1m
+  input_series:
+  - series: manuspectrum_measurement_purge_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x1440 86400x5000
+  - series: up{job="node"}
+    values: 1x6440
+  promql_expr_test:
+  - expr: ALERTS{alertname="MeasurementPurgeStale", alertstate="firing"}
+    eval_time: 24h
+    exp_samples: []
+  - expr: ALERTS{alertname="MeasurementPurgeStale", alertstate="firing"}
+    eval_time: 72h
+    exp_samples: []
+  - expr: ALERTS{alertname="MeasurementPurgeStale", alertstate="firing"}
+    eval_time: 75h30m
+    exp_samples: []
+  - expr: ALERTS{alertname="MeasurementPurgeStale", alertstate="firing"}
+    eval_time: 80h
+    exp_samples:
+    - labels: ALERTS{alertname="MeasurementPurgeStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: MeasurementPurgeStale also warns when the time disappeared for more than a day on a host that is up, and not when the host is down
+  interval: 1m
+  input_series:
+  - series: manuspectrum_measurement_purge_timestamp_seconds{instance="worker:9808"}
+    values: 0+60x60 _x2000
+  - series: up{job="node"}
+    values: 1x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="MeasurementPurgeStale", alertstate="firing"}
+    eval_time: 20h
+    exp_samples: []
+  - expr: ALERTS{alertname="MeasurementPurgeStale", alertstate="firing"}
+    eval_time: 29h
+    exp_samples:
+    - labels: ALERTS{alertname="MeasurementPurgeStale", alertstate="firing", service="celery", severity="warning"}
+      value: 1
+- name: MeasurementPurgeStale stays quiet when the host is down
+  interval: 1m
+  input_series:
+  - series: up{job="node"}
+    values: 0x2060
+  promql_expr_test:
+  - expr: ALERTS{alertname="MeasurementPurgeStale", alertstate="firing"}
+    eval_time: 29h
+    exp_samples: []
 - name: inactive-account pass not completed for more than two days warns after an hour, a fresh one does not
   interval: 1m
   input_series:

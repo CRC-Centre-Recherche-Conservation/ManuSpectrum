@@ -628,6 +628,13 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=3, minute=30),
         "options": {"expires": CELERY_BEAT_CRON_STARTING_DEADLINE},
     },
+    # Old measurement-files staging and abandoned runs at 05:15 Europe/Paris
+    # (measurement_files/purge.py).
+    "measurement-staging-purge": {
+        "task": "manuspectrum.measurement_staging_purge",
+        "schedule": crontab(hour=5, minute=15),
+        "options": {"expires": CELERY_BEAT_CRON_STARTING_DEADLINE},
+    },
     # Notices and anonymisation of long-inactive accounts at 04:30 Europe/Paris
     # (accounts/retention.py).
     "account-retention-pass": {

@@ -58,6 +58,7 @@ from manuspectrum.constants.xy_presets import (
 from manuspectrum.measurement_files import catalogue, decisions, prepare, staging
 from manuspectrum.measurement_files.converters import csv_name
 from manuspectrum.models import MeasurementItem, MeasurementRun
+from manuspectrum.observability import metrics
 from manuspectrum.utils.edit_log import attribute
 from manuspectrum.utils.file_entries import (
     blank_localized_string,
@@ -495,6 +496,25 @@ def write_analysis(run, analysis_id, items):
     return results
 
 
+def _count(results):
+    """Count each ``ItemResult`` by the format of its item and its state (``written`` or ``failed``)."""
+    try:
+        formats = {
+            str(pk): name
+            for pk, name in MeasurementItem.objects.filter(
+                pk__in=[r.item_id for r in results]
+            ).values_list("pk", "detected_format")
+        }
+        for result in results:
+            metrics.measurement_file(formats.get(result.item_id, ""), result.state)
+    except Exception:
+        logger.warning("measurement write: files not counted", exc_info=True)
+
+
+def _failed_results(members, error):
+    return [ItemResult(str(m.pk), "failed", error) for m in members]
+
+
 def _release(items):
     MeasurementItem.objects.filter(
         pk__in=[i.pk for i in items], state="claimed"
@@ -535,6 +555,7 @@ def _finish(run):
         state="written", finished_at=timezone.now(), stop_requested=False
     )
     run.refresh_from_db()
+    metrics.measurement_run("written")
     notify_completion(message, run.user)
 
 
@@ -566,14 +587,16 @@ def write_run(run, *, chunk=None):
         try:
             if analysis_id is None:
                 _fail([m.pk for m in members], "no_analysis")
+                _count(_failed_results(members, "no_analysis"))
             else:
-                write_analysis(run, analysis_id, members)
+                _count(write_analysis(run, analysis_id, members))
         except SoftTimeLimitExceeded:
             _release([item for _, rest in pending[index:] for item in rest])
             raise
         except Exception:
             logger.exception("measurement analysis write failed")
             _fail([m.pk for m in members], "write_failed")
+            _count(_failed_results(members, "write_failed"))
     if _remaining(run):
         return True
     _finish(run)

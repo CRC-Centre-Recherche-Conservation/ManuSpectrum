@@ -48,6 +48,7 @@ from manuspectrum.measurement_files.converters import (
 from manuspectrum.measurement_files.converters.metadata import describe
 from manuspectrum.measurement_files.intake import CLAIM_STALE
 from manuspectrum.models import MeasurementItem, MeasurementNameCode, MeasurementRun
+from manuspectrum.observability import metrics
 from manuspectrum.views.explorer.service import Values, shelfmark as explorer_shelfmark
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,7 @@ CATALOGUE_FILE = "catalogue.json"
 CONVERTED_SUFFIX = "converted.csv"
 DESCRIPTION_SUFFIX = "description.json"
 UNCONVERTED = ("unreadable", "unsupported")
+COUNTED_OUTCOMES = ("csv", "raw_only", "unreadable", "unsupported")
 CONVERTED = ("csv", "raw_only")
 SOFT_CAUSES = ("", "content_vs_display", "no_display")
 
@@ -367,6 +369,8 @@ def prepare_item(item, cards, codes, shelfmark="", hashes=None):
     settle(item)
     item.state = "prepared"
     item.save()
+    if item.outcome in COUNTED_OUTCOMES:
+        metrics.measurement_file(item.detected_format, item.outcome)
 
 
 def _release(items):

@@ -264,3 +264,18 @@ def measurement_undo_task(run_id):
         return
     if undo.undo_run(run):
         intake.send(intake.UNDO_TASK, run.id, countdown=1)
+
+
+@shared_task(name="manuspectrum.measurement_staging_purge")
+def measurement_staging_purge_task():
+    """Run the daily measurement staging purge (measurement_files/purge.py); returns the counts."""
+    from manuspectrum.measurement_files.purge import purge
+
+    report = purge()
+    return {
+        "locked": report.locked,
+        "staging_removed": len(report.staging_removed),
+        "runs_deleted": len(report.runs_deleted),
+        "orphans": len(report.orphans),
+        "failed": len(report.failed),
+    }

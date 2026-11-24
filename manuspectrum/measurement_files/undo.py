@@ -46,6 +46,7 @@ from arches.app.utils.permission_backend import user_can_edit_resource
 from manuspectrum.measurement_files import decisions, prepare, staging
 from manuspectrum.measurement_files.writer import _index_resource, digest
 from manuspectrum.models import MeasurementItem, MeasurementRun
+from manuspectrum.observability import metrics
 from manuspectrum.utils.edit_log import attribute
 
 logger = logging.getLogger(__name__)
@@ -153,7 +154,7 @@ def undo_analysis(run, analysis_id, items):
     analysis_id = str(analysis_id)
     tx = undo_transaction_id(run)
     labels = _labels(run)
-    results = []
+    results, counted = [], []
     with transaction.atomic():
         MeasurementRun.objects.select_for_update().filter(pk=run.pk).first()
         row = (
@@ -196,10 +197,13 @@ def undo_analysis(run, analysis_id, items):
                 run=run, state="written", written__with=str(item.pk)
             ).update(state=state)
             results.append(UndoResult(str(item.pk), state, outcome))
+            counted.append((item.detected_format, state))
         if row is not None and editable and _drop_parents(run, analysis_id, tx):
             touched = True
         if touched:
             transaction.on_commit(lambda: _index_resource(analysis_id))
+    for format_name, state in counted:
+        metrics.measurement_file(format_name, state)
     return results
 
 
@@ -224,9 +228,11 @@ def _settle_partners(run):
 def _finish(run):
     _settle_partners(run)
     staging.remove_run(run.id)
-    MeasurementRun.objects.filter(pk=run.pk, state="undoing").update(
+    moved = MeasurementRun.objects.filter(pk=run.pk, state="undoing").update(
         state="undone", finished_at=timezone.now()
     )
+    if moved:
+        metrics.measurement_run("undone")
     run.refresh_from_db()
 
 

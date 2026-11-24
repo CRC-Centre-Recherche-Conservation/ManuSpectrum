@@ -197,7 +197,7 @@ does not verify. The Prometheus entrypoint marks a target `rehearsal="true"` whe
 **Fresh install.** Until the first backup, the first Sunday restore test and the
 first run of the systemd timers, `BackupMissing` (critical), `RestoreTestMissing`, `ReleaseWatchStale`,
 `HostMetricsStale`, `DiskUsageStale` and `ContainerMissing` fire, and so do `LoginRecordsPruneStale`, `EmbargoPassStale`,
-`WorkflowCleanupStale` and `AccountRetentionStale` until the first night's passes have run (hour-long `for`, 26 h window). Install the
+`WorkflowCleanupStale`, `MeasurementPurgeStale` and `AccountRetentionStale` until the first night's passes have run (hour-long `for`, 26 h window). Install the
 timers and take a first backup before `observability-on`, or run
 `make -C deploy silence-fresh-install` (48 h, with a comment) and let the first
 backup, restore test and timers land within it. The silence includes
@@ -305,6 +305,12 @@ deletion, `ADMIN.md`); the section also gives the number of accounts anonymised 
 (`accounts_anonymised`, read from the `ms_account_retention` ledger). The pass is watched by
 `manuspectrum_account_anonymisations_total{outcome}` (`AccountRetentionFailures`) and
 `manuspectrum_account_retention_timestamp_seconds` (`AccountRetentionStale`).
+**Measurement files** (batch import of instrument files): `manuspectrum_measurement_files_total{format,outcome}`
+counts each file by converter format (`opus`, `asd`, `galactic_spc`, `bruker_spx`, `mzxml`, `elio_mca`,
+`delimited`, else `other`) and outcome (`csv`, `raw_only`, `unreadable`, `unsupported` when prepared;
+`written`, `failed`; `removed`, `kept` by an undo) and `manuspectrum_measurement_runs_total{outcome}` counts
+runs `written`, `undone` and `purged`. No panel or alert reads them yet. The daily staging purge (05:15) is
+watched by `manuspectrum_measurement_purge_timestamp_seconds` (`MeasurementPurgeStale`) and `CeleryTaskFailures`.
 **Active accounts** read `manuspectrum_active_accounts`: one number, no label, the
 active accounts (staff and superusers included, the `anonymous` visitor not) whose last
 login is within 30 days. A daily Celery beat task (`manuspectrum.record_active_accounts`)
