@@ -5,8 +5,8 @@ fixture with an independent open library and writes the result, in our column
 names and x-ascending order, into `expected.json` next to it, keyed by the
 fixture path relative to this directory.
 
-    pip install brukeropus==1.4.3 pyASDReader==1.2.3 spc-spectra==0.4.0 pyteomics numpy
-    python oracle.py <format> <fixture path>      # format: spc, opus, asd
+    pip install brukeropus==1.4.3 pyASDReader==1.2.3 spc-spectra==0.4.0 pyteomics lxml numpy
+    python oracle.py <format> <fixture path>      # format: spc, opus, asd, mzxml
 
 An entry holds `columns`, `rows`, `head` and `tail` (5 rows each), `sums` (per
 column), `content_preset` and `oracle` (library and version). An entry may also
@@ -121,7 +121,38 @@ def asd(path):
     )
 
 
-FORMATS = {"spc": spc, "opus": opus, "asd": asd}
+def mzxml(path):
+    """mzXML through pyteomics (the byte-offset index is not read): the scans'
+    m/z and intensity arrays, intensities summed when every scan has the
+    identical m/z array.
+
+    Prints the `parentFile` names, the operator and contact names and the
+    `dataProcessing` comments, to be pinned by hand as `forbidden`.
+    """
+    import xml.etree.ElementTree as ET
+    from importlib.metadata import version
+
+    from pyteomics import mzxml as reader
+
+    with reader.MzXML(str(path), use_index=False) as source:
+        scans = [(list(s["m/z array"]), list(s["intensity array"])) for s in source]
+    grid = scans[0][0]
+    if any(mz != grid for mz, _ in scans):
+        sys.exit("the scans are on different m/z grids")
+    rows = [
+        (float(mz), float(sum(float(s[1][i]) for s in scans)))
+        for i, mz in enumerate(grid)
+    ]
+    for node in ET.parse(path).getroot().iter():
+        tag = node.tag.rpartition("}")[2]
+        if tag in ("parentFile", "operator", "contact", "comment"):
+            print(tag, node.attrib, (node.text or "").strip())
+    return _entry(
+        ["mz", "intensity"], rows, "mass_spec", f"pyteomics {version('pyteomics')}"
+    )
+
+
+FORMATS = {"spc": spc, "opus": opus, "asd": asd, "mzxml": mzxml}
 
 
 def main(argv):

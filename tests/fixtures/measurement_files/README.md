@@ -33,6 +33,18 @@ Schanne-Klein, Anne Michelin, Jocelyne Deschaux.
 - `indores_albi/Raman_Ms29f57v_s1_532_vert2.spc`: a Raman spectrum (532 nm) in
   Galactic SPC format (`galactic_spc`). Byte for byte unchanged.
 
+## InDoRES — Mont Saint-Michel scriptorium parchment (proteomics) (`mzxml`)
+
+Dataset « Parchment data proteomic - Mont Saint-Michel scriptorium manuscripts
+XIe century », doi:10.48579/PRO/ZEEJTH
+(https://data.indores.fr/dataset.xhtml?persistentId=doi:10.48579/PRO/ZEEJTH),
+licence CC BY 4.0. Authors: Laurianne Robinet, Sylvie Heu-Thao, Lucie Arberet,
+Anne Michelin, Oulfa Belhadj, Marie Radepont, Stéphane Lecouteux.
+
+- `indores_msm/MALDI_Latin2055f1v.mzxml`: a MALDI mass spectrum, one scan of
+  136 825 peaks, in mzXML 2.1. Line endings normalised to LF; content otherwise
+  unchanged (its byte-offset index is therefore stale and never read).
+
 ## asdreader — soil.asd (`asd`)
 
 Source: https://github.com/pierreroudier/asdreader (`inst/extdata/soil.asd`).
