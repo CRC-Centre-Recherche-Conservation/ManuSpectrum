@@ -16,7 +16,9 @@ The nightly backup did not complete.
 
 ### Diagnosis
 
-`journalctl -u manuspectrum-backup -e` and the `FAIL:` line of the log. BACKUP.md, section When things go wrong, lists the usual causes (lock, full repository, network filesystem).
+An altered repository looks like this alert (an attack on the backups also makes the backup fail): read `sudo journalctl -t restic-repo-guard --since "2 days ago"` first. An `ALTERED:` line means go to [ResticRepoAltered](#resticrepoaltered) before repairing or re-creating the repository. 
+
+Then `journalctl -u manuspectrum-backup -e` and the `FAIL:` line of the log. BACKUP.md, section When things go wrong, lists the usual causes (lock, full repository, network filesystem).
 
 ### Remediation
 
@@ -40,7 +42,9 @@ Backups do not run or do not report.
 
 ### Diagnosis
 
-`systemctl list-timers 'manuspectrum-*'` and `journalctl -u manuspectrum-backup -e`. A metric missing altogether means the textfile directory is not mounted or the first backup never ran.
+An altered repository looks like this alert (an attack on the backups also makes the backup fail): read `sudo journalctl -t restic-repo-guard --since "2 days ago"` first. An `ALTERED:` line means go to [ResticRepoAltered](#resticrepoaltered) before repairing or re-creating the repository. 
+
+Then `systemctl list-timers 'manuspectrum-*'` and `journalctl -u manuspectrum-backup -e`. A metric missing altogether means the textfile directory is not mounted or the first backup never ran.
 
 ### Remediation
 
@@ -145,3 +149,59 @@ The include lines come back with the Ansible `host` role: run it from the reposi
 ### Escalation
 
 The technical lead. If the provider changed the file or the class, open a ticket with the hosting provider.
+
+## ResticRepoAltered
+
+Severity: warning. The restic repository holds a file that does not match its name.
+
+### Prerequisites
+
+SSH access to the host as an administrator with `sudo`: the guard, its state and the provider's job are root's. The guard exists only on hosts backed up by the hosting provider's TSM.
+
+### Symptom
+
+The check that runs just before the provider's nightly TSM copy found at least one repository file whose SHA-256 differs from its name, or a changed `config`. The TSM copy did not run today, on purpose: the provider's job stops before `dsmc` so the altered files do not replace the good versions TSM still holds. That stops the provider's copy of every filespace, the logs included, not only the repository. The verdict is kept in `/var/lib/manuspectrum/repo-guard/altered`: while that file exists every pass is a full pass, and it stays until a pass finds the repository intact. If nothing is done, `ResticRepoGuardStale` and then `TsmBackupStale` follow after two days.
+
+### Diagnosis
+
+`sudo journalctl -t restic-repo-guard --since today` shows the `ALTERED: <path>` lines, one per file. `make -C deploy restic ARGS="check --read-data"` asks restic itself to read every file; it runs as the service account, in the checkout (`sudo -iu <service account>`, administrators are not in the docker group), while the other `sudo` commands run as an administrator. The journal shows at most the first 100 altered files and a total. A run that cannot judge also exits 1 while the verdict is « altered »: an exit 1 whose journal shows only a `FAIL:` line and « the last verdict was altered » means still altered as far as the guard knows, and today's run could not check. Fix what the `FAIL:` line says, then run the guard in full. The journal is the reference, not the gauges: when the metrics directory is unusable the guard logs a WARNING, still gives its verdict, and the metrics may be missing or stale. Read `sudo grep restic-repo-guard /etc/cron.daily/tsm` for the two directories the job passes to the guard.
+
+### Remediation
+
+Treat it as a suspected compromise: start with the first step of [INCIDENT.md](../INCIDENT.md#suspected-compromise), « Protect the backups first ». Restore the repository from the provider's backup or snapshots before any new TSM copy, then re-run the guard in full as root, with the two values read from the line of `/etc/cron.daily/tsm`:
+
+`sudo env METRICS_TEXTFILE_DIR=<metrics dir> RESTIC_REPOSITORY_DIR=<repository> RESTIC_GUARD_FULL=1 /usr/local/lib/manuspectrum/repo-guard/restic-repo-guard.sh`
+
+Exit 0 means the repository is intact: the first pass that finds it intact removes the `altered` file, the mismatch gauge returns to 0 and the success time moves. Never delete the `altered` file by hand to make the copy run. When `config` was changed on purpose (for instance a migration of the repository format), delete `/var/lib/manuspectrum/repo-guard/config.sha256` before that run: the next pass records the new reference. A missing `config` while repository files remain is reported as an alteration, whether or not a reference was recorded.
+
+### Escalation
+
+The technical lead at once. If the cause is a compromise of the host, follow INCIDENT.md; the hosting provider holds the previous versions of the files.
+
+## ResticRepoGuardStale
+
+Severity: warning. The restic repository check has not succeeded for more than two days.
+
+### Prerequisites
+
+SSH access to the host as an administrator with `sudo`. The guard exists only on hosts backed up by the hosting provider's TSM.
+
+### Symptom
+
+The guard did not complete a pass without mismatch for more than 54 hours, or never did on a host backed up by the provider's TSM. Causes: the guard cannot judge (its `FAIL:` line in the journal says why: unreadable file, full disk, unexpected error); the provider's job does not run at all (not executable after an incident freeze that was never reversed: `ls -l /etc/cron.daily/tsm`); the guard line is missing from the job; the guard has not run yet after an install or upgrade (its first run is the next 06:25; run it once by hand after Ansible, as `releases/1.0.5.md` says); the repository path is wrong (the guard then says « no restic repository »); or it finds an alteration every day, in which case `ResticRepoAltered` fires too and the provider's TSM copy has not run on purpose. A guard that cannot run never blocks the TSM copy, except after an « altered » verdict (see ResticRepoAltered): then a run that cannot judge also blocks it.
+
+### Diagnosis
+
+`sudo journalctl -t restic-repo-guard --since "3 days ago"` shows the guard's messages (`FAIL:` for a configuration or read error, `ALTERED:` for an alteration). `sudo ls -l /usr/local/lib/manuspectrum/repo-guard/ /etc/cron.daily/tsm` shows the program and that the job is executable. A repository directory that is missing is logged and records no success. The journal is the reference, not the gauges: when the metrics directory is unusable the guard logs a WARNING, still gives its verdict, and the metrics may be missing or stale.
+
+### Remediation
+
+When `ResticRepoAltered` is firing, follow its section first. Otherwise fix what the log names, or run the Ansible `host` role from the repository checkout to put the script and the job line back (the guard recreates its state directory), then run the guard once by hand:
+
+`sudo env METRICS_TEXTFILE_DIR=<metrics dir> RESTIC_REPOSITORY_DIR=<repository> RESTIC_GUARD_FULL=1 /usr/local/lib/manuspectrum/repo-guard/restic-repo-guard.sh`
+
+with the two values of `sudo grep restic-repo-guard /etc/cron.daily/tsm`. The alert clears after a pass that exits 0.
+
+### Escalation
+
+The technical lead. If the cron line is missing or rewritten, tell the hosting provider that it is managed by this deployment.

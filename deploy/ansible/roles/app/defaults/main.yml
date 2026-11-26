@@ -22,6 +22,13 @@ app_oneshot_unit_names:
   - manuspectrum-update@
 app_acme_timer_names:
   - manuspectrum-cert-renew
+# While this file exists (created and removed by the operator, by hand, during an
+# incident: deploy/INCIDENT.md) the role leaves these timers as they are: enabling
+# a Persistent timer runs its missed run at once.
+app_backups_frozen_marker: /etc/manuspectrum/backups-frozen
+app_frozen_timer_names:
+  - manuspectrum-backup
+  - manuspectrum-restore-test
 app_compose_project: manuspectrum
 # Exists while the app role runs: the update command, the scheduled slot and the
 # release engine refuse to start an update meanwhile.
@@ -61,4 +68,5 @@ app_release_managed_paths:
   - deploy/logrotate/*.in
   - deploy/sbin
   - deploy/scripts/tsm-check.sh
+  - deploy/scripts/restic-repo-guard.sh
   - "{{ app_release_program_files | map(attribute='name') | map('regex_replace', '^', 'deploy/scripts/') | list }}"
