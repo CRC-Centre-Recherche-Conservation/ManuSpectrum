@@ -102,8 +102,10 @@ cmd_check() {
   expect "template_postgis" "true|en_US.utf8" \
     "$(psql_app "SELECT datistemplate::text || '|' || datcollate FROM pg_database WHERE datname = 'template_postgis'")"
   expect "standard_conforming_strings" off "$(psql_app 'SHOW standard_conforming_strings')"
+  # The monitoring's pg_stat_statements may also be installed in this database,
+  # depending on the host's history; it is harmless there.
   expect "extensions" "btree_gist,plpgsql,postgis,unaccent,uuid-ossp" \
-    "$(psql_app "SELECT string_agg(extname, ',' ORDER BY extname) FROM pg_extension")"
+    "$(psql_app "SELECT string_agg(extname, ',' ORDER BY extname) FROM pg_extension WHERE extname <> 'pg_stat_statements'")"
 
   es GET '/_nodes/_local?filter_path=**.mlockall' | grep -q '"mlockall":true' \
     || fail "Elasticsearch memory is not locked"
